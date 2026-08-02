@@ -561,7 +561,7 @@ include 'includes/header.php';
     align-items: center;
     justify-content: center;
     padding: 40px 20px;
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    background: linear-gradient(135deg, #fff9f2 0%, #fff 100%);
     -webkit-tap-highlight-color: transparent; /* Remove tap highlight on mobile */
 }
 
@@ -581,7 +581,7 @@ include 'includes/header.php';
 }
 
 .registration-header {
-    background: linear-gradient(135deg, #8B0000 0%, #c62828 100%);
+    background: linear-gradient(135deg, #8f261a 0%, #b3261e 100%);
     color: white;
     padding: 30px 40px;
     text-align: center;
@@ -616,7 +616,7 @@ include 'includes/header.php';
     width: 42px;
     height: 42px;
     border-radius: 50%;
-    background: #c62828;
+    background: #b3261e;
     color: white;
     display: flex;
     align-items: center;
@@ -666,7 +666,7 @@ include 'includes/header.php';
     left: 10%;
     right: 10%;
     height: 3px;
-    background: #c62828;
+    background: #b3261e;
     z-index: 2;
     transition: all 0.3s ease;
     transform-origin: left;
@@ -699,7 +699,7 @@ include 'includes/header.php';
 }
 
 .step.active .step-number {
-    background: #c62828;
+    background: #b3261e;
     color: white;
     transform: scale(1.1);
 }
@@ -717,7 +717,7 @@ include 'includes/header.php';
 }
 
 .step.active .step-label {
-    color: #c62828;
+    color: #b3261e;
 }
 
 /* Form Steps */
@@ -756,19 +756,19 @@ include 'includes/header.php';
 }
 
 .account-type-card:hover {
-    border-color: #c62828;
+    border-color: #b3261e;
     transform: translateY(-5px);
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
 }
 
 .account-type-card.selected {
-    border-color: #c62828;
+    border-color: #b3261e;
     background: linear-gradient(135deg, rgba(198, 40, 40, 0.05) 0%, rgba(139, 0, 0, 0.05) 100%);
 }
 
 .account-type-card i {
     font-size: 3rem;
-    color: #c62828;
+    color: #b3261e;
     margin-bottom: 20px;
 }
 
@@ -815,7 +815,7 @@ include 'includes/header.php';
 
 .form-control:focus {
     outline: none;
-    border-color: #c62828;
+    border-color: #b3261e;
     background-color: white;
     box-shadow: 0 0 0 4px rgba(198, 40, 40, 0.1);
 }
@@ -859,7 +859,7 @@ include 'includes/header.php';
 }
 
 .toggle-password:hover {
-    color: #c62828;
+    color: #b3261e;
 }
 
 /* Form Row */
@@ -873,7 +873,7 @@ include 'includes/header.php';
 .btn-primary {
     width: 100%;
     padding: 18px; /* Increased padding for better touch */
-    background: linear-gradient(135deg, #c62828 0%, #8B0000 100%);
+    background: linear-gradient(135deg, #b3261e 0%, #8f261a 100%);
     color: white;
     border: none;
     border-radius: 10px;
@@ -932,8 +932,8 @@ include 'includes/header.php';
     width: 100%;
     padding: 18px; /* Increased padding for better touch */
     background: white;
-    color: #c62828;
-    border: 2px solid #c62828;
+    color: #b3261e;
+    border: 2px solid #b3261e;
     border-radius: 10px;
     font-size: 1.1rem;
     font-weight: 600;
@@ -950,7 +950,7 @@ include 'includes/header.php';
 }
 
 .btn-secondary:hover {
-    background: linear-gradient(135deg, #c62828 0%, #8B0000 100%);
+    background: linear-gradient(135deg, #b3261e 0%, #8f261a 100%);
     color: white;
     transform: translateY(-3px);
     box-shadow: 0 10px 30px rgba(198, 40, 40, 0.3);
@@ -1023,7 +1023,7 @@ include 'includes/header.php';
 
 .verification-note i {
     margin-top: 2px;
-    color: #c62828;
+    color: #b3261e;
     font-size: 1rem;
 }
 
@@ -1036,12 +1036,12 @@ include 'includes/header.php';
     padding: 15px;
     background-color: #f9f9f9;
     border-radius: 10px;
-    border-left: 4px solid #c62828;
+    border-left: 4px solid #b3261e;
 }
 
 .terms-agreement input {
     margin-top: 3px;
-    accent-color: #c62828;
+    accent-color: #b3261e;
     cursor: pointer;
     min-width: 18px; /* Better touch target */
     min-height: 18px;
@@ -1056,7 +1056,7 @@ include 'includes/header.php';
 }
 
 .terms-agreement a {
-    color: #c62828;
+    color: #b3261e;
     text-decoration: none;
     font-weight: 600;
 }
@@ -1076,7 +1076,7 @@ include 'includes/header.php';
 }
 
 .auth-link a {
-    color: #c62828;
+    color: #b3261e;
     text-decoration: none;
     font-weight: 600;
     margin-left: 5px;
@@ -1084,7 +1084,7 @@ include 'includes/header.php';
 }
 
 .auth-link a:hover {
-    color: #8B0000;
+    color: #8f261a;
     text-decoration: underline;
 }
 
@@ -2071,7 +2071,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 icon: 'error',
                 title: 'Account Type Required',
                 text: 'Please select an account type to continue.',
-                confirmButtonColor: '#c62828'
+                confirmButtonColor: '#b3261e'
             });
             return false;
         }
@@ -2098,7 +2098,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 icon: 'error',
                 title: 'Missing Information',
                 text: 'Please fill in all required fields.',
-                confirmButtonColor: '#c62828'
+                confirmButtonColor: '#b3261e'
             });
             return false;
         }
@@ -2110,7 +2110,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 icon: 'error',
                 title: 'Invalid Email',
                 text: 'Please enter a valid email address.',
-                confirmButtonColor: '#c62828'
+                confirmButtonColor: '#b3261e'
             });
             return false;
         }
@@ -2122,7 +2122,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     icon: 'error',
                     title: 'Invalid Phone Number',
                     text: 'Please enter a valid Philippine mobile number (e.g., 09XXXXXXXXX).',
-                    confirmButtonColor: '#c62828'
+                    confirmButtonColor: '#b3261e'
                 });
                 return false;
             }
@@ -2145,7 +2145,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     icon: 'error',
                     title: 'Business Name Required',
                     text: 'Please enter your business name.',
-                    confirmButtonColor: '#c62828'
+                    confirmButtonColor: '#b3261e'
                 });
                 return false;
             }
@@ -2172,7 +2172,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 icon: 'error',
                 title: 'Password Required',
                 text: 'Please enter and confirm your password.',
-                confirmButtonColor: '#c62828'
+                confirmButtonColor: '#b3261e'
             });
             return false;
         }
@@ -2183,7 +2183,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 icon: 'error',
                 title: 'Weak Password',
                 text: 'Password must be at least 8 characters long.',
-                confirmButtonColor: '#c62828'
+                confirmButtonColor: '#b3261e'
             });
             return false;
         }
@@ -2194,7 +2194,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 icon: 'error',
                 title: 'Passwords Mismatch',
                 text: 'Passwords do not match. Please try again.',
-                confirmButtonColor: '#c62828'
+                confirmButtonColor: '#b3261e'
             });
             return false;
         }
@@ -2205,7 +2205,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 icon: 'error',
                 title: 'Terms Required',
                 text: 'Please accept the Terms of Service and Privacy Policy.',
-                confirmButtonColor: '#c62828'
+                confirmButtonColor: '#b3261e'
             });
             return false;
         }
@@ -2366,7 +2366,7 @@ document.addEventListener('DOMContentLoaded', function() {
             icon: 'error',
             title: title,
             text: text,
-            confirmButtonColor: '#c62828'
+            confirmButtonColor: '#b3261e'
         });
     }
 
@@ -3473,7 +3473,7 @@ document.addEventListener('DOMContentLoaded', function() {
             icon: 'error',
             title: 'Registration failed',
             text: serverRegistrationError,
-            confirmButtonColor: '#c62828'
+            confirmButtonColor: '#b3261e'
         });
     }
 });

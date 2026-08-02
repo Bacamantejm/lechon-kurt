@@ -247,7 +247,7 @@ include 'includes/header.php';
     align-items: center;
     justify-content: center;
     padding: 40px 20px;
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    background: linear-gradient(135deg, #fff9f2 0%, #fff 100%);
 }
 
 .login-wrapper {
@@ -268,7 +268,7 @@ include 'includes/header.php';
 
 /* Left Side - Brand/Info */
 .login-left {
-    background: linear-gradient(135deg, #8B0000 0%, #c62828 100%);
+    background: linear-gradient(135deg, #8f261a 0%, #b3261e 100%);
     padding: 50px 40px;
     color: white;
     position: relative;
@@ -422,7 +422,7 @@ include 'includes/header.php';
 .alert-error {
     background-color: #FFEBEE;
     border-left: 4px solid #F44336;
-    color: #C62828;
+    color: #b3261e;
 }
 
 .alert-success {
@@ -471,7 +471,7 @@ include 'includes/header.php';
 
 .form-control:focus {
     outline: none;
-    border-color: #c62828;
+    border-color: #b3261e;
     background-color: white;
     box-shadow: 0 0 0 4px rgba(198, 40, 40, 0.1);
 }
@@ -512,7 +512,7 @@ include 'includes/header.php';
 }
 
 .toggle-password:hover {
-    color: #c62828;
+    color: #b3261e;
 }
 
 .remember-forgot {
@@ -532,7 +532,7 @@ include 'includes/header.php';
 .remember-checkbox input {
     width: 16px;
     height: 16px;
-    accent-color: #c62828;
+    accent-color: #b3261e;
     cursor: pointer;
 }
 
@@ -543,7 +543,7 @@ include 'includes/header.php';
 }
 
 .forgot-link {
-    color: #c62828;
+    color: #b3261e;
     text-decoration: none;
     font-size: 0.95rem;
     font-weight: 600;
@@ -553,7 +553,7 @@ include 'includes/header.php';
 }
 
 .forgot-link:hover {
-    color: #8B0000;
+    color: #8f261a;
     background-color: rgba(198, 40, 40, 0.05);
     text-decoration: none;
 }
@@ -562,7 +562,7 @@ include 'includes/header.php';
 .btn-primary {
     width: 100%;
     padding: 16px;
-    background: linear-gradient(135deg, #c62828 0%, #8B0000 100%);
+    background: linear-gradient(135deg, #b3261e 0%, #8f261a 100%);
     color: white;
     border: none;
     border-radius: 10px;
@@ -619,8 +619,8 @@ include 'includes/header.php';
     width: 100%;
     padding: 16px;
     background: white;
-    color: #c62828;
-    border: 2px solid #c62828;
+    color: #b3261e;
+    border: 2px solid #b3261e;
     border-radius: 10px;
     font-size: 1.1rem;
     font-weight: 600;
@@ -635,7 +635,7 @@ include 'includes/header.php';
 }
 
 .btn-secondary:hover {
-    background: linear-gradient(135deg, #c62828 0%, #8B0000 100%);
+    background: linear-gradient(135deg, #b3261e 0%, #8f261a 100%);
     color: white;
     transform: translateY(-3px);
     box-shadow: 0 10px 30px rgba(198, 40, 40, 0.3);
@@ -652,7 +652,7 @@ include 'includes/header.php';
 }
 
 .auth-link a {
-    color: #c62828;
+    color: #b3261e;
     text-decoration: none;
     font-weight: 600;
     margin-left: 5px;
@@ -660,7 +660,7 @@ include 'includes/header.php';
 }
 
 .auth-link a:hover {
-    color: #8B0000;
+    color: #8f261a;
     text-decoration: underline;
 }
 
@@ -1050,7 +1050,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     icon: 'error',
                     title: 'Missing Information',
                     text: 'Please enter both email and password.',
-                    confirmButtonColor: '#c62828'
+                    confirmButtonColor: '#b3261e'
                 });
                 return false;
             }
@@ -1060,7 +1060,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     icon: 'error',
                     title: 'Invalid Email',
                     text: 'Please enter a valid email address.',
-                    confirmButtonColor: '#c62828'
+                    confirmButtonColor: '#b3261e'
                 });
                 return false;
             }
@@ -1121,7 +1121,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         icon: 'error',
                         title: 'Login Failed',
                         text: errorMessage,
-                        confirmButtonColor: '#c62828'
+                        confirmButtonColor: '#b3261e'
                     });
                     
                     // Reset button
@@ -1141,7 +1141,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     icon: 'error',
                     title: 'Login Error',
                     text: 'An error occurred while trying to log in. Please try again.',
-                    confirmButtonColor: '#c62828'
+                    confirmButtonColor: '#b3261e'
                 });
                 
                 // Reset button
@@ -1197,7 +1197,7 @@ document.addEventListener('DOMContentLoaded', function() {
         icon: 'error',
         title: 'Login Error',
         text: '<?php echo addslashes($error); ?>',
-        confirmButtonColor: '#c62828'
+        confirmButtonColor: '#b3261e'
     });
     <?php endif; ?>
     
@@ -1206,7 +1206,7 @@ document.addEventListener('DOMContentLoaded', function() {
         icon: 'success',
         title: 'Success!',
         html: '<?php echo addslashes($success); ?>',
-        confirmButtonColor: '#c62828'
+        confirmButtonColor: '#b3261e'
     });
     <?php endif; ?>
 });
