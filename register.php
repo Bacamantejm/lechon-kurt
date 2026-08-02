@@ -1388,7 +1388,21 @@ body {
 }
 
 .btn-secondary {
-    background: #233f32;
+    background: white !important;
+    color: var(--reg-red) !important;
+    border: 2px solid var(--reg-red) !important;
+}
+
+.btn-secondary:hover {
+    background: var(--reg-red) !important;
+    color: white !important;
+    border-color: var(--reg-red) !important;
+    box-shadow: 0 8px 20px rgba(179, 38, 30, 0.2) !important;
+    transform: translateY(-2px) !important;
+}
+
+.social-divider, .social-login-buttons {
+    display: none !important;
 }
 </style>
 
@@ -3451,6 +3465,10 @@ document.addEventListener('DOMContentLoaded', function() {
     syncAddressPreview();
 
     const serverRegistrationError = <?php echo json_encode($error ?? ''); ?>;
+    const requestedAccountType = <?php echo json_encode($requested_account_type); ?>;
+    if (requestedAccountType && !serverRegistrationError) {
+        goToStep(2);
+    }
     if (serverRegistrationError) {
         const loweredError = serverRegistrationError.toLowerCase();
         let targetStep = 1;
