@@ -2755,6 +2755,320 @@ document.addEventListener('DOMContentLoaded', function () {
     <?php endif; ?>
 });
 </script>
+
+<!-- Landing Page Login & Signup Popup Modal Styles -->
+<style>
+.auth-popup-overlay { position:fixed; inset:0; background:rgba(15, 23, 42, 0.45); backdrop-filter:blur(10px); z-index:2000; display:flex; align-items:center; justify-content:center; padding:16px; opacity:0; visibility:hidden; transition: opacity 0.22s cubic-bezier(.22,1,.36,1), visibility 0.22s cubic-bezier(.22,1,.36,1); }
+.auth-popup-overlay.active { opacity:1; visibility:visible; }
+.auth-popup-card { background:#fff; border-radius:24px; box-shadow:0 30px 60px rgba(15,23,42,.18); width:min(460px,100%); max-height:92vh; display:flex; flex-direction:column; overflow:hidden; border:1px solid #efddcd; transform:translateY(20px) scale(0.96); transition:transform 0.28s cubic-bezier(.22,1,.36,1); position:relative; }
+.auth-popup-overlay.active .auth-popup-card { transform:translateY(0) scale(1); }
+.auth-popup-close { position:absolute; top:18px; right:20px; border:none; background:transparent; width:34px; height:34px; border-radius:10px; color:#667085; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; transition:all 0.22s; z-index:10; }
+.auth-popup-close:hover { background:#fff9f2; color:#171922; }
+.auth-popup-tabs { display:flex; border-bottom:1px solid #efddcd; padding:0 24px; background:#faf7f4; padding-top:10px; }
+.auth-popup-tab { appearance:none; border:none; background:transparent; font-weight:800; font-size:.95rem; color:#667085; padding:18px 12px; border-bottom:3px solid transparent; cursor:pointer; transition:all 0.22s; }
+.auth-popup-tab:hover { color:#171922; }
+.auth-popup-tab.active { color:#b3261e; border-bottom-color:#b3261e; }
+.auth-popup-content { padding:28px 24px; overflow-y:auto; }
+.auth-popup-pane { display:none; }
+.auth-popup-pane.active { display:block; }
+.auth-popup-form .form-group { display:grid; gap:6px; margin-bottom:16px; }
+.auth-popup-form .form-group label { font-size:.88rem; font-weight:700; color:#171922; text-align: left; }
+.auth-popup-form .input-wrap { position:relative; }
+.auth-popup-form .input-wrap i { position:absolute; left:14px; top:50%; transform:translateY(-50%); color:#667085; }
+.auth-popup-form .form-control { width:100%; min-height:45px; border-radius:12px; border:1px solid #efddcd; padding:0 14px 0 42px; outline:none; font-family:inherit; font-size:.9rem; transition:all 0.22s; background:#fcf9f6; }
+.auth-popup-form .form-control:focus { border-color:#b3261e; box-shadow:0 0 0 3px rgba(179,38,30,0.12); background:#fff; }
+.auth-popup-form .toggle-password { position:absolute; right:12px; top:50%; transform:translateY(-50%); border:none; background:transparent; color:#667085; cursor:pointer; min-height:36px; display:inline-flex; align-items:center; }
+.auth-popup-form .password-field { padding-right:45px; }
+.auth-popup-form .remember-forgot { display:flex; justify-content:space-between; align-items:center; font-size:.84rem; margin-bottom:20px; }
+.auth-popup-form .remember-label { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-weight:600; color:#667085; }
+.auth-popup-form .forgot-link { color:#b3261e; text-decoration:none; font-weight:700; }
+.auth-popup-form .forgot-link:hover { text-decoration:underline; }
+.auth-popup-form .btn-submit { width:100%; min-height:48px; border-radius:12px; border:none; background:#b3261e; color:#fff; font-weight:800; font-size:.94rem; display:inline-flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; transition:all 0.22s; box-shadow:0 10px 24px rgba(179,38,30,.2); }
+.auth-popup-form .btn-submit:hover { background:#8f261a; transform:translateY(-1px); }
+.auth-popup-form .auth-link { margin-top:20px; font-size:.86rem; color:#667085; text-align: center; }
+.auth-popup-form .auth-link a { color:#b3261e; text-decoration:none; font-weight:700; }
+.auth-popup-form .auth-link a:hover { text-decoration:underline; }
+
+.reg-choice-grid { display:grid; gap:16px; margin-top:4px; }
+.reg-choice-card { display:flex; gap:16px; align-items:center; border:1px solid #efddcd; border-radius:16px; padding:18px; text-decoration:none; color:inherit; transition:all 0.22s; background:#fcf9f6; text-align: left; }
+.reg-choice-card:hover { border-color:#b3261e; background:#fff5e9; transform:translateY(-2px); box-shadow:0 12px 30px rgba(15,23,42,.1); }
+.reg-choice-icon { width:48px; height:48px; border-radius:12px; background:rgba(179,38,30,0.08); color:#b3261e; display:inline-flex; align-items:center; justify-content:center; font-size:1.3rem; flex-shrink:0; }
+.reg-choice-info { display:grid; gap:2px; }
+.reg-choice-title { font-weight:800; font-size:1.02rem; color:#171922; }
+.reg-choice-desc { font-size:.82rem; color:#667085; line-height:1.3; }
+</style>
+
+<!-- Landing Page Login & Signup Popup Modal Markup -->
+<div class="auth-popup-overlay" id="authPopupOverlay">
+    <div class="auth-popup-card">
+        <button type="button" class="auth-popup-close" id="authPopupClose" aria-label="Close modal">
+            <i class="fas fa-times"></i>
+        </button>
+        
+        <div class="auth-popup-tabs">
+            <button type="button" class="auth-popup-tab active" data-auth-tab="login">Sign In</button>
+            <button type="button" class="auth-popup-tab" data-auth-tab="register">Create Account</button>
+        </div>
+        
+        <div class="auth-popup-content">
+            <!-- Login Pane -->
+            <div class="auth-popup-pane active" id="authPaneLogin">
+                <form class="auth-popup-form" id="popupLoginForm" novalidate>
+                    <div class="form-group">
+                        <label for="popupEmail">Email Address</label>
+                        <div class="input-wrap">
+                            <i class="fas fa-envelope"></i>
+                            <input type="email" id="popupEmail" name="email" class="form-control" placeholder="Enter your email address" required autocomplete="email">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="popupPassword">Password</label>
+                        <div class="input-wrap">
+                            <i class="fas fa-lock"></i>
+                            <input type="password" id="popupPassword" name="password" class="form-control password-field" placeholder="Enter your password" required autocomplete="current-password">
+                            <button type="button" class="toggle-password" id="popupTogglePassword" aria-label="Toggle password visibility">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="remember-forgot">
+                        <label class="remember-label">
+                            <input type="checkbox" name="remember" id="popupRememberMe" value="1">
+                            <span>Remember me</span>
+                        </label>
+                        <a href="reset_password_request.php" class="forgot-link">Forgot password?</a>
+                    </div>
+                    
+                    <button type="submit" class="btn-submit" id="popupLoginBtn">
+                        <i class="fas fa-sign-in-alt"></i>
+                        <span>Sign In</span>
+                    </button>
+                    
+                    <div class="auth-link">
+                        Don't have an account? 
+                        <a href="javascript:void(0);" id="popupSwitchToRegister">Create an account</a>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Register Pane -->
+            <div class="auth-popup-pane" id="authPaneRegister">
+                <div class="reg-choice-grid">
+                    <a href="register.php?account_type=individual" class="reg-choice-card">
+                        <div class="reg-choice-icon">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <div class="reg-choice-info">
+                            <span class="reg-choice-title">Individual Customer</span>
+                            <span class="reg-choice-desc">Order delicious lechon dishes, rate food, track deliveries, and manage your account.</span>
+                        </div>
+                    </a>
+                    
+                    <a href="register.php?account_type=organization" class="reg-choice-card">
+                        <div class="reg-choice-icon">
+                            <i class="fas fa-store"></i>
+                        </div>
+                        <div class="reg-choice-info">
+                            <span class="reg-choice-title">Business Partner</span>
+                            <span class="reg-choice-desc">Register your lechon business, manage your storefront menu, and sync billing invoices.</span>
+                        </div>
+                    </a>
+                </div>
+                <div class="auth-popup-form" style="margin-top: 10px;">
+                    <div class="auth-link">
+                        Already have an account? 
+                        <a href="javascript:void(0);" id="popupSwitchToLogin">Sign in</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const authOverlay = document.getElementById('authPopupOverlay');
+    const authClose = document.getElementById('authPopupClose');
+    const togglePasswordBtn = document.getElementById('popupTogglePassword');
+    const passwordInput = document.getElementById('popupPassword');
+    const popupLoginForm = document.getElementById('popupLoginForm');
+    const authTabs = document.querySelectorAll('[data-auth-tab]');
+    const authPanes = document.querySelectorAll('.auth-popup-pane');
+    
+    function switchAuthTab(tabName) {
+        authTabs.forEach(tab => {
+            if (tab.dataset.authTab === tabName) {
+                tab.classList.add('active');
+            } else {
+                tab.classList.remove('active');
+            }
+        });
+        
+        authPanes.forEach(pane => {
+            if (pane.id === 'authPane' + tabName.charAt(0).toUpperCase() + tabName.slice(1)) {
+                pane.classList.add('active');
+            } else {
+                pane.classList.remove('active');
+            }
+        });
+    }
+
+    authTabs.forEach(tab => {
+        tab.addEventListener('click', function() {
+            switchAuthTab(this.dataset.authTab);
+        });
+    });
+
+    const switchToRegisterLink = document.getElementById('popupSwitchToRegister');
+    if (switchToRegisterLink) {
+        switchToRegisterLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            switchAuthTab('register');
+        });
+    }
+
+    const switchToLoginLink = document.getElementById('popupSwitchToLogin');
+    if (switchToLoginLink) {
+        switchToLoginLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            switchAuthTab('login');
+        });
+    }
+    
+    // Intercept clicks on the sign-in button in the header
+    document.querySelectorAll('.btn-signin').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            switchAuthTab('login');
+            if (authOverlay) authOverlay.classList.add('active');
+        });
+    });
+
+    // Intercept clicks on the register button in the header
+    document.querySelectorAll('.btn-register').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            switchAuthTab('register');
+            if (authOverlay) authOverlay.classList.add('active');
+        });
+    });
+    
+    if (authClose) {
+        authClose.addEventListener('click', function() {
+            if (authOverlay) authOverlay.classList.remove('active');
+        });
+    }
+    
+    if (authOverlay) {
+        authOverlay.addEventListener('click', function(e) {
+            if (e.target === authOverlay) {
+                authOverlay.classList.remove('active');
+            }
+        });
+    }
+    
+    if (togglePasswordBtn && passwordInput) {
+        togglePasswordBtn.addEventListener('click', function() {
+            const isPassword = passwordInput.type === 'password';
+            passwordInput.type = isPassword ? 'text' : 'password';
+            const icon = this.querySelector('i');
+            if (icon) {
+                icon.className = isPassword ? 'fas fa-eye-slash' : 'fas fa-eye';
+            }
+        });
+    }
+    
+    if (popupLoginForm) {
+        popupLoginForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const emailInput = document.getElementById('popupEmail');
+            const submitBtn = document.getElementById('popupLoginBtn');
+            
+            const email = emailInput.value.trim();
+            const password = passwordInput.value;
+            const remember = document.getElementById('popupRememberMe').checked;
+            
+            if (!email || !password) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Missing Information',
+                    text: 'Please enter both email and password.',
+                    confirmButtonColor: '#b3261e'
+                });
+                return;
+            }
+            
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                const span = submitBtn.querySelector('span');
+                if (span) span.textContent = 'Signing in...';
+            }
+            
+            const formData = new FormData();
+            formData.append('login', 'true');
+            formData.append('ajax', 'true');
+            formData.append('email', email);
+            formData.append('password', password);
+            if (remember) formData.append('remember', '1');
+            
+            fetch('login.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.text())
+            .then(data => {
+                try {
+                    const json = JSON.parse(data);
+                    if (json.success) {
+                        window.location.reload();
+                        return;
+                    }
+                } catch(e) {}
+                
+                if (data.includes('alert-error') || data.includes('Invalid email or password')) {
+                    const errorMatch = data.match(/alert-error.*?<div>(.*?)<\/div>/s);
+                    const errMsg = errorMatch ? errorMatch[1].trim() : 'Invalid email or password';
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Sign In Failed',
+                        text: errMsg,
+                        confirmButtonColor: '#b3261e'
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'An unexpected error occurred. Please try again.',
+                        confirmButtonColor: '#b3261e'
+                    });
+                }
+                
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    const span = submitBtn.querySelector('span');
+                    if (span) span.textContent = 'Sign In';
+                }
+            })
+            .catch(err => {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Connection Error',
+                    text: 'Could not connect to authentication server.',
+                    confirmButtonColor: '#b3261e'
+                });
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    const span = submitBtn.querySelector('span');
+                    if (span) span.textContent = 'Sign In';
+                }
+            });
+        });
+    }
+});
+</script>
 <?php include 'includes/footer.php'; ?>
 
 
