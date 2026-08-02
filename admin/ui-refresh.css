@@ -1,0 +1,365 @@
+/* Shared visual polish for selected admin pages */
+
+.admin-polish {
+    --ui-card-bg: #ffffff;
+    --ui-card-border: #eceff3;
+    --ui-soft-bg: #f8f9fb;
+    --ui-heading: #1e2430;
+    --ui-muted: #6b7280;
+    --ui-accent: #c62828;
+    --ui-accent-soft: #fdecec;
+    --ui-shadow: 0 12px 28px rgba(22, 28, 45, 0.08);
+    --ui-shadow-soft: 0 6px 18px rgba(22, 28, 45, 0.06);
+    font-family: 'Poppins', 'Inter', sans-serif;
+}
+
+.admin-polish .admin-main {
+    padding: 24px;
+    background:
+        radial-gradient(circle at 100% 0%, rgba(198, 40, 40, 0.07) 0, rgba(198, 40, 40, 0) 45%),
+        radial-gradient(circle at 0% 100%, rgba(15, 23, 42, 0.05) 0, rgba(15, 23, 42, 0) 45%);
+}
+
+.admin-polish .admin-topbar {
+    padding: 12px 24px;
+    border-bottom: 1px solid #e8edf3;
+}
+
+.admin-polish .topbar-content {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+}
+
+.admin-polish .topbar-content h1 {
+    flex: 1;
+    margin: 0;
+    font-size: clamp(1.2rem, 1.1vw + 0.9rem, 1.75rem);
+    letter-spacing: 0.2px;
+    color: var(--ui-heading);
+}
+
+.admin-polish .topbar-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.admin-polish .admin-profile {
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid #e5e9ef;
+    background: #fff;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.04);
+}
+
+.admin-polish .date-display {
+    font-size: 0.88rem;
+    color: var(--ui-muted);
+    font-weight: 500;
+}
+
+.admin-polish .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 16px 18px;
+    background: var(--ui-card-bg);
+    border: 1px solid var(--ui-card-border);
+    border-radius: 16px;
+    box-shadow: var(--ui-shadow-soft);
+    margin-bottom: 16px;
+}
+
+.admin-polish .section-header h2 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: var(--ui-heading);
+}
+
+.admin-polish .filter-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 10px;
+    width: min(960px, 100%);
+}
+
+.admin-polish .filter-form .form-control,
+.admin-polish .filter-form .form-select {
+    min-height: 42px;
+    border-radius: 10px;
+    border: 1px solid #dde3ea;
+    background: #fff;
+}
+
+.admin-polish .stats-grid,
+.admin-polish .dashboard-grid {
+    gap: 14px;
+    margin-bottom: 16px;
+}
+
+.admin-polish .stat-card {
+    border-radius: 16px;
+    border: 1px solid var(--ui-card-border);
+    background: linear-gradient(180deg, #fff, #fcfcfd);
+    box-shadow: var(--ui-shadow-soft);
+}
+
+.admin-polish .stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--ui-shadow);
+}
+
+.admin-polish .stat-content h3 {
+    color: #101828;
+}
+
+.admin-polish .stat-content p {
+    color: var(--ui-muted);
+}
+
+.admin-polish .table-responsive {
+    border-radius: 16px;
+    border: 1px solid var(--ui-card-border);
+    background: #fff;
+    box-shadow: var(--ui-shadow-soft);
+    overflow: auto;
+}
+
+.admin-polish .admin-table {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.admin-polish .admin-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #f6f8fb;
+    color: #364152;
+    border-bottom: 1px solid #e5eaf0;
+    font-weight: 600;
+}
+
+.admin-polish .admin-table th,
+.admin-polish .admin-table td {
+    padding: 12px 14px;
+    vertical-align: middle;
+}
+
+.admin-polish .admin-table tbody tr:nth-child(even) {
+    background: #fcfdff;
+}
+
+.admin-polish .admin-table tbody tr:hover {
+    background: #f8fbff;
+}
+
+.admin-polish .status-badge {
+    border-radius: 999px;
+    padding: 6px 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.1px;
+}
+
+.admin-polish .btn,
+.admin-polish .btn-icon,
+.admin-polish .btn-icon-sm {
+    border-radius: 10px;
+}
+
+.admin-polish .btn-primary {
+    background: var(--ui-accent);
+    border-color: var(--ui-accent);
+}
+
+.admin-polish .btn-primary:hover {
+    background: #ad2020;
+    border-color: #ad2020;
+}
+
+.admin-polish .btn-outline-primary {
+    border-color: #e6bcbc;
+    color: var(--ui-accent);
+}
+
+.admin-polish .btn-outline-primary:hover {
+    background: var(--ui-accent);
+    border-color: var(--ui-accent);
+}
+
+.admin-polish .pagination .page-link {
+    border-radius: 10px;
+    margin: 0 3px;
+    border: 1px solid #e2e8f0;
+}
+
+.admin-polish .alert {
+    border-radius: 12px;
+}
+
+.admin-polish .modal-content {
+    border-radius: 16px;
+    border: 1px solid #e5e7eb;
+    box-shadow: var(--ui-shadow);
+}
+
+.admin-polish .modal-header {
+    border-bottom: 1px solid #edf1f5;
+}
+
+.admin-polish .modal-footer {
+    border-top: 1px solid #edf1f5;
+}
+
+.admin-polish .nav-tabs {
+    border-bottom: 1px solid #e4e9f0;
+    gap: 4px;
+}
+
+.admin-polish .nav-tabs .nav-link {
+    border: 1px solid transparent;
+    border-radius: 10px 10px 0 0;
+    color: #5b6679;
+    font-weight: 600;
+}
+
+.admin-polish .nav-tabs .nav-link.active {
+    color: #111827;
+    background: #fff;
+    border-color: #e4e9f0 #e4e9f0 #fff;
+}
+
+/* Kiosk-specific polish */
+.admin-polish.kiosk-page .admin-main {
+    padding-bottom: 16px;
+}
+
+.admin-polish.kiosk-page .kiosk-container {
+    gap: 16px;
+}
+
+.admin-polish.kiosk-page .product-grid-wrapper,
+.admin-polish.kiosk-page .cart {
+    border: 1px solid var(--ui-card-border);
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: var(--ui-shadow-soft);
+}
+
+.admin-polish.kiosk-page .product-grid-wrapper {
+    padding: 12px;
+}
+
+.admin-polish.kiosk-page .product-card {
+    border: 1px solid #edf1f6;
+    border-radius: 14px;
+    box-shadow: 0 8px 16px rgba(17, 24, 39, 0.06);
+}
+
+.admin-polish.kiosk-page .product-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 14px 24px rgba(17, 24, 39, 0.12);
+}
+
+.admin-polish.kiosk-page .category-pill {
+    border: 1px solid #e4e8ef;
+    border-radius: 999px;
+    padding: 7px 14px;
+    background: #fff;
+}
+
+.admin-polish.kiosk-page .category-pill.active {
+    background: var(--ui-accent);
+    border-color: var(--ui-accent);
+    color: #fff;
+}
+
+.admin-polish.kiosk-page .cart-header {
+    background: linear-gradient(180deg, #fff, #f7f9fc);
+}
+
+/* Dark mode support */
+body.admin-polish.dark-mode {
+    --ui-card-bg: #1f2530;
+    --ui-card-border: #313948;
+    --ui-soft-bg: #1b212b;
+    --ui-heading: #e8edf5;
+    --ui-muted: #b6bfce;
+}
+
+body.admin-polish.dark-mode .admin-main {
+    background: #161b23;
+}
+
+body.admin-polish.dark-mode .section-header,
+body.admin-polish.dark-mode .table-responsive,
+body.admin-polish.dark-mode .admin-profile,
+body.admin-polish.dark-mode .stat-card,
+body.admin-polish.dark-mode .modal-content,
+body.admin-polish.dark-mode .product-grid-wrapper,
+body.admin-polish.dark-mode .cart {
+    background: var(--ui-card-bg) !important;
+    border-color: var(--ui-card-border) !important;
+    color: #e7ecf5 !important;
+}
+
+body.admin-polish.dark-mode .admin-table thead th {
+    background: #252d3a !important;
+    border-color: #303a49 !important;
+    color: #dbe4f3 !important;
+}
+
+body.admin-polish.dark-mode .admin-table tbody tr:nth-child(even) {
+    background: #202734 !important;
+}
+
+body.admin-polish.dark-mode .admin-table tbody tr:hover {
+    background: #263040 !important;
+}
+
+body.admin-polish.dark-mode .filter-form .form-control,
+body.admin-polish.dark-mode .filter-form .form-select {
+    background: #1d2430 !important;
+    border-color: #364051 !important;
+    color: #e5ebf5 !important;
+}
+
+body.admin-polish.dark-mode .nav-tabs .nav-link {
+    color: #b9c3d4 !important;
+}
+
+body.admin-polish.dark-mode .nav-tabs .nav-link.active {
+    background: #1f2530 !important;
+    border-color: #3b4454 #3b4454 #1f2530 !important;
+    color: #ecf1fb !important;
+}
+
+@media (max-width: 992px) {
+    .admin-polish .admin-main {
+        padding: 16px;
+    }
+
+    .admin-polish .section-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .admin-polish .filter-form {
+        width: 100%;
+        grid-template-columns: 1fr;
+    }
+
+    .admin-polish.kiosk-page .kiosk-container {
+        flex-direction: column;
+        height: auto !important;
+    }
+
+    .admin-polish.kiosk-page .kiosk-right {
+        width: 100% !important;
+    }
+}

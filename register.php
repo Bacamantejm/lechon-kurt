@@ -1,0 +1,3489 @@
+<?php
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+require_once 'includes/config.php';
+require_once 'includes/email_verification_helper.php';
+require_once 'includes/security.php';
+
+// If already logged in, redirect
+if (isset($_SESSION['user_id'])) {
+    header('Location: index.php');
+    exit;
+}
+
+$error = '';
+$success = '';
+$form_data = [];
+$requested_account_type = strtolower(trim((string)($_GET['account_type'] ?? '')));
+$partner_signup_flag = strtolower(trim((string)($_GET['partner_signup'] ?? '')));
+$is_partner_signup = (
+    $requested_account_type === 'organization' ||
+    in_array($partner_signup_flag, ['1', 'true', 'yes'], true)
+);
+
+if ($is_partner_signup) {
+    $form_data['account_type'] = 'organization';
+}
+
+if (empty($_SESSION['registration_csrf_token'])) {
+    $_SESSION['registration_csrf_token'] = bin2hex(random_bytes(32));
+}
+
+if (!isset($_SESSION['registration_security'])) {
+    $_SESSION['registration_security'] = [
+        'attempts' => 0,
+        'window_started_at' => time(),
+        'blocked_until' => 0,
+    ];
+}
+
+if (!function_exists('normalizePhilippineMobile')) {
+    function normalizePhilippineMobile($phone)
+    {
+        $cleaned = preg_replace('/[^0-9]/', '', (string)$phone);
+
+        if (preg_match('/^63[0-9]{10}$/', $cleaned)) {
+            return '0' . substr($cleaned, 2);
+        }
+
+        if (preg_match('/^9[0-9]{9}$/', $cleaned)) {
+            return '0' . $cleaned;
+        }
+
+        return $cleaned;
+    }
+}
+
+if (!function_exists('isLuzonRegionSelection')) {
+    function isLuzonRegionSelection($region_code, $region_name)
+    {
+        $region_code = trim((string)$region_code);
+        $region_name = strtolower(trim((string)$region_name));
+        $region_name = preg_replace('/\s+/', ' ', $region_name);
+
+        $luzon_region_codes = [
+            '010000000', // Ilocos Region
+            '020000000', // Cagayan Valley
+            '030000000', // Central Luzon
+            '040000000', // CALABARZON
+            '050000000', // Bicol Region
+            '130000000', // NCR
+            '140000000', // CAR
+            '170000000'  // MIMAROPA
+        ];
+
+        if ($region_code !== '' && in_array($region_code, $luzon_region_codes, true)) {
+            return true;
+        }
+
+        $luzon_name_markers = [
+            'ilocos',
+            'cagayan valley',
+            'central luzon',
+            'calabarzon',
+            'bicol',
+            'national capital region',
+            'ncr',
+            'cordillera',
+            'mimaropa'
+        ];
+
+        foreach ($luzon_name_markers as $marker) {
+            if ($region_name !== '' && strpos($region_name, $marker) !== false) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}
+
+if (!function_exists('registrationColumnExists')) {
+    function registrationColumnExists($conn, $table_name, $column_name)
+    {
+        $table_name = trim((string)$table_name);
+        $column_name = trim((string)$column_name);
+        if ($table_name === '' || $column_name === '') {
+            return false;
+        }
+        $safe_table = mysqli_real_escape_string($conn, $table_name);
+        $safe_column = mysqli_real_escape_string($conn, $column_name);
+        $result = mysqli_query($conn, "SHOW COLUMNS FROM `{$safe_table}` LIKE '{$safe_column}'");
+        return ($result && mysqli_num_rows($result) > 0);
+    }
+}
+
+if (!function_exists('ensureRegistrationValidIdSchema')) {
+    function ensureRegistrationValidIdSchema($conn)
+    {
+        $table_sql = "CREATE TABLE IF NOT EXISTS `user_valid_id_documents` (
+            `id` int(11) NOT NULL AUTO_INCREMENT,
+            `user_id` int(11) NOT NULL,
+            `document_type` varchar(50) NOT NULL DEFAULT 'valid_id',
+            `file_name` varchar(255) NOT NULL,
+            `file_path` varchar(500) NOT NULL,
+            `uploaded_at` timestamp NOT NULL DEFAULT current_timestamp(),
+            PRIMARY KEY (`id`),
+            KEY `idx_user_valid_id_documents_user` (`user_id`),
+            CONSTRAINT `fk_user_valid_id_documents_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci";
+
+        if (!mysqli_query($conn, $table_sql)) {
+            error_log('Failed to ensure valid ID schema table: ' . mysqli_error($conn));
+            return false;
+        }
+
+        $required_columns = [
+            'id' => "ALTER TABLE `user_valid_id_documents` ADD COLUMN `id` INT(11) NOT NULL AUTO_INCREMENT PRIMARY KEY FIRST",
+            'user_id' => "ALTER TABLE `user_valid_id_documents` ADD COLUMN `user_id` INT(11) NOT NULL AFTER `id`",
+            'document_type' => "ALTER TABLE `user_valid_id_documents` ADD COLUMN `document_type` VARCHAR(50) NOT NULL DEFAULT 'valid_id' AFTER `user_id`",
+            'file_name' => "ALTER TABLE `user_valid_id_documents` ADD COLUMN `file_name` VARCHAR(255) NOT NULL AFTER `document_type`",
+            'file_path' => "ALTER TABLE `user_valid_id_documents` ADD COLUMN `file_path` VARCHAR(500) NOT NULL AFTER `file_name`",
+            'uploaded_at' => "ALTER TABLE `user_valid_id_documents` ADD COLUMN `uploaded_at` TIMESTAMP NOT NULL DEFAULT current_timestamp() AFTER `file_path`",
+        ];
+
+        foreach ($required_columns as $column_name => $alter_sql) {
+            if (!registrationColumnExists($conn, 'user_valid_id_documents', $column_name)) {
+                if (!mysqli_query($conn, $alter_sql)) {
+                    error_log('Failed to ensure valid ID schema column ' . $column_name . ': ' . mysqli_error($conn));
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+}
+
+if (!function_exists('validateRegistrationValidIdUpload')) {
+    function validateRegistrationValidIdUpload($file)
+    {
+        if (!isset($file) || !is_array($file) || !isset($file['error']) || (int)$file['error'] === UPLOAD_ERR_NO_FILE) {
+            return ['valid' => false, 'message' => 'Please upload a valid ID image.'];
+        }
+
+        if ((int)$file['error'] !== UPLOAD_ERR_OK) {
+            $upload_errors = [
+                UPLOAD_ERR_INI_SIZE => 'The uploaded ID is too large.',
+                UPLOAD_ERR_FORM_SIZE => 'The uploaded ID is too large.',
+                UPLOAD_ERR_PARTIAL => 'The uploaded ID was only partially uploaded. Please try again.',
+                UPLOAD_ERR_NO_TMP_DIR => 'Upload failed: missing temporary folder.',
+                UPLOAD_ERR_CANT_WRITE => 'Upload failed: unable to write file.',
+                UPLOAD_ERR_EXTENSION => 'Upload blocked by server extension.',
+            ];
+            $message = $upload_errors[(int)$file['error']] ?? 'Unable to upload your valid ID right now.';
+            return ['valid' => false, 'message' => $message];
+        }
+
+        $allowed_types = ['image/jpeg', 'image/png', 'image/webp'];
+        $validation = validateFileUpload($file, $allowed_types, 5 * 1024 * 1024);
+        if (empty($validation['valid'])) {
+            $errors = $validation['errors'] ?? [];
+            $friendly_message = !empty($errors)
+                ? (string)$errors[0]
+                : 'Please upload a clear JPG, PNG, or WEBP valid ID image up to 5MB.';
+            return ['valid' => false, 'message' => $friendly_message];
+        }
+
+        return [
+            'valid' => true,
+            'mime_type' => (string)($validation['mime_type'] ?? '')
+        ];
+    }
+}
+
+if (!function_exists('saveRegistrationValidIdDocument')) {
+    function saveRegistrationValidIdDocument($conn, $user_id, $uploaded_file)
+    {
+        $user_id = (int)$user_id;
+        if ($user_id <= 0) {
+            return ['success' => false, 'message' => 'Unable to map uploaded ID to account.'];
+        }
+
+        $validation = validateRegistrationValidIdUpload($uploaded_file);
+        if (empty($validation['valid'])) {
+            return ['success' => false, 'message' => (string)($validation['message'] ?? 'Please upload a valid ID image.')];
+        }
+
+        if (!ensureRegistrationValidIdSchema($conn)) {
+            return ['success' => false, 'message' => 'Unable to prepare secure ID storage. Please try again in a moment.'];
+        }
+
+        $upload_dir = __DIR__ . '/uploads/user_valid_ids/';
+        if (!is_dir($upload_dir) && !mkdir($upload_dir, 0755, true) && !is_dir($upload_dir)) {
+            return ['success' => false, 'message' => 'Unable to create upload directory for valid IDs.'];
+        }
+
+        $mime_to_ext = [
+            'image/jpeg' => 'jpg',
+            'image/png' => 'png',
+            'image/webp' => 'webp'
+        ];
+        $mime_type = (string)($validation['mime_type'] ?? '');
+        $extension = $mime_to_ext[$mime_type] ?? '';
+        if ($extension === '') {
+            $original_ext = strtolower((string)pathinfo((string)($uploaded_file['name'] ?? ''), PATHINFO_EXTENSION));
+            if (in_array($original_ext, ['jpg', 'jpeg', 'png', 'webp'], true)) {
+                $extension = $original_ext === 'jpeg' ? 'jpg' : $original_ext;
+            }
+        }
+        if ($extension === '') {
+            $extension = 'jpg';
+        }
+
+        $original_name = (string)($uploaded_file['name'] ?? 'valid_id');
+        $base_name = preg_replace('/[^A-Za-z0-9._-]/', '_', (string)pathinfo($original_name, PATHINFO_FILENAME));
+        $base_name = trim((string)$base_name, '._-');
+        if ($base_name === '') {
+            $base_name = 'valid_id';
+        }
+        $base_name = substr($base_name, 0, 40);
+
+        $unique_name = $user_id . '_valid_id_' . time() . '_' . random_int(1000, 9999) . '_' . $base_name . '.' . $extension;
+        $target_path = $upload_dir . $unique_name;
+        $relative_path = 'uploads/user_valid_ids/' . $unique_name;
+
+        if (!move_uploaded_file((string)$uploaded_file['tmp_name'], $target_path)) {
+            return ['success' => false, 'message' => 'Unable to save the uploaded valid ID. Please try again.'];
+        }
+
+        $insert_sql = "INSERT INTO user_valid_id_documents (user_id, document_type, file_name, file_path) VALUES (?, 'valid_id', ?, ?)";
+        $stmt = mysqli_prepare($conn, $insert_sql);
+        if (!$stmt) {
+            @unlink($target_path);
+            error_log('Valid ID metadata prepare failed: ' . mysqli_error($conn));
+            return ['success' => false, 'message' => 'Unable to record valid ID metadata right now.'];
+        }
+
+        mysqli_stmt_bind_param($stmt, "iss", $user_id, $unique_name, $relative_path);
+        $ok = mysqli_stmt_execute($stmt);
+        if (!$ok) {
+            $db_error = mysqli_stmt_error($stmt);
+            mysqli_stmt_close($stmt);
+            @unlink($target_path);
+            error_log('Valid ID metadata insert failed: ' . $db_error);
+            return ['success' => false, 'message' => 'Unable to save your valid ID record right now.'];
+        }
+        mysqli_stmt_close($stmt);
+
+        return ['success' => true, 'file_path' => $relative_path];
+    }
+}
+
+ensureUserEmailVerificationSchema($conn);
+
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    $max_attempts = 6;
+    $window_seconds = 600;
+    $lock_seconds = 900;
+    $now = time();
+
+    if (
+        isset($_SESSION['registration_security']['window_started_at']) &&
+        ($now - (int)$_SESSION['registration_security']['window_started_at']) > $window_seconds
+    ) {
+        $_SESSION['registration_security']['attempts'] = 0;
+        $_SESSION['registration_security']['window_started_at'] = $now;
+    }
+
+    if (!empty($_SESSION['registration_security']['blocked_until']) && (int)$_SESSION['registration_security']['blocked_until'] > $now) {
+        $wait_seconds = (int)$_SESSION['registration_security']['blocked_until'] - $now;
+        $error = 'Too many registration attempts. Please try again in ' . ceil($wait_seconds / 60) . ' minute(s).';
+    }
+
+    // Get form data
+    $account_type = strtolower(trim($_POST['account_type'] ?? ($is_partner_signup ? 'organization' : 'individual')));
+    if ($is_partner_signup) {
+        $account_type = 'organization';
+    }
+    $first_name = preg_replace('/\s+/', ' ', trim($_POST['first_name'] ?? ''));
+    $last_name = preg_replace('/\s+/', ' ', trim($_POST['last_name'] ?? ''));
+    $middle_name = preg_replace('/\s+/', ' ', trim($_POST['middle_name'] ?? ''));
+    $nickname = preg_replace('/\s+/', ' ', trim($_POST['nickname'] ?? ''));
+    $birth_date = trim($_POST['birth_date'] ?? '');
+    $gender = strtolower(trim($_POST['gender'] ?? ''));
+    $email = strtolower(trim($_POST['email'] ?? ''));
+    $phone = trim($_POST['phone'] ?? '');
+    $password = $_POST['password'] ?? '';
+    $confirm_password = $_POST['confirm_password'] ?? '';
+    $accept_terms = isset($_POST['accept_terms']);
+    $valid_id_file = $_FILES['valid_id_file'] ?? null;
+    
+    // Business partner fields
+    $business_name = preg_replace('/\s+/', ' ', trim($_POST['business_name'] ?? ''));
+    $business_type = 'restaurant';
+    $business_registration = trim($_POST['business_registration'] ?? '');
+    $website = null;
+    $tax_id = trim($_POST['tax_id'] ?? '');
+    $street_address = trim($_POST['street_address'] ?? '');
+    $address = trim($_POST['address'] ?? '');
+    $psgc_region_code = trim($_POST['psgc_region_code'] ?? '');
+    $psgc_region_name = trim($_POST['psgc_region_name'] ?? '');
+    $psgc_province_code = trim($_POST['psgc_province_code'] ?? '');
+    $psgc_province_name = trim($_POST['psgc_province_name'] ?? '');
+    $psgc_city_code = trim($_POST['psgc_city_code'] ?? '');
+    $psgc_city_name = trim($_POST['psgc_city_name'] ?? '');
+    $psgc_barangay_code = trim($_POST['psgc_barangay_code'] ?? '');
+    $psgc_barangay_name = trim($_POST['psgc_barangay_name'] ?? '');
+
+    $address_parts = array_filter([
+        $street_address,
+        $psgc_barangay_name,
+        $psgc_city_name,
+        $psgc_province_name,
+        $psgc_region_name
+    ], static function ($part) {
+        return $part !== '';
+    });
+
+    if (!empty($address_parts)) {
+        $address = implode(', ', array_unique($address_parts));
+    }
+
+    // Store form data for repopulation
+    $form_data = [
+        'account_type' => $account_type,
+        'first_name' => $first_name,
+        'last_name' => $last_name,
+        'middle_name' => $middle_name,
+        'nickname' => $nickname,
+        'birth_date' => $birth_date,
+        'gender' => $gender,
+        'email' => $email,
+        'phone' => $phone,
+        'business_name' => $business_name,
+        'business_type' => $business_type,
+        'business_registration' => $business_registration,
+        'tax_id' => $tax_id,
+        'street_address' => $street_address,
+        'address' => $address,
+        'psgc_region_code' => $psgc_region_code,
+        'psgc_region_name' => $psgc_region_name,
+        'psgc_province_code' => $psgc_province_code,
+        'psgc_province_name' => $psgc_province_name,
+        'psgc_city_code' => $psgc_city_code,
+        'psgc_city_name' => $psgc_city_name,
+        'psgc_barangay_code' => $psgc_barangay_code,
+        'psgc_barangay_name' => $psgc_barangay_name
+    ];
+
+    // Validation
+    if ($error === '') {
+        $csrf_token = $_POST['csrf_token'] ?? '';
+        if (empty($csrf_token) || empty($_SESSION['registration_csrf_token']) || !hash_equals($_SESSION['registration_csrf_token'], $csrf_token)) {
+            $error = 'Invalid security token. Please refresh the page and try again.';
+        } elseif (!in_array($account_type, ['individual', 'organization'], true)) {
+            $error = 'Invalid account type selected.';
+        } elseif (!$accept_terms) {
+            $error = 'You must accept the Terms of Service and Privacy Policy.';
+        } elseif (empty($first_name) || empty($last_name)) {
+            $error = 'Please enter your first and last name.';
+        } elseif (!preg_match('/^[\p{L}\p{M}\'\-\s]{2,60}$/u', $first_name) || !preg_match('/^[\p{L}\p{M}\'\-\s]{2,60}$/u', $last_name)) {
+            $error = 'Please enter a valid first and last name.';
+        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $error = 'Please enter a valid email address.';
+        } elseif (!preg_match('/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,72}$/', $password)) {
+            $error = 'Password must be 8-72 characters with uppercase, lowercase, number, and symbol.';
+        } elseif (!hash_equals($password, $confirm_password)) {
+            $error = 'Passwords do not match.';
+        } elseif (empty($phone)) {
+            $error = 'Please enter your mobile number.';
+        } elseif (empty($valid_id_file) || !is_array($valid_id_file) || (int)($valid_id_file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+            $error = 'Please upload your valid ID in Personal Information.';
+        } else {
+            $valid_id_validation = validateRegistrationValidIdUpload($valid_id_file);
+            if (empty($valid_id_validation['valid'])) {
+                $error = (string)($valid_id_validation['message'] ?? 'Please upload a clear JPG, PNG, or WEBP valid ID image up to 5MB.');
+            }
+        }
+
+        if ($error === '' && $account_type === 'organization' && empty($business_name)) {
+            $error = 'Please enter your restaurant name.';
+        } elseif ($error === '' && strlen($address) < 10) {
+            $error = 'Please provide a complete delivery address.';
+        } elseif (
+            $error === '' &&
+            ($psgc_region_code !== '' || $psgc_region_name !== '' || $psgc_city_code !== '' || $psgc_city_name !== '' || $psgc_barangay_code !== '' || $psgc_barangay_name !== '') &&
+            ($psgc_region_name === '' || $psgc_city_name === '' || $psgc_barangay_name === '')
+        ) {
+            $error = 'Please complete the PSGC address fields (region, city/municipality, and barangay).';
+        } elseif ($error === '' && $account_type === 'organization') {
+            $is_complete_org_psgc = (
+                $psgc_region_code !== '' && $psgc_region_name !== '' &&
+                $psgc_province_code !== '' && $psgc_province_name !== '' &&
+                $psgc_city_code !== '' && $psgc_city_name !== '' &&
+                $psgc_barangay_code !== '' && $psgc_barangay_name !== ''
+            );
+
+            if (!$is_complete_org_psgc) {
+                $error = 'Please complete your PSGC business address details for Cavite (Region IV-A CALABARZON).';
+            } elseif (
+                ($psgc_region_code !== '040000000') ||
+                (stripos($psgc_region_name, 'calabarzon') === false)
+            ) {
+                $error = 'Business partner registration is limited to CALABARZON (Region IV-A).';
+            } elseif (
+                ($psgc_province_code !== '042100000') ||
+                (stripos($psgc_province_name, 'cavite') === false)
+            ) {
+                $error = 'Business partner registration is limited to Cavite province.';
+            }
+        } elseif ($error === '') {
+            $is_ncr_region = (
+                $psgc_region_code === '130000000' ||
+                stripos($psgc_region_name, 'national capital region') !== false ||
+                preg_match('/\bncr\b/i', $psgc_region_name)
+            );
+
+            $is_complete_individual_psgc = (
+                $psgc_region_code !== '' && $psgc_region_name !== '' &&
+                $psgc_city_code !== '' && $psgc_city_name !== '' &&
+                $psgc_barangay_code !== '' && $psgc_barangay_name !== '' &&
+                ($is_ncr_region || ($psgc_province_code !== '' && $psgc_province_name !== ''))
+            );
+
+            if (!$is_complete_individual_psgc) {
+                $error = 'Please complete your PSGC home address details for Luzon.';
+            } elseif (!isLuzonRegionSelection($psgc_region_code, $psgc_region_name)) {
+                $error = 'Individual registration is limited to Luzon regions only.';
+            }
+        }
+    }
+
+    if ($error === '') {
+        $phone_cleaned = normalizePhilippineMobile($phone);
+        $business_registration = preg_replace('/[^A-Za-z0-9\- ]/', '', $business_registration);
+        $tax_id = preg_replace('/[^A-Za-z0-9\- ]/', '', $tax_id);
+        $full_name = trim($first_name . ' ' . $last_name);
+        $address = preg_replace('/\s+/', ' ', $address);
+        if (strlen($address) > 255) {
+            $address = substr($address, 0, 255);
+        }
+
+        $result = registerUser(
+            $conn,
+            $email,
+            $password,
+            $full_name,
+            $phone_cleaned,
+            $address,
+            $account_type,
+            $business_name,
+            $business_type,
+            $business_registration,
+            $website,
+            $tax_id,
+            $middle_name,
+            $birth_date,
+            $gender,
+            $nickname
+        );
+
+        if (!empty($result['success']) && $error === '') {
+            $created_user_id = (int)($result['user_id'] ?? 0);
+            $saved_valid_id = saveRegistrationValidIdDocument($conn, $created_user_id, $valid_id_file);
+            if (empty($saved_valid_id['success'])) {
+                if ($created_user_id > 0) {
+                    $cleanup_stmt = mysqli_prepare($conn, "DELETE FROM users WHERE id = ? LIMIT 1");
+                    if ($cleanup_stmt) {
+                        mysqli_stmt_bind_param($cleanup_stmt, "i", $created_user_id);
+                        mysqli_stmt_execute($cleanup_stmt);
+                        mysqli_stmt_close($cleanup_stmt);
+                    }
+                }
+                $error = (string)($saved_valid_id['message'] ?? 'Unable to save your valid ID. Please try again.');
+            }
+        }
+
+        if (!empty($result['success']) && $error === '') {
+            $email_verification = issueUserEmailVerification(
+                $conn,
+                (int)$result['user_id'],
+                $email,
+                $full_name
+            );
+
+            $_SESSION['registration_security'] = [
+                'attempts' => 0,
+                'window_started_at' => $now,
+                'blocked_until' => 0,
+            ];
+            $_SESSION['registration_csrf_token'] = bin2hex(random_bytes(32));
+            session_regenerate_id(true);
+
+            $verification_notice = 'Your account was created successfully. We sent a confirmation email to ' . $email . '. Please open it and click the verification button to activate your account.';
+            $verification_link = '';
+            if (empty($email_verification['success'])) {
+                $verification_notice = 'Your account was created successfully. We could not send the confirmation email automatically, but you can verify your address from the next screen.';
+                $verification_link = (string)($email_verification['verification_url'] ?? '');
+            }
+
+            $_SESSION['register_success'] = true;
+            $_SESSION['register_email'] = $email;
+            $_SESSION['registration_verification_notice'] = $verification_notice;
+            $_SESSION['registration_verification_link'] = $verification_link;
+
+            header('Location: login.php');
+            exit;
+        }
+
+        if ($error === '' && empty($result['success'])) {
+            $error = $result['message'] ?? 'Unable to create your account right now.';
+        }
+    }
+
+    if ($error !== '') {
+        $_SESSION['registration_security']['attempts'] = (int)($_SESSION['registration_security']['attempts'] ?? 0) + 1;
+        if ($_SESSION['registration_security']['attempts'] >= $max_attempts) {
+            $_SESSION['registration_security']['blocked_until'] = $now + $lock_seconds;
+            $_SESSION['registration_security']['attempts'] = 0;
+            $_SESSION['registration_security']['window_started_at'] = $now;
+            $error = 'Too many registration attempts. Please try again in 15 minutes.';
+        }
+    }
+}
+
+$page_title = "Create Account | Lechon Delights";
+include 'includes/header.php';
+?>
+
+<!-- SweetAlert2 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<!-- Add this for better mobile input handling -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+
+<style>
+.registration-page {
+    min-height: calc(100vh - 200px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    -webkit-tap-highlight-color: transparent; /* Remove tap highlight on mobile */
+}
+
+.registration-container {
+    background-color: white;
+    border-radius: 16px;
+    box-shadow: 0 15px 50px rgba(0, 0, 0, 0.1);
+    max-width: 800px;
+    width: 100%;
+    overflow: hidden;
+    animation: fadeIn 0.6s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(30px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.registration-header {
+    background: linear-gradient(135deg, #8B0000 0%, #c62828 100%);
+    color: white;
+    padding: 30px 40px;
+    text-align: center;
+}
+
+.registration-header h1 {
+    font-size: 2rem;
+    margin: 0 0 10px 0;
+    font-weight: 700;
+}
+
+.registration-header p {
+    margin: 0;
+    opacity: 0.9;
+    font-size: 1.05rem;
+}
+
+.registration-intro {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 18px 20px;
+    margin-bottom: 24px;
+    background: #fff8f2;
+    border: 1px solid #f2d4c2;
+    border-radius: 14px;
+    color: #6b3c1d;
+}
+
+.registration-intro-icon {
+    flex-shrink: 0;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: #c62828;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.05rem;
+}
+
+.registration-intro h2 {
+    margin: 0 0 6px;
+    font-size: 1.1rem;
+    color: #333;
+}
+
+.registration-intro p {
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: #666;
+}
+
+.registration-body {
+    padding: 40px;
+}
+
+/* Progress Steps */
+.progress-steps {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 40px;
+    position: relative;
+}
+
+.progress-steps::before {
+    content: '';
+    position: absolute;
+    top: 20px;
+    left: 10%;
+    right: 10%;
+    height: 3px;
+    background: #e0e0e0;
+    z-index: 1;
+}
+
+.progress-bar {
+    position: absolute;
+    top: 20px;
+    left: 10%;
+    right: 10%;
+    height: 3px;
+    background: #c62828;
+    z-index: 2;
+    transition: all 0.3s ease;
+    transform-origin: left;
+}
+
+.step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    z-index: 3;
+    flex: 1;
+}
+
+.step-number {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #e0e0e0;
+    color: #666;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 1.1rem;
+    margin-bottom: 10px;
+    transition: all 0.3s ease;
+    border: 3px solid white;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.step.active .step-number {
+    background: #c62828;
+    color: white;
+    transform: scale(1.1);
+}
+
+.step.completed .step-number {
+    background: #4CAF50;
+    color: white;
+}
+
+.step-label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #666;
+    text-align: center;
+}
+
+.step.active .step-label {
+    color: #c62828;
+}
+
+/* Form Steps */
+.form-step {
+    display: none;
+    animation: slideIn 0.5s ease;
+}
+
+@keyframes slideIn {
+    from { opacity: 0; transform: translateX(30px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+.form-step.active {
+    display: block;
+}
+
+/* Account Type Selection */
+.account-type-selection {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.account-type-card {
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    padding: 30px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: white;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+}
+
+.account-type-card:hover {
+    border-color: #c62828;
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+}
+
+.account-type-card.selected {
+    border-color: #c62828;
+    background: linear-gradient(135deg, rgba(198, 40, 40, 0.05) 0%, rgba(139, 0, 0, 0.05) 100%);
+}
+
+.account-type-card i {
+    font-size: 3rem;
+    color: #c62828;
+    margin-bottom: 20px;
+}
+
+.account-type-card h3 {
+    margin: 0 0 10px 0;
+    color: #333;
+    font-size: 1.3rem;
+}
+
+.account-type-card p {
+    color: #666;
+    font-size: 0.95rem;
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* Form Styles */
+.form-group {
+    margin-bottom: 25px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: #333;
+    font-weight: 600;
+    font-size: 0.95rem;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.form-control {
+    width: 100%;
+    padding: 15px 18px;
+    border: 2px solid #e0e0e0;
+    border-radius: 10px;
+    font-size: 1rem;
+    transition: all 0.3s;
+    font-family: inherit;
+    background-color: #fafafa;
+    -webkit-appearance: none; /* Remove iOS input styling */
+    appearance: none;
+    min-height: 50px; /* Better touch target */
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: #c62828;
+    background-color: white;
+    box-shadow: 0 0 0 4px rgba(198, 40, 40, 0.1);
+}
+
+.input-with-icon {
+    position: relative;
+}
+
+.input-with-icon i {
+    position: absolute;
+    left: 18px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #999;
+    font-size: 1.1rem;
+    pointer-events: none; /* Prevent icon from interfering with clicks */
+}
+
+.input-with-icon .form-control {
+    padding-left: 50px;
+}
+
+.password-wrapper {
+    position: relative;
+}
+
+.toggle-password {
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #666;
+    cursor: pointer;
+    padding: 12px; /* Larger touch target */
+    font-size: 1.1rem;
+    transition: color 0.3s;
+    z-index: 10; /* Ensure button is above other elements */
+    -webkit-tap-highlight-color: transparent;
+}
+
+.toggle-password:hover {
+    color: #c62828;
+}
+
+/* Form Row */
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+/* Button Styles */
+.btn-primary {
+    width: 100%;
+    padding: 18px; /* Increased padding for better touch */
+    background: linear-gradient(135deg, #c62828 0%, #8B0000 100%);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    position: relative;
+    overflow: hidden;
+    letter-spacing: 0.5px;
+    min-height: 56px; /* Better touch target */
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation; /* Improve touch response */
+}
+
+.btn-primary:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 30px rgba(198, 40, 40, 0.3);
+}
+
+.btn-primary:active {
+    transform: translateY(-1px);
+}
+
+.btn-primary:disabled {
+    background: #cccccc;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.btn-primary.loading {
+    color: transparent;
+}
+
+.btn-primary.loading::after {
+    content: '';
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.btn-secondary {
+    width: 100%;
+    padding: 18px; /* Increased padding for better touch */
+    background: white;
+    color: #c62828;
+    border: 2px solid #c62828;
+    border-radius: 10px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    letter-spacing: 0.5px;
+    min-height: 56px; /* Better touch target */
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation; /* Improve touch response */
+}
+
+.btn-secondary:hover {
+    background: linear-gradient(135deg, #c62828 0%, #8B0000 100%);
+    color: white;
+    transform: translateY(-3px);
+    box-shadow: 0 10px 30px rgba(198, 40, 40, 0.3);
+}
+
+.form-actions {
+    display: flex;
+    gap: 15px;
+    margin-top: 30px;
+}
+
+/* Password Strength */
+.password-strength {
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.strength-indicator {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.strength-text {
+    font-weight: 600;
+    min-width: 50px;
+}
+
+.strength-bars {
+    display: flex;
+    gap: 4px;
+    flex: 1;
+}
+
+.strength-bar {
+    flex: 1;
+    height: 6px;
+    background-color: #e0e0e0;
+    border-radius: 3px;
+    transition: all 0.3s;
+}
+
+.strength-bar.weak {
+    background-color: #ff5252;
+}
+
+.strength-bar.medium {
+    background-color: #ff9800;
+}
+
+.strength-bar.strong {
+    background-color: #4caf50;
+}
+
+/* Verification Note */
+.verification-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin: 16px 0 18px;
+    padding: 14px 16px;
+    border-radius: 12px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    color: #334155;
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+.verification-note i {
+    margin-top: 2px;
+    color: #c62828;
+    font-size: 1rem;
+}
+
+/* Terms Agreement */
+.terms-agreement {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 25px;
+    padding: 15px;
+    background-color: #f9f9f9;
+    border-radius: 10px;
+    border-left: 4px solid #c62828;
+}
+
+.terms-agreement input {
+    margin-top: 3px;
+    accent-color: #c62828;
+    cursor: pointer;
+    min-width: 18px; /* Better touch target */
+    min-height: 18px;
+}
+
+.terms-agreement label {
+    color: #666;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.terms-agreement a {
+    color: #c62828;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.terms-agreement a:hover {
+    text-decoration: underline;
+}
+
+/* Auth Link */
+.auth-link {
+    text-align: center;
+    margin-top: 25px;
+    color: #666;
+    font-size: 0.95rem;
+    padding-top: 20px;
+    border-top: 1px solid #eee;
+}
+
+.auth-link a {
+    color: #c62828;
+    text-decoration: none;
+    font-weight: 600;
+    margin-left: 5px;
+    transition: all 0.3s;
+}
+
+.auth-link a:hover {
+    color: #8B0000;
+    text-decoration: underline;
+}
+
+/* Social Login Divider */
+.social-divider {
+    display: flex;
+    align-items: center;
+    margin: 25px 0 20px;
+    gap: 15px;
+    color: #999;
+    font-size: 0.9rem;
+}
+
+.social-divider::before,
+.social-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background-color: #e0e0e0;
+}
+
+/* Social Login Buttons */
+.social-login-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.social-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px;
+    border: 2px solid #e0e0e0;
+    border-radius: 10px;
+    background-color: #fafafa;
+    color: #333;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+    position: relative;
+    overflow: hidden;
+    min-height: 50px;
+}
+
+.social-btn:hover {
+    border-color: #333;
+    background-color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.social-btn:active {
+    transform: translateY(0);
+}
+
+.social-btn i {
+    font-size: 1.2rem;
+}
+
+.social-btn span {
+    display: none;
+}
+
+/* Social button specific colors */
+.google-btn {
+    border-color: #EA4335;
+    color: #EA4335;
+}
+
+.google-btn:hover {
+    background-color: #EA4335;
+    color: white;
+}
+
+.facebook-btn {
+    border-color: #1877F2;
+    color: #1877F2;
+}
+
+.facebook-btn:hover {
+    background-color: #1877F2;
+    color: white;
+}
+
+.twitter-btn {
+    border-color: #000;
+    color: #000;
+}
+
+.twitter-btn:hover {
+    background-color: #000;
+    color: white;
+}
+
+.instagram-btn {
+    border-color: #E4405F;
+    color: #E4405F;
+}
+
+.instagram-btn:hover {
+    background-color: #E4405F;
+    color: white;
+}
+
+@media (min-width: 576px) {
+    .social-btn span {
+        display: inline;
+    }
+    
+    .social-login-buttons {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+/* Mobile-specific fixes */
+@media (max-width: 768px) {
+    .registration-body {
+        padding: 30px 25px;
+    }
+    
+    .account-type-selection {
+        grid-template-columns: 1fr;
+    }
+    
+    .form-row {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    
+    .progress-steps {
+        flex-direction: column;
+        gap: 20px;
+    }
+    
+    .progress-steps::before,
+    .progress-bar {
+        display: none;
+    }
+    
+    .step {
+        flex-direction: row;
+        gap: 15px;
+        width: 100%;
+        justify-content: flex-start;
+    }
+    
+    .step-number {
+        margin-bottom: 0;
+        flex-shrink: 0;
+    }
+    
+    .step-label {
+        text-align: left;
+    }
+    
+    /* Fix for mobile inputs */
+    input, select, textarea, button {
+        font-size: 16px !important; /* Prevents iOS zoom on focus */
+    }
+    
+    .form-control {
+        padding: 14px 16px;
+        min-height: 52px;
+    }
+    
+    .btn-primary, .btn-secondary {
+        padding: 16px;
+        min-height: 52px;
+        font-size: 1rem;
+    }
+    
+    /* Prevent form from jumping on mobile */
+    .registration-container {
+        margin: 10px;
+        max-width: calc(100% - 20px);
+    }
+}
+
+@media (max-width: 480px) {
+    .registration-header {
+        padding: 25px 20px;
+    }
+    
+    .registration-header h1 {
+        font-size: 1.6rem;
+    }
+    
+    .registration-body {
+        padding: 25px 20px;
+    }
+    
+    .form-actions {
+        flex-direction: column;
+        gap: 12px;
+    }
+    
+    .account-type-card {
+        padding: 20px;
+    }
+    
+    .account-type-card i {
+        font-size: 2.5rem;
+        margin-bottom: 15px;
+    }
+    
+    /* Ensure buttons are easily tappable */
+    button, 
+    .account-type-card,
+    .terms-agreement label,
+    .toggle-password {
+        min-height: 44px; /* Apple's recommended minimum touch target */
+    }
+}
+
+/* Fix for iOS Safari */
+@supports (-webkit-overflow-scrolling: touch) {
+    .registration-page {
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .form-control {
+        font-size: 16px; /* Prevents zoom on iOS */
+    }
+}
+
+/* Modern Food Registration Refresh */
+:root {
+    --reg-red: #b3261e;
+    --reg-orange: #ef6b2e;
+    --reg-cream: #fff8ef;
+    --reg-ink: #2a211d;
+    --reg-muted: #7c6e65;
+    --reg-border: #efddcc;
+}
+
+body {
+    background:
+        radial-gradient(circle at 0% 0%, rgba(239, 107, 46, 0.12), transparent 34%),
+        radial-gradient(circle at 100% 12%, rgba(179, 38, 30, 0.1), transparent 30%),
+        var(--reg-cream);
+}
+
+.registration-page {
+    background: transparent;
+}
+
+.registration-container {
+    border: 1px solid var(--reg-border);
+    border-radius: 22px;
+    box-shadow: 0 22px 44px rgba(74, 32, 20, 0.14);
+}
+
+.registration-header {
+    background:
+        linear-gradient(130deg, rgba(22, 14, 10, 0.9), rgba(65, 30, 20, 0.78)),
+        url('images/about-us-bg.jpg') center/cover no-repeat;
+}
+
+.registration-body {
+    background: linear-gradient(180deg, #fffaf4 0%, #fff 100%);
+}
+
+.step.active .step-number {
+    background: linear-gradient(135deg, var(--reg-red), var(--reg-orange));
+}
+
+.account-type-card,
+.form-control,
+.terms-agreement {
+    border: 1px solid #ead4c1;
+    background: #fffdfb;
+}
+
+.account-type-card.selected {
+    border-color: #d79972;
+    background: #fff5e9;
+}
+
+.account-type-card i,
+.step.active .step-label,
+.auth-link a {
+    color: #9a3322;
+}
+
+.form-control:focus {
+    border-color: #d17148;
+    box-shadow: 0 0 0 3px rgba(239, 107, 46, 0.15);
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--reg-red), var(--reg-orange));
+    box-shadow: 0 12px 28px rgba(179, 38, 30, 0.26);
+}
+
+.btn-primary:hover {
+    box-shadow: 0 16px 34px rgba(179, 38, 30, 0.34);
+}
+
+.btn-secondary {
+    background: #233f32;
+}
+</style>
+
+<div class="registration-page">
+    <div class="registration-container">
+        <div class="registration-header">
+            <h1>Create Your Account</h1>
+            <p>Join Lechon Delights and start enjoying delicious lechon delivered to your doorstep</p>
+        </div>
+        
+        <div class="registration-body">
+            <div class="registration-intro">
+                <div class="registration-intro-icon">
+                    <i class="fas fa-user-plus"></i>
+                </div>
+                <div>
+                    <h2>Sign up in four simple steps</h2>
+                    <p>Choose the account that fits you best, add your details, and confirm your email once you are done.</p>
+                </div>
+            </div>
+
+            <!-- Progress Steps -->
+            <div class="progress-steps">
+                <div class="progress-bar" id="progressBar"></div>
+                <div class="step active" id="step1">
+                    <div class="step-number">1</div>
+                    <div class="step-label">Account Type</div>
+                </div>
+                <div class="step" id="step2">
+                    <div class="step-number">2</div>
+                    <div class="step-label">Personal Info</div>
+                </div>
+                <div class="step" id="step3">
+                    <div class="step-number">3</div>
+                    <div class="step-label" id="step3NavLabel">Address Info</div>
+                </div>
+                <div class="step" id="step4">
+                    <div class="step-number">4</div>
+                    <div class="step-label">Create Account</div>
+                </div>
+            </div>
+            
+            <form method="POST" action="" id="registrationForm" data-swal-validate="off" enctype="multipart/form-data" novalidate>
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['registration_csrf_token']); ?>">
+
+                <!-- Step 1: Account Type -->
+                <div class="form-step active" id="step1Form">
+                    <h2 style="color: #333; margin-bottom: 25px; font-size: 1.5rem;">
+                        <?php echo $is_partner_signup ? 'Business Partner Sign Up' : 'Select Account Type'; ?>
+                    </h2>
+                    
+                    <div class="account-type-selection">
+                        <?php if (!$is_partner_signup): ?>
+                        <div class="account-type-card" data-type="individual">
+                            <i class="fas fa-user"></i>
+                            <h3>Individual</h3>
+                            <p>Perfect for customers who want to order lechon for themselves, their family, or a special occasion.</p>
+                        </div>
+                        <?php endif; ?>
+                        <div class="account-type-card" data-type="organization">
+                            <i class="fas fa-building"></i>
+                            <h3>Business Partner</h3>
+                            <p>Great for restaurant owners who want to register their business and serve customers across Cavite.</p>
+                        </div>
+                    </div>
+                    
+                    <input type="hidden" name="account_type" id="accountType" value="<?php echo htmlspecialchars($form_data['account_type'] ?? ($is_partner_signup ? 'organization' : 'individual')); ?>">
+                    <input type="hidden" name="psgc_region_name" id="psgcRegionName" value="<?php echo htmlspecialchars($form_data['psgc_region_name'] ?? ''); ?>">
+                    <input type="hidden" name="psgc_province_name" id="psgcProvinceName" value="<?php echo htmlspecialchars($form_data['psgc_province_name'] ?? ''); ?>">
+                    <input type="hidden" name="psgc_city_name" id="psgcCityName" value="<?php echo htmlspecialchars($form_data['psgc_city_name'] ?? ''); ?>">
+                    <input type="hidden" name="psgc_barangay_name" id="psgcBarangayName" value="<?php echo htmlspecialchars($form_data['psgc_barangay_name'] ?? ''); ?>">
+                    
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary" id="backToLoginBtn">
+                            <i class="fas fa-arrow-left"></i>
+                            Back to Login
+                        </button>
+                        <button type="button" class="btn-primary" id="nextStep1">
+                            Continue
+                            <i class="fas fa-arrow-right"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Step 2: Personal Information -->
+                <div class="form-step" id="step2Form">
+                    <h2 style="color: #333; margin-bottom: 25px; font-size: 1.5rem;">Tell us about you</h2>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="firstName">First Name *</label>
+                            <input type="text" id="firstName" name="first_name" class="form-control" required 
+                                placeholder="Enter your first name"
+                                value="<?php echo htmlspecialchars($form_data['first_name'] ?? ''); ?>"
+                                autocomplete="given-name">
+                        </div>
+                        <div class="form-group">
+                            <label for="lastName">Last Name *</label>
+                            <input type="text" id="lastName" name="last_name" class="form-control" required 
+                                placeholder="Enter your last name"
+                                value="<?php echo htmlspecialchars($form_data['last_name'] ?? ''); ?>"
+                                autocomplete="family-name">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="middleName">Middle Name</label>
+                            <input type="text" id="middleName" name="middle_name" class="form-control"
+                                placeholder="Optional"
+                                value="<?php echo htmlspecialchars($form_data['middle_name'] ?? ''); ?>"
+                                autocomplete="additional-name">
+                        </div>
+                        <div class="form-group">
+                            <label for="nickname">Nickname</label>
+                            <input type="text" id="nickname" name="nickname" class="form-control"
+                                placeholder="Optional"
+                                value="<?php echo htmlspecialchars($form_data['nickname'] ?? ''); ?>"
+                                autocomplete="nickname">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="birthDate">Date of Birth</label>
+                            <input type="date" id="birthDate" name="birth_date" class="form-control"
+                                value="<?php echo htmlspecialchars($form_data['birth_date'] ?? ''); ?>">
+                        </div>
+                        <div class="form-group">
+                            <label for="gender">Gender</label>
+                            <select id="gender" name="gender" class="form-control">
+                                <option value="" <?php echo (($form_data['gender'] ?? '') === '') ? 'selected' : ''; ?>>Prefer not to say</option>
+                                <option value="male" <?php echo (($form_data['gender'] ?? '') === 'male') ? 'selected' : ''; ?>>Male</option>
+                                <option value="female" <?php echo (($form_data['gender'] ?? '') === 'female') ? 'selected' : ''; ?>>Female</option>
+                                <option value="other" <?php echo (($form_data['gender'] ?? '') === 'other') ? 'selected' : ''; ?>>Other</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="email">Email Address *</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-envelope"></i>
+                            <input type="email" id="email" name="email" class="form-control" required 
+                                placeholder="Enter your email address"
+                                value="<?php echo htmlspecialchars($form_data['email'] ?? ''); ?>"
+                                autocomplete="email"
+                                inputmode="email">
+                        </div>
+                        <small style="display:block; margin-top:5px; color:#666; font-size:0.85rem;">
+                            We will use this email for account notifications and sign-in.
+                        </small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="phone">Mobile Number *</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-phone"></i>
+                            <input type="tel" id="phone" name="phone" class="form-control" required 
+                                placeholder="e.g., 09171234567 or +639171234567"
+                                value="<?php echo htmlspecialchars($form_data['phone'] ?? ''); ?>"
+                                autocomplete="tel"
+                                inputmode="tel">
+                        </div>
+                        <small style="display: block; margin-top: 5px; color: #666; font-size: 0.85rem;">
+                            Enter your 11-digit mobile number (starting with 09) or with country code (+63)
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="validIdFile">Valid ID Upload *</label>
+                        <input type="file" id="validIdFile" name="valid_id_file" class="form-control" required
+                            accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp">
+                        <small style="display: block; margin-top: 5px; color: #666; font-size: 0.85rem;">
+                            Upload a clear government-issued ID image (JPG, PNG, or WEBP, max 5MB).
+                        </small>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary" id="prevStep2">
+                            <i class="fas fa-arrow-left"></i>
+                            Back
+                        </button>
+                        <button type="button" class="btn-primary" id="nextStep2">
+                            Continue
+                            <i class="fas fa-arrow-right"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Step 3: Address + Business Partner Information -->
+                <div class="form-step" id="step3Form">
+                    <h2 id="step3Title" style="color: #333; margin-bottom: 10px; font-size: 1.5rem;">Add your delivery details</h2>
+                    <p id="step3Subtitle" style="margin: 0 0 18px; color: #666; font-size: 0.92rem;">
+                        Provide your address so we can help you get your orders delivered smoothly.
+                    </p>
+                    
+                        <div id="organizationFields">
+                            <div class="form-group">
+                            <label for="businessName">Restaurant Name *</label>
+                            <input type="text" id="businessName" name="business_name" class="form-control" 
+                                placeholder="Enter your restaurant name"
+                                value="<?php echo htmlspecialchars($form_data['business_name'] ?? ''); ?>">
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="businessType">Business Type</label>
+                                <select id="businessType" name="business_type" class="form-control">
+                                    <option value="restaurant" selected>Restaurant</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="businessRegistration">Business Registration Number</label>
+                                <input type="text" id="businessRegistration" name="business_registration" class="form-control" 
+                                    placeholder="Enter registration number"
+                                    value="<?php echo htmlspecialchars($form_data['business_registration'] ?? ''); ?>">
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="taxId">Tax ID Number</label>
+                            <input type="text" id="taxId" name="tax_id" class="form-control" 
+                                placeholder="Enter TIN"
+                                value="<?php echo htmlspecialchars($form_data['tax_id'] ?? ''); ?>">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="psgcRegion" id="addressSectionLabel">Home Address (PSGC) *</label>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="psgcRegion" id="regionLabel">Region (Luzon only) *</label>
+                                <select id="psgcRegion" name="psgc_region_code" class="form-control" required data-selected="<?php echo htmlspecialchars($form_data['psgc_region_code'] ?? ''); ?>">
+                                    <option value="">Select region</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="psgcProvince" id="provinceLabel">Province (Required except NCR) *</label>
+                                <select id="psgcProvince" name="psgc_province_code" class="form-control" required data-selected="<?php echo htmlspecialchars($form_data['psgc_province_code'] ?? ''); ?>">
+                                    <option value="">Select province</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="psgcCity">City / Municipality *</label>
+                                <select id="psgcCity" name="psgc_city_code" class="form-control" required data-selected="<?php echo htmlspecialchars($form_data['psgc_city_code'] ?? ''); ?>">
+                                    <option value="">Select city or municipality</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="psgcBarangay">Barangay *</label>
+                                <select id="psgcBarangay" name="psgc_barangay_code" class="form-control" required data-selected="<?php echo htmlspecialchars($form_data['psgc_barangay_code'] ?? ''); ?>">
+                                    <option value="">Select barangay</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="streetAddress" id="streetAddressLabel">House No. / Street / Landmark *</label>
+                            <input type="text" id="streetAddress" name="street_address" class="form-control"
+                                placeholder="e.g., Blk 5 Lot 2, Brgy. San Agustin"
+                                value="<?php echo htmlspecialchars($form_data['street_address'] ?? ''); ?>"
+                                maxlength="120"
+                                required>
+                        </div>
+                        <small id="psgcAddressHelp" style="display:block; margin-top:4px; color:#666; font-size:0.84rem;">
+                            Individual registration is limited to Luzon regions.
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="address" id="completeAddressLabel">Complete Home Address *</label>
+                        <textarea id="address" name="address" class="form-control" rows="3"
+                                placeholder="Your complete home address will appear here after selecting PSGC fields"
+                                readonly required><?php echo htmlspecialchars($form_data['address'] ?? ''); ?></textarea>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary" id="prevStep3">
+                            <i class="fas fa-arrow-left"></i>
+                            Back
+                        </button>
+                        <button type="button" class="btn-primary" id="nextStep3">
+                            Continue
+                            <i class="fas fa-arrow-right"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Step 4: Create Account -->
+                <div class="form-step" id="step4Form">
+                    <h2 style="color: #333; margin-bottom: 25px; font-size: 1.5rem;">Secure your account</h2>
+                    
+                    <div class="form-group">
+                        <label for="password">Password *</label>
+                        <div class="password-wrapper input-with-icon">
+                            <i class="fas fa-lock"></i>
+                            <input type="password" id="password" name="password" class="form-control" required 
+                                placeholder="Create a strong password"
+                                autocomplete="new-password"
+                                minlength="8"
+                                maxlength="72"
+                                pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,72}"
+                                title="Use at least 8 characters with uppercase, lowercase, number, and symbol.">
+                            <button type="button" class="toggle-password" aria-label="Toggle password visibility">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                        <div class="password-strength">
+                            <div class="strength-indicator">
+                                <span class="strength-text" id="strengthText">Weak</span>
+                                <div class="strength-bars">
+                                    <div class="strength-bar" id="strengthBar1"></div>
+                                    <div class="strength-bar" id="strengthBar2"></div>
+                                    <div class="strength-bar" id="strengthBar3"></div>
+                                    <div class="strength-bar" id="strengthBar4"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="confirmPassword">Confirm Password *</label>
+                        <div class="password-wrapper input-with-icon">
+                            <i class="fas fa-lock"></i>
+                            <input type="password" id="confirmPassword" name="confirm_password" class="form-control" required 
+                                placeholder="Confirm your password"
+                                autocomplete="new-password">
+                            <button type="button" class="toggle-password" aria-label="Toggle password visibility">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="verification-note">
+                        <i class="fas fa-envelope-open-text"></i>
+                        <div>
+                            <strong>What happens next?</strong><br>
+                            After you create your account, we’ll send a confirmation email so you can verify your address and start using your account.
+                        </div>
+                    </div>
+
+                    <div class="terms-agreement">
+                        <input type="checkbox" id="acceptTerms" name="accept_terms" required>
+                        <label for="acceptTerms">
+                            I agree to the <a href="terms_of_service.php" data-policy-modal="terms">Terms of Service</a> and 
+                            <a href="privacy_policy.php" data-policy-modal="privacy">Privacy Policy</a>
+                        </label>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary" id="prevStep4">
+                            <i class="fas fa-arrow-left"></i>
+                            Back
+                        </button>
+                        <button type="submit" class="btn-primary" id="submitRegistration">
+                            <i class="fas fa-user-plus"></i>
+                            <span>Create Account</span>
+                        </button>
+                    </div>
+                </div>
+            </form>
+            
+            <!-- Social Registration Divider -->
+            <div class="social-divider">
+                <span>Or register with</span>
+            </div>
+            
+            <!-- Social Login Buttons -->
+            <div class="social-login-buttons">
+                <button type="button" class="social-btn google-btn" id="googleRegisterBtn" title="Register with Google">
+                    <i class="fab fa-google"></i>
+                    <span>Google</span>
+                </button>
+                <button type="button" class="social-btn facebook-btn" id="facebookRegisterBtn" title="Register with Facebook">
+                    <i class="fab fa-facebook-f"></i>
+                    <span>Facebook</span>
+                </button>
+                <button type="button" class="social-btn twitter-btn" id="twitterRegisterBtn" title="Register with X">
+                    <i class="fab fa-x-twitter"></i>
+                    <span>X</span>
+                </button>
+                <button type="button" class="social-btn instagram-btn" id="instagramRegisterBtn" title="Register with Instagram">
+                    <i class="fab fa-instagram"></i>
+                    <span>Instagram</span>
+                </button>
+            </div>
+            
+            <div class="auth-link">
+                Already have an account? 
+                <a href="login.php">Sign in here</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SweetAlert2 JS -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<script type="text/plain" data-legacy-registration-script>
+document.addEventListener('DOMContentLoaded', function() {
+    if (!window.__useLegacyRegistrationScript) {
+        return;
+    }
+
+    console.log('DOM loaded - registration form initialized');
+    
+    // Initialize SweetAlert2
+    const Toast = Swal.mixin({
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 3000,
+        timerProgressBar: true,
+        didOpen: (toast) => {
+            toast.addEventListener('mouseenter', Swal.stopTimer)
+            toast.addEventListener('mouseleave', Swal.resumeTimer)
+        }
+    });
+    
+    // Current step tracking
+    let currentStep = 1;
+    const totalSteps = 4;
+    let accountType = (document.getElementById('accountType')?.value || '').trim() || 'individual';
+    
+    // DOM Elements
+    const steps = document.querySelectorAll('.step');
+    const formSteps = document.querySelectorAll('.form-step');
+    const accountTypeCards = document.querySelectorAll('.account-type-card');
+    const accountTypeInput = document.getElementById('accountType');
+    const organizationFields = document.getElementById('organizationFields');
+    
+    // Initialize
+    updateProgressBar();
+    updateOrganizationFields();
+    
+    // Debug logging
+    console.log('Form steps found:', formSteps.length);
+    console.log('Account type cards found:', accountTypeCards.length);
+    
+    // Back to login button
+    document.getElementById('backToLoginBtn').addEventListener('click', function() {
+        window.location.href = 'login.php';
+    });
+    
+    // Account Type Selection
+    accountTypeCards.forEach(card => {
+        card.addEventListener('click', function() {
+            console.log('Account type card clicked:', this.dataset.type);
+            // Remove selected class from all cards
+            accountTypeCards.forEach(c => c.classList.remove('selected'));
+            
+            // Add selected class to clicked card
+            this.classList.add('selected');
+            
+            // Update account type
+            accountType = this.dataset.type;
+            accountTypeInput.value = accountType;
+            console.log('Account type set to:', accountType);
+            
+            // Update organization fields visibility
+            updateOrganizationFields();
+        });
+    });
+    
+    // Step Navigation - SIMPLIFIED EVENT LISTENERS
+    document.getElementById('nextStep1').addEventListener('click', function() {
+        console.log('Next Step 1 clicked');
+        goToStep(2);
+    });
+    
+    document.getElementById('nextStep2').addEventListener('click', function() {
+        console.log('Next Step 2 clicked');
+        validateStep2();
+    });
+    
+    document.getElementById('nextStep3').addEventListener('click', function() {
+        console.log('Next Step 3 clicked');
+        validateStep3();
+    });
+    
+    document.getElementById('prevStep2').addEventListener('click', function() {
+        console.log('Prev Step 2 clicked');
+        goToStep(1);
+    });
+    
+    document.getElementById('prevStep3').addEventListener('click', function() {
+        console.log('Prev Step 3 clicked');
+        goToStep(2);
+    });
+    
+    document.getElementById('prevStep4').addEventListener('click', function() {
+        console.log('Prev Step 4 clicked');
+        goToStep(3);
+    });
+    
+    // Toggle password visibility
+    document.querySelectorAll('.toggle-password').forEach(button => {
+        button.addEventListener('click', function() {
+            const input = this.closest('.password-wrapper').querySelector('input');
+            const icon = this.querySelector('i');
+            
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.className = 'fas fa-eye-slash';
+                this.setAttribute('aria-label', 'Hide password');
+            } else {
+                input.type = 'password';
+                icon.className = 'fas fa-eye';
+                this.setAttribute('aria-label', 'Show password');
+            }
+        });
+    });
+    
+    // Password strength indicator
+    const passwordInput = document.getElementById('password');
+    if (passwordInput) {
+        passwordInput.addEventListener('input', function() {
+            const password = this.value;
+            const strengthBars = [
+                document.getElementById('strengthBar1'),
+                document.getElementById('strengthBar2'),
+                document.getElementById('strengthBar3'),
+                document.getElementById('strengthBar4')
+            ];
+            const strengthText = document.getElementById('strengthText');
+            
+            let score = 0;
+            if (password.length >= 8) score++;
+            if (/[A-Z]/.test(password)) score++;
+            if (/[0-9]/.test(password)) score++;
+            if (/[^A-Za-z0-9]/.test(password)) score++;
+            
+            // Reset bars
+            strengthBars.forEach(bar => {
+                bar.className = 'strength-bar';
+            });
+            
+            // Update bars
+            for (let i = 0; i < score; i++) {
+                if (score <= 1) {
+                    strengthBars[i].classList.add('weak');
+                    strengthText.textContent = 'Weak';
+                    strengthText.style.color = '#ff5252';
+                } else if (score <= 2) {
+                    strengthBars[i].classList.add('medium');
+                    strengthText.textContent = 'Fair';
+                    strengthText.style.color = '#ff9800';
+                } else {
+                    strengthBars[i].classList.add('strong');
+                    strengthText.textContent = 'Strong';
+                    strengthText.style.color = '#4caf50';
+                }
+            }
+            
+            if (password.length === 0) {
+                strengthText.textContent = 'Weak';
+                strengthText.style.color = '#666';
+            }
+        });
+    }
+    
+    // Form submission
+    const registrationForm = document.getElementById('registrationForm');
+    if (registrationForm) {
+        registrationForm.addEventListener('submit', function(e) {
+            console.log('Form submission attempted');
+            e.preventDefault();
+            
+            // Validate step 4
+            if (!validateStep4()) {
+                return false;
+            }
+            
+            const submitBtn = document.getElementById('submitRegistration');
+            if (submitBtn) {
+                submitBtn.classList.add('loading');
+                submitBtn.disabled = true;
+                const span = submitBtn.querySelector('span');
+                if (span) {
+                    span.textContent = 'Creating account...';
+                }
+            }
+            
+            // Submit form
+            console.log('Submitting form...');
+            this.submit();
+        });
+    }
+    
+    // Functions
+    function goToStep(step) {
+        console.log('Going to step:', step, 'from current step:', currentStep);
+        
+        // Validate current step before proceeding
+        if (currentStep === 1 && !validateStep1()) {
+            console.log('Step 1 validation failed');
+            return;
+        }
+        
+        // Update current step
+        currentStep = step;
+        console.log('Current step updated to:', currentStep);
+        
+        // Update UI
+        updateSteps();
+        updateProgressBar();
+        
+        // Scroll to top of form
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        
+        // Focus on first input
+        setTimeout(() => {
+            const formStep = document.getElementById(`step${step}Form`);
+            if (formStep) {
+                const firstInput = formStep.querySelector('input:not([type="hidden"]), select, textarea');
+                if (firstInput) {
+                    firstInput.focus();
+                    console.log('Focused on:', firstInput.id);
+                }
+            }
+        }, 300);
+    }
+    
+    function updateSteps() {
+        console.log('Updating steps UI');
+        // Update step indicators
+        steps.forEach((step, index) => {
+            step.classList.remove('active', 'completed');
+            if (index + 1 === currentStep) {
+                step.classList.add('active');
+            } else if (index + 1 < currentStep) {
+                step.classList.add('completed');
+            }
+        });
+        
+        // Update form steps
+        formSteps.forEach((formStep, index) => {
+            formStep.classList.remove('active');
+            if (index + 1 === currentStep) {
+                formStep.classList.add('active');
+                console.log('Activated form step:', index + 1);
+            }
+        });
+    }
+    
+    function updateProgressBar() {
+        const progressBar = document.getElementById('progressBar');
+        const progress = ((currentStep - 1) / (totalSteps - 1)) * 100;
+        if (progressBar) {
+            progressBar.style.width = `${progress}%`;
+        }
+    }
+    
+    function updateOrganizationFields() {
+        console.log('Updating organization fields for account type:', accountType);
+        if (accountType === 'organization') {
+            organizationFields.style.display = 'block';
+            // Make business name required
+            const businessNameInput = document.getElementById('businessName');
+            if (businessNameInput) {
+                businessNameInput.required = true;
+            }
+        } else {
+            organizationFields.style.display = 'none';
+            // Make business name optional
+            const businessNameInput = document.getElementById('businessName');
+            if (businessNameInput) {
+                businessNameInput.required = false;
+            }
+        }
+    }
+    
+    // Validation functions
+    function validateStep1() {
+        console.log('Validating step 1, account type:', accountType);
+        if (!accountType) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Account Type Required',
+                text: 'Please select an account type to continue.',
+                confirmButtonColor: '#c62828'
+            });
+            return false;
+        }
+        return true;
+    }
+    
+    function validateStep2() {
+        console.log('Validating step 2');
+        
+        const firstName = document.getElementById('firstName').value.trim();
+        const lastName = document.getElementById('lastName').value.trim();
+        const email = document.getElementById('email').value.trim();
+        const phone = document.getElementById('phone').value.trim();
+        
+        console.log('First name:', firstName);
+        console.log('Last name:', lastName);
+        console.log('Email:', email);
+        console.log('Phone:', phone);
+        
+        // Check for empty fields
+        if (!firstName || !lastName || !email || !phone) {
+            console.log('Validation failed: Empty fields');
+            Swal.fire({
+                icon: 'error',
+                title: 'Missing Information',
+                text: 'Please fill in all required fields.',
+                confirmButtonColor: '#c62828'
+            });
+            return false;
+        }
+        
+        // Validate email
+        if (!isValidEmail(email)) {
+            console.log('Validation failed: Invalid email');
+            Swal.fire({
+                icon: 'error',
+                title: 'Invalid Email',
+                text: 'Please enter a valid email address.',
+                confirmButtonColor: '#c62828'
+            });
+            return false;
+        }
+        
+        // Validate phone - MUCH MORE FLEXIBLE
+        if (!isValidPhone(phone)) {
+            console.log('Validation failed: Invalid phone');
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Invalid Phone Number',
+                    text: 'Please enter a valid Philippine mobile number (e.g., 09XXXXXXXXX).',
+                    confirmButtonColor: '#c62828'
+                });
+                return false;
+            }
+        
+        console.log('Step 2 validation passed');
+        goToStep(3);
+        return true;
+    }
+    
+    function validateStep3() {
+        console.log('Validating step 3');
+        
+        if (accountType === 'organization') {
+            const businessName = document.getElementById('businessName').value.trim();
+            console.log('Business name:', businessName);
+            
+            if (!businessName) {
+                console.log('Validation failed: Business name required');
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Business Name Required',
+                    text: 'Please enter your business name.',
+                    confirmButtonColor: '#c62828'
+                });
+                return false;
+            }
+        }
+        
+        console.log('Step 3 validation passed');
+        goToStep(4);
+        return true;
+    }
+    
+    function validateStep4() {
+        console.log('Validating step 4');
+        
+        const password = document.getElementById('password').value;
+        const confirmPassword = document.getElementById('confirmPassword').value;
+        const terms = document.getElementById('acceptTerms');
+        
+        console.log('Password length:', password.length);
+        console.log('Terms checked:', terms.checked);
+        
+        if (!password || !confirmPassword) {
+            console.log('Validation failed: Password required');
+            Swal.fire({
+                icon: 'error',
+                title: 'Password Required',
+                text: 'Please enter and confirm your password.',
+                confirmButtonColor: '#c62828'
+            });
+            return false;
+        }
+        
+        if (password.length < 8) {
+            console.log('Validation failed: Password too short');
+            Swal.fire({
+                icon: 'error',
+                title: 'Weak Password',
+                text: 'Password must be at least 8 characters long.',
+                confirmButtonColor: '#c62828'
+            });
+            return false;
+        }
+        
+        if (password !== confirmPassword) {
+            console.log('Validation failed: Passwords dont match');
+            Swal.fire({
+                icon: 'error',
+                title: 'Passwords Mismatch',
+                text: 'Passwords do not match. Please try again.',
+                confirmButtonColor: '#c62828'
+            });
+            return false;
+        }
+        
+        if (!terms.checked) {
+            console.log('Validation failed: Terms not accepted');
+            Swal.fire({
+                icon: 'error',
+                title: 'Terms Required',
+                text: 'Please accept the Terms of Service and Privacy Policy.',
+                confirmButtonColor: '#c62828'
+            });
+            return false;
+        }
+        
+        console.log('Step 4 validation passed');
+        return true;
+    }
+    
+    function isValidEmail(email) {
+        const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return re.test(email);
+    }
+    
+    function isValidPhone(phone) {
+        // Accept PH mobile formats:
+        // 09XXXXXXXXX, 9XXXXXXXXX, +639XXXXXXXXX, 639XXXXXXXXX
+        console.log('Validating phone:', phone);
+        
+        const cleaned = phone.replace(/[^\d]/g, '');
+        console.log('Cleaned phone:', cleaned);
+        
+        const valid =
+            /^09\d{9}$/.test(cleaned) ||
+            /^9\d{9}$/.test(cleaned) ||
+            /^639\d{9}$/.test(cleaned);
+
+        if (valid) {
+            console.log('Phone validation passed');
+            return true;
+        }
+        
+        console.log('Phone validation failed');
+        return false;
+    }
+    
+    // Auto-select account type card based on previous selection
+    if (accountType === 'organization') {
+        const orgCard = document.querySelector('.account-type-card[data-type="organization"]');
+        if (orgCard) {
+            orgCard.classList.add('selected');
+        }
+    }
+    
+    // Show error message if exists
+    <?php if ($error): ?>
+    Toast.fire({
+        icon: 'error',
+        title: '<?php echo addslashes($error); ?>'
+    });
+    <?php endif; ?>
+    
+    // Add Enter key support for mobile keyboards
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            if (currentStep === 1) {
+                document.getElementById('nextStep1').click();
+            } else if (currentStep === 2) {
+                document.getElementById('nextStep2').click();
+            } else if (currentStep === 3) {
+                document.getElementById('nextStep3').click();
+            } else if (currentStep === 4) {
+                document.getElementById('submitRegistration').click();
+            }
+        }
+    });
+    
+    // Test button functionality
+    console.log('All event listeners attached');
+    console.log('nextStep2 button exists:', !!document.getElementById('nextStep2'));
+    console.log('nextStep3 button exists:', !!document.getElementById('nextStep3'));
+
+    // Social Registration Handlers
+    document.getElementById('googleRegisterBtn').addEventListener('click', function(e) {
+        e.preventDefault();
+        window.location.href = 'controllers/google_auth.php?action=register';
+    });
+
+    document.getElementById('facebookRegisterBtn').addEventListener('click', function(e) {
+        e.preventDefault();
+        window.location.href = 'controllers/facebook_auth.php?action=register';
+    });
+
+    document.getElementById('twitterRegisterBtn').addEventListener('click', function(e) {
+        e.preventDefault();
+        window.location.href = 'controllers/twitter_auth.php?action=register';
+    });
+
+    document.getElementById('instagramRegisterBtn').addEventListener('click', function(e) {
+        e.preventDefault();
+        window.location.href = 'controllers/instagram_auth.php?action=register';
+    });
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const Toast = Swal.mixin({
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 3000,
+        timerProgressBar: true,
+        didOpen: function(toast) {
+            toast.addEventListener('mouseenter', Swal.stopTimer);
+            toast.addEventListener('mouseleave', Swal.resumeTimer);
+        }
+    });
+
+    let currentStep = 1;
+    const totalSteps = 4;
+    const steps = document.querySelectorAll('.step');
+    const formSteps = document.querySelectorAll('.form-step');
+    const accountTypeCards = document.querySelectorAll('.account-type-card');
+    const accountTypeInput = document.getElementById('accountType');
+    const organizationFields = document.getElementById('organizationFields');
+    const step3Title = document.getElementById('step3Title');
+    const step3Subtitle = document.getElementById('step3Subtitle');
+    const step3NavLabel = document.getElementById('step3NavLabel');
+    const addressSectionLabel = document.getElementById('addressSectionLabel');
+    const regionLabel = document.getElementById('regionLabel');
+    const provinceLabel = document.getElementById('provinceLabel');
+    const streetAddressLabel = document.getElementById('streetAddressLabel');
+    const completeAddressLabel = document.getElementById('completeAddressLabel');
+    let accountType = (accountTypeInput ? accountTypeInput.value : 'individual') || 'individual';
+
+    const regionSelect = document.getElementById('psgcRegion');
+    const provinceSelect = document.getElementById('psgcProvince');
+    const citySelect = document.getElementById('psgcCity');
+    const barangaySelect = document.getElementById('psgcBarangay');
+    const streetAddressInput = document.getElementById('streetAddress');
+    const addressPreviewInput = document.getElementById('address');
+    const psgcAddressHelp = document.getElementById('psgcAddressHelp');
+    const psgcRegionNameInput = document.getElementById('psgcRegionName');
+    const psgcProvinceNameInput = document.getElementById('psgcProvinceName');
+    const psgcCityNameInput = document.getElementById('psgcCityName');
+    const psgcBarangayNameInput = document.getElementById('psgcBarangayName');
+
+    const PSGC_API_BASE = 'https://psgc.gitlab.io/api';
+    const CALABARZON_REGION_CODE = '040000000';
+    const CAVITE_PROVINCE_CODE = '042100000';
+    const NCR_REGION_CODE = '130000000';
+    const LUZON_REGION_CODES = [
+        '010000000', // Ilocos Region
+        '020000000', // Cagayan Valley
+        '030000000', // Central Luzon
+        '040000000', // CALABARZON
+        '050000000', // Bicol Region
+        '130000000', // NCR
+        '140000000', // CAR
+        '170000000'  // MIMAROPA
+    ];
+    let psgcEnabled = true;
+    const psgcCache = new Map();
+
+    function showError(title, text) {
+        Swal.fire({
+            icon: 'error',
+            title: title,
+            text: text,
+            confirmButtonColor: '#c62828'
+        });
+    }
+
+    function isNcrSelection(regionCode, regionName) {
+        const code = String(regionCode || '').trim();
+        const name = String(regionName || '').toLowerCase();
+        return code === NCR_REGION_CODE || name.includes('national capital region') || /\bncr\b/i.test(name);
+    }
+
+    function isLuzonSelection(regionCode, regionName) {
+        const code = String(regionCode || '').trim();
+        if (LUZON_REGION_CODES.includes(code)) {
+            return true;
+        }
+
+        const name = String(regionName || '').toLowerCase();
+        return (
+            name.includes('ilocos') ||
+            name.includes('cagayan valley') ||
+            name.includes('central luzon') ||
+            name.includes('calabarzon') ||
+            name.includes('bicol') ||
+            name.includes('national capital region') ||
+            /\bncr\b/i.test(name) ||
+            name.includes('cordillera') ||
+            name.includes('mimaropa')
+        );
+    }
+
+    function normalizePlaceName(value) {
+        let text = String(value || '').toLowerCase();
+        try {
+            text = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        } catch (error) {
+            // Keep original text when normalize is unavailable.
+        }
+        return text.replace(/[^a-z0-9]/g, '');
+    }
+
+    function toNameTokens(value) {
+        let text = String(value || '').toLowerCase();
+        try {
+            text = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        } catch (error) {
+            // Keep original text when normalize is unavailable.
+        }
+
+        if (text.includes('metro manila')) {
+            text += ' ncr national capital region';
+        }
+        if (text.includes('national capital region') || /\bncr\b/.test(text)) {
+            text += ' metro manila ncr';
+        }
+        if (text.includes('calabarzon') || text.includes('region iv-a') || text.includes('region iva') || text.includes('region 4a')) {
+            text += ' calabarzon region iva region 4a iv-a';
+        }
+
+        text = text
+            .replace(/&/g, ' and ')
+            .replace(/[^a-z0-9]+/g, ' ')
+            .trim();
+
+        const stopWords = new Set([
+            'city',
+            'municipality',
+            'municipal',
+            'province',
+            'region',
+            'barangay',
+            'brgy',
+            'of',
+            'the',
+            'and'
+        ]);
+
+        return Array.from(new Set(text.split(/\s+/).filter(function(token) {
+            return token && !stopWords.has(token);
+        })));
+    }
+
+    function toCandidateNames() {
+        const seen = new Set();
+        const names = [];
+        const addName = function(value) {
+            const text = String(value || '').trim();
+            if (!text) return;
+            const key = normalizePlaceName(text);
+            if (!key || seen.has(key)) return;
+            seen.add(key);
+            names.push(text);
+        };
+
+        Array.prototype.slice.call(arguments).forEach(function(group) {
+            if (Array.isArray(group)) {
+                group.forEach(addName);
+            } else {
+                addName(group);
+            }
+        });
+        return names;
+    }
+
+    function findOptionValueByName(selectElement, targetName) {
+        if (!selectElement || !targetName) return '';
+        const normalizedTarget = normalizePlaceName(targetName);
+        const targetTokens = toNameTokens(targetName);
+        if (!normalizedTarget || targetTokens.length === 0) return '';
+
+        let bestValue = '';
+        let bestScore = 0;
+        let bestOverlap = 0;
+
+        Array.from(selectElement.options || []).forEach(function(option) {
+            if (!option || !option.value) return;
+            const normalizedOption = normalizePlaceName(option.textContent || option.label || '');
+            if (!normalizedOption) return;
+
+            if (normalizedOption === normalizedTarget ||
+                normalizedOption.includes(normalizedTarget) ||
+                normalizedTarget.includes(normalizedOption)) {
+                bestValue = bestValue || option.value;
+                bestScore = 1;
+                bestOverlap = targetTokens.length;
+                return;
+            }
+
+            const optionTokens = toNameTokens(option.textContent || option.label || '');
+            if (!optionTokens.length) return;
+            const optionTokenSet = new Set(optionTokens);
+            let overlap = 0;
+            targetTokens.forEach(function(token) {
+                if (optionTokenSet.has(token)) overlap++;
+            });
+            if (overlap <= 0) return;
+
+            const score = overlap / Math.max(targetTokens.length, optionTokens.length);
+            if (overlap > bestOverlap || (overlap === bestOverlap && score > bestScore)) {
+                bestOverlap = overlap;
+                bestScore = score;
+                bestValue = option.value;
+            }
+        });
+
+        if (bestValue && (bestOverlap >= Math.max(1, targetTokens.length - 1) || bestScore >= 0.45)) {
+            return bestValue;
+        }
+        return '';
+    }
+
+    function findOptionValueFromCandidates(selectElement, candidates) {
+        const names = toCandidateNames(candidates);
+        for (let i = 0; i < names.length; i += 1) {
+            const code = findOptionValueByName(selectElement, names[i]);
+            if (code) return code;
+        }
+        return '';
+    }
+
+    function hasOptionValue(selectElement, value) {
+        const target = String(value || '').trim();
+        if (!selectElement || !target) return false;
+        return Array.from(selectElement.options || []).some(function(option) {
+            return String(option.value || '').trim() === target;
+        });
+    }
+
+    function applySelectCodeOrName(selectElement, code, candidateNames) {
+        const normalizedCode = String(code || '').trim();
+        if (normalizedCode && hasOptionValue(selectElement, normalizedCode)) {
+            selectElement.value = normalizedCode;
+            return normalizedCode;
+        }
+        const fallbackCode = findOptionValueFromCandidates(selectElement, candidateNames);
+        if (fallbackCode) {
+            selectElement.value = fallbackCode;
+            return fallbackCode;
+        }
+        return '';
+    }
+
+    function sortByName(items) {
+        return [].slice.call(items).sort(function(a, b) {
+            return String(a.name || '').localeCompare(String(b.name || ''));
+        });
+    }
+
+    function setSelectOptions(selectElement, items, placeholder) {
+        if (!selectElement) {
+            return;
+        }
+        selectElement.innerHTML = '';
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = placeholder;
+        selectElement.appendChild(defaultOption);
+
+        sortByName(items).forEach(function(item) {
+            const option = document.createElement('option');
+            option.value = item.code || '';
+            option.textContent = item.name || '';
+            selectElement.appendChild(option);
+        });
+    }
+
+    function getSelectedLabel(selectElement) {
+        if (!selectElement || selectElement.selectedIndex < 0) {
+            return '';
+        }
+        const selectedOption = selectElement.options[selectElement.selectedIndex];
+        if (!selectedOption || !selectedOption.value) {
+            return '';
+        }
+        return selectedOption.textContent.trim();
+    }
+
+    function syncAddressPreview() {
+        if (!addressPreviewInput) {
+            return;
+        }
+
+        if (psgcRegionNameInput) {
+            psgcRegionNameInput.value = getSelectedLabel(regionSelect);
+        }
+        if (psgcProvinceNameInput) {
+            psgcProvinceNameInput.value = getSelectedLabel(provinceSelect);
+        }
+        if (psgcCityNameInput) {
+            psgcCityNameInput.value = getSelectedLabel(citySelect);
+        }
+        if (psgcBarangayNameInput) {
+            psgcBarangayNameInput.value = getSelectedLabel(barangaySelect);
+        }
+
+        if (!psgcEnabled) {
+            return;
+        }
+
+        const composedAddress = [
+            streetAddressInput ? streetAddressInput.value.trim() : '',
+            psgcBarangayNameInput ? psgcBarangayNameInput.value.trim() : '',
+            psgcCityNameInput ? psgcCityNameInput.value.trim() : '',
+            psgcProvinceNameInput ? psgcProvinceNameInput.value.trim() : '',
+            psgcRegionNameInput ? psgcRegionNameInput.value.trim() : ''
+        ].filter(Boolean).join(', ');
+
+        addressPreviewInput.value = composedAddress;
+    }
+
+    function setManualAddressFallback(message) {
+        psgcEnabled = false;
+        if (psgcAddressHelp) {
+            psgcAddressHelp.textContent = message;
+            psgcAddressHelp.style.color = '#b71c1c';
+        }
+
+        [regionSelect, provinceSelect, citySelect, barangaySelect].forEach(function(selectElement) {
+            if (selectElement) {
+                selectElement.required = false;
+                selectElement.disabled = true;
+            }
+        });
+
+        if (streetAddressInput) {
+            streetAddressInput.required = true;
+            streetAddressInput.disabled = true;
+            streetAddressInput.value = '';
+        }
+
+        if (addressPreviewInput) {
+            addressPreviewInput.readOnly = true;
+            addressPreviewInput.value = '';
+            addressPreviewInput.placeholder = 'PSGC location service is required. Please try again shortly.';
+        }
+    }
+
+    function resetSelect(selectElement, placeholder) {
+        if (!selectElement) {
+            return;
+        }
+        setSelectOptions(selectElement, [], placeholder);
+        selectElement.value = '';
+        selectElement.disabled = true;
+    }
+
+    async function fetchPSGC(path) {
+        const key = String(path || '');
+        if (psgcCache.has(key)) {
+            return psgcCache.get(key);
+        }
+        const response = await fetch(PSGC_API_BASE + key, {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' }
+        });
+        if (!response.ok) {
+            throw new Error('PSGC API request failed');
+        }
+        const payload = await response.json();
+        psgcCache.set(key, payload);
+        return payload;
+    }
+
+    async function loadRegions() {
+        const regions = await fetchPSGC('/regions');
+        const previousValue = regionSelect ? String(regionSelect.value || '').trim() : '';
+        const previousRegionName = psgcRegionNameInput ? String(psgcRegionNameInput.value || '').trim() : '';
+
+        let allowedRegions = regions;
+        if (accountType === 'organization') {
+            allowedRegions = regions.filter(function(region) {
+                return String(region.code || '') === CALABARZON_REGION_CODE ||
+                    String(region.name || '').toLowerCase().includes('calabarzon');
+            });
+        } else {
+            allowedRegions = regions.filter(function(region) {
+                return isLuzonSelection(region.code || '', region.name || '');
+            });
+        }
+
+        setSelectOptions(regionSelect, allowedRegions, allowedRegions.length ? 'Select region' : 'No allowed region');
+        regionSelect.disabled = allowedRegions.length === 0;
+
+        if (allowedRegions.some(function(region) { return String(region.code || '') === previousValue; })) {
+            regionSelect.value = previousValue;
+        } else {
+            const fallbackRegionCode = findOptionValueFromCandidates(regionSelect, previousRegionName);
+            if (fallbackRegionCode) {
+                regionSelect.value = fallbackRegionCode;
+            } else if (accountType === 'organization' && allowedRegions.length === 1) {
+                regionSelect.value = allowedRegions[0].code || CALABARZON_REGION_CODE;
+            }
+        }
+    }
+
+    async function loadProvinces(regionCode) {
+        if (!regionCode) {
+            resetSelect(provinceSelect, 'Select province');
+            return [];
+        }
+
+        const provinces = await fetchPSGC('/regions/' + encodeURIComponent(regionCode) + '/provinces');
+        const previousValue = provinceSelect ? String(provinceSelect.value || '').trim() : '';
+        const previousProvinceName = psgcProvinceNameInput ? String(psgcProvinceNameInput.value || '').trim() : '';
+
+        let allowedProvinces = provinces;
+        if (accountType === 'organization') {
+            allowedProvinces = provinces.filter(function(province) {
+                return String(province.code || '') === CAVITE_PROVINCE_CODE ||
+                    String(province.name || '').toLowerCase().includes('cavite');
+            });
+        }
+
+        setSelectOptions(provinceSelect, allowedProvinces, allowedProvinces.length ? 'Select province' : 'No allowed province');
+        provinceSelect.disabled = allowedProvinces.length === 0;
+
+        if (allowedProvinces.some(function(province) { return String(province.code || '') === previousValue; })) {
+            provinceSelect.value = previousValue;
+        } else {
+            const fallbackProvinceCode = findOptionValueFromCandidates(provinceSelect, previousProvinceName);
+            if (fallbackProvinceCode) {
+                provinceSelect.value = fallbackProvinceCode;
+            } else if (accountType === 'organization' && allowedProvinces.length === 1) {
+                provinceSelect.value = allowedProvinces[0].code || CAVITE_PROVINCE_CODE;
+            }
+        }
+        return allowedProvinces;
+    }
+
+    async function loadCities(regionCode, provinceCode) {
+        if (!regionCode) {
+            resetSelect(citySelect, 'Select city or municipality');
+            return [];
+        }
+
+        let cities = [];
+        if (provinceCode) {
+            cities = await fetchPSGC('/provinces/' + encodeURIComponent(provinceCode) + '/cities-municipalities');
+        } else {
+            cities = await fetchPSGC('/regions/' + encodeURIComponent(regionCode) + '/cities-municipalities');
+        }
+
+        setSelectOptions(citySelect, cities, 'Select city or municipality');
+        citySelect.disabled = cities.length === 0;
+        return cities;
+    }
+
+    async function loadBarangays(cityCode) {
+        if (!cityCode) {
+            resetSelect(barangaySelect, 'Select barangay');
+            return [];
+        }
+
+        const barangays = await fetchPSGC('/cities-municipalities/' + encodeURIComponent(cityCode) + '/barangays');
+        setSelectOptions(barangaySelect, barangays, 'Select barangay');
+        barangaySelect.disabled = barangays.length === 0;
+        return barangays;
+    }
+
+    async function handleRegionChange(isRestore) {
+        const regionCode = regionSelect ? regionSelect.value : '';
+        if (!isRestore) {
+            resetSelect(provinceSelect, 'Select province');
+            resetSelect(citySelect, 'Select city or municipality');
+            resetSelect(barangaySelect, 'Select barangay');
+            if (psgcProvinceNameInput) {
+                psgcProvinceNameInput.value = '';
+            }
+            if (psgcCityNameInput) {
+                psgcCityNameInput.value = '';
+            }
+            if (psgcBarangayNameInput) {
+                psgcBarangayNameInput.value = '';
+            }
+            syncAddressPreview();
+        }
+
+        if (!regionCode) {
+            syncAddressPreview();
+            return;
+        }
+
+        const provinces = await loadProvinces(regionCode);
+        provinceSelect.required = provinces.length > 0;
+        if (provinces.length === 0) {
+            await loadCities(regionCode, '');
+        } else if (provinces.length === 1 && provinceSelect.value) {
+            await handleProvinceChange(true);
+        }
+        syncAddressPreview();
+    }
+
+    async function handleProvinceChange(isRestore) {
+        const regionCode = regionSelect ? regionSelect.value : '';
+        const provinceCode = provinceSelect ? provinceSelect.value : '';
+
+        if (!isRestore) {
+            resetSelect(citySelect, 'Select city or municipality');
+            resetSelect(barangaySelect, 'Select barangay');
+            if (psgcCityNameInput) {
+                psgcCityNameInput.value = '';
+            }
+            if (psgcBarangayNameInput) {
+                psgcBarangayNameInput.value = '';
+            }
+            syncAddressPreview();
+        }
+
+        await loadCities(regionCode, provinceCode);
+        syncAddressPreview();
+    }
+
+    async function handleCityChange(isRestore) {
+        const cityCode = citySelect ? citySelect.value : '';
+        if (!isRestore) {
+            resetSelect(barangaySelect, 'Select barangay');
+            if (psgcBarangayNameInput) {
+                psgcBarangayNameInput.value = '';
+            }
+            syncAddressPreview();
+        }
+
+        await loadBarangays(cityCode);
+        syncAddressPreview();
+    }
+
+    async function restoreAddressSelections() {
+        if (!psgcEnabled) {
+            return;
+        }
+
+        const presetRegionCode = regionSelect ? (regionSelect.getAttribute('data-selected') || '') : '';
+        const presetProvinceCode = provinceSelect ? (provinceSelect.getAttribute('data-selected') || '') : '';
+        const presetCityCode = citySelect ? (citySelect.getAttribute('data-selected') || '') : '';
+        const presetBarangayCode = barangaySelect ? (barangaySelect.getAttribute('data-selected') || '') : '';
+
+        const regionCandidates = toCandidateNames(psgcRegionNameInput ? psgcRegionNameInput.value : '');
+        const provinceCandidates = toCandidateNames(psgcProvinceNameInput ? psgcProvinceNameInput.value : '');
+        const cityCandidates = toCandidateNames(psgcCityNameInput ? psgcCityNameInput.value : '');
+        const barangayCandidates = toCandidateNames(psgcBarangayNameInput ? psgcBarangayNameInput.value : '');
+
+        const regionAppliedCode = applySelectCodeOrName(regionSelect, presetRegionCode, regionCandidates);
+        if (!regionAppliedCode) {
+            if (regionSelect && regionSelect.value) {
+                await handleRegionChange(true);
+            }
+            syncAddressPreview();
+            return;
+        }
+
+        await handleRegionChange(true);
+
+        if (provinceSelect && !provinceSelect.disabled) {
+            applySelectCodeOrName(provinceSelect, presetProvinceCode, provinceCandidates);
+            await handleProvinceChange(true);
+        } else if (provinceSelect && !provinceSelect.required) {
+            await handleProvinceChange(true);
+        }
+
+        let cityAppliedCode = '';
+        if (citySelect && !citySelect.disabled) {
+            cityAppliedCode = applySelectCodeOrName(citySelect, presetCityCode, cityCandidates);
+
+            if (!cityAppliedCode && provinceSelect && !provinceSelect.disabled) {
+                const currentProvinceCode = String(provinceSelect.value || '').trim();
+                const provinceOptions = Array.from(provinceSelect.options || []).filter(function(option) {
+                    return option && option.value;
+                });
+
+                for (let i = 0; i < provinceOptions.length; i += 1) {
+                    const option = provinceOptions[i];
+                    if (!option || !option.value || String(option.value) === currentProvinceCode) {
+                        continue;
+                    }
+                    provinceSelect.value = String(option.value);
+                    await handleProvinceChange(true);
+                    cityAppliedCode = applySelectCodeOrName(citySelect, presetCityCode, cityCandidates);
+                    if (cityAppliedCode) {
+                        break;
+                    }
+                }
+
+                if (!cityAppliedCode && currentProvinceCode && String(provinceSelect.value || '') !== currentProvinceCode) {
+                    provinceSelect.value = currentProvinceCode;
+                    await handleProvinceChange(true);
+                }
+            }
+
+            if (cityAppliedCode) {
+                await handleCityChange(true);
+            }
+        }
+
+        if (barangaySelect && !barangaySelect.disabled) {
+            applySelectCodeOrName(barangaySelect, presetBarangayCode, barangayCandidates);
+        }
+
+        syncAddressPreview();
+    }
+
+    function updateSteps() {
+        steps.forEach(function(step, index) {
+            step.classList.remove('active', 'completed');
+            if (index + 1 === currentStep) {
+                step.classList.add('active');
+            } else if (index + 1 < currentStep) {
+                step.classList.add('completed');
+            }
+        });
+
+        formSteps.forEach(function(formStep, index) {
+            formStep.classList.toggle('active', index + 1 === currentStep);
+        });
+    }
+
+    function updateProgressBar() {
+        const progressBar = document.getElementById('progressBar');
+        const progress = ((currentStep - 1) / (totalSteps - 1)) * 100;
+        if (progressBar) {
+            progressBar.style.width = progress + '%';
+        }
+    }
+
+    function updateOrganizationFields() {
+        if (!organizationFields) {
+            return;
+        }
+
+        const businessNameInput = document.getElementById('businessName');
+        if (accountType === 'organization') {
+            organizationFields.style.display = 'block';
+            if (businessNameInput) {
+                businessNameInput.required = true;
+            }
+            if (step3Title) {
+                step3Title.textContent = 'Business Partner Information';
+            }
+            if (step3Subtitle) {
+                step3Subtitle.textContent = 'Provide your business details and business address.';
+            }
+            if (step3NavLabel) {
+                step3NavLabel.textContent = 'Partner Info';
+            }
+            if (addressSectionLabel) {
+                addressSectionLabel.textContent = 'Business Address (PSGC) *';
+            }
+            if (regionLabel) {
+                regionLabel.textContent = 'Region (CALABARZON only) *';
+            }
+            if (provinceLabel) {
+                provinceLabel.textContent = 'Province (Cavite only) *';
+            }
+            if (streetAddressLabel) {
+                streetAddressLabel.textContent = 'Business Street / Landmark *';
+            }
+            if (completeAddressLabel) {
+                completeAddressLabel.textContent = 'Complete Business Address *';
+            }
+            if (psgcAddressHelp) {
+                psgcAddressHelp.textContent = 'Business partner registration is limited to Cavite, Region IV-A (CALABARZON).';
+                psgcAddressHelp.style.color = '#666';
+            }
+            if (addressPreviewInput) {
+                addressPreviewInput.placeholder = 'Your complete business address will appear here after selecting PSGC fields';
+            }
+        } else {
+            organizationFields.style.display = 'none';
+            if (businessNameInput) {
+                businessNameInput.required = false;
+            }
+            if (step3Title) {
+                step3Title.textContent = 'Individual Address Information';
+            }
+            if (step3Subtitle) {
+                step3Subtitle.textContent = 'Provide your complete home address for deliveries.';
+            }
+            if (step3NavLabel) {
+                step3NavLabel.textContent = 'Address Info';
+            }
+            if (addressSectionLabel) {
+                addressSectionLabel.textContent = 'Home Address (PSGC) *';
+            }
+            if (regionLabel) {
+                regionLabel.textContent = 'Region (Luzon only) *';
+            }
+            if (provinceLabel) {
+                provinceLabel.textContent = 'Province (Required except NCR) *';
+            }
+            if (streetAddressLabel) {
+                streetAddressLabel.textContent = 'House No. / Street / Landmark *';
+            }
+            if (completeAddressLabel) {
+                completeAddressLabel.textContent = 'Complete Home Address *';
+            }
+            if (psgcAddressHelp) {
+                psgcAddressHelp.textContent = 'Individual registration is limited to Luzon regions.';
+                psgcAddressHelp.style.color = '#666';
+            }
+            if (addressPreviewInput) {
+                addressPreviewInput.placeholder = 'Your complete home address will appear here after selecting PSGC fields';
+            }
+        }
+    }
+
+    async function refreshAddressScopeByAccountType() {
+        if (!psgcEnabled || !regionSelect || !provinceSelect || !citySelect || !barangaySelect) {
+            return;
+        }
+
+        const previousRegion = String(regionSelect.value || '').trim();
+        await loadRegions();
+        const currentRegion = String(regionSelect.value || '').trim();
+
+        if (currentRegion === '') {
+            resetSelect(provinceSelect, 'Select province');
+            resetSelect(citySelect, 'Select city or municipality');
+            resetSelect(barangaySelect, 'Select barangay');
+            syncAddressPreview();
+            return;
+        }
+
+        if (currentRegion !== previousRegion) {
+            resetSelect(provinceSelect, 'Select province');
+            resetSelect(citySelect, 'Select city or municipality');
+            resetSelect(barangaySelect, 'Select barangay');
+        }
+
+        await handleRegionChange(true);
+        syncAddressPreview();
+    }
+
+    function goToStep(step) {
+        if (step > currentStep) {
+            if (currentStep === 1 && !validateStep1()) {
+                return;
+            }
+            if (currentStep === 2 && !validateStep2()) {
+                return;
+            }
+            if (currentStep === 3 && !validateStep3()) {
+                return;
+            }
+        }
+
+        currentStep = step;
+        updateSteps();
+        updateProgressBar();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function isValidEmail(email) {
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    }
+
+    function isValidPhone(phone) {
+        const cleaned = phone.replace(/[^\d]/g, '');
+        return /^09\d{9}$/.test(cleaned) || /^9\d{9}$/.test(cleaned) || /^639\d{9}$/.test(cleaned);
+    }
+
+    function isValidName(name) {
+        return /^[\p{L}\p{M}'\-\s]{2,60}$/u.test(name);
+    }
+
+    function isStrongPassword(password) {
+        return /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,72}$/.test(password);
+    }
+
+    function validateStep1() {
+        if (!accountType || !['individual', 'organization'].includes(accountType)) {
+            showError('Account Type Required', 'Please select either Individual or Business Partner to continue.');
+            return false;
+        }
+        return true;
+    }
+
+    function validateStep2() {
+        const firstName = ((document.getElementById('firstName') || {}).value || '').trim();
+        const lastName = ((document.getElementById('lastName') || {}).value || '').trim();
+        const email = ((document.getElementById('email') || {}).value || '').trim();
+        const phone = ((document.getElementById('phone') || {}).value || '').trim();
+        const validIdInput = document.getElementById('validIdFile');
+        const validIdFile = validIdInput && validIdInput.files ? validIdInput.files[0] : null;
+
+        if (!firstName || !lastName || !email || !phone) {
+            showError('Missing Information', 'Please fill in all required personal details.');
+            return false;
+        }
+
+        if (!validIdFile) {
+            showError('Valid ID Required', 'Please upload your valid ID to continue.');
+            return false;
+        }
+
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+        const hasAllowedType = allowedTypes.includes(validIdFile.type || '');
+        const fileName = String(validIdFile.name || '').toLowerCase();
+        const hasAllowedExt = /\.(jpg|jpeg|png|webp)$/.test(fileName);
+        if (!hasAllowedType && !hasAllowedExt) {
+            showError('Invalid ID Format', 'Please upload a JPG, PNG, or WEBP image only.');
+            return false;
+        }
+
+        if (validIdFile.size > (5 * 1024 * 1024)) {
+            showError('File Too Large', 'Your valid ID must be 5MB or smaller.');
+            return false;
+        }
+
+        if (!isValidName(firstName) || !isValidName(lastName)) {
+            showError('Invalid Name', 'Please use letters, spaces, apostrophes, or hyphens only.');
+            return false;
+        }
+
+        if (!isValidEmail(email)) {
+            showError('Invalid Email', 'Please enter a valid email address.');
+            return false;
+        }
+
+        if (!isValidPhone(phone)) {
+            showError('Invalid Phone Number', 'Please enter a valid Philippine mobile number (e.g., 09171234567).');
+            return false;
+        }
+
+        return true;
+    }
+
+    function validateStep3() {
+        if (accountType === 'organization') {
+            const businessName = ((document.getElementById('businessName') || {}).value || '').trim();
+            if (!businessName) {
+                showError('Restaurant Name Required', 'Please enter your restaurant name.');
+                return false;
+            }
+        }
+
+        if (!addressPreviewInput || addressPreviewInput.value.trim().length < 10) {
+            showError('Address Required', accountType === 'organization'
+                ? 'Please provide a complete business address.'
+                : 'Please provide a complete home address.');
+            return false;
+        }
+
+        if (!psgcEnabled) {
+            showError('Address Service Unavailable', 'PSGC address lookup is currently unavailable. Please try again in a few minutes.');
+            return false;
+        }
+
+        if (psgcEnabled) {
+            const selectedRegionLabel = getSelectedLabel(regionSelect);
+            const isNcrRegion = isNcrSelection(regionSelect.value, selectedRegionLabel);
+            const hasRequiredLocationPieces =
+                !!regionSelect.value &&
+                !!citySelect.value &&
+                !!barangaySelect.value &&
+                !!streetAddressInput.value.trim() &&
+                (isNcrRegion || !!provinceSelect.value);
+
+            if (!hasRequiredLocationPieces) {
+                showError('Incomplete Address', accountType === 'organization'
+                    ? 'Please complete your business address details (region, province, city/municipality, barangay, and street).'
+                    : 'Please complete your home address details in Luzon (province may be skipped for NCR).');
+                return false;
+            }
+
+            if (accountType === 'organization') {
+                if (regionSelect.value !== CALABARZON_REGION_CODE || !String(selectedRegionLabel).toLowerCase().includes('calabarzon')) {
+                    showError('Region Restricted', 'Business partner registration is available only in Region IV-A (CALABARZON).');
+                    return false;
+                }
+                const selectedProvinceLabel = getSelectedLabel(provinceSelect);
+                if (provinceSelect.value !== CAVITE_PROVINCE_CODE || !String(selectedProvinceLabel).toLowerCase().includes('cavite')) {
+                    showError('Province Restricted', 'Business partner registration is available only in Cavite.');
+                    return false;
+                }
+            } else if (!isLuzonSelection(regionSelect.value, selectedRegionLabel)) {
+                showError('Region Restricted', 'Individual registration is available only for Luzon regions.');
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    function validateStep4() {
+        const passwordInput = document.getElementById('password');
+        const confirmPasswordInput = document.getElementById('confirmPassword');
+        const termsInput = document.getElementById('acceptTerms');
+        const password = passwordInput ? passwordInput.value : '';
+        const confirmPassword = confirmPasswordInput ? confirmPasswordInput.value : '';
+
+        if (!password || !confirmPassword) {
+            showError('Password Required', 'Please enter and confirm your password.');
+            return false;
+        }
+
+        if (!isStrongPassword(password)) {
+            showError('Weak Password', 'Use 8+ characters with uppercase, lowercase, number, and symbol.');
+            return false;
+        }
+
+        if (password !== confirmPassword) {
+            showError('Passwords Mismatch', 'Passwords do not match. Please try again.');
+            return false;
+        }
+
+        if (!termsInput || !termsInput.checked) {
+            showError('Terms Required', 'Please accept the Terms of Service and Privacy Policy.');
+            return false;
+        }
+
+        return true;
+    }
+
+    accountTypeCards.forEach(function(card) {
+        card.addEventListener('click', function() {
+            accountTypeCards.forEach(function(item) {
+                item.classList.remove('selected');
+            });
+            card.classList.add('selected');
+            accountType = card.dataset.type;
+            if (accountTypeInput) {
+                accountTypeInput.value = accountType;
+            }
+            updateOrganizationFields();
+            refreshAddressScopeByAccountType().catch(function() {
+                setManualAddressFallback('PSGC address lookup is unavailable while updating account type scope.');
+            });
+        });
+    });
+
+    accountTypeCards.forEach(function(card) {
+        if (card.dataset.type === accountType) {
+            card.classList.add('selected');
+        }
+    });
+
+    const backToLoginBtn = document.getElementById('backToLoginBtn');
+    if (backToLoginBtn) {
+        backToLoginBtn.addEventListener('click', function() {
+            window.location.href = 'login.php';
+        });
+    }
+
+    const nextStep1 = document.getElementById('nextStep1');
+    if (nextStep1) {
+        nextStep1.addEventListener('click', function() {
+            goToStep(2);
+        });
+    }
+
+    const nextStep2 = document.getElementById('nextStep2');
+    if (nextStep2) {
+        nextStep2.addEventListener('click', function() {
+            if (validateStep2()) {
+                goToStep(3);
+            }
+        });
+    }
+
+    const nextStep3 = document.getElementById('nextStep3');
+    if (nextStep3) {
+        nextStep3.addEventListener('click', function() {
+            if (validateStep3()) {
+                goToStep(4);
+            }
+        });
+    }
+
+    const prevStep2 = document.getElementById('prevStep2');
+    if (prevStep2) {
+        prevStep2.addEventListener('click', function() {
+            goToStep(1);
+        });
+    }
+
+    const prevStep3 = document.getElementById('prevStep3');
+    if (prevStep3) {
+        prevStep3.addEventListener('click', function() {
+            goToStep(2);
+        });
+    }
+
+    const prevStep4 = document.getElementById('prevStep4');
+    if (prevStep4) {
+        prevStep4.addEventListener('click', function() {
+            goToStep(3);
+        });
+    }
+
+    document.querySelectorAll('.toggle-password').forEach(function(button) {
+        button.addEventListener('click', function() {
+            const wrapper = button.closest('.password-wrapper');
+            if (!wrapper) {
+                return;
+            }
+            const input = wrapper.querySelector('input');
+            const icon = button.querySelector('i');
+            if (!input || !icon) {
+                return;
+            }
+
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.className = 'fas fa-eye-slash';
+                button.setAttribute('aria-label', 'Hide password');
+            } else {
+                input.type = 'password';
+                icon.className = 'fas fa-eye';
+                button.setAttribute('aria-label', 'Show password');
+            }
+        });
+    });
+
+    const passwordInput = document.getElementById('password');
+    if (passwordInput) {
+        passwordInput.addEventListener('input', function() {
+            const password = passwordInput.value;
+            const bars = [
+                document.getElementById('strengthBar1'),
+                document.getElementById('strengthBar2'),
+                document.getElementById('strengthBar3'),
+                document.getElementById('strengthBar4')
+            ];
+            const strengthText = document.getElementById('strengthText');
+            const checks = [/[a-z]/, /[A-Z]/, /\d/, /[^A-Za-z\d]/];
+            let score = password.length >= 8 ? 1 : 0;
+            checks.forEach(function(regex) {
+                if (regex.test(password)) {
+                    score += 1;
+                }
+            });
+            score = Math.min(score, 4);
+
+            bars.forEach(function(bar) {
+                if (bar) {
+                    bar.className = 'strength-bar';
+                }
+            });
+
+            let label = 'Weak';
+            let cssClass = 'weak';
+            let color = '#ff5252';
+
+            if (score >= 3) {
+                label = 'Fair';
+                cssClass = 'medium';
+                color = '#ff9800';
+            }
+            if (score >= 4) {
+                label = 'Strong';
+                cssClass = 'strong';
+                color = '#4caf50';
+            }
+            if (!password.length) {
+                label = 'Weak';
+                color = '#666';
+            }
+
+            for (let i = 0; i < score; i += 1) {
+                if (bars[i]) {
+                    bars[i].classList.add(cssClass);
+                }
+            }
+            if (strengthText) {
+                strengthText.textContent = label;
+                strengthText.style.color = color;
+            }
+        });
+    }
+
+    if (regionSelect && provinceSelect && citySelect && barangaySelect && streetAddressInput && addressPreviewInput) {
+        Promise.resolve()
+            .then(loadRegions)
+            .then(restoreAddressSelections)
+            .catch(function() {
+                setManualAddressFallback('PSGC address lookup is unavailable right now. You can enter your complete address manually.');
+            });
+
+        regionSelect.addEventListener('change', function() {
+            handleRegionChange(false).catch(function() {
+                setManualAddressFallback('PSGC address lookup failed while loading provinces/cities. Use manual address entry for now.');
+            });
+        });
+
+        provinceSelect.addEventListener('change', function() {
+            handleProvinceChange(false).catch(function() {
+                setManualAddressFallback('PSGC address lookup failed while loading cities/municipalities.');
+            });
+        });
+
+        citySelect.addEventListener('change', function() {
+            handleCityChange(false).catch(function() {
+                setManualAddressFallback('PSGC address lookup failed while loading barangays.');
+            });
+        });
+
+        barangaySelect.addEventListener('change', syncAddressPreview);
+        streetAddressInput.addEventListener('input', syncAddressPreview);
+    }
+
+    const registrationForm = document.getElementById('registrationForm');
+    if (registrationForm) {
+        registrationForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            if (!validateStep4() || !validateStep3()) {
+                return false;
+            }
+
+            if (psgcEnabled) {
+                syncAddressPreview();
+            }
+
+            const submitBtn = document.getElementById('submitRegistration');
+            if (submitBtn) {
+                submitBtn.classList.add('loading');
+                submitBtn.disabled = true;
+                const span = submitBtn.querySelector('span');
+                if (span) {
+                    span.textContent = 'Creating account...';
+                }
+            }
+            this.submit();
+            return true;
+        });
+    }
+
+    [
+        ['googleRegisterBtn', 'controllers/google_auth.php?action=register'],
+        ['facebookRegisterBtn', 'controllers/facebook_auth.php?action=register'],
+        ['twitterRegisterBtn', 'controllers/twitter_auth.php?action=register'],
+        ['instagramRegisterBtn', 'controllers/instagram_auth.php?action=register']
+    ].forEach(function(item) {
+        const button = document.getElementById(item[0]);
+        if (button) {
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
+                window.location.href = item[1];
+            });
+        }
+    });
+
+    updateOrganizationFields();
+    updateSteps();
+    updateProgressBar();
+    syncAddressPreview();
+
+    const serverRegistrationError = <?php echo json_encode($error ?? ''); ?>;
+    if (serverRegistrationError) {
+        const loweredError = serverRegistrationError.toLowerCase();
+        let targetStep = 1;
+
+        if (/(email|mobile|phone|name|valid id|government id)/.test(loweredError)) {
+            targetStep = 2;
+        } else if (/(business|partner|address|psgc|delivery|restaurant)/.test(loweredError)) {
+            targetStep = 3;
+        } else if (/(password|terms|token|security)/.test(loweredError)) {
+            targetStep = 4;
+        }
+
+        if (targetStep !== currentStep) {
+            currentStep = targetStep;
+            updateSteps();
+            updateProgressBar();
+        }
+
+        Swal.fire({
+            icon: 'error',
+            title: 'Registration failed',
+            text: serverRegistrationError,
+            confirmButtonColor: '#c62828'
+        });
+    }
+});
+</script>
+
+<?php 
+// Close database connection
+if (isset($conn)) {
+    mysqli_close($conn);
+}
+
+include 'includes/footer.php'; 
+?>

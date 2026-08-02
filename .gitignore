@@ -1,0 +1,12 @@
+# Production/local secrets
+includes/deployment_credentials.php
+.env
+.env.local
+.env.*.local
+
+# Runtime artifacts
+logs/*.log
+logs/*.txt
+*.tmp
+tmp_*.php
+.codex_write_test.txt
