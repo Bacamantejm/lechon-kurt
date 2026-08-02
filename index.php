@@ -2141,6 +2141,67 @@ include 'includes/header.php';
     display: flex !important;
     gap: 6px !important;
 }
+
+<?php if (!empty($_SESSION['user_id'])): ?>
+/* Logged-in Customer Dashboard Layout Theme */
+body {
+    background: #ffffff !important;
+    --bg: #ffffff !important;
+}
+
+.market-explorer {
+    gap: 36px !important;
+    align-items: flex-start !important;
+}
+
+.market-sidebar {
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 16px !important;
+    padding: 20px !important;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.02) !important;
+    max-width: 280px !important;
+    width: 100% !important;
+}
+
+.market-sidebar-section {
+    border-bottom: 1px solid #f1f5f9 !important;
+    padding-bottom: 16px !important;
+    margin-bottom: 16px !important;
+}
+
+.market-sidebar-section:last-child {
+    border-bottom: none !important;
+    padding-bottom: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+.market-sidebar h3 {
+    margin: 0 0 12px 0 !important;
+    font-size: 1.15rem !important;
+    font-weight: 800 !important;
+    color: #1e293b !important;
+}
+
+.market-sidebar h4 {
+    margin: 0 0 10px 0 !important;
+    font-size: 0.88rem !important;
+    font-weight: 700 !important;
+    color: #475569 !important;
+}
+
+/* Header bottom links for customer portal */
+.market-home-link.active {
+    background: #b3261e !important;
+    color: #ffffff !important;
+    border-color: #b3261e !important;
+}
+
+.market-home-link:hover:not(.active) {
+    background: #f1f5f9 !important;
+    color: #171922 !important;
+}
+<?php endif; ?>
 </style>
 
 <div class="market-home">
@@ -2148,6 +2209,38 @@ include 'includes/header.php';
         <div class="container">
             <div class="market-explorer">
                 <aside class="market-sidebar">
+                    <?php if (!empty($_SESSION['user_id'])): ?>
+                        <!-- App Promo Card -->
+                        <div class="sidebar-app-promo" style="background:#2a211d; color:#ffffff; padding:20px; border-radius:20px; position:relative; margin-bottom:24px; box-shadow:0 8px 24px rgba(0,0,0,0.12); display:flex; flex-direction:column; align-items:center; text-align:center;">
+                            <button type="button" onclick="this.parentElement.style.display='none';" style="position:absolute; top:12px; right:12px; background:transparent; border:none; color:#a1a1a1; cursor:pointer; font-size:1rem; padding:0; line-height:1;"><i class="fas fa-xmark"></i></button>
+                            <div style="background:#ffffff; padding:12px; border-radius:16px; margin-bottom:12px; display:inline-block; border:1px solid #efddcd; line-height:0;">
+                                <svg width="90" height="90" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                                    <rect width="100" height="100" fill="#fff"/>
+                                    <rect x="10" y="10" width="25" height="25" fill="#2a211d"/>
+                                    <rect x="15" y="15" width="15" height="15" fill="#fff"/>
+                                    <rect x="18" y="18" width="9" height="9" fill="#2a211d"/>
+                                    <rect x="65" y="10" width="25" height="25" fill="#2a211d"/>
+                                    <rect x="70" y="15" width="15" height="15" fill="#fff"/>
+                                    <rect x="73" y="18" width="9" height="9" fill="#2a211d"/>
+                                    <rect x="10" y="65" width="25" height="25" fill="#2a211d"/>
+                                    <rect x="15" y="70" width="15" height="15" fill="#fff"/>
+                                    <rect x="18" y="73" width="9" height="9" fill="#2a211d"/>
+                                    <rect x="45" y="15" width="8" height="8" fill="#b3261e"/>
+                                    <rect x="53" y="30" width="8" height="8" fill="#2a211d"/>
+                                    <rect x="40" y="45" width="20" height="20" fill="#b3261e" rx="4"/>
+                                    <circle cx="50" cy="55" r="6" fill="#fff"/>
+                                    <path d="M48 55 C48 53, 52 53, 52 55 C52 57, 48 57, 48 55" fill="#b3261e"/>
+                                    <rect x="70" y="45" width="12" height="12" fill="#2a211d"/>
+                                    <rect x="75" y="70" width="15" height="15" fill="#2a211d"/>
+                                </svg>
+                            </div>
+                            <h4 style="margin:0 0 6px 0; font-family:'Outfit', sans-serif; font-size:0.92rem; font-weight:800; line-height:1.3; color:#ffffff;">Unlock more app-only deals. Download now.</h4>
+                            <div style="display:flex; gap:8px; width:100%; justify-content:center; margin-top:8px;">
+                                <a href="#" style="background:#111; color:#fff; border:1px solid #444; border-radius:8px; padding:6px 10px; font-size:0.68rem; display:inline-flex; align-items:center; gap:6px; text-decoration:none; font-weight:700;"><i class="fab fa-apple" style="font-size:0.9rem;"></i> App Store</a>
+                                <a href="#" style="background:#111; color:#fff; border:1px solid #444; border-radius:8px; padding:6px 10px; font-size:0.68rem; display:inline-flex; align-items:center; gap:6px; text-decoration:none; font-weight:700;"><i class="fab fa-google-play" style="font-size:0.8rem;"></i> Play Store</a>
+                            </div>
+                        </div>
+                    <?php endif; ?>
                     <div class="market-sidebar-section">
                         <h3>Filters</h3>
                     </div>
@@ -2190,38 +2283,67 @@ include 'includes/header.php';
                             </div>
                         </div>
                     <?php endif; ?>
-                    <div class="panda-hero-banners">
-                        <article class="panda-hero-card panda-card-pink">
-                            <div class="panda-card-arch"></div>
-                            <div class="panda-card-content">
-                                <h2 class="panda-card-title">Order Fresh Lechon</h2>
-                                <p class="panda-card-desc">Enjoy crispy skin and juicy meat, roasted fresh for every order.</p>
-                                <a href="#marketplaceStores" class="panda-card-btn">Order Now</a>
-                            </div>
-                            <div class="panda-card-graphic">
-                                <img src="assets/images/lechon_mascot_user.png" alt="Lechon Delights Mascot" class="panda-mascot-img" loading="lazy">
-                            </div>
-                        </article>
+                    <?php if (empty($_SESSION['user_id'])): ?>
+                        <div class="panda-hero-banners">
+                            <article class="panda-hero-card panda-card-pink">
+                                <div class="panda-card-arch"></div>
+                                <div class="panda-card-content">
+                                    <h2 class="panda-card-title">Order Fresh Lechon</h2>
+                                    <p class="panda-card-desc">Enjoy crispy skin and juicy meat, roasted fresh for every order.</p>
+                                    <a href="#marketplaceStores" class="panda-card-btn">Order Now</a>
+                                </div>
+                                <div class="panda-card-graphic">
+                                    <img src="assets/images/lechon_mascot_user.png" alt="Lechon Delights Mascot" class="panda-mascot-img" loading="lazy">
+                                </div>
+                            </article>
 
-                        <article class="panda-hero-card panda-card-soft">
-                            <div class="panda-card-heart-bg">
-                                <div class="panda-heart-shape heart-lg"></div>
-                                <div class="panda-heart-shape heart-sm"></div>
-                            </div>
-                            <div class="panda-card-content">
-                                <h2 class="panda-card-title">Pre-order for Celebrations</h2>
-                                <p class="panda-card-desc">Avoid the rush by booking your whole or half lechon ahead of time.</p>
-                                <a href="preorder.php" class="panda-card-btn panda-card-btn-alt">Reserve Now</a>
-                            </div>
-                            <div class="panda-card-graphic-cluster">
-                                <div class="panda-float-badge-wrap">
-                                    <div class="panda-badge-item panda-badge-calendar" title="Pre-order Ahead"><i class="fas fa-calendar-check"></i></div>
-                                    <div class="panda-badge-item panda-badge-gift" title="Celebration Offer"><i class="fas fa-gift"></i></div>
-                                    <div class="panda-badge-item panda-badge-party" title="Lechon Feast"><i class="fas fa-utensils"></i></div>
+                            <article class="panda-hero-card panda-card-soft">
+                                <div class="panda-card-heart-bg">
+                                    <div class="panda-heart-shape heart-lg"></div>
+                                    <div class="panda-heart-shape heart-sm"></div>
+                                </div>
+                                <div class="panda-card-content">
+                                    <h2 class="panda-card-title">Pre-order for Celebrations</h2>
+                                    <p class="panda-card-desc">Avoid the rush by booking your whole or half lechon ahead of time.</p>
+                                    <a href="preorder.php" class="panda-card-btn panda-card-btn-alt">Reserve Now</a>
+                                </div>
+                                <div class="panda-card-graphic-cluster">
+                                    <div class="panda-float-badge-wrap">
+                                        <div class="panda-badge-item panda-badge-calendar" title="Pre-order Ahead"><i class="fas fa-calendar-check"></i></div>
+                                        <div class="panda-badge-item panda-badge-gift" title="Celebration Offer"><i class="fas fa-gift"></i></div>
+                                        <div class="panda-badge-item panda-badge-party" title="Lechon Feast"><i class="fas fa-utensils"></i></div>
+                                    </div>
+                                </div>
+                            </article>
+                        </div>
+                    <?php else: ?>
+                        <!-- Logged-in Premium Minimal Promo Cards -->
+                        <div class="user-promo-row" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-bottom: 28px;">
+                            <!-- Order Now Card -->
+                            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 4px 12px rgba(15,23,42,0.02); transition: transform 0.2s ease;">
+                                <div style="width: 52px; height: 52px; border-radius: 12px; background: #fff1f2; display: flex; align-items: center; justify-content: center; color: #b3261e; font-size: 1.4rem; flex-shrink: 0;">
+                                    <i class="fas fa-motorcycle"></i>
+                                </div>
+                                <div style="flex: 1;">
+                                    <h4 style="margin: 0 0 4px 0; font-family: 'Outfit', sans-serif; font-size: 0.98rem; font-weight: 800; color: #1e293b;">Order Fresh Lechon</h4>
+                                    <p style="margin: 0 0 10px 0; font-size: 0.8rem; color: #64748b; line-height: 1.4;">Crispy skin and juicy meat roasted fresh for your feast.</p>
+                                    <a href="#marketplaceStores" class="market-btn" style="min-height: 32px; padding: 0 14px; font-size: 0.78rem; border-radius: 8px; text-decoration: none; display: inline-flex; align-items: center; justify-content: center;">Order Now</a>
                                 </div>
                             </div>
-                        </article>
-                    </div>
+                            
+                            <!-- Reserve Now Card -->
+                            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 4px 12px rgba(15,23,42,0.02); transition: transform 0.2s ease;">
+                                <div style="width: 52px; height: 52px; border-radius: 12px; background: #fef4ea; display: flex; align-items: center; justify-content: center; color: #ef6b2e; font-size: 1.4rem; flex-shrink: 0;">
+                                    <i class="fas fa-calendar-check"></i>
+                                </div>
+                                <div style="flex: 1;">
+                                    <h4 style="margin: 0 0 4px 0; font-family: 'Outfit', sans-serif; font-size: 0.98rem; font-weight: 800; color: #1e293b;">Pre-order Celebrations</h4>
+                                    <p style="margin: 0 0 10px 0; font-size: 0.8rem; color: #64748b; line-height: 1.4;">Avoid the rush and reserve your whole lechon ahead of time.</p>
+                                    <a href="preorder.php" class="market-btn-soft" style="min-height: 32px; padding: 0 14px; font-size: 0.78rem; border-radius: 8px; text-decoration: none; display: inline-flex; align-items: center; justify-content: center;">Reserve Now</a>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endif; ?>
 
                     <?php if (!empty($top_rated_stores)): ?>
                     <section class="market-mini-section">
