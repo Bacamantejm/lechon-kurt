@@ -470,17 +470,15 @@ $faqs = [
     box-shadow: var(--faq-shadow-sm);
     overflow: hidden;
     transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
-    border-left: 4px solid transparent;
 }
 
 .faq-card:hover {
     box-shadow: var(--faq-shadow-md);
-    border-color: #ebd7c5;
-    border-left-color: var(--faq-brand-orange);
+    border-color: #e2d2c5;
 }
 
 .faq-card.active {
-    border-left-color: var(--faq-brand-red);
+    border-color: #d6c0b0;
     box-shadow: var(--faq-shadow-md);
 }
 
