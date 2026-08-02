@@ -905,94 +905,129 @@ body {
     <div class="login-wrapper">
         <!-- Login Form Section -->
         <div class="login-right">
-            <div class="login-header">
-                <h2>Welcome Back!</h2>
-                <p>Sign in to continue your delicious journey with Lechon Delights</p>
-            </div>
-            
-            <?php if ($error): ?>
-            <div class="alert alert-error" id="errorAlert">
-                <i class="fas fa-exclamation-circle"></i>
-                <div><?php echo htmlspecialchars($error); ?></div>
-            </div>
-            <?php endif; ?>
-            
-            <?php if ($success): ?>
-            <div class="alert alert-success" id="successAlert">
-                <i class="fas fa-check-circle"></i>
-                <div><?php echo $success; ?></div>
-            </div>
-            <?php endif; ?>
-
-            <!-- Login Form -->
-            <form method="POST" action="" class="login-form" id="loginForm">
-                <div class="form-group">
-                    <label for="email">Email Address</label>
-                    <div class="input-with-icon">
-                        <i class="fas fa-envelope"></i>
-                        <input type="email" id="email" name="email" class="form-control" required 
-                            placeholder="Enter your email address" 
-                            value="<?php echo htmlspecialchars($form_data['email'] ?? ''); ?>"
-                            autocomplete="email">
-                    </div>
+            <!-- Login View -->
+            <div id="loginViewContainer" class="auth-panel-view">
+                <div class="login-header">
+                    <h2>Welcome Back!</h2>
+                    <p>Sign in to continue your delicious journey with Lechon Delights</p>
                 </div>
                 
-                <div class="form-group">
-                    <label for="password">Password</label>
-                    <div class="password-wrapper input-with-icon">
-                        <i class="fas fa-lock"></i>
-                        <input type="password" id="password" name="password" class="form-control" required 
-                            placeholder="Enter your password"
-                            autocomplete="current-password">
-                        <button type="button" class="toggle-password" aria-label="Toggle password visibility">
-                            <i class="fas fa-eye"></i>
+                <?php if ($error): ?>
+                <div class="alert alert-error" id="errorAlert">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <div><?php echo htmlspecialchars($error); ?></div>
+                </div>
+                <?php endif; ?>
+                
+                <?php if ($success): ?>
+                <div class="alert alert-success" id="successAlert">
+                    <i class="fas fa-check-circle"></i>
+                    <div><?php echo $success; ?></div>
+                </div>
+                <?php endif; ?>
+
+                <!-- Login Form -->
+                <form method="POST" action="" class="login-form" id="loginForm">
+                    <div class="form-group">
+                        <label for="email">Email Address</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-envelope"></i>
+                            <input type="email" id="email" name="email" class="form-control" required 
+                                placeholder="Enter your email address" 
+                                value="<?php echo htmlspecialchars($form_data['email'] ?? ''); ?>"
+                                autocomplete="email">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <div class="password-wrapper input-with-icon">
+                            <i class="fas fa-lock"></i>
+                            <input type="password" id="password" name="password" class="form-control" required 
+                                placeholder="Enter your password"
+                                autocomplete="current-password">
+                            <button type="button" class="toggle-password" aria-label="Toggle password visibility">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="remember-forgot">
+                        <label class="remember-checkbox">
+                            <input type="checkbox" name="remember" id="rememberMe" value="1">
+                            <span>Remember me</span>
+                        </label>
+                        <a href="reset_password_request.php" class="forgot-link" id="switchToForgotView">Forgot password?</a>
+                    </div>
+                    
+                    <button type="submit" name="login" class="btn-primary" id="loginBtn">
+                        <i class="fas fa-sign-in-alt"></i>
+                        <span>Sign In</span>
+                    </button>
+                    
+                    <!-- Social Login Divider -->
+                    <div class="social-divider">
+                        <span>Or continue with</span>
+                    </div>
+                    
+                    <!-- Social Login Buttons -->
+                    <div class="social-login-buttons">
+                        <button type="button" class="social-btn google-btn" id="googleLoginBtn" title="Login with Google">
+                            <i class="fab fa-google"></i>
+                            <span>Google</span>
+                        </button>
+                        <button type="button" class="social-btn facebook-btn" id="facebookLoginBtn" title="Login with Facebook">
+                            <i class="fab fa-facebook-f"></i>
+                            <span>Facebook</span>
+                        </button>
+                        <button type="button" class="social-btn twitter-btn" id="twitterLoginBtn" title="Login with X">
+                            <i class="fab fa-x-twitter"></i>
+                            <span>X</span>
+                        </button>
+                        <button type="button" class="social-btn instagram-btn" id="instagramLoginBtn" title="Login with Instagram">
+                            <i class="fab fa-instagram"></i>
+                            <span>Instagram</span>
                         </button>
                     </div>
+                    
+                    <div class="auth-link">
+                        Don't have an account? 
+                        <a href="register.php" id="switchToRegister">Create an account</a>
+                    </div>
+                </form>
+            </div>
+
+            <!-- In-Place Forgot Password Panel View -->
+            <div id="forgotPasswordViewContainer" class="auth-panel-view" style="display: none;">
+                <div class="login-header">
+                    <h2>Reset Password</h2>
+                    <p>Enter your registered account email and we'll send you instructions to reset your password.</p>
                 </div>
-                
-                <div class="remember-forgot">
-                    <label class="remember-checkbox">
-                        <input type="checkbox" name="remember" id="rememberMe" value="1">
-                        <span>Remember me</span>
-                    </label>
-                    <a href="reset_password_request.php" class="forgot-link">Forgot password?</a>
-                </div>
-                
-                <button type="submit" name="login" class="btn-primary" id="loginBtn">
-                    <i class="fas fa-sign-in-alt"></i>
-                    <span>Sign In</span>
-                </button>
-                
-                <!-- Social Login Divider -->
-                <div class="social-divider">
-                    <span>Or continue with</span>
-                </div>
-                
-                <!-- Social Login Buttons -->
-                <div class="social-login-buttons">
-                    <button type="button" class="social-btn google-btn" id="googleLoginBtn" title="Login with Google">
-                        <i class="fab fa-google"></i>
-                        <span>Google</span>
+
+                <div id="forgotViewAlert" class="alert" style="display: none;"></div>
+
+                <form id="forgotViewForm" method="POST" action="reset_password_request.php" class="login-form">
+                    <input type="hidden" name="ajax" value="true">
+                    <div class="form-group">
+                        <label for="forgotViewEmail">Email Address</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-envelope"></i>
+                            <input type="email" id="forgotViewEmail" name="email" class="form-control" required placeholder="Enter your email address" autocomplete="email">
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn-primary" id="forgotViewSubmitBtn" style="margin-bottom: 25px;">
+                        <i class="fas fa-paper-plane"></i>
+                        <span>Send Reset Link</span>
                     </button>
-                    <button type="button" class="social-btn facebook-btn" id="facebookLoginBtn" title="Login with Facebook">
-                        <i class="fab fa-facebook-f"></i>
-                        <span>Facebook</span>
-                    </button>
-                    <button type="button" class="social-btn twitter-btn" id="twitterLoginBtn" title="Login with X">
-                        <i class="fab fa-x-twitter"></i>
-                        <span>X</span>
-                    </button>
-                    <button type="button" class="social-btn instagram-btn" id="instagramLoginBtn" title="Login with Instagram">
-                        <i class="fab fa-instagram"></i>
-                        <span>Instagram</span>
-                    </button>
-                </div>
-                
-                <div class="auth-link">
-                    Don't have an account? 
-                    <a href="register.php" id="switchToRegister">Create an account</a>
-                </div>
-            </form>
+
+                    <div class="auth-link" style="text-align: center;">
+                        <button type="button" id="switchToLoginView" style="background: none; border: none; color: #b3261e; font-weight: 700; cursor: pointer; font-size: 0.95rem; font-family: inherit; display: inline-flex; align-items: center; gap: 6px;">
+                            <i class="fas fa-arrow-left"></i> Back to Sign In
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
 </div>
@@ -1191,7 +1226,97 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }, 300);
     
-    // Show SweetAlert2 messages from PHP
+    // In-Place View Switcher between Login and Forgot Password
+    const loginView = document.getElementById('loginViewContainer');
+    const forgotView = document.getElementById('forgotPasswordViewContainer');
+    const switchToForgotBtn = document.getElementById('switchToForgotView');
+    const switchToLoginBtn = document.getElementById('switchToLoginView');
+    const forgotViewForm = document.getElementById('forgotViewForm');
+    const forgotViewEmail = document.getElementById('forgotViewEmail');
+    const forgotViewAlert = document.getElementById('forgotViewAlert');
+    const forgotViewSubmitBtn = document.getElementById('forgotViewSubmitBtn');
+
+    if (switchToForgotBtn) {
+        switchToForgotBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const mainEmail = document.getElementById('email');
+            if (mainEmail && mainEmail.value) {
+                forgotViewEmail.value = mainEmail.value.trim();
+            }
+            if (loginView && forgotView) {
+                loginView.style.display = 'none';
+                forgotView.style.display = 'block';
+                setTimeout(() => { if (forgotViewEmail) forgotViewEmail.focus(); }, 100);
+            }
+        });
+    }
+
+    if (switchToLoginBtn) {
+        switchToLoginBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            if (loginView && forgotView) {
+                forgotView.style.display = 'none';
+                loginView.style.display = 'block';
+            }
+        });
+    }
+
+    if (forgotViewForm) {
+        forgotViewForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const email = forgotViewEmail ? forgotViewEmail.value.trim() : '';
+            if (!email) return;
+
+            if (forgotViewSubmitBtn) {
+                forgotViewSubmitBtn.disabled = true;
+                forgotViewSubmitBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> <span>Sending Link...</span>';
+            }
+            if (forgotViewAlert) forgotViewAlert.style.display = 'none';
+
+            try {
+                const formData = new FormData(forgotViewForm);
+                const res = await fetch('reset_password_request.php', {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    body: formData
+                });
+                const data = await res.json();
+                if (data.success) {
+                    if (forgotViewAlert) {
+                        forgotViewAlert.className = 'alert alert-success';
+                        forgotViewAlert.innerHTML = '<i class="fas fa-check-circle"></i> <div>' + (data.message || 'Password reset link sent! Check your inbox.') + '</div>';
+                        forgotViewAlert.style.display = 'flex';
+                    }
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Reset Link Sent',
+                            text: data.message || 'Check your email inbox for password reset instructions.',
+                            confirmButtonColor: '#b3261e'
+                        });
+                    }
+                } else {
+                    if (forgotViewAlert) {
+                        forgotViewAlert.className = 'alert alert-error';
+                        forgotViewAlert.innerHTML = '<i class="fas fa-exclamation-circle"></i> <div>' + (data.message || 'Error processing request.') + '</div>';
+                        forgotViewAlert.style.display = 'flex';
+                    }
+                }
+            } catch (err) {
+                if (forgotViewAlert) {
+                    forgotViewAlert.className = 'alert alert-error';
+                    forgotViewAlert.innerHTML = '<i class="fas fa-exclamation-circle"></i> <div>An unexpected error occurred. Please try again.</div>';
+                    forgotViewAlert.style.display = 'flex';
+                }
+            } finally {
+                if (forgotViewSubmitBtn) {
+                    forgotViewSubmitBtn.disabled = false;
+                    forgotViewSubmitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> <span>Send Reset Link</span>';
+                }
+            }
+        });
+    }
+
     <?php if ($error): ?>
     Swal.fire({
         icon: 'error',
