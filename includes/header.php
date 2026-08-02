@@ -1990,6 +1990,6 @@ document.addEventListener('DOMContentLoaded', function () {
             marketAddressPanel.classList.remove('active');
             scheduleHeaderOffsetSync();
         }
-    });
 });
 </script>
+<?php require_once __DIR__ . '/forgot_password_modal.php'; ?>

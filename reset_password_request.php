@@ -92,6 +92,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
     }
     error_log("=== End Password Reset Request ===\n");
+
+    // Handle AJAX request from Forgot Password Modal
+    $is_ajax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+    $is_ajax = $is_ajax || (isset($_POST['ajax']) && (string)$_POST['ajax'] === 'true');
+
+    if ($is_ajax) {
+        header('Content-Type: application/json');
+        if (!empty($error)) {
+            echo json_encode(['success' => false, 'message' => $error]);
+        } else {
+            echo json_encode(['success' => true, 'message' => $success]);
+        }
+        exit;
+    }
 }
 
 /**
