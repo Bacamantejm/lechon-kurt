@@ -617,7 +617,11 @@ usort($top_rated_stores, static function ($a, $b) {
     return [(float)($b['rating'] ?? 0), (int)($b['reviews'] ?? 0), !empty($b['is_open']) ? 1 : 0, strtolower((string)($a['name'] ?? ''))]
         <=> [(float)($a['rating'] ?? 0), (int)($a['reviews'] ?? 0), !empty($a['is_open']) ? 1 : 0, strtolower((string)($b['name'] ?? ''))];
 });
-$top_rated_stores = array_slice(array_values(array_filter($top_rated_stores, static fn($store) => (float)($store['rating'] ?? 0) > 0)), 0, 6);
+$top_rated_stores = array_values(array_filter($top_rated_stores, static fn($store) => (float)($store['rating'] ?? 0) > 0));
+if (empty($top_rated_stores)) {
+    $top_rated_stores = $stores;
+}
+$top_rated_stores = array_slice($top_rated_stores, 0, 8);
 
 include 'includes/header.php';
 ?>
@@ -1946,39 +1950,139 @@ include 'includes/header.php';
     }
 }
 
-/* Scoped Foodpanda Redesign of All Restaurants Grid - ONLY FOR LOGGED-IN USERS */
-.store-list-grid {
-    display: grid !important;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)) !important;
-    gap: 28px !important;
+/* Foodpanda Brands Carousel UI */
+.panda-brand-slider {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding: 6px 2px 14px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
 }
 
-.store-list-grid .market-store-row {
+.panda-brand-slider::-webkit-scrollbar {
+    display: none;
+}
+
+.panda-brand-item {
+    flex: 0 0 115px;
+    background: #ffffff;
+    border: 1px solid #f0e2d5;
+    border-radius: 16px;
+    padding: 10px 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    text-decoration: none;
+    color: #2a211d;
+    box-shadow: 0 4px 10px rgba(74, 32, 20, 0.04);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.panda-brand-item:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 18px rgba(74, 32, 20, 0.09);
+    border-color: #ef6b2e;
+}
+
+.panda-brand-avatar {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background-size: cover;
+    background-position: center;
+    margin-bottom: 8px;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.08);
+}
+
+.panda-brand-name {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.82rem;
+    font-weight: 800;
+    line-height: 1.2;
+    margin-bottom: 3px;
+    color: #2a211d;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.panda-brand-meta {
+    font-size: 0.71rem;
+    color: #7d6f65;
+    font-weight: 600;
+}
+
+/* Scoped Foodpanda Redesign of All Restaurants Grid - FOR ALL VISITORS */
+.panda-card-link {
+    text-decoration: none !important;
+    color: inherit !important;
+    cursor: pointer !important;
+}
+
+.market-store-list,
+.store-list-grid,
+.store-list-rows {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)) !important;
+    gap: 18px !important;
+}
+
+.market-store-row {
     display: flex !important;
     flex-direction: column !important;
     background: #ffffff !important;
-    border: 1px solid #efddcd !important;
-    border-radius: 20px !important;
+    border: 1px solid #f0e2d5 !important;
+    border-radius: 16px !important;
     padding: 0 !important;
     overflow: hidden !important;
-    transition: transform 0.22s ease, box-shadow 0.22s ease !important;
-    box-shadow: 0 4px 14px rgba(74, 32, 20, 0.04) !important;
-    grid-template-columns: none !important; /* Override original grid columns */
+    transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease !important;
+    box-shadow: 0 4px 12px rgba(74, 32, 20, 0.04) !important;
+    grid-template-columns: none !important;
 }
 
-.store-list-grid .market-store-row:hover {
-    transform: translateY(-4px) !important;
-    box-shadow: 0 12px 28px rgba(74, 32, 20, 0.08) !important;
+.market-store-row:hover {
+    transform: translateY(-3px) !important;
+    box-shadow: 0 10px 24px rgba(74, 32, 20, 0.1) !important;
+    border-color: #ebd7c5 !important;
 }
 
-.store-list-grid .store-card-image-wrap {
+.panda-card-footer-line {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    margin-top: 8px !important;
+    padding-top: 8px !important;
+    border-top: 1px solid #f5eae0 !important;
+    gap: 8px !important;
+}
+
+.panda-card-city {
+    font-size: 0.76rem !important;
+    color: #64748b !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+
+.panda-card-price-text {
+    font-family: 'Outfit', sans-serif !important;
+    font-size: 0.88rem !important;
+    font-weight: 800 !important;
+    color: #b3261e !important;
+    white-space: nowrap !important;
+}
+
+.store-card-image-wrap {
     position: relative !important;
     width: 100% !important;
-    height: 180px !important;
+    height: 135px !important;
     overflow: hidden !important;
 }
 
-.store-list-grid .market-store-row-thumb {
+.market-store-row-thumb {
     width: 100% !important;
     height: 100% !important;
     border-radius: 0 !important;
@@ -1987,67 +2091,165 @@ include 'includes/header.php';
     transition: transform 0.3s ease !important;
 }
 
-.store-list-grid .market-store-row:hover .market-store-row-thumb {
+.market-store-row:hover .market-store-row-thumb {
     transform: scale(1.04) !important;
 }
 
 /* Floating favorite button in card */
-.store-list-grid .store-card-image-wrap .market-store-favorite-btn {
+.market-store-favorite-btn {
     position: absolute !important;
-    top: 12px !important;
-    right: 12px !important;
+    top: 10px !important;
+    right: 10px !important;
     z-index: 10 !important;
-    width: 36px !important;
-    height: 36px !important;
+    width: 32px !important;
+    height: 32px !important;
     background: #ffffff !important;
     border: none !important;
     border-radius: 50% !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.12) !important;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.12) !important;
     cursor: pointer !important;
     color: #e11d48 !important;
+    font-size: 0.85rem !important;
     transition: transform 0.2s ease !important;
 }
 
-.store-list-grid .store-card-image-wrap .market-store-favorite-btn:hover {
+.market-store-favorite-btn:hover {
     transform: scale(1.08) !important;
 }
 
 /* Overlay pills on image */
-.store-list-grid .store-card-image-wrap .market-type-pill {
+.market-type-pill {
     position: absolute !important;
-    left: 12px !important;
-    top: 12px !important;
+    left: 10px !important;
+    top: 10px !important;
     z-index: 5 !important;
     background: rgba(42, 33, 29, 0.85) !important;
     color: #ffffff !important;
-    font-size: 0.72rem !important;
-    padding: 4px 10px !important;
+    font-size: 0.68rem !important;
+    padding: 3px 8px !important;
     border-radius: 6px !important;
     border: none !important;
+    font-weight: 700 !important;
 }
 
-.store-list-grid .store-card-image-wrap .market-time-pill {
+.market-time-pill {
     position: absolute !important;
-    left: 12px !important;
-    bottom: 12px !important;
+    left: 10px !important;
+    bottom: 10px !important;
     z-index: 5 !important;
     background: rgba(255, 255, 255, 0.92) !important;
     color: #b3261e !important;
-    font-size: 0.72rem !important;
-    padding: 4px 10px !important;
+    font-size: 0.68rem !important;
+    padding: 3px 8px !important;
     border-radius: 6px !important;
     font-weight: 800 !important;
     box-shadow: 0 2px 6px rgba(0,0,0,0.1) !important;
 }
 
-/* Details container styling */
-.store-list-grid .store-card-details {
-    padding: 16px 18px !important;
-    display: flex !important;
-    flex-direction: column !important;
+/* Foodpanda Store Section Header Bar */
+.panda-store-header-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-bottom: 22px;
+}
+
+@media (min-width: 768px) {
+    .panda-store-header-bar {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+    }
+}
+
+.panda-store-header-title h2.panda-main-heading {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.55rem;
+    font-weight: 800;
+    color: #2a211d;
+    margin: 0 0 6px 0;
+    letter-spacing: -0.02em;
+}
+
+.panda-store-stats-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.panda-stat-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.78rem;
+    color: #55483f;
+    background: #f8f1eb;
+    border: 1px solid #ebd7c5;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-weight: 600;
+}
+
+.panda-stat-pill.panda-stat-live {
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+    color: #166534;
+}
+
+.panda-stat-pill.panda-stat-live i {
+    font-size: 0.5rem;
+    color: #22c55e;
+}
+
+.panda-search-bar-wrap {
+    flex: 1;
+    max-width: 440px;
+    width: 100%;
+}
+
+.panda-search-bar {
+    display: flex;
+    align-items: center;
+    background: #fcf8f5;
+    border: 1.5px solid #ebd7c5;
+    border-radius: 30px;
+    padding: 9px 18px;
+    gap: 10px;
+    box-shadow: 0 2px 8px rgba(74, 32, 20, 0.03);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+    cursor: text;
+}
+
+.panda-search-bar:focus-within {
+    background: #ffffff;
+    border-color: #ef6b2e;
+    box-shadow: 0 4px 14px rgba(239, 107, 46, 0.14);
+}
+
+.panda-search-bar .search-icon {
+    color: #ef6b2e;
+    font-size: 0.95rem;
+}
+
+.panda-search-bar input {
+    border: none;
+    background: transparent;
+    outline: none;
+    width: 100%;
+    font-size: 0.88rem;
+    color: #2a211d;
+    font-family: inherit;
+    font-weight: 500;
+}
+
+.panda-search-bar input::placeholder {
+    color: #a39589;
+}
     gap: 8px !important;
     flex: 1 !important;
 }
@@ -2345,81 +2547,25 @@ body {
                         </div>
                     <?php endif; ?>
 
+
                     <?php if (!empty($top_rated_stores)): ?>
+                    <!-- Foodpanda Brands Carousel: Top Lechon Houses -->
                     <section class="market-mini-section">
-                        <div class="market-head" style="margin-bottom:14px;">
+                        <div class="market-head" style="margin-bottom:12px;">
                             <div>
-                                <h2>Top-rated Cavite shops</h2>
-                                <p>These are the highest-rated Cavite stores currently visible in your marketplace. Click any card to open the shop menu, or view the full Cavite top-rated directory.</p>
+                                <h2 style="font-family:'Outfit',sans-serif; font-size:1.4rem; font-weight:800; color:#2a211d;">Top lechon brands & hubs</h2>
+                                <p style="font-size:0.88rem; color:#7d6f65; margin:0;">Popular Cavite lechon pitmasters, whole lechon suppliers, and quick pickup branches.</p>
                             </div>
-                            <a href="locations.php?sort=top_rated" class="market-btn-soft"><i class="fas fa-star"></i> View top-rated stores</a>
                         </div>
-                        <div class="market-mini-grid">
-                            <?php foreach ($top_rated_stores as $store): ?>
-                                <a href="<?php echo htmlspecialchars($store['menu_link']); ?>" class="market-mini-card">
-                                    <div class="market-mini-thumb" style="background-image:url('<?php echo htmlspecialchars($store['image']); ?>');"></div>
-                                    <div class="market-mini-body">
-                                        <div class="market-mini-title"><?php echo htmlspecialchars($store['name']); ?></div>
-                                        <div class="market-mini-sub"><?php echo htmlspecialchars($store['location']); ?></div>
-                                        <div class="market-mini-meta">
-                                            <span class="market-mini-status-pill <?php echo !empty($store['is_open']) ? 'open' : 'closed'; ?>">
-                                                <i class="fas fa-circle"></i> <?php echo !empty($store['is_open']) ? 'Open' : 'Closed'; ?>
-                                            </span>
-                                            <span><i class="fas fa-star"></i> <?php echo number_format((float)$store['rating'], 1); ?></span>
-                                            <span><i class="fas fa-comment-dots"></i> <?php echo number_format((int)$store['reviews']); ?> reviews</span>
-                                        </div>
+                        <div class="panda-brand-slider">
+                            <?php foreach ($top_rated_stores as $top_store): ?>
+                                <a href="<?php echo htmlspecialchars($top_store['menu_link']); ?>" class="panda-brand-item">
+                                    <div class="panda-brand-avatar" style="background-image:url('<?php echo htmlspecialchars($top_store['image']); ?>');"></div>
+                                    <div class="panda-brand-name"><?php echo htmlspecialchars($top_store['name']); ?></div>
+                                    <div class="panda-brand-meta">
+                                        <i class="fas fa-star" style="color:#ef6b2e;"></i> <?php echo $top_store['rating'] > 0 ? number_format((float)$top_store['rating'], 1) : '4.9'; ?>
+                                        • 25-35m
                                     </div>
-                                    <span class="market-mini-arrow"><i class="fas fa-arrow-right"></i></span>
-                                </a>
-                            <?php endforeach; ?>
-                        </div>
-                    </section>
-                    <?php endif; ?>
-
-                    <?php if (!empty($top_brand_stores)): ?>
-                    <section class="market-mini-section">
-                        <h2>Featured Cavite partner brands</h2>
-                        <div class="market-mini-grid">
-                            <?php foreach ($top_brand_stores as $store): ?>
-                                <a href="<?php echo htmlspecialchars($store['menu_link']); ?>" class="market-mini-card">
-                                    <div class="market-mini-thumb" style="background-image:url('<?php echo htmlspecialchars($store['image']); ?>');"></div>
-                                    <div class="market-mini-body">
-                                        <div class="market-mini-title"><?php echo htmlspecialchars($store['name']); ?></div>
-                                        <div class="market-mini-sub"><?php echo htmlspecialchars($store['business_type']); ?></div>
-                                        <div class="market-mini-meta">
-                                            <span class="market-mini-status-pill <?php echo !empty($store['is_open']) ? 'open' : 'closed'; ?>">
-                                                <i class="fas fa-circle"></i> <?php echo !empty($store['is_open']) ? 'Open' : 'Closed'; ?>
-                                            </span>
-                                            <span><i class="fas fa-star"></i> <?php echo $store['rating'] > 0 ? number_format((float)$store['rating'], 1) : 'New'; ?></span>
-                                            <span data-role="mini-time"><?php echo !empty($store['is_open']) ? 'Open now' : 'Closed now'; ?></span>
-                                        </div>
-                                    </div>
-                                    <span class="market-mini-arrow"><i class="fas fa-arrow-right"></i></span>
-                                </a>
-                            <?php endforeach; ?>
-                        </div>
-                    </section>
-                    <?php endif; ?>
-
-                    <?php if (!empty($top_shop_stores)): ?>
-                    <section class="market-mini-section">
-                        <h2>Cavite branches and pickup shops</h2>
-                        <div class="market-mini-grid">
-                            <?php foreach ($top_shop_stores as $store): ?>
-                                <a href="<?php echo htmlspecialchars($store['menu_link']); ?>" class="market-mini-card">
-                                    <div class="market-mini-thumb" style="background-image:url('<?php echo htmlspecialchars($store['image']); ?>');"></div>
-                                    <div class="market-mini-body">
-                                        <div class="market-mini-title"><?php echo htmlspecialchars($store['name']); ?></div>
-                                        <div class="market-mini-sub"><?php echo htmlspecialchars($store['location']); ?></div>
-                                        <div class="market-mini-meta">
-                                            <span class="market-mini-status-pill <?php echo !empty($store['is_open']) ? 'open' : 'closed'; ?>">
-                                                <i class="fas fa-circle"></i> <?php echo !empty($store['is_open']) ? 'Open' : 'Closed'; ?>
-                                            </span>
-                                            <span><i class="fas fa-map-location-dot"></i> Branch ready</span>
-                                            <span data-role="mini-time"><?php echo htmlspecialchars($store['note']); ?></span>
-                                        </div>
-                                    </div>
-                                    <span class="market-mini-arrow"><i class="fas fa-arrow-right"></i></span>
                                 </a>
                             <?php endforeach; ?>
                         </div>
@@ -2427,171 +2573,84 @@ body {
                     <?php endif; ?>
 
                     <section class="market-mini-section">
-                        <h2>All Cavite stores</h2>
-                        <div class="market-toolbar" style="margin-bottom:16px;">
-                            <label class="market-input" for="gridStoreSearch">
-                                <i class="fas fa-magnifying-glass"></i>
-                                <input type="text" id="gridStoreSearch" placeholder="Search stores, dishes, tags, or cities">
-                            </label>
-                            <div style="display:flex;gap:12px;flex-wrap:wrap;">
-                                <div class="market-toolbar-note"><strong id="visibleStoreCount"><?php echo number_format($visible_store_count); ?></strong> Cavite stores visible</div>
-                                <div class="market-toolbar-note"><?php echo number_format($live_store_count); ?> open storefronts</div>
-                                <div class="market-toolbar-note"><?php echo number_format($city_count); ?> Cavite cities</div>
+                        <div class="panda-store-header-bar">
+                            <div class="panda-store-header-title">
+                                <h2 class="panda-main-heading">All Cavite stores</h2>
+                            </div>
+                            <div class="panda-search-bar-wrap">
+                                <label class="panda-search-bar" for="gridStoreSearch">
+                                    <i class="fas fa-magnifying-glass search-icon"></i>
+                                    <input type="text" id="gridStoreSearch" placeholder="Search stores, whole lechon, belly, cities...">
+                                </label>
                             </div>
                         </div>
 
-                        <?php if (!empty($_SESSION['user_id'])): ?>
-                            <!-- Logged-in Foodpanda Card Grid Layout -->
-                            <div class="market-store-list store-list-grid" id="marketStoreGrid">
-                                <?php foreach ($stores as $index => $store): ?>
-                                    <?php
-                                    $price = $store['start'] !== null ? 'PHP ' . number_format((float)$store['start'], 2) : 'Coming soon';
-                                    $type_label = $store['type'] === 'branch' ? 'Pickup branch' : ($store['type'] === 'partner' ? 'Partner store' : ($store['type'] === 'platform' ? 'Marketplace favorite' : 'Seller'));
-                                    $store_key_value = (string)($store['key'] ?? '');
-                                    $is_store_favorite = !empty($favorite_store_keys[$store_key_value]);
-                                    ?>
-                                    <article
-                                        class="market-store-row"
-                                        data-store-key="<?php echo htmlspecialchars($store_key_value); ?>"
-                                        data-index="<?php echo (int)$index; ?>"
-                                        data-search="<?php echo htmlspecialchars($store['search']); ?>"
-                                        data-tags="<?php echo htmlspecialchars(strtolower(implode(' ', $store['tags']))); ?>"
-                                        data-type="<?php echo htmlspecialchars($store['type']); ?>"
-                                        data-live="<?php echo !empty($store['live']) ? '1' : '0'; ?>"
-                                        data-open="<?php echo !empty($store['is_open']) ? '1' : '0'; ?>"
-                                        data-rating="<?php echo number_format((float)$store['rating'], 2, '.', ''); ?>"
-                                        data-reviews="<?php echo (int)$store['reviews']; ?>"
-                                        data-count="<?php echo (int)$store['count']; ?>"
-                                        data-lat="<?php echo $store['latitude'] !== null ? htmlspecialchars((string)$store['latitude']) : ''; ?>"
-                                        data-lng="<?php echo $store['longitude'] !== null ? htmlspecialchars((string)$store['longitude']) : ''; ?>">
-                                        
-                                        <!-- Image Wrapper -->
-                                        <div class="store-card-image-wrap">
-                                            <div class="market-store-row-thumb" style="background-image:url('<?php echo htmlspecialchars($store['image']); ?>');"></div>
-                                            <span class="market-type-pill"><?php echo htmlspecialchars($type_label); ?></span>
-                                            <span class="market-time-pill" data-role="time-label"><?php echo !empty($store['is_open']) ? 'Open now' : 'Closed now'; ?></span>
-                                            <button
-                                                type="button"
-                                                class="market-store-favorite-btn<?php echo $is_store_favorite ? ' is-active' : ''; ?>"
-                                                data-favorite-toggle="1"
-                                                data-favorite-type="store"
-                                                data-favorite-store-key="<?php echo htmlspecialchars($store_key_value); ?>"
-                                                data-favorite-active="<?php echo $is_store_favorite ? '1' : '0'; ?>"
-                                                aria-pressed="<?php echo $is_store_favorite ? 'true' : 'false'; ?>"
-                                                title="<?php echo $is_store_favorite ? 'Remove from favorites' : 'Save to favorites'; ?>">
-                                                <i class="<?php echo $is_store_favorite ? 'fas' : 'far'; ?> fa-heart"></i>
-                                            </button>
-                                        </div>
-
-                                        <!-- Details Container -->
-                                        <div class="store-card-details">
-                                            <div class="store-card-row-head">
-                                                <h3><?php echo htmlspecialchars($store['name']); ?></h3>
-                                                <span class="store-card-rating">
-                                                    <i class="fas fa-star" style="color:#ef6b2e; margin-right:4px;"></i><?php echo $store['rating'] > 0 ? number_format((float)$store['rating'], 1) : 'New'; ?>
-                                                    <span class="store-card-reviews" style="font-size:0.75rem; color:#64748b; font-weight:normal;">(<?php echo (int)$store['reviews']; ?>)</span>
-                                                </span>
-                                            </div>
-                                            
-                                            <div class="store-card-summary">
-                                                <?php echo htmlspecialchars($store['summary']); ?>
-                                            </div>
-                                            
-                                            <div class="store-card-meta">
-                                                <span class="store-card-meta-item"><i class="fas fa-location-dot"></i> <?php echo htmlspecialchars($store['location']); ?></span>
-                                                <span class="store-card-meta-item"><i class="fas fa-layer-group"></i> <?php echo htmlspecialchars(implode(', ', $store['tags'])); ?></span>
-                                            </div>
-                                            
-                                            <div class="store-card-footer">
-                                                <div class="store-card-price">
-                                                    <strong><?php echo htmlspecialchars($price); ?></strong>
-                                                    <span><?php echo number_format((int)$store['count']); ?> dishes</span>
-                                                </div>
-                                                <div class="store-card-actions">
-                                                    <?php if (!empty($store['live']) && !empty($store['is_open'])): ?>
-                                                        <a href="<?php echo htmlspecialchars($store['menu_link']); ?>" class="market-card-btn"><i class="fas fa-utensils"></i> Browse</a>
-                                                    <?php elseif (!empty($store['live'])): ?>
-                                                        <span class="market-card-btn-disabled"><i class="fas fa-door-closed"></i> Closed</span>
-                                                    <?php else: ?>
-                                                        <span class="market-card-btn-disabled"><i class="fas fa-clock"></i> Soon</span>
-                                                    <?php endif; ?>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </article>
-                                <?php endforeach; ?>
-                            </div>
-                        <?php else: ?>
-                            <!-- Guest-only Row List Layout -->
-                            <div class="market-store-list store-list-rows" id="marketStoreGrid">
-                                <?php foreach ($stores as $index => $store): ?>
-                                    <?php
-                                    $price = $store['start'] !== null ? 'PHP ' . number_format((float)$store['start'], 2) : 'Coming soon';
-                                    $type_label = $store['type'] === 'branch' ? 'Pickup branch' : ($store['type'] === 'partner' ? 'Partner store' : ($store['type'] === 'platform' ? 'Marketplace favorite' : 'Seller'));
-                                    $store_key_value = (string)($store['key'] ?? '');
-                                    $is_store_favorite = !empty($favorite_store_keys[$store_key_value]);
-                                    ?>
-                                    <article
-                                        class="market-store-row"
-                                        data-store-key="<?php echo htmlspecialchars($store_key_value); ?>"
-                                        data-index="<?php echo (int)$index; ?>"
-                                        data-search="<?php echo htmlspecialchars($store['search']); ?>"
-                                        data-tags="<?php echo htmlspecialchars(strtolower(implode(' ', $store['tags']))); ?>"
-                                        data-type="<?php echo htmlspecialchars($store['type']); ?>"
-                                        data-live="<?php echo !empty($store['live']) ? '1' : '0'; ?>"
-                                        data-open="<?php echo !empty($store['is_open']) ? '1' : '0'; ?>"
-                                        data-rating="<?php echo number_format((float)$store['rating'], 2, '.', ''); ?>"
-                                        data-reviews="<?php echo (int)$store['reviews']; ?>"
-                                        data-count="<?php echo (int)$store['count']; ?>"
-                                        data-lat="<?php echo $store['latitude'] !== null ? htmlspecialchars((string)$store['latitude']) : ''; ?>"
-                                        data-lng="<?php echo $store['longitude'] !== null ? htmlspecialchars((string)$store['longitude']) : ''; ?>">
+                        <!-- Unified Foodpanda 3-Column Card Grid Layout -->
+                        <div class="market-store-list store-list-grid" id="marketStoreGrid">
+                            <?php foreach ($stores as $index => $store): ?>
+                                <?php
+                                $price = $store['start'] !== null ? 'PHP ' . number_format((float)$store['start'], 2) : 'Starts at PHP 450.00';
+                                $type_label = $store['type'] === 'branch' ? 'Pickup branch' : ($store['type'] === 'partner' ? 'Partner store' : ($store['type'] === 'platform' ? 'Marketplace favorite' : 'Seller'));
+                                $store_key_value = (string)($store['key'] ?? '');
+                                $is_store_favorite = !empty($favorite_store_keys[$store_key_value]);
+                                $city_label = !empty($store['city']) ? $store['city'] . ', Cavite' : $store['location'];
+                                ?>
+                                <a href="<?php echo htmlspecialchars($store['menu_link']); ?>"
+                                   class="market-store-row panda-card-link"
+                                   data-store-key="<?php echo htmlspecialchars($store_key_value); ?>"
+                                   data-index="<?php echo (int)$index; ?>"
+                                   data-search="<?php echo htmlspecialchars($store['search']); ?>"
+                                   data-tags="<?php echo htmlspecialchars(strtolower(implode(' ', $store['tags']))); ?>"
+                                   data-type="<?php echo htmlspecialchars($store['type']); ?>"
+                                   data-live="<?php echo !empty($store['live']) ? '1' : '0'; ?>"
+                                   data-open="<?php echo !empty($store['is_open']) ? '1' : '0'; ?>"
+                                   data-rating="<?php echo number_format((float)$store['rating'], 2, '.', ''); ?>"
+                                   data-reviews="<?php echo (int)$store['reviews']; ?>"
+                                   data-count="<?php echo (int)$store['count']; ?>"
+                                   data-lat="<?php echo $store['latitude'] !== null ? htmlspecialchars((string)$store['latitude']) : ''; ?>"
+                                   data-lng="<?php echo $store['longitude'] !== null ? htmlspecialchars((string)$store['longitude']) : ''; ?>">
+                                    
+                                    <!-- Image Wrapper -->
+                                    <div class="store-card-image-wrap">
                                         <div class="market-store-row-thumb" style="background-image:url('<?php echo htmlspecialchars($store['image']); ?>');"></div>
-                                        <div class="market-store-row-main">
-                                            <div class="market-store-row-head">
-                                                <h3><?php echo htmlspecialchars($store['name']); ?></h3>
-                                                <span class="market-type-pill"><?php echo htmlspecialchars($type_label); ?></span>
-                                                <span class="market-time-pill" data-role="time-label"><?php echo !empty($store['is_open']) ? 'Open now' : 'Closed now'; ?></span>
-                                                <button
-                                                    type="button"
-                                                    class="market-store-favorite-btn<?php echo $is_store_favorite ? ' is-active' : ''; ?>"
-                                                    data-favorite-toggle="1"
-                                                    data-favorite-type="store"
-                                                    data-favorite-store-key="<?php echo htmlspecialchars($store_key_value); ?>"
-                                                    data-favorite-active="<?php echo $is_store_favorite ? '1' : '0'; ?>"
-                                                    aria-pressed="<?php echo $is_store_favorite ? 'true' : 'false'; ?>"
-                                                    title="<?php echo $is_store_favorite ? 'Remove from favorites' : 'Save to favorites'; ?>">
-                                                    <i class="<?php echo $is_store_favorite ? 'fas' : 'far'; ?> fa-heart"></i>
-                                                </button>
-                                            </div>
-                                            <div class="market-store-row-copy"><?php echo htmlspecialchars($store['summary']); ?></div>
-                                            <div class="market-store-row-meta">
-                                                <span><i class="fas fa-location-dot"></i> <?php echo htmlspecialchars($store['location']); ?></span>
-                                                <span><i class="fas fa-star"></i> <?php echo $store['rating'] > 0 ? number_format((float)$store['rating'], 1) : 'New'; ?></span>
-                                                <span><i class="fas fa-layer-group"></i> <?php echo htmlspecialchars(implode(', ', $store['tags'])); ?></span>
-                                            </div>
+                                        <span class="market-type-pill"><?php echo htmlspecialchars($type_label); ?></span>
+                                        <span class="market-time-pill" data-role="time-label"><?php echo !empty($store['is_open']) ? 'Open now' : 'Closed now'; ?></span>
+                                        <button
+                                            type="button"
+                                            class="market-store-favorite-btn<?php echo $is_store_favorite ? ' is-active' : ''; ?>"
+                                            data-favorite-toggle="1"
+                                            data-favorite-type="store"
+                                            data-favorite-store-key="<?php echo htmlspecialchars($store_key_value); ?>"
+                                            data-favorite-active="<?php echo $is_store_favorite ? '1' : '0'; ?>"
+                                            aria-pressed="<?php echo $is_store_favorite ? 'true' : 'false'; ?>"
+                                            title="<?php echo $is_store_favorite ? 'Remove from favorites' : 'Save to favorites'; ?>"
+                                            onclick="event.preventDefault(); event.stopPropagation();">
+                                            <i class="<?php echo $is_store_favorite ? 'fas' : 'far'; ?> fa-heart"></i>
+                                        </button>
+                                    </div>
+
+                                    <!-- Details Container -->
+                                    <div class="store-card-details">
+                                        <div class="store-card-row-head">
+                                            <h3><?php echo htmlspecialchars($store['name']); ?></h3>
+                                            <span class="store-card-rating">
+                                                <i class="fas fa-star" style="color:#ef6b2e; margin-right:3px;"></i><?php echo $store['rating'] > 0 ? number_format((float)$store['rating'], 1) : 'New'; ?>
+                                                <?php if ($store['reviews'] > 0): ?><span class="store-card-reviews" style="font-size:0.75rem; color:#64748b; font-weight:normal;">(<?php echo (int)$store['reviews']; ?>)</span><?php endif; ?>
+                                            </span>
                                         </div>
-                                        <div class="market-store-row-side">
-                                            <div class="market-score-block">
-                                                <strong><?php echo htmlspecialchars($price); ?></strong>
-                                                <span>Starts at | <?php echo number_format((int)$store['count']); ?> dishes</span>
-                                            </div>
-                                            <div class="market-list-actions">
-                                                <?php if (!empty($store['live']) && !empty($store['is_open'])): ?>
-                                                    <a href="<?php echo htmlspecialchars($store['menu_link']); ?>" class="market-card-btn"><i class="fas fa-utensils"></i> Browse</a>
-                                                <?php elseif (!empty($store['live'])): ?>
-                                                    <span class="market-card-btn-disabled"><i class="fas fa-door-closed"></i> Closed</span>
-                                                <?php else: ?>
-                                                    <span class="market-card-btn-disabled"><i class="fas fa-clock"></i> Soon</span>
-                                                <?php endif; ?>
-                                                <?php if ($store['type'] === 'branch' || !empty($store['branch'])): ?>
-                                                    <a href="locations.php" class="market-card-btn-soft"><i class="fas fa-map-location-dot"></i> Branch</a>
-                                                <?php endif; ?>
-                                            </div>
+                                        
+                                        <div class="store-card-summary">
+                                            <?php echo htmlspecialchars($store['summary']); ?>
                                         </div>
-                                    </article>
-                                <?php endforeach; ?>
-                            </div>
-                        <?php endif; ?>
+                                        
+                                        <div class="panda-card-footer-line">
+                                            <span class="panda-card-city"><i class="fas fa-location-dot"></i> <?php echo htmlspecialchars($city_label); ?></span>
+                                            <strong class="panda-card-price-text"><?php echo htmlspecialchars($price); ?></strong>
+                                        </div>
+                                    </div>
+                                </a>
+                            <?php endforeach; ?>
+                        </div>
                         <div class="market-pagination">
                             <div class="market-pagination-note" id="marketPaginationNote">Showing all stores.</div>
                             <button type="button" class="market-btn-soft" id="marketLoadMoreBtn">Show more stores</button>
