@@ -322,6 +322,10 @@ document.addEventListener('DOMContentLoaded', function () {
     document.body.addEventListener('click', function (e) {
         const link = e.target.closest('.forgot-link, a[href*="reset_password_request.php"]');
         if (link) {
+            if (document.getElementById('loginViewContainer')) {
+                // login.php handles in-place container transition
+                return;
+            }
             e.preventDefault();
             let emailVal = '';
             const pageEmailInput = document.getElementById('email');
