@@ -1726,7 +1726,7 @@ CREATE TABLE `inventory` (
   `min_stock_level` int(11) NOT NULL DEFAULT 10,
   `last_updated` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   `is_archived` tinyint(1) DEFAULT 0,
-  `inventory_date` date NOT NULL DEFAULT curdate()
+  `inventory_date` date NOT NULL DEFAULT (curdate())
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
