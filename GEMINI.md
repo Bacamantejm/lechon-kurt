@@ -20,6 +20,13 @@
 ## 3. UI/UX Design (Anti- "AI Slop")
 - **Aesthetic:** Clean, minimalist design. No decorative clutter.
 - **Visuals:** Prioritize whitespace, visual hierarchy, and clear typography. Default to refined, professional color palettes.
+- **System Color Palette Tokens:**
+  - `Primary Red`: `#b3261e` (Main CTA buttons, active tabs, brand accents)
+  - `Brand Orange`: `#ef6b2e` (Hover states, badges, secondary accents)
+  - `Background Cream`: `#fff8ef` / `#fff9f2` (Soft warm page & container accents)
+  - `Primary Ink`: `#2a211d` / `#171922` (Titles, headers, dark text)
+  - `Muted Text`: `#7b6d64` / `#667085` (Subtitles, labels, secondary text)
+  - `Warm Border`: `#efddcd` / `#e8d4c3` (Card borders, input outlines)
 - **No Emojis:** Do not use decorative or inline emojis in the system (e.g., in headers, UI labels, sidebars, buttons, notifications) unless explicitly stated or requested by the user. Prefer clean SVG icons (such as Lucide, Heroicons, or Phosphor).
 - **Anti- "AI Slop" Visuals:** Never use multi-color gradient border accents or rainbow top stripes on card interfaces or modals. They look like generic, automated AI template styles ("AI slop") and detract from a premium, custom-built feel.
 - **Design Tokens:** Strictly use pre-configured design system theme tokens (e.g., Tailwind theme colors and spacing scales). Avoid arbitrary style values (e.g., `bg-[#f3f4f6]`) and inline styles to maintain theme consistency.
@@ -55,6 +62,9 @@
 - **Diffs:** Provide clear file paths and diffs for modifications rather than full file rewrites when editing existing files.
 - **Task Focus:** Focus strictly on the assigned task. Do not make random, unrelated, or unnecessary changes to the codebase unless required to complete the task.
 - **Proactive Diagnostic & User Information Requests:** If a problem cannot be pinpointed with 100% certainty from existing codebase files alone, explicitly ask the user for exact diagnostic logs or error tracebacks. Never rely on theoretical guesses.
+- **Git Commit Message Standard:**
+  - **Subject Line:** Must be specific, easy to understand, straight to the point, and clear (e.g. `Redesign marketplace store cards and integrate Forgot Password pane into Auth modal`).
+  - **Detailed Bullet Points:** Always include clear, concise bullet points detailing exact feature additions, UI/UX refactorings, positioning fixes, or performance/transition updates.
 
 ## 9. Generic Technology Stack & Integrations
 - **Backend Framework:** Modern MVC / API framework (Laravel, Express, NestJS, Django, FastAPI, Go/Gin, etc.).
