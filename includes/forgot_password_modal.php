@@ -9,16 +9,16 @@
 .forgot-modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(42, 33, 29, 0.65);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    background: rgba(30, 20, 16, 0.45);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
     z-index: 2100;
     display: none;
     align-items: center;
     justify-content: center;
     padding: 20px;
     opacity: 0;
-    transition: opacity 0.25s ease;
+    transition: opacity 0.22s ease;
 }
 
 .forgot-modal-overlay.active {
@@ -28,14 +28,14 @@
 
 .forgot-modal-card {
     background: #ffffff;
-    border-radius: 22px;
-    width: min(440px, 94vw);
-    padding: 32px 28px 24px;
-    box-shadow: 0 24px 60px rgba(42, 33, 29, 0.22);
-    border: 1px solid #efddcc;
+    border-radius: 20px;
+    width: min(420px, 94vw);
+    padding: 30px 26px 22px;
+    box-shadow: 0 16px 44px rgba(42, 33, 29, 0.14);
+    border: 1px solid #ebd7c5;
     position: relative;
-    transform: translateY(20px) scale(0.96);
-    transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+    transform: translateY(16px) scale(0.97);
+    transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .forgot-modal-overlay.active .forgot-modal-card {
@@ -44,58 +44,58 @@
 
 .forgot-modal-close {
     position: absolute;
-    top: 18px;
-    right: 18px;
-    width: 36px;
-    height: 36px;
+    top: 16px;
+    right: 16px;
+    width: 34px;
+    height: 34px;
     border: none;
-    background: #f8f1eb;
+    background: #fdf6f0;
     border-radius: 50%;
     color: #7b6d64;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1rem;
+    font-size: 0.95rem;
     transition: all 0.2s ease;
 }
 
 .forgot-modal-close:hover {
-    background: #ef6b2e;
+    background: #b3261e;
     color: #ffffff;
     transform: rotate(90deg);
 }
 
 .forgot-modal-header {
     text-align: center;
-    margin-bottom: 24px;
+    margin-bottom: 22px;
 }
 
 .forgot-modal-badge {
-    width: 58px;
-    height: 58px;
-    border-radius: 18px;
-    background: linear-gradient(135deg, #fef4ea, #fde4d0);
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+    background: rgba(239, 107, 46, 0.12);
+    border: 1px solid rgba(239, 107, 46, 0.2);
     color: #ef6b2e;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.5rem;
-    margin-bottom: 14px;
-    box-shadow: 0 6px 16px rgba(239, 107, 46, 0.15);
+    font-size: 1.35rem;
+    margin-bottom: 12px;
 }
 
 .forgot-modal-header h3 {
     font-family: 'Outfit', sans-serif;
-    font-size: 1.5rem;
+    font-size: 1.45rem;
     font-weight: 800;
     color: #2a211d;
-    margin: 0 0 8px 0;
+    margin: 0 0 6px 0;
     letter-spacing: -0.01em;
 }
 
 .forgot-modal-header p {
-    font-size: 0.88rem;
+    font-size: 0.86rem;
     color: #7b6d64;
     line-height: 1.45;
     margin: 0;
@@ -126,15 +126,15 @@
 }
 
 .forgot-form-group {
-    margin-bottom: 20px;
+    margin-bottom: 18px;
 }
 
 .forgot-form-group label {
     display: block;
-    font-size: 0.85rem;
+    font-size: 0.84rem;
     font-weight: 700;
     color: #2a211d;
-    margin-bottom: 8px;
+    margin-bottom: 7px;
 }
 
 .forgot-input-icon-wrap {
@@ -143,32 +143,32 @@
 
 .forgot-input-icon-wrap i {
     position: absolute;
-    left: 16px;
+    left: 15px;
     top: 50%;
     transform: translateY(-50%);
-    color: #a39589;
-    font-size: 1rem;
+    color: #ef6b2e;
+    font-size: 0.95rem;
     transition: color 0.2s ease;
 }
 
 .forgot-input {
     width: 100%;
-    height: 48px;
-    padding: 0 16px 0 46px;
-    border: 1.5px solid #e8d4c3;
+    height: 46px;
+    padding: 0 16px 0 44px;
+    border: 1px solid #ebd7c5;
     border-radius: 12px;
-    font-size: 0.95rem;
+    font-size: 0.92rem;
     color: #2a211d;
-    background: #fffdfb;
+    background: #fffcf9;
     outline: none;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
     font-family: inherit;
 }
 
 .forgot-input:focus {
     border-color: #ef6b2e;
     background: #ffffff;
-    box-shadow: 0 0 0 3.5px rgba(239, 107, 46, 0.15);
+    box-shadow: 0 0 0 3px rgba(239, 107, 46, 0.12);
 }
 
 .forgot-input:focus + i {
