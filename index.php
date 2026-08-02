@@ -3243,17 +3243,24 @@ document.addEventListener('DOMContentLoaded', function () {
 .auth-popup-tab { appearance:none; border:none; background:transparent; font-weight:800; font-size:.95rem; color:#667085; padding:18px 12px; border-bottom:3px solid transparent; cursor:pointer; transition:all 0.22s; }
 .auth-popup-tab:hover { color:#171922; }
 .auth-popup-tab.active { color:#b3261e; border-bottom-color:#b3261e; }
-.auth-popup-content { padding:28px 24px; overflow-y:auto; }
-.auth-popup-pane { display:none; }
-.auth-popup-pane.active { display:block; }
+.auth-popup-content { padding:28px 24px; overflow-x:hidden; overflow-y:auto; position:relative; }
+.auth-popup-pane { display:none; opacity:0; transform:translateX(20px); }
+.auth-popup-pane.active { display:block; animation: authPaneSlideFast 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+@keyframes authPaneSlideFast {
+    0% { opacity: 0; transform: translateX(22px); }
+    100% { opacity: 1; transform: translateX(0); }
+}
+
 .auth-popup-form .form-group { display:grid; gap:6px; margin-bottom:16px; }
 .auth-popup-form .form-group label { font-size:.88rem; font-weight:700; color:#171922; text-align: left; }
-.auth-popup-form .input-wrap { position:relative; }
-.auth-popup-form .input-wrap i { position:absolute; left:14px; top:50%; transform:translateY(-50%); color:#667085; }
-.auth-popup-form .form-control { width:100%; min-height:45px; border-radius:12px; border:1px solid #efddcd; padding:0 14px 0 42px; outline:none; font-family:inherit; font-size:.9rem; transition:all 0.22s; background:#fcf9f6; }
-.auth-popup-form .form-control:focus { border-color:#b3261e; box-shadow:0 0 0 3px rgba(179,38,30,0.12); background:#fff; }
-.auth-popup-form .toggle-password { position:absolute; right:12px; top:50%; transform:translateY(-50%); border:none; background:transparent; color:#667085; cursor:pointer; min-height:36px; display:inline-flex; align-items:center; }
-.auth-popup-form .password-field { padding-right:45px; }
+.auth-popup-form .input-wrap { position:relative !important; width:100% !important; display:flex !important; align-items:center !important; }
+.auth-popup-form .input-wrap > i { position:absolute !important; left:14px !important; top:50% !important; transform:translateY(-50%) !important; color:#667085 !important; font-size:1rem !important; pointer-events:none !important; z-index:2 !important; }
+.auth-popup-form .form-control { width:100% !important; min-height:46px !important; border-radius:12px !important; border:1px solid #efddcd !important; padding:0 46px 0 42px !important; outline:none !important; font-family:inherit !important; font-size:.9rem !important; transition:all 0.22s !important; background:#fcf9f6 !important; }
+.auth-popup-form .form-control:focus { border-color:#b3261e !important; box-shadow:0 0 0 3px rgba(179,38,30,0.12) !important; background:#fff !important; }
+.auth-popup-form .toggle-password { position:absolute !important; right:12px !important; top:50% !important; transform:translateY(-50%) !important; border:none !important; background:transparent !important; color:#667085 !important; cursor:pointer !important; padding:6px 8px !important; font-size:1rem !important; z-index:5 !important; display:inline-flex !important; align-items:center !important; justify-content:center !important; }
+.auth-popup-form .toggle-password:hover { color:#b3261e !important; }
+.auth-popup-form .password-field { padding-right:46px !important; }
 .auth-popup-form .remember-forgot { display:flex; justify-content:space-between; align-items:center; font-size:.84rem; margin-bottom:20px; }
 .auth-popup-form .remember-label { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-weight:600; color:#667085; }
 .auth-popup-form .forgot-link { color:#b3261e; text-decoration:none; font-weight:700; }
@@ -3313,7 +3320,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             <input type="checkbox" name="remember" id="popupRememberMe" value="1">
                             <span>Remember me</span>
                         </label>
-                        <a href="reset_password_request.php" class="forgot-link">Forgot password?</a>
+                        <a href="javascript:void(0);" class="forgot-link" id="popupSwitchToForgot">Forgot password?</a>
                     </div>
                     
                     <button type="submit" class="btn-submit" id="popupLoginBtn">
@@ -3348,6 +3355,31 @@ document.addEventListener('DOMContentLoaded', function () {
                         <a href="javascript:void(0);" id="popupSwitchToLogin">Sign in</a>
                     </div>
                 </div>
+            </div>
+
+            <!-- Forgot Password Pane -->
+            <div class="auth-popup-pane" id="authPaneForgot">
+                <form class="auth-popup-form" id="popupForgotForm" novalidate style="margin-top: 10px;">
+                    <input type="hidden" name="ajax" value="true">
+                    <div id="popupForgotAlert" class="auth-popup-alert" style="display:none; margin-bottom:15px; padding:12px 16px; border-radius:8px; font-size:.88rem; font-weight:600; line-height:1.4;"></div>
+
+                    <div class="form-group">
+                        <label for="popupForgotEmail">Email Address</label>
+                        <div class="input-wrap">
+                            <i class="fas fa-envelope"></i>
+                            <input type="email" id="popupForgotEmail" name="email" class="form-control" placeholder="Enter your email address" required autocomplete="email">
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn-submit" id="popupForgotBtn" style="margin-top: 10px;">
+                        <i class="fas fa-paper-plane"></i>
+                        <span>Send Reset Link</span>
+                    </button>
+
+                    <div class="auth-link">
+                        <a href="javascript:void(0);" id="popupForgotBackToLogin"><i class="fas fa-arrow-left"></i> Back to Sign In</a>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
@@ -3400,6 +3432,94 @@ document.addEventListener('DOMContentLoaded', function() {
         switchToLoginLink.addEventListener('click', function(e) {
             e.preventDefault();
             switchAuthTab('login');
+        });
+    }
+
+    const switchToForgotLink = document.getElementById('popupSwitchToForgot');
+    const popupForgotEmailInput = document.getElementById('popupForgotEmail');
+    const popupEmailInput = document.getElementById('popupEmail');
+
+    if (switchToForgotLink) {
+        switchToForgotLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            if (popupEmailInput && popupEmailInput.value && popupForgotEmailInput) {
+                popupForgotEmailInput.value = popupEmailInput.value.trim();
+            }
+            switchAuthTab('forgot');
+        });
+    }
+
+    const popupForgotBackToLogin = document.getElementById('popupForgotBackToLogin');
+    if (popupForgotBackToLogin) {
+        popupForgotBackToLogin.addEventListener('click', function(e) {
+            e.preventDefault();
+            switchAuthTab('login');
+        });
+    }
+
+    const popupForgotForm = document.getElementById('popupForgotForm');
+    const popupForgotBtn = document.getElementById('popupForgotBtn');
+    const popupForgotAlert = document.getElementById('popupForgotAlert');
+
+    if (popupForgotForm) {
+        popupForgotForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const email = popupForgotEmailInput ? popupForgotEmailInput.value.trim() : '';
+            if (!email) return;
+
+            if (popupForgotBtn) {
+                popupForgotBtn.disabled = true;
+                popupForgotBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> <span>Sending Link...</span>';
+            }
+            if (popupForgotAlert) popupForgotAlert.style.display = 'none';
+
+            try {
+                const formData = new FormData(popupForgotForm);
+                const res = await fetch('reset_password_request.php', {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    body: formData
+                });
+                const data = await res.json();
+                if (data.success) {
+                    if (popupForgotAlert) {
+                        popupForgotAlert.style.background = '#E8F5E9';
+                        popupForgotAlert.style.borderLeft = '4px solid #4CAF50';
+                        popupForgotAlert.style.color = '#2E7D32';
+                        popupForgotAlert.innerHTML = '<i class="fas fa-check-circle"></i> ' + (data.message || 'Password reset link sent! Check your inbox.');
+                        popupForgotAlert.style.display = 'block';
+                    }
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Reset Link Sent',
+                            text: data.message || 'Check your email inbox for password reset instructions.',
+                            confirmButtonColor: '#b3261e'
+                        });
+                    }
+                } else {
+                    if (popupForgotAlert) {
+                        popupForgotAlert.style.background = '#FFEBEE';
+                        popupForgotAlert.style.borderLeft = '4px solid #F44336';
+                        popupForgotAlert.style.color = '#b3261e';
+                        popupForgotAlert.innerHTML = '<i class="fas fa-exclamation-circle"></i> ' + (data.message || 'Error processing request.');
+                        popupForgotAlert.style.display = 'block';
+                    }
+                }
+            } catch (err) {
+                if (popupForgotAlert) {
+                    popupForgotAlert.style.background = '#FFEBEE';
+                    popupForgotAlert.style.borderLeft = '4px solid #F44336';
+                    popupForgotAlert.style.color = '#b3261e';
+                    popupForgotAlert.innerHTML = '<i class="fas fa-exclamation-circle"></i> An unexpected error occurred. Please try again.';
+                    popupForgotAlert.style.display = 'block';
+                }
+            } finally {
+                if (popupForgotBtn) {
+                    popupForgotBtn.disabled = false;
+                    popupForgotBtn.innerHTML = '<i class="fas fa-paper-plane"></i> <span>Send Reset Link</span>';
+                }
+            }
         });
     }
     
