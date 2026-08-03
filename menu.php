@@ -600,9 +600,7 @@ if (!empty($product_ids_for_reviews)) {
 }
 
 mysqli_close($conn);
-?>
-
-<!-- Product Preview Modal -->
+?><!-- Product Preview Modal -->
 <div class="product-preview-modal" id="productPreviewModal">
     <div class="preview-modal-content">
         <button class="preview-close" id="previewClose">&times;</button>
@@ -661,6 +659,102 @@ mysqli_close($conn);
     <div class="preview-overlay" id="previewOverlay"></div>
 </div>
 
+<!-- Foodpanda Storefront Reviews Modal -->
+<div class="product-preview-modal" id="storefrontReviewsModal" style="display:none;">
+    <div class="preview-modal-content" style="max-width: 640px; border-radius: 24px; padding: 24px; position:relative; z-index:1001;">
+        <button type="button" class="preview-close" id="closeStorefrontReviewsModal" style="top:18px; right:18px;">&times;</button>
+        <div class="preview-body" style="display:block; padding:0;">
+            <h2 style="font-family:'Outfit',sans-serif; font-size:1.35rem; font-weight:800; color:#171922; margin:0 0 2px;">
+                <?php echo htmlspecialchars($store_display_name); ?>
+            </h2>
+            <p style="color:#64748b; font-size:0.9rem; margin:0 0 20px; font-weight:600;">Reviews</p>
+            
+            <!-- Rating Breakdown Header Card -->
+            <div style="background:#fff9f2; border:1px solid #efddcd; border-radius:18px; padding:20px; margin-bottom:20px; display:flex; gap:20px; align-items:center;">
+                <div style="text-align:center; min-width:110px; border-right:1px solid #efddcd; padding-right:16px;">
+                    <div style="font-size:2.8rem; font-weight:800; color:#171922; line-height:1;">
+                        <?php echo $store_rating_value > 0 ? number_format($store_rating_value, 1) : '0'; ?>
+                    </div>
+                    <div style="color:#f59e0b; font-size:0.9rem; margin:6px 0 4px;">
+                        <?php for ($s = 1; $s <= 5; $s++): ?>
+                            <i class="<?php echo $s <= round($store_rating_value) ? 'fas' : 'far'; ?> fa-star"></i>
+                        <?php endfor; ?>
+                    </div>
+                    <div style="font-size:0.78rem; color:#64748b; font-weight:600;">
+                        All ratings (<?php echo number_format($store_review_total); ?>)
+                    </div>
+                </div>
+                
+                <div style="flex:1;">
+                    <?php
+                    $star_counts = [5 => 0, 4 => 0, 3 => 0, 2 => 0, 1 => 0];
+                    foreach ($store_recent_reviews as $r) {
+                        $st = max(1, min(5, (int)($r['rating'] ?? 0)));
+                        $star_counts[$st] = ($star_counts[$st] ?? 0) + 1;
+                    }
+                    $total_reviews_count = max(1, count($store_recent_reviews));
+                    for ($s = 5; $s >= 1; $s--):
+                        $pct = round(($star_counts[$s] / $total_reviews_count) * 100);
+                    ?>
+                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px; font-size:0.8rem; color:#64748b; font-weight:600;">
+                        <span style="min-width:24px; text-align:right;"><?php echo $s; ?> <i class="fas fa-star" style="color:#f59e0b; font-size:0.75rem;"></i></span>
+                        <div style="flex:1; height:8px; background:#e2e8f0; border-radius:999px; overflow:hidden;">
+                            <div style="width:<?php echo $pct; ?>%; height:100%; background:#f59e0b; border-radius:999px;"></div>
+                        </div>
+                    </div>
+                    <?php endfor; ?>
+                </div>
+            </div>
+            
+            <!-- Filter Pills -->
+            <div style="display:flex; gap:8px; margin-bottom:18px; overflow-x:auto;">
+                <button type="button" class="panda-cat-tab active" style="padding:6px 14px; border-radius:999px; background:#171922; color:#fff; font-size:0.84rem; font-weight:700; border:none;">Top reviews</button>
+                <button type="button" style="padding:6px 14px; border-radius:999px; background:#f1f5f9; color:#64748b; font-size:0.84rem; font-weight:600; border:1px solid #e2e8f0;">Newest</button>
+                <button type="button" style="padding:6px 14px; border-radius:999px; background:#f1f5f9; color:#64748b; font-size:0.84rem; font-weight:600; border:1px solid #e2e8f0;">Highest rating</button>
+            </div>
+            
+            <!-- Reviews List -->
+            <div style="max-height:360px; overflow-y:auto; display:flex; flex-direction:column; gap:14px; padding-right:4px;">
+                <?php if (!empty($store_recent_reviews)): ?>
+                    <?php foreach ($store_recent_reviews as $review): ?>
+                        <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:16px; padding:16px; box-shadow:0 2px 8px rgba(0,0,0,0.02);">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                                <strong style="font-size:0.95rem; font-weight:800; color:#171922;"><?php echo htmlspecialchars($review['first_name']); ?></strong>
+                                <span style="font-size:0.78rem; color:#64748b; font-weight:500;"><?php echo htmlspecialchars($review['created_at']); ?></span>
+                            </div>
+                            <div style="color:#f59e0b; font-size:0.82rem; margin-bottom:8px;">
+                                <?php for ($star = 1; $star <= 5; $star++): ?>
+                                    <i class="<?php echo $star <= (int)$review['rating'] ? 'fas' : 'far'; ?> fa-star"></i>
+                                <?php endfor; ?>
+                            </div>
+                            <p style="font-size:0.9rem; color:#334155; line-height:1.5; margin:0 0 8px;">
+                                <?php echo htmlspecialchars($review['comment'] !== '' ? $review['comment'] : 'Customer did not leave a written comment.'); ?>
+                            </p>
+                            <?php if ($review['seller_reply'] !== ''): ?>
+                                <div style="background:#fff9f2; border-left:3px solid #ef6b2e; padding:10px 12px; border-radius:0 10px 10px 0; margin-top:8px;">
+                                    <div style="font-size:0.8rem; font-weight:700; color:#ef6b2e; margin-bottom:2px;">
+                                        <i class="fas fa-reply"></i> <?php echo htmlspecialchars($review['seller_reply_name']); ?> replied
+                                    </div>
+                                    <div style="font-size:0.86rem; color:#475569;"><?php echo htmlspecialchars($review['seller_reply']); ?></div>
+                                </div>
+                            <?php endif; ?>
+                            <div style="font-size:0.78rem; color:#94a3b8; margin-top:6px; font-weight:600;">
+                                Item: <?php echo htmlspecialchars($review['product_name']); ?>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <div style="text-align:center; padding:30px 20px; color:#64748b;">
+                        <i class="far fa-comment-dots" style="font-size:2.5rem; color:#cbd5e1; margin-bottom:10px; display:block;"></i>
+                        <p style="margin:0; font-weight:600;">No approved reviews yet for this storefront.</p>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+    <div class="preview-overlay" id="storefrontReviewsOverlay"></div>
+</div>
+
 <section class="page-header storefront-header">
     <div class="container">
         <nav class="store-breadcrumb" aria-label="Breadcrumb">
@@ -687,7 +781,7 @@ mysqli_close($conn);
                     <span><i class="fas fa-utensils"></i> <?php echo number_format($store_item_count); ?> items</span>
                 </div>
                 <div class="storefront-meta-row storefront-meta-row-secondary">
-                    <a href="#menu"><i class="fas fa-star"></i> <?php echo htmlspecialchars($store_rating_label); ?></a>
+                    <a href="javascript:void(0);" id="openStorefrontReviewsBtn"><i class="fas fa-star" style="color:#f59e0b;"></i> <?php echo htmlspecialchars($store_rating_label); ?> <span style="text-decoration:underline; font-weight:700; margin-left:4px;">See reviews</span></a>
                     <a href="#menu"><i class="far fa-comment-dots"></i> See menu</a>
                     <a href="locations.php"><i class="fas fa-circle-info"></i> More info</a>
                 </div>
@@ -917,70 +1011,6 @@ mysqli_close($conn);
                         <button type="button" class="quick-order-checkout" id="quickCheckoutBtn" disabled>
                             Review payment and address
                         </button>
-                    </section>
-
-                    <section class="store-review-panel" id="storeReviewPanel">
-                        <div class="store-review-panel-header">
-                            <h3>Product Reviews</h3>
-                            <span><?php echo number_format(count($store_recent_reviews)); ?> posts</span>
-                        </div>
-
-                        <div class="store-review-list">
-                            <?php if (!empty($store_recent_reviews)): ?>
-                                <?php foreach ($store_recent_reviews as $review): ?>
-                                    <article class="store-review-item">
-                                        <div class="store-review-item-top">
-                                            <strong><?php echo htmlspecialchars($review['first_name']); ?></strong>
-                                            <time><?php echo htmlspecialchars($review['created_at']); ?></time>
-                                        </div>
-                                        <div class="store-review-stars" aria-label="<?php echo (int)$review['rating']; ?> star rating">
-                                            <?php for ($star = 1; $star <= 5; $star++): ?>
-                                                <i class="<?php echo $star <= (int)$review['rating'] ? 'fas' : 'far'; ?> fa-star"></i>
-                                            <?php endfor; ?>
-                                        </div>
-                                        <p class="store-review-comment">
-                                            <?php
-                                            $review_comment = trim((string)($review['comment'] ?? ''));
-                                            echo htmlspecialchars($review_comment !== '' ? $review_comment : 'Customer did not leave a written comment.');
-                                            ?>
-                                        </p>
-                                        <?php
-                                        $seller_reply_text = trim((string)($review['seller_reply'] ?? ''));
-                                        if ($seller_reply_text !== ''):
-                                            $seller_reply_name = trim((string)($review['seller_reply_name'] ?? 'Store'));
-                                            if ($seller_reply_name === '') {
-                                                $seller_reply_name = 'Store';
-                                            }
-                                            $seller_reply_at_raw = trim((string)($review['seller_reply_at'] ?? ''));
-                                            $seller_reply_at_label = '';
-                                            if ($seller_reply_at_raw !== '') {
-                                                $reply_ts = strtotime($seller_reply_at_raw);
-                                                if ($reply_ts !== false) {
-                                                    $seller_reply_at_label = date('M j, Y', $reply_ts);
-                                                }
-                                            }
-                                        ?>
-                                            <div class="store-review-reply">
-                                                <p class="store-review-reply-label">
-                                                    <i class="fas fa-reply"></i>
-                                                    <?php echo htmlspecialchars($seller_reply_name); ?> replied<?php echo $seller_reply_at_label !== '' ? ' on ' . htmlspecialchars($seller_reply_at_label) : ''; ?>
-                                                </p>
-                                                <p class="store-review-reply-text"><?php echo htmlspecialchars($seller_reply_text); ?></p>
-                                            </div>
-                                        <?php endif; ?>
-                                        <p class="store-review-product">
-                                            <i class="fas fa-bowl-food"></i>
-                                            <?php echo htmlspecialchars($review['product_name']); ?>
-                                        </p>
-                                    </article>
-                                <?php endforeach; ?>
-                            <?php else: ?>
-                                <div class="store-review-empty">
-                                    <i class="far fa-comment-dots"></i>
-                                    <p>No approved reviews yet for this storefront.</p>
-                                </div>
-                            <?php endif; ?>
-                        </div>
                     </section>
                 </div>
             </aside>
@@ -1773,6 +1803,131 @@ document.addEventListener('click', function(e) {
         const unitPrice = parseFloat(activeSizeBtn.dataset.price);
         const quantity = parseInt(document.querySelector('.qty-input').value) || 1;
         
+    if (e.target.closest('.view-details-btn')) {
+        const button = e.target.closest('.view-details-btn');
+        currentProduct = {
+            id: button.getAttribute('data-id'),
+            product_id: button.getAttribute('data-product-id'), // String product_id
+            name: button.getAttribute('data-name'),
+            description: button.getAttribute('data-description'),
+            image: button.getAttribute('data-image'),
+            sizes: JSON.parse(button.getAttribute('data-sizes')),
+            weights: JSON.parse(button.getAttribute('data-weights')),
+            goodFor: JSON.parse(button.getAttribute('data-good-for')),
+            sizePrices: JSON.parse(button.getAttribute('data-size-prices')),
+            addons: JSON.parse(button.getAttribute('data-addons')),
+            stock: parseInt(button.getAttribute('data-stock'))
+        };
+        
+        showProductPreview(currentProduct);
+    }
+});
+    
+    function showProductPreview(product) {
+        // Set product image
+        const img = document.getElementById('previewProductImage');
+        const placeholderText = encodeURIComponent(product.name);
+        const resolvedImage = product.image || `https://via.placeholder.com/400x300?text=${placeholderText}`;
+        img.src = resolvedImage;
+        img.onerror = function() {
+            this.src = `https://via.placeholder.com/400x300?text=${placeholderText}`;
+        };
+        
+        // Set product info
+        document.getElementById('previewProductName').textContent = product.name;
+        document.getElementById('previewDescription').textContent = product.description;
+        document.getElementById('summaryProduct').textContent = product.name;
+        
+        // Update quantity input max based on stock
+        const qtyInput = document.querySelector('.qty-input');
+        if (qtyInput) {
+            qtyInput.max = product.stock;
+            qtyInput.value = 1;
+            
+            // Add or update stock display
+            let stockDisplay = document.getElementById('previewStockDisplay');
+            if (!stockDisplay) {
+                stockDisplay = document.createElement('div');
+                stockDisplay.id = 'previewStockDisplay';
+                stockDisplay.style.fontSize = '0.85rem';
+                stockDisplay.style.color = '#666';
+                stockDisplay.style.marginTop = '5px';
+                document.querySelector('.quantity-selection').appendChild(stockDisplay);
+            }
+            stockDisplay.textContent = `${product.stock} units available`;
+        }
+        
+        // Create size buttons
+        const sizeButtons = document.getElementById('previewSizeButtons');
+        sizeButtons.innerHTML = '';
+        
+        product.sizes.forEach((size, index) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'size-preview-btn' + (index === 0 ? ' active' : '');
+            button.textContent = size;
+            button.dataset.size = size;
+            button.dataset.price = product.sizePrices[size];
+            
+            // Add weight and pax info to button
+            const weightInfo = product.weights[size] ? ` | ${product.weights[size]}` : '';
+            const paxInfo = product.goodFor[size] ? ` | ${product.goodFor[size]}` : '';
+            
+            if (weightInfo || paxInfo) {
+                const infoSpan = document.createElement('span');
+                infoSpan.className = 'size-info';
+                infoSpan.textContent = weightInfo + paxInfo;
+                button.appendChild(infoSpan);
+            }
+            
+            button.addEventListener('click', function() {
+                document.querySelectorAll('.size-preview-btn').forEach(btn => btn.classList.remove('active'));
+                this.classList.add('active');
+                updateOrderSummary();
+            });
+            
+            sizeButtons.appendChild(button);
+        });
+        
+        // Create addons checkboxes
+        const addonsList = document.getElementById('previewAddonsList');
+        addonsList.innerHTML = '';
+        
+        if (product.addons && product.addons.length > 0) {
+            document.getElementById('previewAddonsSection').style.display = 'block';
+            
+            product.addons.forEach(addon => {
+                const label = document.createElement('label');
+                label.className = 'addon-checkbox';
+                label.innerHTML = `
+                    <input type="checkbox" value="${addon}">
+                    <span>${addon}</span>
+                `;
+                label.querySelector('input').addEventListener('change', updateOrderSummary);
+                addonsList.appendChild(label);
+            });
+        } else {
+            document.getElementById('previewAddonsSection').style.display = 'none';
+        }
+        
+        // Set initial price
+        updateOrderSummary();
+        
+        // Show modal
+        productPreviewModal.style.display = 'block';
+        setTimeout(() => {
+            productPreviewModal.classList.add('active');
+        }, 10);
+    }
+    
+    function updateOrderSummary() {
+        const activeSizeBtn = document.querySelector('.size-preview-btn.active');
+        if (!activeSizeBtn || !currentProduct) return;
+        
+        const size = activeSizeBtn.dataset.size;
+        const unitPrice = parseFloat(activeSizeBtn.dataset.price);
+        const quantity = parseInt(document.querySelector('.qty-input').value) || 1;
+        
         // Get selected addons
         const selectedAddons = [];
         document.querySelectorAll('.addon-checkbox input:checked').forEach(checkbox => {
@@ -1792,15 +1947,15 @@ document.addEventListener('click', function(e) {
         // Update size weight info
         const weightInfoDiv = document.getElementById('sizeWeightInfo');
         let weightInfo = '';
-        if (currentProduct.weights[size]) {
+        if (currentProduct.weights && currentProduct.weights[size]) {
             weightInfo += `<div class="weight-info"><i class="fas fa-weight"></i> ${currentProduct.weights[size]}</div>`;
         }
-        if (currentProduct.goodFor[size]) {
+        if (currentProduct.goodFor && currentProduct.goodFor[size]) {
             weightInfo += `<div class="pax-info"><i class="fas fa-users"></i> ${currentProduct.goodFor[size]}</div>`;
         }
-        weightInfoDiv.innerHTML = weightInfo;
+        if (weightInfoDiv) weightInfoDiv.innerHTML = weightInfo;
     }
-    
+
     // Quantity controls in preview modal
     document.addEventListener('click', function(e) {
         if (e.target.classList.contains('qty-minus') || e.target.classList.contains('qty-plus')) {
@@ -1817,186 +1972,52 @@ document.addEventListener('click', function(e) {
                     input.value = value + 1;
                 }
             }
-            
             updateOrderSummary();
         }
     });
-    
-    // Quantity input change
-    document.addEventListener('input', function(e) {
-        if (e.target.classList.contains('qty-input')) {
-            let value = parseInt(e.target.value) || 1;
-            const maxStock = currentProduct ? currentProduct.stock : 20;
-            if (value < 1) value = 1;
-            if (value > maxStock) value = maxStock;
-            e.target.value = value;
-            updateOrderSummary();
-        }
-    });
-    
+
     // Close preview modal
     function closeProductPreview() {
+        if (!productPreviewModal) return;
         productPreviewModal.classList.remove('active');
         setTimeout(() => {
             productPreviewModal.style.display = 'none';
         }, 300);
     }
-    
-    previewClose.addEventListener('click', closeProductPreview);
-    previewOverlay.addEventListener('click', closeProductPreview);
-    
-// Add to cart from preview modal
-addToCartConfirm.addEventListener('click', async function() {
-    if (!currentProduct) {
-        console.error('No current product selected');
-        return;
+
+    if (previewClose) previewClose.addEventListener('click', closeProductPreview);
+    if (previewOverlay) previewOverlay.addEventListener('click', closeProductPreview);
+
+    // Foodpanda Storefront Reviews Modal controls
+    const openStorefrontReviewsBtn = document.getElementById('openStorefrontReviewsBtn');
+    const storefrontReviewsModal = document.getElementById('storefrontReviewsModal');
+    const closeStorefrontReviewsModal = document.getElementById('closeStorefrontReviewsModal');
+    const storefrontReviewsOverlay = document.getElementById('storefrontReviewsOverlay');
+
+    function openStorefrontReviews() {
+        if (!storefrontReviewsModal) return;
+        storefrontReviewsModal.style.display = 'flex';
+        setTimeout(() => {
+            storefrontReviewsModal.classList.add('active');
+        }, 10);
     }
-    
-    const activeSizeBtn = document.querySelector('.size-preview-btn.active');
-    if (!activeSizeBtn) {
-        console.error('No size selected');
-        return;
+
+    function closeStorefrontReviews() {
+        if (!storefrontReviewsModal) return;
+        storefrontReviewsModal.classList.remove('active');
+        setTimeout(() => {
+            storefrontReviewsModal.style.display = 'none';
+        }, 300);
     }
-    
-    const size = activeSizeBtn.dataset.size;
-    const unitPrice = parseFloat(activeSizeBtn.dataset.price);
-    const quantityInput = document.querySelector('.qty-input');
-    const quantity = parseInt(quantityInput.value) || 1;
-    
-    console.log('Adding to cart:', {
-        product: currentProduct.name,
-        product_id: currentProduct.id,
-        size: size,
-        price: unitPrice,
-        quantity: quantity
-    });
-    
-    // Get selected addons
-    const selectedAddons = [];
-    document.querySelectorAll('.addon-checkbox input:checked').forEach(checkbox => {
-        selectedAddons.push(checkbox.value);
-    });
-    
-    try {
-        console.log('Sending request to add_to_cart.php...');
-        
-        const response = await fetch('add_to_cart.php', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: new URLSearchParams({
-                'product_id': currentProduct.id.toString(), // Ensure it's a string
-                'quantity': quantity.toString(),
-                'size': size,
-                'price': unitPrice.toString(),
-                'addons': JSON.stringify(selectedAddons)
-            })
-        });
-        
-        console.log('Response received, status:', response.status);
-        
-        // Check if response is JSON
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-            const text = await response.text();
-            console.error('Non-JSON response:', text.substring(0, 200));
-            throw new Error('Server returned non-JSON response');
-        }
-        
-        const data = await response.json();
-        console.log('Response data:', data);
-        
-        if (data.success) {
-            // Update cart count
-            syncCartCountBadges(data.cart_count);
-            
-            // Show success message
-            Swal.fire({
-                icon: 'success',
-                title: 'Added to Cart!',
-                text: `${currentProduct.name} has been added to your cart.`,
-                toast: true,
-                position: 'top-end',
-                showConfirmButton: false,
-                timer: 1500
-            });
-            
-            // Update cart sidebar
-            updateCartSidebar();
-            
-            // Open cart sidebar
-            openCartSidebar();
-            
-            // Close preview modal
-            closeProductPreview();
-        } else {
-            const responseCode = String(data.code || '').toUpperCase();
-            const isTenantConflict =
-                responseCode === 'MIXED_TENANT_ADD_BLOCKED'
-                || responseCode === 'MIXED_TENANT_CART_EXISTING';
 
-            if (isTenantConflict) {
-                const tenantMessage = (data.message || 'Your cart currently contains items from a different store. Please review your cart first.');
-                const targetUrl = (data.redirect_url || 'cart.php').toString();
-                closeProductPreview();
-
-                const result = await Swal.fire({
-                    icon: 'warning',
-                    title: 'One Store Per Checkout',
-                    text: tenantMessage,
-                    showCancelButton: true,
-                    confirmButtonColor: '#b3261e',
-                    cancelButtonColor: '#6c757d',
-                    confirmButtonText: 'Review Cart',
-                    cancelButtonText: 'Stay Here',
-                    customClass: {
-                        container: 'swal-preview-top'
-                    }
-                });
-
-                if (result.isConfirmed) {
-                    window.location.href = targetUrl;
-                }
-                return;
-            }
-
-            const message = (data.message || '').toLowerCase();
-            const isStockRelated = message.includes('out of stock') || (message.includes('only') && message.includes('available'));
-
-            if (isStockRelated) {
-                Swal.fire({
-                    icon: 'info',
-                    title: 'Sorry for the inconvenience',
-                    text: 'Sorry, the item selected is currently out of stock.',
-                    confirmButtonColor: '#b3261e',
-                    customClass: {
-                        container: 'swal-preview-top'
-                    }
-                });
-            } else {
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Unable to add item',
-                    text: 'Sorry, we could not add this item to your cart right now. Please try again.',
-                    confirmButtonColor: '#b3261e',
-                    customClass: {
-                        container: 'swal-preview-top'
-                    }
-                });
-            }
-        }
-    } catch (error) {
-        console.error('Add to cart error:', error);
-        Swal.fire({
-            icon: 'error',
-            title: 'Network Error',
-            text: 'Failed to add item to cart. Please check your connection and try again.',
-            confirmButtonColor: '#b3261e',
-            customClass: {
-                container: 'swal-preview-top'
-            }
-        });
+    if (openStorefrontReviewsBtn) {
+        openStorefrontReviewsBtn.addEventListener('click', openStorefrontReviews);
+    }
+    if (closeStorefrontReviewsModal) {
+        closeStorefrontReviewsModal.addEventListener('click', closeStorefrontReviews);
+    }
+    if (storefrontReviewsOverlay) {
+        storefrontReviewsOverlay.addEventListener('click', closeStorefrontReviews);
     }
 });
     
@@ -2508,25 +2529,7 @@ addToCartConfirm.addEventListener('click', async function() {
     font-size: 0.95rem;
 }
 
-.category-link:hover,
-.category-link.active {
-    background-color: var(--primary-color);
-    color: white;
-    box-shadow: 0 4px 10px rgba(179, 38, 30, 0.3);
-}
 
-/* Menu Categories */
-.menu-category {
-    margin-bottom: 80px;
-    scroll-margin-top: 180px;
-}
-
-.category-title {
-    color: var(--text-main);
-    font-size: 2.2rem;
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.1);
-}
 
 .category-list {
     display: flex;
@@ -2564,18 +2567,24 @@ addToCartConfirm.addEventListener('click', async function() {
 
 /* Menu Categories */
 .menu-category {
-    margin-bottom: 80px;
-    scroll-margin-top: 180px;
+    margin-bottom: 60px !important;
+    scroll-margin-top: 140px !important;
 }
 
 .category-title {
-    color: var(--text-main);
-    font-size: 2.2rem;
-    margin-bottom: 40px;
-    padding-left: 20px;
-    border-left: 5px solid var(--primary-color);
-    font-weight: 700;
-    position: relative;
+    font-family: 'Outfit', sans-serif !important;
+    font-size: 1.8rem !important;
+    font-weight: 800 !important;
+    color: #171922 !important;
+    margin: 0 0 20px 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    outline: none !important;
+    background: transparent !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
 }
 
 .menu-items-grid {
