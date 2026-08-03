@@ -115,8 +115,13 @@ if ($prod_res) {
         $img = !empty($p['image']) ? $p['image'] : 'images/store-bg.jpg';
         $cat_key = strtolower(preg_replace('/[^a-z0-9]+/', '_', trim((string)$p['category'])));
         
+        $seller_id = (int)$p['seller_id'];
+        $menu_target = 'menu.php?' . ($seller_id > 0 ? 'seller_id=' . $seller_id : 'branch_id=1') . '&product_id=' . (int)$p['id'];
+
         $spotlight_products[] = [
             'id' => (int)$p['id'],
+            'seller_id' => $seller_id,
+            'menu_link' => $menu_target,
             'name' => trim((string)$p['name']),
             'price' => $price,
             'orig_price' => $orig_price,
@@ -543,7 +548,7 @@ require_once 'includes/header.php';
 
                             <div class="panda-swimlane" id="swimlaneContainer" style="display:flex; gap:14px; overflow-x:auto; padding-bottom:8px; scroll-behavior:smooth; scrollbar-width:none;">
                                 <?php foreach ($spotlight_products as $p): ?>
-                                    <div class="swimlane-item-card" data-cat="<?php echo htmlspecialchars($p['cat_key']); ?>" data-price="<?php echo (float)$p['price']; ?>" style="flex:0 0 170px; background:#ffffff; border:1px solid #efddcd; border-radius:16px; padding:12px; position:relative; box-shadow:0 4px 14px rgba(15,23,42,0.03); display:flex; flex-direction:column; justify-content:space-between;">
+                                    <a href="<?php echo htmlspecialchars($p['menu_link']); ?>" class="swimlane-item-card" data-cat="<?php echo htmlspecialchars($p['cat_key']); ?>" data-price="<?php echo (float)$p['price']; ?>" style="flex:0 0 170px; background:#ffffff; border:1px solid #efddcd; border-radius:16px; padding:12px; position:relative; box-shadow:0 4px 14px rgba(15,23,42,0.03); display:flex; flex-direction:column; justify-content:space-between; text-decoration:none; color:inherit;">
                                         <!-- Product Image + Floating (+) Add Button -->
                                         <div style="position:relative; width:100%; height:110px; border-radius:12px; overflow:hidden; background:url('<?php echo htmlspecialchars($p['image']); ?>') center/cover; margin-bottom:10px;">
                                             <button type="button" class="swimlane-add-btn" style="position:absolute; bottom:6px; right:6px; width:30px; height:30px; border-radius:50%; background:#ffffff; border:1px solid #cbd5e1; color:#171922; font-size:0.95rem; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 3px 8px rgba(0,0,0,0.12); transition:all 0.2s ease;" onclick="event.preventDefault(); event.stopPropagation(); this.style.transform='scale(1.1)';">
@@ -563,7 +568,7 @@ require_once 'includes/header.php';
                                                 <?php echo htmlspecialchars($p['name']); ?>
                                             </h4>
                                         </div>
-                                    </div>
+                                    </a>
                                 <?php endforeach; ?>
                             </div>
 

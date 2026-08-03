@@ -531,6 +531,7 @@ $favorites_feature_enabled = $is_customer_user;
         </div>
     </div>
     
+    <?php if ($show_market_header_bottom): ?>
     <div class="market-header-bottom">
         <nav class="market-home-nav">
             <a href="<?php echo $path_prefix; ?>index.php#marketplaceStores" class="market-home-link<?php echo ($current_page === 'home' || $current_page === 'index') ? ' active' : ''; ?>"><i class="fas fa-motorcycle"></i> Delivery</a>
@@ -579,6 +580,7 @@ $favorites_feature_enabled = $is_customer_user;
             </div>
         </div>
     </div>
+    <?php endif; ?>
     
     <div class="map-modal-overlay" id="marketMapModal" aria-hidden="true">
         <div class="map-modal" role="dialog" aria-modal="true" aria-labelledby="mapModalTitle">
