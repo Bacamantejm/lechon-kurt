@@ -468,7 +468,7 @@ $store_display_subtitle = $storefront_subtitle;
 $category_keys = array_values(array_filter(array_keys($menu_categories), static function ($category) {
     return trim((string)$category) !== '';
 }));
-$store_category_line = !empty($category_keys) ? implode(' â€¢ ', array_slice($category_keys, 0, 2)) : 'Lechon â€¢ Filipino';
+$store_category_line = !empty($category_keys) ? implode(' • ', array_slice($category_keys, 0, 2)) : 'Lechon • Filipino';
 
 $store_item_count = count($product_details);
 $store_min_price = null;
@@ -699,30 +699,51 @@ mysqli_close($conn);
 <!-- Menu Section -->
 <section class="menu-section" id="menu">
     <div class="container">
-        <!-- Category Navigation -->
-        <div class="category-nav">
-            <div class="category-list">
-                <?php foreach (array_keys($menu_categories) as $category): ?>
-                <a href="#<?php echo strtolower(str_replace(' ', '-', $category)); ?>" class="category-link">
-                    <?php echo $category; ?>
-                </a>
-                <?php endforeach; ?>
-            </div>
-        </div>
+        <!-- Foodpanda Unified Sticky Category Navigation Bar -->
+        <div class="panda-menu-sticky-bar" id="pandaMenuStickyBar">
+            <div class="panda-menu-bar-inner">
+                <!-- Search in Menu Input -->
+                <div class="panda-menu-search-box">
+                    <i class="fas fa-magnifying-glass"></i>
+                    <input type="search" id="menuSearchInput" placeholder="Search in menu" autocomplete="off">
+                </div>
 
-        <div class="menu-filter-bar">
-            <label class="menu-search-field" for="menuSearchInput">
-                <i class="fas fa-magnifying-glass"></i>
-                <input type="search" id="menuSearchInput" placeholder="Search dishes, categories, or keywords">
-            </label>
-            <label for="menuSortFilter">Filter Menu:</label>
-            <select id="menuSortFilter">
-                <option value="default" selected>Default</option>
-                <option value="lowest_price">Lowest Price</option>
-                <option value="highest_price">Highest Price</option>
-                <option value="best_top_seller">Best / Top Seller</option>
-                <option value="near_me">Near Me (Pickup Store)</option>
-            </select>
+                <!-- Left Scroll Arrow -->
+                <button type="button" class="panda-cat-arrow arrow-left" id="pandaCatScrollLeft" aria-label="Scroll categories left">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+
+                <!-- Category Tabs Strip -->
+                <div class="panda-cat-strip-wrap" id="pandaCatStripWrap">
+                    <div class="panda-cat-strip" id="pandaCatStrip">
+                        <?php $cat_index = 0; foreach ($menu_categories as $category => $items): ?>
+                            <?php
+                            $cat_slug = strtolower(str_replace(' ', '-', $category));
+                            $cat_count = count($items);
+                            $is_active_cat = ($cat_index === 0);
+                            ?>
+                            <a href="#<?php echo htmlspecialchars($cat_slug); ?>" class="panda-cat-tab<?php echo $is_active_cat ? ' active' : ''; ?>" data-category="<?php echo htmlspecialchars($cat_slug); ?>">
+                                <?php echo htmlspecialchars($category); ?> <span class="panda-cat-count">(<?php echo $cat_count; ?>)</span>
+                            </a>
+                        <?php $cat_index++; endforeach; ?>
+                    </div>
+                </div>
+
+                <!-- Right Scroll Arrow -->
+                <button type="button" class="panda-cat-arrow arrow-right" id="pandaCatScrollRight" aria-label="Scroll categories right">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+                
+                <!-- Filter Dropdown -->
+                <div class="panda-menu-filter-select-wrap">
+                    <select id="menuSortFilter" class="panda-menu-filter-select">
+                        <option value="default" selected>Default Sort</option>
+                        <option value="lowest_price">Lowest Price</option>
+                        <option value="highest_price">Highest Price</option>
+                        <option value="best_top_seller">Best / Top Seller</option>
+                    </select>
+                </div>
+            </div>
         </div>
         <p id="menuSearchResultInfo" class="menu-search-result-info" style="display:none;"></p>
 
@@ -780,6 +801,8 @@ mysqli_close($conn);
                             <span>Sold Out</span>
                         </div>
                     <?php endif; ?>
+                    
+                    <!-- Top Image Banner -->
                     <div class="item-image">
                         <img src="<?php echo htmlspecialchars($imageSrc); ?>" alt="<?php echo htmlspecialchars($item['name']); ?>" 
                              onerror="this.src='https://via.placeholder.com/400x300?text=<?php echo $placeholderText; ?>'">
@@ -794,78 +817,41 @@ mysqli_close($conn);
                             title="<?php echo $is_product_favorite ? 'Remove from favorites' : 'Save to favorites'; ?>">
                             <i class="<?php echo $is_product_favorite ? 'fas' : 'far'; ?> fa-heart"></i>
                         </button>
-                        <span class="item-price-tag">From PHP <?php echo number_format(min($item['size_prices']), 2); ?></span>
                         <?php if (($item['total_sold'] ?? 0) > 0): ?>
-                        <span class="top-seller-badge">Top Seller</span>
+                        <span class="top-seller-badge"><i class="fas fa-fire"></i> Top Seller</span>
                         <?php endif; ?>
                     </div>
                     
+                    <!-- Card Body Content -->
                     <div class="item-content">
-                        <h3><?php echo $item['name']; ?></h3>
+                        <h3><?php echo htmlspecialchars($item['name']); ?></h3>
+                        
                         <div class="item-rating">
                             <?php
                             $rating = floatval($item['avg_rating']);
                             $review_count = intval($item['review_count']);
                             for ($i = 1; $i <= 5; $i++) {
                                 if ($i <= $rating) {
-                                    echo '<i class="fas fa-star"></i>'; // Full star
+                                    echo '<i class="fas fa-star"></i>';
                                 } elseif ($i - 0.5 <= $rating) {
-                                    echo '<i class="fas fa-star-half-alt"></i>'; // Half star
+                                    echo '<i class="fas fa-star-half-alt"></i>';
                                 } else {
-                                    echo '<i class="far fa-star"></i>'; // Empty star
+                                    echo '<i class="far fa-star"></i>';
                                 }
                             }
                             ?>
                             <span class="review-count">(<?php echo $review_count; ?>)</span>
                         </div>
-                        <p class="item-description"><?php echo $item['description']; ?></p>
                         
-                        <!-- Display weight and pax information -->
-                        <?php if (!empty($item['general_weight']) || !empty($item['general_pax'])): ?>
-                        <div class="item-specs">
-                            <?php if (!empty($item['general_weight'])): ?>
-                            <div class="spec">
-                                <i class="fas fa-weight"></i>
-                                <span><?php echo $item['general_weight']; ?></span>
-                            </div>
-                            <?php endif; ?>
-                            <?php if (!empty($item['general_pax'])): ?>
-                            <div class="spec">
-                                <i class="fas fa-users"></i>
-                                <span><?php echo $item['general_pax']; ?></span>
-                            </div>
-                            <?php endif; ?>
-                        </div>
-                        <?php endif; ?>
+                        <p class="item-description"><?php echo htmlspecialchars($item['description']); ?></p>
                         
-                        <?php if (!empty($item['sizes']) && count($item['sizes']) > 1): ?>
-                        <div class="size-options">
-                            <label>Available Sizes:</label>
-                            <div class="size-buttons">
-                                <?php foreach ($item['sizes'] as $size): ?>
-                                <button type="button" class="size-btn" data-size="<?php echo htmlspecialchars($size); ?>">
-                                    <?php echo $size; ?>
-                                </button>
-                                <?php endforeach; ?>
+                        <!-- Bottom Action Bar: Price Pill + (+) Plus Button -->
+                        <div class="item-card-bottom">
+                            <div class="panda-price-pill">
+                                PHP <?php echo number_format(min($item['size_prices']), 2); ?>
                             </div>
-                        </div>
-                        <?php endif; ?>
-                        
-                        <?php if (!empty($item['addons'])): ?>
-                        <div class="addon-options">
-                            <label>Available Add-ons:</label>
-                            <?php foreach ($item['addons'] as $addon): ?>
-                            <div class="addon-item">
-                                <i class="fas fa-plus-circle"></i>
-                                <span><?php echo $addon; ?></span>
-                            </div>
-                            <?php endforeach; ?>
-                        </div>
-                        <?php endif; ?>
-                        
-                        <div class="item-actions">
-                            <!-- In the menu items loop, update the view-details-btn: -->
-                            <button type="button" class="btn-primary view-details-btn"
+                            
+                            <button type="button" class="panda-quick-add-btn view-details-btn add-to-cart"
                                     data-id="<?php echo $item['id']; ?>"
                                     data-product-id="<?php echo $item['product_id']; ?>"
                                     data-name="<?php echo htmlspecialchars($item['name']); ?>"
@@ -878,9 +864,9 @@ mysqli_close($conn);
                                     data-addons='<?php echo json_encode($item['addons']); ?>'
                                     data-avg-rating='<?php echo $item['avg_rating']; ?>'
                                     data-stock="<?php echo $item['stock']; ?>"
-                                    <?php if ($item['stock'] <= 0) echo 'disabled'; ?>>
-                                <i class="fas fa-<?php echo ($item['stock'] <= 0) ? 'ban' : 'eye'; ?>"></i> 
-                                <?php echo ($item['stock'] <= 0) ? 'Sold Out' : 'View Details'; ?>
+                                    <?php if ($item['stock'] <= 0) echo 'disabled'; ?>
+                                    title="View details / Add to cart">
+                                <i class="fas fa-<?php echo ($item['stock'] <= 0) ? 'ban' : 'plus'; ?>"></i>
                             </button>
                         </div>
                     </div>
@@ -1103,23 +1089,39 @@ document.addEventListener('DOMContentLoaded', function() {
     const mobileQuickCheckoutBtn = document.getElementById('mobileQuickCheckoutBtn');
     const mobileSeeSummaryBtn = document.getElementById('mobileSeeSummaryBtn');
     const checkoutBtn = document.getElementById('checkoutBtn');
-    const categoryNav = document.querySelector('.category-nav');
+    const categoryNav = document.querySelector('.category-nav, .panda-menu-sticky-bar');
+    const catStripWrap = document.getElementById('pandaCatStripWrap');
+    const catScrollLeft = document.getElementById('pandaCatScrollLeft');
+    const catScrollRight = document.getElementById('pandaCatScrollRight');
+
+    if (catScrollLeft && catStripWrap) {
+        catScrollLeft.addEventListener('click', function() {
+            catStripWrap.scrollBy({ left: -240, behavior: 'smooth' });
+        });
+    }
+    if (catScrollRight && catStripWrap) {
+        catScrollRight.addEventListener('click', function() {
+            catStripWrap.scrollBy({ left: 240, behavior: 'smooth' });
+        });
+    }
+
     let menuSearchQuery = '';
 
     const menuUrlParams = new URLSearchParams(window.location.search);
     const initialMenuSearch = (menuUrlParams.get('search') || '').trim();
     const initialMenuFilter = (menuUrlParams.get('filter') || 'default').trim().toLowerCase();
     const allowedMenuFilters = new Set(['default', 'lowest_price', 'highest_price', 'best_top_seller', 'near_me']);
-    
-    // Current product being viewed
+    const initialProductId = (menuUrlParams.get('product_id') || '').trim();
     let currentProduct = null;
 
-    // Preserve default order for reset behavior
-    document.querySelectorAll('.menu-items-grid').forEach((grid) => {
-        Array.from(grid.querySelectorAll('.menu-item')).forEach((item, index) => {
-            item.dataset.defaultIndex = index;
-        });
-    });
+    if (initialProductId) {
+        setTimeout(function() {
+            const targetBtn = document.querySelector(`.add-to-cart[data-id="${initialProductId}"], .add-to-cart[data-product-id="${initialProductId}"]`);
+            if (targetBtn) {
+                targetBtn.click();
+            }
+        }, 300);
+    }
 
     function toRadians(value) {
         return value * (Math.PI / 180);
@@ -2277,19 +2279,147 @@ addToCartConfirm.addEventListener('click', async function() {
     font-weight: 300;
 }
 
-/* Category Navigation */
-.category-nav {
-    background-color: rgba(255, 255, 255, 0.95);
-    padding: 15px 20px;
-    border-radius: 100px; /* Pill shape container */
-    box-shadow: var(--shadow-md);
-    margin: 0 auto 50px;
-    max-width: 1200px;
-    position: sticky;
-    top: calc(var(--site-header-offset, 92px) + 10px);
-    z-index: 99;
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255,255,255,0.2);
+/* Foodpanda Unified Sticky Category Navigation Bar */
+.panda-menu-sticky-bar {
+    position: sticky !important;
+    top: var(--site-header-offset, 64px) !important;
+    z-index: 120 !important;
+    background: #ffffff !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04) !important;
+    margin: 0 -22px 30px -22px !important;
+    padding: 10px 22px !important;
+}
+
+.panda-menu-bar-inner {
+    max-width: 1320px !important;
+    margin: 0 auto !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+    position: relative !important;
+}
+
+.panda-menu-search-box {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    background: #f1f5f9 !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 999px !important;
+    padding: 0 14px !important;
+    height: 38px !important;
+    flex-shrink: 0 !important;
+    min-width: 180px !important;
+    max-width: 220px !important;
+}
+
+.panda-menu-search-box i {
+    color: #64748b !important;
+    font-size: 0.85rem !important;
+}
+
+.panda-menu-search-box input {
+    border: none !important;
+    background: transparent !important;
+    outline: none !important;
+    font-size: 0.86rem !important;
+    color: #171922 !important;
+    width: 100% !important;
+    font-weight: 500 !important;
+}
+
+.panda-cat-arrow {
+    width: 32px !important;
+    height: 32px !important;
+    border-radius: 50% !important;
+    background: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
+    color: #171922 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+    flex-shrink: 0 !important;
+    transition: all 0.2s ease !important;
+    font-size: 0.8rem !important;
+}
+
+.panda-cat-arrow:hover {
+    background: #171922 !important;
+    color: #ffffff !important;
+    border-color: #171922 !important;
+}
+
+.panda-cat-strip-wrap {
+    flex: 1 !important;
+    overflow-x: auto !important;
+    scroll-behavior: smooth !important;
+    scrollbar-width: none !important;
+}
+
+.panda-cat-strip-wrap::-webkit-scrollbar {
+    display: none !important;
+}
+
+.panda-cat-strip {
+    display: flex !important;
+    align-items: center !important;
+    gap: 20px !important;
+    white-space: nowrap !important;
+}
+
+.panda-cat-tab {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    padding: 10px 0 !important;
+    color: #64748b !important;
+    font-size: 0.92rem !important;
+    font-weight: 600 !important;
+    text-decoration: none !important;
+    border-bottom: 3px solid transparent !important;
+    transition: all 0.2s ease !important;
+    cursor: pointer !important;
+}
+
+.panda-cat-tab:hover {
+    color: #171922 !important;
+}
+
+.panda-cat-tab.active {
+    color: #171922 !important;
+    font-weight: 800 !important;
+    border-bottom-color: #171922 !important;
+}
+
+.panda-cat-count {
+    font-size: 0.84rem !important;
+    color: #64748b !important;
+    font-weight: 500 !important;
+}
+
+.panda-cat-tab.active .panda-cat-count {
+    color: #171922 !important;
+    font-weight: 700 !important;
+}
+
+.panda-menu-filter-select-wrap {
+    flex-shrink: 0 !important;
+}
+
+.panda-menu-filter-select {
+    height: 38px !important;
+    padding: 0 12px !important;
+    border-radius: 10px !important;
+    border: 1px solid #cbd5e1 !important;
+    background: #ffffff !important;
+    font-size: 0.84rem !important;
+    font-weight: 600 !important;
+    color: #171922 !important;
+    cursor: pointer !important;
+    outline: none !important;
 }
 
 .menu-filter-bar {
@@ -2394,6 +2524,53 @@ addToCartConfirm.addEventListener('click', async function() {
 .category-title {
     color: var(--text-main);
     font-size: 2.2rem;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.1);
+}
+
+.category-list {
+    display: flex;
+    justify-content: center; /* Center items */
+    overflow-x: auto;
+    gap: 10px;
+    padding: 10px 0;
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+}
+
+.category-list::-webkit-scrollbar {
+    display: none;
+}
+
+.category-link {
+    white-space: nowrap;
+    padding: 10px 25px;
+    background-color: transparent;
+    color: var(--text-light);
+    text-decoration: none;
+    border-radius: 50px;
+    font-weight: 500;
+    transition: var(--transition);
+    border: 1px solid transparent;
+    font-size: 0.95rem;
+}
+
+.category-link:hover,
+.category-link.active {
+    background-color: var(--primary-color);
+    color: white;
+    box-shadow: 0 4px 10px rgba(179, 38, 30, 0.3);
+}
+
+/* Menu Categories */
+.menu-category {
+    margin-bottom: 80px;
+    scroll-margin-top: 180px;
+}
+
+.category-title {
+    color: var(--text-main);
+    font-size: 2.2rem;
     margin-bottom: 40px;
     padding-left: 20px;
     border-left: 5px solid var(--primary-color);
@@ -2402,78 +2579,260 @@ addToCartConfirm.addEventListener('click', async function() {
 }
 
 .menu-items-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 30px;
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)) !important;
+    gap: 22px !important;
 }
 
 .menu-item {
-    background-color: white;
-    border-radius: var(--card-radius);
-    overflow: hidden;
-    box-shadow: var(--shadow-sm);
-    transition: var(--transition);
-    border: 1px solid rgba(0,0,0,0.05);
-    display: flex;
-    flex-direction: column;
-    position: relative;
+    background: #ffffff !important;
+    border: 1px solid #efddcd !important;
+    border-radius: 18px !important;
+    overflow: hidden !important;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.03) !important;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    position: relative !important;
 }
 
 .menu-item:hover {
-    transform: translateY(-8px);
-    box-shadow: var(--shadow-hover);
-    border-color: rgba(0,0,0,0);
+    transform: translateY(-4px) !important;
+    box-shadow: 0 12px 28px rgba(179, 38, 30, 0.08) !important;
+    border-color: #e8d4c3 !important;
 }
 
 .item-image {
-    position: relative;
-    height: 240px;
-    overflow: hidden;
+    position: relative !important;
+    height: 180px !important;
+    overflow: hidden !important;
+    background: #f8fafc !important;
 }
 
 .item-image img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    transition: transform calc(var(--motion-base) + .24s) var(--motion-ease);
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    transition: transform 0.35s ease !important;
 }
 
 .menu-item:hover .item-image img {
-    transform: scale(1.08);
-}
-
-.item-price-tag {
-    position: absolute;
-    bottom: 15px;
-    right: 0;
-    background: white;
-    color: var(--primary-color);
-    padding: 8px 15px 8px 20px;
-    border-radius: 20px 0 0 20px;
-    font-weight: 700;
-    font-size: 1.1rem;
-    box-shadow: -2px 4px 10px rgba(0,0,0,0.1);
+    transform: scale(1.05) !important;
 }
 
 .top-seller-badge {
-    position: absolute;
-    top: 15px;
-    left: 15px;
-    background: var(--secondary-color);
-    color: white;
-    font-size: 0.7rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    padding: 6px 10px;
-    border-radius: 6px;
-    box-shadow: 0 4px 10px rgba(255, 152, 0, 0.4);
-    z-index: 2;
+    position: absolute !important;
+    top: 10px !important;
+    left: 10px !important;
+    background: #ef6b2e !important;
+    color: #ffffff !important;
+    font-size: 0.72rem !important;
+    font-weight: 800 !important;
+    padding: 4px 10px !important;
+    border-radius: 999px !important;
+    box-shadow: 0 3px 8px rgba(239, 107, 46, 0.3) !important;
+    z-index: 2 !important;
 }
 
 .item-content {
-    padding: 25px;
+    padding: 16px 18px 18px 18px !important;
+    flex-grow: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+.item-content h3 {
+    font-family: 'Outfit', sans-serif !important;
+    font-size: 1.08rem !important;
+    font-weight: 800 !important;
+    color: #171922 !important;
+    margin: 0 0 6px !important;
+    line-height: 1.3 !important;
+}
+
+.item-card-bottom {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    margin-top: auto !important;
+    padding-top: 8px !important;
+}
+
+.panda-price-pill {
+    background: #fff9f2 !important;
+    border: 1px solid #efddcd !important;
+    border-radius: 999px !important;
+    padding: 5px 14px !important;
+    font-size: 0.9rem !important;
+    font-weight: 800 !important;
+    color: #b3261e !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    box-shadow: 0 2px 6px rgba(179, 38, 30, 0.04) !important;
+}
+
+.panda-quick-add-btn {
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 50% !important;
+    background: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
+    color: #171922 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08) !important;
+    transition: all 0.2s ease !important;
+    font-size: 0.9rem !important;
+}
+
+.panda-quick-add-btn:hover {
+    background: #b3261e !important;
+    color: #ffffff !important;
+    border-color: #b3261e !important;
+    transform: scale(1.1) !important;
+}
+
+.item-rating {
+    margin-bottom: 15px;
+    color: var(--secondary-color);
+    font-size: 0.9rem;
+}
+
+.item-description {
+    color: var(--text-light);
+    margin-bottom: 20px;
+    line-height: 1.6;
+    font-size: 0.9rem;
     flex-grow: 1;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.item-specs {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 20px;
+    padding: 12px 15px;
+    background-color: rgba(0,0,0,0.03);
+    border-radius: 10px;
+    font-size: 0.85rem;
+}
+
+.item-specs .spec {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-main);
+    font-weight: 500;
+}
+
+.item-specs .spec i {
+    color: var(--primary-color);
+    opacity: 0.8;
+}
+
+.size-options {
+    margin-bottom: 15px;
+}
+
+.size-options label,
+.addon-options label {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--text-main);
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.size-buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.size-btn {
+    padding: 6px 14px;
+    background-color: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 50px;
+    color: var(--text-light);
+    cursor: pointer;
+    transition: var(--transition);
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.size-btn:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+    background-color: rgba(179, 38, 30, 0.05);
+}
+
+.addon-options {
+    margin-bottom: 20px;
+}
+
+.addon-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+    color: #666;
+    font-size: 0.9rem;
+    padding: 5px 0;
+}
+
+.addon-item i {
+    color: #4CAF50;
+    font-size: 0.9rem;
+}
+
+.item-actions {
+    margin-top: auto;
+}
+
+.item-actions .btn-primary {
+    width: 100%;
+    padding: 14px;
+    font-size: 1rem;
+    font-weight: 600;
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+    border: none;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    box-shadow: 0 4px 15px rgba(179, 38, 30, 0.3);
+}
+
+.item-actions .btn-primary:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(179, 38, 30, 0.5);
+}
+
+.item-actions .btn-primary:disabled {
+    background: #e0e0e0;
+    color: #9e9e9e;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
+
+.item-unavailable .item-image img {
+    filter: grayscale(100%);
+}
+
+.item-sold-out-overlay {
+    position: absolute;
     display: flex;
     flex-direction: column;
 }
@@ -4177,17 +4536,19 @@ body {
 }
 
 .storefront-categories {
-    margin: 0 0 6px;
-    color: #845a47;
-    font-size: 0.96rem;
-    font-weight: 600;
+    margin: 0 0 4px !important;
+    color: #ef6b2e !important;
+    font-size: 0.88rem !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.04em !important;
 }
 
 .storefront-subtitle {
-    margin: 0 0 10px;
-    color: var(--menu-muted);
-    font-size: 0.95rem;
-    line-height: 1.6;
+    margin: 4px 0 10px !important;
+    color: #64748b !important;
+    font-size: 0.92rem !important;
+    line-height: 1.5 !important;
 }
 
 .storefront-meta-row {
