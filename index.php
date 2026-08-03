@@ -145,21 +145,7 @@ function store_menu_link(array $store) {
 }
 
 function branch_fallbacks() {
-    return [
-        [
-            'id' => 1004,
-            'owner_user_id' => 0,
-            'name' => 'General Trias, Cavite Branch',
-            'address' => "9002 Governor's Drive, Manggahan",
-            'city' => 'General Trias',
-            'province' => 'Cavite',
-            'phone' => '0917-887-2168',
-            'email' => 'gentrias@lechondelights.com',
-            'hours' => '8:00 AM - 8:00 PM',
-            'latitude' => null,
-            'longitude' => null
-        ],
-    ];
+    return [];
 }
 
 $current_user_address = '';
@@ -239,10 +225,7 @@ if ($branch_result) {
             $branch_any_by_name[$branch_name_key] = $branch;
         }
 
-        if (!is_cavite_scope((string)($row['address'] ?? ''), (string)($row['city'] ?? ''), (string)($row['province'] ?? ''))) {
-            continue;
-        }
-
+        // Include all active database store locations
         $branches[] = $branch;
         if ((int)$branch['owner_user_id'] > 0) {
             $branch_owner_ids[(int)$branch['owner_user_id']] = true;
@@ -438,7 +421,20 @@ if ($product_result) {
         $categories[$category] = ($categories[$category] ?? 0) + 1;
         $global_min = $global_min === null ? $price : min($global_min, $price);
         $global_reviews += (int)$row['review_count'];
-        $products[] = ['name' => trim((string)$row['name']), 'store' => $stores[$key]['name'], 'category' => $category, 'price' => $price, 'rating' => $rating, 'reviews' => (int)$row['review_count'], 'sold' => (int)($sales_map[(int)$row['id']] ?? 0), 'image' => $image];
+        $menu_target = $seller_id > 0 ? 'menu.php?seller_id=' . $seller_id : (!empty($stores[$key]['branch_id']) ? 'menu.php?branch_id=' . $stores[$key]['branch_id'] : 'menu.php');
+        $products[] = [
+            'id' => (int)$row['id'],
+            'seller_id' => $seller_id,
+            'menu_link' => $menu_target,
+            'name' => trim((string)$row['name']),
+            'store' => $stores[$key]['name'],
+            'category' => $category,
+            'price' => $price,
+            'rating' => $rating,
+            'reviews' => (int)$row['review_count'],
+            'sold' => (int)($sales_map[(int)$row['id']] ?? 0),
+            'image' => $image
+        ];
     }
     mysqli_free_result($product_result);
 }
@@ -1482,13 +1478,33 @@ include 'includes/header.php';
 
 .market-sidebar {
     position: sticky;
-    top: 92px;
+    top: 112px;
+    max-height: calc(100vh - 130px);
+    overflow-y: auto;
     align-self: start;
-    padding: 24px;
+    z-index: 100;
+    padding: 20px 14px 20px 20px;
     border-radius: 26px;
-    background: #fbf8f5;
-    border: 1px solid #ebd8c5;
-    box-shadow: 0 10px 25px rgba(42, 33, 29, 0.04);
+    scrollbar-width: thin;
+    scrollbar-color: #94a3b8 #f1f5f9;
+}
+
+.market-sidebar::-webkit-scrollbar {
+    width: 6px;
+}
+
+.market-sidebar::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 999px;
+}
+
+.market-sidebar::-webkit-scrollbar-thumb {
+    background: #94a3b8;
+    border-radius: 999px;
+}
+
+.market-sidebar::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
 }
 
 .market-sidebar h3,
@@ -2033,6 +2049,7 @@ include 'includes/header.php';
     gap: 18px !important;
 }
 
+.market-product-card,
 .market-store-row {
     display: flex !important;
     flex-direction: column !important;
@@ -2046,10 +2063,52 @@ include 'includes/header.php';
     grid-template-columns: none !important;
 }
 
+.market-product-card:hover,
 .market-store-row:hover {
     transform: translateY(-3px) !important;
     box-shadow: 0 10px 24px rgba(74, 32, 20, 0.1) !important;
     border-color: #ebd7c5 !important;
+}
+
+.store-card-details {
+    padding: 18px 20px 20px 20px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    flex: 1 !important;
+    gap: 6px !important;
+}
+
+.store-card-row-head {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    gap: 8px !important;
+    margin-bottom: 6px !important;
+}
+
+.store-card-row-head h3 {
+    margin: 0 !important;
+    font-family: 'Outfit', sans-serif !important;
+    font-size: 1.05rem !important;
+    font-weight: 800 !important;
+    color: #171922 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    flex: 1 !important;
+}
+
+.store-card-summary {
+    font-size: 0.84rem !important;
+    color: #64748b !important;
+    line-height: 1.45 !important;
+    height: 38px !important;
+    overflow: hidden !important;
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2 !important;
+    -webkit-box-orient: vertical !important;
+    margin-bottom: 8px !important;
 }
 
 .panda-card-footer-line {
@@ -2495,7 +2554,7 @@ body {
                                 <div class="panda-card-content">
                                     <h2 class="panda-card-title">Order Fresh Lechon</h2>
                                     <p class="panda-card-desc">Enjoy crispy skin and juicy meat, roasted fresh for every order.</p>
-                                    <a href="register.php?account_type=individual" class="panda-card-btn guest-trigger-register">Order Now</a>
+                                    <a href="#marketplaceStores" class="panda-card-btn">Order Now</a>
                                 </div>
                                 <div class="panda-card-graphic">
                                     <img src="assets/images/lechon_mascot_user.png" alt="Lechon Delights Mascot" class="panda-mascot-img" loading="lazy">
@@ -2510,7 +2569,7 @@ body {
                                 <div class="panda-card-content">
                                     <h2 class="panda-card-title">Pre-order for Celebrations</h2>
                                     <p class="panda-card-desc">Avoid the rush by booking your whole or half lechon ahead of time.</p>
-                                    <a href="register.php?account_type=individual" class="panda-card-btn panda-card-btn-alt guest-trigger-register">Reserve Now</a>
+                                    <a href="preorder.php" class="panda-card-btn panda-card-btn-alt">Reserve Now</a>
                                 </div>
                                 <div class="panda-card-graphic-cluster">
                                     <div class="panda-float-badge-wrap">
@@ -2665,31 +2724,57 @@ body {
     </section>
 
     <?php if (!empty($featured_products)): ?>
-    <section class="market-section">
+    <section class="market-section" style="padding-top: 10px;">
         <div class="container">
-            <div class="market-head">
-                <div>
-                    <h2>Popular picks right now</h2>
-                    <p>These featured dishes are pulled from your live catalog and surfaced using product activity, reviews, and ratings.</p>
+            <div class="panda-store-header-bar" style="margin-bottom: 20px;">
+                <div class="panda-store-header-title">
+                    <h2 class="panda-main-heading">Popular picks right now</h2>
+                    <p style="margin: 4px 0 0 0; font-size: 0.88rem; color: #667085;">These featured dishes are pulled from your live catalog and surfaced using product activity, reviews, and ratings.</p>
                 </div>
             </div>
-            <div class="market-dishes">
+            <div class="market-store-list store-list-grid" style="grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)) !important;">
                 <?php foreach ($featured_products as $product): ?>
-                    <article class="market-dish">
-                        <img src="<?php echo htmlspecialchars($product['image']); ?>" alt="<?php echo htmlspecialchars($product['name']); ?>" loading="lazy">
-                        <div class="market-dish-body">
-                            <h3><?php echo htmlspecialchars($product['name']); ?></h3>
-                            <div class="market-dish-meta">
-                                <span><i class="fas fa-store"></i> <?php echo htmlspecialchars($product['store']); ?></span>
-                                <span><i class="fas fa-tags"></i> <?php echo htmlspecialchars($product['category']); ?></span>
-                                <?php if ($product['rating'] > 0): ?><span><i class="fas fa-star"></i> <?php echo number_format((float)$product['rating'], 1); ?></span><?php endif; ?>
+                    <?php
+                    $prod_id_val = (string)($product['id'] ?? '');
+                    $is_prod_fav = !empty($favorite_store_keys['product_' . $prod_id_val]);
+                    ?>
+                    <a href="<?php echo htmlspecialchars($product['menu_link'] ?? 'menu.php'); ?>" class="market-product-card panda-card-link">
+                        <div class="store-card-image-wrap" style="height: 140px;">
+                            <div class="market-store-row-thumb" style="background-image: url('<?php echo htmlspecialchars($product['image']); ?>');"></div>
+                            <span class="market-type-pill" style="background: rgba(179,38,30,0.88);"><?php echo htmlspecialchars($product['category']); ?></span>
+                            <button
+                                type="button"
+                                class="market-store-favorite-btn<?php echo $is_prod_fav ? ' is-active' : ''; ?>"
+                                data-favorite-toggle="1"
+                                data-favorite-type="product"
+                                data-favorite-product-id="<?php echo htmlspecialchars($prod_id_val); ?>"
+                                data-favorite-active="<?php echo $is_prod_fav ? '1' : '0'; ?>"
+                                aria-pressed="<?php echo $is_prod_fav ? 'true' : 'false'; ?>"
+                                title="<?php echo $is_prod_fav ? 'Remove from favorites' : 'Save to favorites'; ?>"
+                                onclick="event.preventDefault(); event.stopPropagation();">
+                                <i class="<?php echo $is_prod_fav ? 'fas' : 'far'; ?> fa-heart"></i>
+                            </button>
+                        </div>
+                        <div class="store-card-details">
+                            <div class="store-card-row-head">
+                                <h3><?php echo htmlspecialchars($product['name']); ?></h3>
+                                <?php if ($product['rating'] > 0): ?>
+                                <span class="store-card-rating">
+                                    <i class="fas fa-star" style="color: #ef6b2e; margin-right: 3px;"></i><?php echo number_format((float)$product['rating'], 1); ?>
+                                </span>
+                                <?php endif; ?>
                             </div>
-                            <div class="market-dish-price">
-                                <span>PHP <?php echo number_format((float)$product['price'], 2); ?></span>
-                                <span><?php echo number_format((int)$product['sold']); ?> sold</span>
+                            
+                            <div class="store-card-summary" style="height: auto; font-size: 0.8rem; color: #64748b; margin-bottom: 8px;">
+                                <i class="fas fa-shop" style="color: #ef6b2e; margin-right: 4px;"></i><?php echo htmlspecialchars($product['store']); ?>
+                            </div>
+                            
+                            <div class="panda-card-footer-line">
+                                <strong class="panda-card-price-text">PHP <?php echo number_format((float)$product['price'], 2); ?></strong>
+                                <span style="font-size: 0.76rem; color: #64748b; font-weight: 600;"><?php echo number_format((int)$product['sold']); ?> sold</span>
                             </div>
                         </div>
-                    </article>
+                    </a>
                 <?php endforeach; ?>
             </div>
         </div>
@@ -3337,16 +3422,25 @@ document.addEventListener('DOMContentLoaded', function () {
 
             <!-- Register Pane -->
             <div class="auth-popup-pane" id="authPaneRegister">
-                <div style="text-align: center; padding: 20px 10px;">
-                    <div style="width: 60px; height: 60px; border-radius: 50%; background: #fff5e9; color: #b3261e; display: inline-flex; align-items: center; justify-content: center; font-size: 1.8rem; margin-bottom: 16px;">
-                        <i class="fas fa-user"></i>
-                    </div>
-                    <h3 style="font-size: 1.2rem; font-weight: 800; color: #0f172a; margin-bottom: 8px;">Individual Customer</h3>
-                    <p style="font-size: 0.9rem; color: #64748b; margin-bottom: 24px; max-width: 320px; margin-left: auto; margin-right: auto; line-height: 1.5;">
-                        Order delicious lechon dishes, rate food, track deliveries, and manage your account.
-                    </p>
-                    <a href="register.php?account_type=individual" class="btn-popup-register-link" style="display: inline-flex; text-decoration: none; padding: 12px 32px; border-radius: 999px; font-weight: 700; font-size: 0.9rem; border: 1px solid var(--ink); background: var(--ink); color: #fff; transition: all 0.22s;" onmouseover="this.style.background='#0f1118'; this.style.borderColor='#0f1118';" onmouseout="this.style.background='var(--ink)'; this.style.borderColor='var(--ink)';">
-                        Create Account
+                <div class="reg-choice-grid">
+                    <a href="register.php?account_type=individual" class="reg-choice-card">
+                        <div class="reg-choice-icon">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <div class="reg-choice-info">
+                            <span class="reg-choice-title">Individual Customer</span>
+                            <span class="reg-choice-desc">Order delicious lechon dishes, rate food, track deliveries, and manage your account.</span>
+                        </div>
+                    </a>
+                    
+                    <a href="register.php?account_type=organization" class="reg-choice-card">
+                        <div class="reg-choice-icon">
+                            <i class="fas fa-store"></i>
+                        </div>
+                        <div class="reg-choice-info">
+                            <span class="reg-choice-title">Business Partner</span>
+                            <span class="reg-choice-desc">Register your lechon business, manage your storefront menu, and sync billing invoices.</span>
+                        </div>
                     </a>
                 </div>
                 <div class="auth-popup-form" style="margin-top: 10px;">
@@ -3534,15 +3628,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Intercept clicks on the register button in the header
     document.querySelectorAll('.btn-register').forEach(btn => {
-        btn.addEventListener('click', function(e) {
-            e.preventDefault();
-            switchAuthTab('register');
-            if (authOverlay) authOverlay.classList.add('active');
-        });
-    });
-
-    // Intercept clicks on guest Order Now / Reserve Now buttons
-    document.querySelectorAll('.guest-trigger-register').forEach(btn => {
         btn.addEventListener('click', function(e) {
             e.preventDefault();
             switchAuthTab('register');

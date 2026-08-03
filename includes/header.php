@@ -17,7 +17,7 @@ $is_logged_in_user = !empty($_SESSION['user_id']);
 $is_customer_user = $is_logged_in_user && ($normalized_user_type === '' || $normalized_user_type === 'customer' || $normalized_user_type === 'user');
 $market_header_excluded_pages = ['reset_password'];
 $is_market_home_header = ($script_parent !== 'admin') && !in_array($current_page, $market_header_excluded_pages, true);
-$show_market_header_bottom = ($current_page === 'home');
+$show_market_header_bottom = in_array($current_page, ['home', 'index', 'shops'], true);
 $cart_count = isset($_SESSION['cart']) && is_array($_SESSION['cart']) ? count($_SESSION['cart']) : 0;
 
 $current_user_address = trim((string)($current_user_address ?? ($_SESSION['address'] ?? '')));
@@ -57,7 +57,7 @@ $favorites_feature_enabled = $is_customer_user;
     <style>
         :root { --ink:#171922; --muted:#667085; --line:#efddcd; --rose:#b3261e; --bg:#fff9f2; --card:#fff; --shadow:0 12px 30px rgba(15,23,42,.1); --primary-color:#b3261e; --primary-dark:#8f261a; --motion-ease:cubic-bezier(.22,1,.36,1); --motion-fast:.22s; --motion-base:.28s; --transition-fast:all var(--motion-fast) var(--motion-ease); --transition-fade:opacity var(--motion-fast) var(--motion-ease), visibility var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease); --transition-lift:transform var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease); }
         * { box-sizing:border-box; }
-        html, body { margin:0; padding:0; overflow-x:hidden !important; max-width:100vw; width:100%; font-family:"Plus Jakarta Sans","Segoe UI",sans-serif; background:var(--bg); color:var(--ink); }
+        html, body { margin:0; padding:0; overflow-x:clip !important; max-width:100vw; width:100%; font-family:"Plus Jakarta Sans","Segoe UI",sans-serif; background:var(--bg); color:var(--ink); }
         h1,h2,h3,h4,h5,h6 { font-family:"Outfit","Plus Jakarta Sans",sans-serif; }
         .site-main { min-height:calc(100vh - 260px); }
         .site-header { position:sticky; top:0; z-index:1200; background:#ffffff; border-bottom:1px solid var(--line); box-shadow:0 6px 20px rgba(15,23,42,.04); width:100%; }
@@ -533,9 +533,9 @@ $favorites_feature_enabled = $is_customer_user;
     
     <div class="market-header-bottom">
         <nav class="market-home-nav">
-            <a href="<?php echo $path_prefix; ?>index.php#marketplaceStores" class="market-home-link active"><i class="fas fa-motorcycle"></i> Delivery</a>
-            <a href="<?php echo $path_prefix; ?>index.php#marketplaceStores" class="market-home-link"><i class="fas fa-person-walking"></i> Pick-up</a>
-            <a href="<?php echo $path_prefix; ?>index.php#marketplaceStores" class="market-home-link"><i class="fas fa-shop"></i> Shops</a>
+            <a href="<?php echo $path_prefix; ?>index.php#marketplaceStores" class="market-home-link<?php echo ($current_page === 'home' || $current_page === 'index') ? ' active' : ''; ?>"><i class="fas fa-motorcycle"></i> Delivery</a>
+            <a href="<?php echo $path_prefix; ?>index.php?type=pickup#marketplaceStores" class="market-home-link<?php echo ($current_page === 'pickup') ? ' active' : ''; ?>"><i class="fas fa-person-walking"></i> Pick-up</a>
+            <a href="<?php echo $path_prefix; ?>shops.php" class="market-home-link<?php echo ($current_page === 'shops') ? ' active' : ''; ?>"><i class="fas fa-shop"></i> Shops</a>
         </nav>
         <div class="market-home-search-wrap" id="marketHeaderSearchWrap">
             <label class="market-home-search" for="marketHeaderSearch"><i class="fas fa-magnifying-glass"></i><input type="search" id="marketHeaderSearch" placeholder="Search for restaurants, cuisines, and dishes" autocomplete="off"></label>
