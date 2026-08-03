@@ -194,7 +194,7 @@ if (!function_exists('validateRegistrationValidIdUpload')) {
 }
 
 if (!function_exists('saveRegistrationValidIdDocument')) {
-    function saveRegistrationValidIdDocument($conn, $user_id, $uploaded_file)
+    function saveRegistrationValidIdDocument($conn, $user_id, $uploaded_file, $valid_id_type = '')
     {
         $user_id = (int)$user_id;
         if ($user_id <= 0) {
@@ -248,7 +248,23 @@ if (!function_exists('saveRegistrationValidIdDocument')) {
             return ['success' => false, 'message' => 'Unable to save the uploaded valid ID. Please try again.'];
         }
 
-        $insert_sql = "INSERT INTO user_valid_id_documents (user_id, document_type, file_name, file_path) VALUES (?, 'valid_id', ?, ?)";
+        $id_label_map = [
+            'umid' => 'Unified Multi-Purpose ID (UMID)',
+            'drivers_license' => "Driver's License",
+            'passport' => 'Philippine Passport',
+            'sss' => 'SSS ID',
+            'gsis' => 'GSIS ID',
+            'prc' => 'PRC ID',
+            'postal' => 'Postal ID',
+            'voters' => "Voter's ID",
+            'national_id' => 'Philippine National ID (PhilSys)',
+            'tin' => 'TIN ID',
+            'pag_ibig' => 'Pag-IBIG ID',
+            'philhealth' => 'PhilHealth ID'
+        ];
+        $document_type_label = $id_label_map[$valid_id_type] ?? 'Government ID';
+
+        $insert_sql = "INSERT INTO user_valid_id_documents (user_id, document_type, file_name, file_path) VALUES (?, ?, ?, ?)";
         $stmt = mysqli_prepare($conn, $insert_sql);
         if (!$stmt) {
             @unlink($target_path);
@@ -256,7 +272,7 @@ if (!function_exists('saveRegistrationValidIdDocument')) {
             return ['success' => false, 'message' => 'Unable to record valid ID metadata right now.'];
         }
 
-        mysqli_stmt_bind_param($stmt, "iss", $user_id, $unique_name, $relative_path);
+        mysqli_stmt_bind_param($stmt, "isss", $user_id, $document_type_label, $unique_name, $relative_path);
         $ok = mysqli_stmt_execute($stmt);
         if (!$ok) {
             $db_error = mysqli_stmt_error($stmt);
@@ -309,6 +325,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $confirm_password = $_POST['confirm_password'] ?? '';
     $accept_terms = isset($_POST['accept_terms']);
     $valid_id_file = $_FILES['valid_id_file'] ?? null;
+    $valid_id_type = trim($_POST['valid_id_type'] ?? '');
     
     // Business partner fields
     $business_name = preg_replace('/\s+/', ' ', trim($_POST['business_name'] ?? ''));
@@ -352,6 +369,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         'gender' => $gender,
         'email' => $email,
         'phone' => $phone,
+        'valid_id_type' => $valid_id_type,
         'business_name' => $business_name,
         'business_type' => $business_type,
         'business_registration' => $business_registration,
@@ -389,13 +407,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $error = 'Passwords do not match.';
         } elseif (empty($phone)) {
             $error = 'Please enter your mobile number.';
-        } elseif (empty($valid_id_file) || !is_array($valid_id_file) || (int)($valid_id_file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
-            $error = 'Please upload your valid ID in Personal Information.';
-        } else {
-            $valid_id_validation = validateRegistrationValidIdUpload($valid_id_file);
-            if (empty($valid_id_validation['valid'])) {
-                $error = (string)($valid_id_validation['message'] ?? 'Please upload a clear JPG, PNG, or WEBP valid ID image up to 5MB.');
-            }
         }
 
         if ($error === '' && $account_type === 'organization' && empty($business_name)) {
@@ -480,21 +491,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $nickname
         );
 
-        if (!empty($result['success']) && $error === '') {
-            $created_user_id = (int)($result['user_id'] ?? 0);
-            $saved_valid_id = saveRegistrationValidIdDocument($conn, $created_user_id, $valid_id_file);
-            if (empty($saved_valid_id['success'])) {
-                if ($created_user_id > 0) {
-                    $cleanup_stmt = mysqli_prepare($conn, "DELETE FROM users WHERE id = ? LIMIT 1");
-                    if ($cleanup_stmt) {
-                        mysqli_stmt_bind_param($cleanup_stmt, "i", $created_user_id);
-                        mysqli_stmt_execute($cleanup_stmt);
-                        mysqli_stmt_close($cleanup_stmt);
-                    }
-                }
-                $error = (string)($saved_valid_id['message'] ?? 'Unable to save your valid ID. Please try again.');
-            }
-        }
+
 
         if (!empty($result['success']) && $error === '') {
             $email_verification = issueUserEmailVerification(
@@ -567,9 +564,10 @@ include 'includes/header.php';
 
 .registration-container {
     background-color: white;
-    border-radius: 16px;
-    box-shadow: 0 15px 50px rgba(0, 0, 0, 0.1);
-    max-width: 800px;
+    border-radius: 24px;
+    border: 1px solid #efddcd;
+    box-shadow: 0 20px 40px rgba(15,23,42,.06);
+    max-width: 600px;
     width: 100%;
     overflow: hidden;
     animation: fadeIn 0.6s ease-out;
@@ -638,91 +636,81 @@ include 'includes/header.php';
 }
 
 .registration-body {
-    padding: 40px;
+    padding: 0;
 }
 
-/* Progress Steps */
+/* Progress Steps styled like modal tabs */
 .progress-steps {
     display: flex;
-    justify-content: space-between;
-    margin-bottom: 40px;
+    border-bottom: 1px solid #efddcd;
+    background: #faf7f4;
+    margin: 0;
     position: relative;
-}
-
-.progress-steps::before {
-    content: '';
-    position: absolute;
-    top: 20px;
-    left: 10%;
-    right: 10%;
-    height: 3px;
-    background: #e0e0e0;
-    z-index: 1;
 }
 
 .progress-bar {
-    position: absolute;
-    top: 20px;
-    left: 10%;
-    right: 10%;
-    height: 3px;
-    background: #b3261e;
-    z-index: 2;
-    transition: all 0.3s ease;
-    transform-origin: left;
+    display: none; /* Hide old progress bar */
 }
 
 .step {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    position: relative;
-    z-index: 3;
     flex: 1;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 16px 8px;
+    cursor: default;
+    border-bottom: 3px solid transparent;
+    transition: all 0.22s;
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: #667085;
+}
+
+.step.active {
+    color: #b3261e;
+    border-bottom-color: #b3261e;
+    background: #ffffff;
+}
+
+.step.completed {
+    color: #1a5f7a;
 }
 
 .step-number {
-    width: 40px;
-    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
     background: #e0e0e0;
     color: #666;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 600;
-    font-size: 1.1rem;
-    margin-bottom: 10px;
-    transition: all 0.3s ease;
-    border: 3px solid white;
-    -webkit-tap-highlight-color: transparent;
+    font-size: 0.75rem;
+    font-weight: 800;
+    transition: all 0.22s;
 }
 
 .step.active .step-number {
     background: #b3261e;
-    color: white;
-    transform: scale(1.1);
+    color: #fff;
 }
 
 .step.completed .step-number {
-    background: #4CAF50;
-    color: white;
+    background: #1a5f7a;
+    color: #fff;
 }
 
 .step-label {
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: #666;
-    text-align: center;
-}
-
-.step.active .step-label {
-    color: #b3261e;
+    font-size: 0.88rem;
+    font-weight: 700;
 }
 
 /* Form Steps */
 .form-step {
     display: none;
+    padding: 30px 40px;
     animation: slideIn 0.5s ease;
 }
 
@@ -1408,39 +1396,32 @@ body {
 
 <div class="registration-page">
     <div class="registration-container">
-        <div class="registration-header">
-            <h1>Create Your Account</h1>
-            <p>Join Lechon Delights and start enjoying delicious lechon delivered to your doorstep</p>
+        <div class="registration-header" style="background:#fff; border-bottom:1px solid #efddcd; padding:30px 24px 20px; text-align:center;">
+            <div style="display:inline-flex; align-items:center; gap:10px; margin-bottom:12px;">
+                <div style="width:36px; height:36px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; overflow:hidden; box-shadow:0 6px 16px rgba(179,38,30,.2);">
+                    <img src="assets/images/logo.jpg" alt="Lechon Delights Logo" style="width:100%; height:100%; object-fit:cover;">
+                </div>
+                <span style="font-size:1.25rem; font-weight:800; color:#0f172a;">Lechon Delights</span>
+            </div>
+            <h2 style="font-size:1.35rem; font-weight:800; color:#0f172a; margin:0 0 4px 0;">Create Account</h2>
+            <p style="font-size:0.9rem; color:#64748b; margin:0;">Join us to order Cavite's finest lechon dishes.</p>
         </div>
         
         <div class="registration-body">
-            <div class="registration-intro">
-                <div class="registration-intro-icon">
-                    <i class="fas fa-user-plus"></i>
-                </div>
-                <div>
-                    <h2>Sign up in four simple steps</h2>
-                    <p>Choose the account that fits you best, add your details, and confirm your email once you are done.</p>
-                </div>
-            </div>
 
             <!-- Progress Steps -->
             <div class="progress-steps">
                 <div class="progress-bar" id="progressBar"></div>
-                <div class="step active" id="step1">
+                <div class="step active" id="step2">
                     <div class="step-number">1</div>
-                    <div class="step-label">Account Type</div>
-                </div>
-                <div class="step" id="step2">
-                    <div class="step-number">2</div>
                     <div class="step-label">Personal Info</div>
                 </div>
                 <div class="step" id="step3">
-                    <div class="step-number">3</div>
+                    <div class="step-number">2</div>
                     <div class="step-label" id="step3NavLabel">Address Info</div>
                 </div>
                 <div class="step" id="step4">
-                    <div class="step-number">4</div>
+                    <div class="step-number">3</div>
                     <div class="step-label">Create Account</div>
                 </div>
             </div>
@@ -1449,7 +1430,7 @@ body {
                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['registration_csrf_token']); ?>">
 
                 <!-- Step 1: Account Type -->
-                <div class="form-step active" id="step1Form">
+                <div class="form-step" id="step1Form" style="display:none;">
                     <h2 style="color: #333; margin-bottom: 25px; font-size: 1.5rem;">
                         <?php echo $is_partner_signup ? 'Business Partner Sign Up' : 'Select Account Type'; ?>
                     </h2>
@@ -1488,7 +1469,7 @@ body {
                 </div>
                 
                 <!-- Step 2: Personal Information -->
-                <div class="form-step" id="step2Form">
+                <div class="form-step active" id="step2Form">
                     <h2 style="color: #333; margin-bottom: 25px; font-size: 1.5rem;">Tell us about you</h2>
                     
                     <div class="form-row">
@@ -1515,13 +1496,6 @@ body {
                                 placeholder="Optional"
                                 value="<?php echo htmlspecialchars($form_data['middle_name'] ?? ''); ?>"
                                 autocomplete="additional-name">
-                        </div>
-                        <div class="form-group">
-                            <label for="nickname">Nickname</label>
-                            <input type="text" id="nickname" name="nickname" class="form-control"
-                                placeholder="Optional"
-                                value="<?php echo htmlspecialchars($form_data['nickname'] ?? ''); ?>"
-                                autocomplete="nickname">
                         </div>
                     </div>
 
@@ -1572,14 +1546,7 @@ body {
                         </small>
                     </div>
 
-                    <div class="form-group">
-                        <label for="validIdFile">Valid ID Upload *</label>
-                        <input type="file" id="validIdFile" name="valid_id_file" class="form-control" required
-                            accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp">
-                        <small style="display: block; margin-top: 5px; color: #666; font-size: 0.85rem;">
-                            Upload a clear government-issued ID image (JPG, PNG, or WEBP, max 5MB).
-                        </small>
-                    </div>
+
                     
                     <div class="form-actions">
                         <button type="button" class="btn-secondary" id="prevStep2">
@@ -2329,12 +2296,15 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    let currentStep = 1;
+    let currentStep = 2;
     const totalSteps = 4;
     const steps = document.querySelectorAll('.step');
     const formSteps = document.querySelectorAll('.form-step');
     const accountTypeCards = document.querySelectorAll('.account-type-card');
     const accountTypeInput = document.getElementById('accountType');
+    if (accountTypeInput) {
+        accountTypeInput.value = 'individual';
+    }
     const organizationFields = document.getElementById('organizationFields');
     const step3Title = document.getElementById('step3Title');
     const step3Subtitle = document.getElementById('step3Subtitle');
@@ -2344,7 +2314,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const provinceLabel = document.getElementById('provinceLabel');
     const streetAddressLabel = document.getElementById('streetAddressLabel');
     const completeAddressLabel = document.getElementById('completeAddressLabel');
-    let accountType = (accountTypeInput ? accountTypeInput.value : 'individual') || 'individual';
+    let accountType = 'individual';
 
     const regionSelect = document.getElementById('psgcRegion');
     const provinceSelect = document.getElementById('psgcProvince');
@@ -2687,17 +2657,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const previousValue = regionSelect ? String(regionSelect.value || '').trim() : '';
         const previousRegionName = psgcRegionNameInput ? String(psgcRegionNameInput.value || '').trim() : '';
 
-        let allowedRegions = regions;
-        if (accountType === 'organization') {
-            allowedRegions = regions.filter(function(region) {
-                return String(region.code || '') === CALABARZON_REGION_CODE ||
-                    String(region.name || '').toLowerCase().includes('calabarzon');
-            });
-        } else {
-            allowedRegions = regions.filter(function(region) {
-                return isLuzonSelection(region.code || '', region.name || '');
-            });
-        }
+        const allowedRegions = regions.filter(function(region) {
+            return String(region.code || '') === CALABARZON_REGION_CODE ||
+                String(region.name || '').toLowerCase().includes('calabarzon');
+        });
 
         setSelectOptions(regionSelect, allowedRegions, allowedRegions.length ? 'Select region' : 'No allowed region');
         regionSelect.disabled = allowedRegions.length === 0;
@@ -2708,7 +2671,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const fallbackRegionCode = findOptionValueFromCandidates(regionSelect, previousRegionName);
             if (fallbackRegionCode) {
                 regionSelect.value = fallbackRegionCode;
-            } else if (accountType === 'organization' && allowedRegions.length === 1) {
+            } else if (allowedRegions.length === 1) {
                 regionSelect.value = allowedRegions[0].code || CALABARZON_REGION_CODE;
             }
         }
@@ -2936,7 +2899,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function updateProgressBar() {
         const progressBar = document.getElementById('progressBar');
-        const progress = ((currentStep - 1) / (totalSteps - 1)) * 100;
+        const progress = ((currentStep - 2) / (totalSteps - 2)) * 100;
         if (progressBar) {
             progressBar.style.width = progress + '%';
         }
@@ -3099,30 +3062,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const lastName = ((document.getElementById('lastName') || {}).value || '').trim();
         const email = ((document.getElementById('email') || {}).value || '').trim();
         const phone = ((document.getElementById('phone') || {}).value || '').trim();
-        const validIdInput = document.getElementById('validIdFile');
-        const validIdFile = validIdInput && validIdInput.files ? validIdInput.files[0] : null;
 
         if (!firstName || !lastName || !email || !phone) {
             showError('Missing Information', 'Please fill in all required personal details.');
-            return false;
-        }
-
-        if (!validIdFile) {
-            showError('Valid ID Required', 'Please upload your valid ID to continue.');
-            return false;
-        }
-
-        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
-        const hasAllowedType = allowedTypes.includes(validIdFile.type || '');
-        const fileName = String(validIdFile.name || '').toLowerCase();
-        const hasAllowedExt = /\.(jpg|jpeg|png|webp)$/.test(fileName);
-        if (!hasAllowedType && !hasAllowedExt) {
-            showError('Invalid ID Format', 'Please upload a JPG, PNG, or WEBP image only.');
-            return false;
-        }
-
-        if (validIdFile.size > (5 * 1024 * 1024)) {
-            showError('File Too Large', 'Your valid ID must be 5MB or smaller.');
             return false;
         }
 
@@ -3137,7 +3079,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         if (!isValidPhone(phone)) {
-            showError('Invalid Phone Number', 'Please enter a valid Philippine mobile number (e.g., 09171234567).');
+            showError('Invalid Phone', 'Please enter a valid Philippine mobile number.');
             return false;
         }
 
@@ -3289,7 +3231,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const prevStep2 = document.getElementById('prevStep2');
     if (prevStep2) {
         prevStep2.addEventListener('click', function() {
-            goToStep(1);
+            window.location.href = 'login.php';
         });
     }
 
@@ -3471,7 +3413,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     if (serverRegistrationError) {
         const loweredError = serverRegistrationError.toLowerCase();
-        let targetStep = 1;
+        let targetStep = 2;
 
         if (/(email|mobile|phone|name|valid id|government id)/.test(loweredError)) {
             targetStep = 2;

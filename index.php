@@ -2492,7 +2492,7 @@ body {
                                 <div class="panda-card-content">
                                     <h2 class="panda-card-title">Order Fresh Lechon</h2>
                                     <p class="panda-card-desc">Enjoy crispy skin and juicy meat, roasted fresh for every order.</p>
-                                    <a href="#marketplaceStores" class="panda-card-btn">Order Now</a>
+                                    <a href="register.php?account_type=individual" class="panda-card-btn guest-trigger-register">Order Now</a>
                                 </div>
                                 <div class="panda-card-graphic">
                                     <img src="assets/images/lechon_mascot_user.png" alt="Lechon Delights Mascot" class="panda-mascot-img" loading="lazy">
@@ -2507,7 +2507,7 @@ body {
                                 <div class="panda-card-content">
                                     <h2 class="panda-card-title">Pre-order for Celebrations</h2>
                                     <p class="panda-card-desc">Avoid the rush by booking your whole or half lechon ahead of time.</p>
-                                    <a href="preorder.php" class="panda-card-btn panda-card-btn-alt">Reserve Now</a>
+                                    <a href="register.php?account_type=individual" class="panda-card-btn panda-card-btn-alt guest-trigger-register">Reserve Now</a>
                                 </div>
                                 <div class="panda-card-graphic-cluster">
                                     <div class="panda-float-badge-wrap">
@@ -3327,25 +3327,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
             <!-- Register Pane -->
             <div class="auth-popup-pane" id="authPaneRegister">
-                <div class="reg-choice-grid">
-                    <a href="register.php?account_type=individual" class="reg-choice-card">
-                        <div class="reg-choice-icon">
-                            <i class="fas fa-user"></i>
-                        </div>
-                        <div class="reg-choice-info">
-                            <span class="reg-choice-title">Individual Customer</span>
-                            <span class="reg-choice-desc">Order delicious lechon dishes, rate food, track deliveries, and manage your account.</span>
-                        </div>
-                    </a>
-                    
-                    <a href="register.php?account_type=organization" class="reg-choice-card">
-                        <div class="reg-choice-icon">
-                            <i class="fas fa-store"></i>
-                        </div>
-                        <div class="reg-choice-info">
-                            <span class="reg-choice-title">Business Partner</span>
-                            <span class="reg-choice-desc">Register your lechon business, manage your storefront menu, and sync billing invoices.</span>
-                        </div>
+                <div style="text-align: center; padding: 20px 10px;">
+                    <div style="width: 60px; height: 60px; border-radius: 50%; background: #fff5e9; color: #b3261e; display: inline-flex; align-items: center; justify-content: center; font-size: 1.8rem; margin-bottom: 16px;">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <h3 style="font-size: 1.2rem; font-weight: 800; color: #0f172a; margin-bottom: 8px;">Individual Customer</h3>
+                    <p style="font-size: 0.9rem; color: #64748b; margin-bottom: 24px; max-width: 320px; margin-left: auto; margin-right: auto; line-height: 1.5;">
+                        Order delicious lechon dishes, rate food, track deliveries, and manage your account.
+                    </p>
+                    <a href="register.php?account_type=individual" class="btn-popup-register-link" style="display: inline-flex; text-decoration: none; padding: 12px 32px; border-radius: 999px; font-weight: 700; font-size: 0.9rem; border: 1px solid var(--ink); background: var(--ink); color: #fff; transition: all 0.22s;" onmouseover="this.style.background='#0f1118'; this.style.borderColor='#0f1118';" onmouseout="this.style.background='var(--ink)'; this.style.borderColor='var(--ink)';">
+                        Create Account
                     </a>
                 </div>
                 <div class="auth-popup-form" style="margin-top: 10px;">
@@ -3420,6 +3411,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Intercept clicks on the register button in the header
     document.querySelectorAll('.btn-register').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            switchAuthTab('register');
+            if (authOverlay) authOverlay.classList.add('active');
+        });
+    });
+
+    // Intercept clicks on guest Order Now / Reserve Now buttons
+    document.querySelectorAll('.guest-trigger-register').forEach(btn => {
         btn.addEventListener('click', function(e) {
             e.preventDefault();
             switchAuthTab('register');

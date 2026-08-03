@@ -72,8 +72,8 @@ $favorites_feature_enabled = $is_customer_user;
         .btn-signin,.btn-register { min-height:38px; padding:0 14px; border-radius:999px; border:1px solid; text-decoration:none; font-weight:700; font-size:.84rem; display:inline-flex; align-items:center; justify-content:center; transition:var(--transition-fast); white-space:nowrap; }
         .btn-signin { border-color:var(--ink); color:var(--ink); background:#fff; }
         .btn-signin:hover { background:var(--ink); color:#fff; }
-        .btn-register { border-color:var(--ink); background:var(--ink); color:#fff; }
-        .btn-register:hover { background:#0f1118; border-color:#0f1118; }
+        .btn-register { border-color:var(--ink); background:#fff; color:var(--ink); }
+        .btn-register:hover { background:var(--ink); color:#fff; border-color:var(--ink); }
         .icon-btn { width:38px; height:38px; border-radius:10px; border:1px solid var(--line); background:#fff; color:#222a3d; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; transition:var(--transition-fast); position:relative; font-size:.9rem; }
         .icon-btn:hover { background:var(--ink); color:#fff; border-color:var(--ink); }
         .user-avatar-btn { padding:0; overflow:hidden; }
@@ -445,7 +445,7 @@ $favorites_feature_enabled = $is_customer_user;
 <header class="site-header market-main-header">
     <div class="market-header-top">
         <a href="<?php echo $path_prefix; ?>index.php" class="logo-link">
-            <span class="logo-icon"><i class="fas fa-store"></i></span>
+            <span class="logo-icon"><img src="<?php echo $path_prefix; ?>assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block;"></span>
             <span class="logo-copy"><span class="logo-title">Lechon Delights</span><span class="logo-sub">Marketplace</span></span>
         </a>
 
@@ -612,7 +612,7 @@ $favorites_feature_enabled = $is_customer_user;
 <header class="site-header standard-header">
     <div class="header-shell standard-top">
         <a href="<?php echo $path_prefix; ?>index.php" class="logo-link">
-            <span class="logo-icon"><i class="fas fa-store"></i></span>
+            <span class="logo-icon"><img src="<?php echo $path_prefix; ?>assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block;"></span>
             <span class="logo-copy"><span class="logo-title">Lechon Delights</span><span class="logo-sub">Marketplace</span></span>
         </a>
         <nav class="main-nav">
@@ -678,7 +678,7 @@ $favorites_feature_enabled = $is_customer_user;
 <aside class="mobile-menu" id="mobileMenu">
     <div class="mobile-menu-header">
         <a href="<?php echo $path_prefix; ?>index.php" class="logo-link">
-            <span class="logo-icon" style="width:38px;height:38px;font-size:.88rem;"><i class="fas fa-store"></i></span>
+            <span class="logo-icon" style="width:38px;height:38px;font-size:.88rem;"><img src="<?php echo $path_prefix; ?>assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block;"></span>
             <span class="logo-copy"><span class="logo-title" style="font-size:1.04rem;">Lechon Delights</span><span class="logo-sub">Marketplace</span></span>
         </a>
         <button class="mobile-menu-close" id="mobileMenuClose"><i class="fas fa-times"></i></button>
