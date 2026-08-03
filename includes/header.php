@@ -1985,12 +1985,19 @@ document.addEventListener('DOMContentLoaded', function () {
     requestFavoritesCount();
 
     document.addEventListener('click', function (event) {
-        if (!marketAddressPanel || !marketAddressPanel.classList.contains('active')) return;
-        const inPanel = marketAddressPanel.contains(event.target);
-        const inToggle = marketAddressToggle && marketAddressToggle.contains(event.target);
-        if (!inPanel && !inToggle) {
-            marketAddressPanel.classList.remove('active');
-            scheduleHeaderOffsetSync();
+        if (marketAddressWrap && marketAddressWrap.classList.contains('is-open')) {
+            if (!marketAddressWrap.contains(event.target)) {
+                closeAddressPopover();
+            }
         }
+        if (marketAddressPanel && marketAddressPanel.classList.contains('active')) {
+            const inPanel = marketAddressPanel.contains(event.target);
+            const inToggle = marketAddressToggle && marketAddressToggle.contains(event.target);
+            if (!inPanel && !inToggle) {
+                marketAddressPanel.classList.remove('active');
+                scheduleHeaderOffsetSync();
+            }
+        }
+    });
 });
 </script>

@@ -601,7 +601,7 @@ if (!empty($product_ids_for_reviews)) {
 
 mysqli_close($conn);
 ?><!-- Product Preview Modal -->
-<div class="product-preview-modal" id="productPreviewModal">
+<div class="product-preview-modal" id="productPreviewModal" style="display:none;">
     <div class="preview-modal-content">
         <button class="preview-close" id="previewClose">&times;</button>
         <div class="preview-body">
@@ -661,7 +661,7 @@ mysqli_close($conn);
 
 <!-- Foodpanda Storefront Reviews Modal -->
 <div class="product-preview-modal" id="storefrontReviewsModal" style="display:none;">
-    <div class="preview-modal-content" style="max-width: 640px; border-radius: 24px; padding: 24px; position:relative; z-index:1001;">
+    <div class="preview-modal-content" style="max-width: 640px; border-radius: 24px; padding: 24px; z-index: 2002;">
         <button type="button" class="preview-close" id="closeStorefrontReviewsModal" style="top:18px; right:18px;">&times;</button>
         <div class="preview-body" style="display:block; padding:0;">
             <h2 style="font-family:'Outfit',sans-serif; font-size:1.35rem; font-weight:800; color:#171922; margin:0 0 2px;">
@@ -707,45 +707,56 @@ mysqli_close($conn);
             </div>
             
             <!-- Filter Pills -->
-            <div style="display:flex; gap:8px; margin-bottom:18px; overflow-x:auto;">
-                <button type="button" class="panda-cat-tab active" style="padding:6px 14px; border-radius:999px; background:#171922; color:#fff; font-size:0.84rem; font-weight:700; border:none;">Top reviews</button>
-                <button type="button" style="padding:6px 14px; border-radius:999px; background:#f1f5f9; color:#64748b; font-size:0.84rem; font-weight:600; border:1px solid #e2e8f0;">Newest</button>
-                <button type="button" style="padding:6px 14px; border-radius:999px; background:#f1f5f9; color:#64748b; font-size:0.84rem; font-weight:600; border:1px solid #e2e8f0;">Highest rating</button>
+            <div class="store-review-filters" style="display:flex; gap:8px; margin-bottom:18px; overflow-x:auto; padding-bottom:4px;">
+                <button type="button" class="store-review-filter-btn active" data-filter="top">Top reviews</button>
+                <button type="button" class="store-review-filter-btn" data-filter="newest">Newest</button>
+                <button type="button" class="store-review-filter-btn" data-filter="highest">Highest rating</button>
+                <button type="button" class="store-review-filter-btn" data-filter="lowest">Lowest rating</button>
             </div>
             
             <!-- Reviews List -->
-            <div style="max-height:360px; overflow-y:auto; display:flex; flex-direction:column; gap:14px; padding-right:4px;">
+            <div id="storefrontReviewsList" style="max-height:360px; overflow-y:auto; display:flex; flex-direction:column; gap:14px; padding-right:4px;">
                 <?php if (!empty($store_recent_reviews)): ?>
                     <?php foreach ($store_recent_reviews as $review): ?>
-                        <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:16px; padding:16px; box-shadow:0 2px 8px rgba(0,0,0,0.02);">
+                        <?php
+                        $r_rating = (int)($review['rating'] ?? 5);
+                        $r_date = (string)($review['created_at'] ?? '');
+                        $r_comment = trim((string)($review['comment'] ?? ''));
+                        $r_timestamp = strtotime($r_date) ?: 0;
+                        ?>
+                        <div class="store-review-item" 
+                             data-rating="<?php echo $r_rating; ?>" 
+                             data-timestamp="<?php echo $r_timestamp; ?>" 
+                             data-has-comment="<?php echo $r_comment !== '' ? '1' : '0'; ?>"
+                             style="background:#ffffff; border:1px solid #efddcd; border-radius:16px; padding:16px; box-shadow:0 2px 8px rgba(0,0,0,0.02);">
                             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                                <strong style="font-size:0.95rem; font-weight:800; color:#171922;"><?php echo htmlspecialchars($review['first_name']); ?></strong>
-                                <span style="font-size:0.78rem; color:#64748b; font-weight:500;"><?php echo htmlspecialchars($review['created_at']); ?></span>
+                                <strong style="font-size:0.95rem; font-weight:800; color:#2a211d;"><?php echo htmlspecialchars($review['first_name']); ?></strong>
+                                <span style="font-size:0.78rem; color:#7b6d64; font-weight:500;"><?php echo htmlspecialchars($review['created_at']); ?></span>
                             </div>
-                            <div style="color:#f59e0b; font-size:0.82rem; margin-bottom:8px;">
+                            <div style="color:#ef6b2e; font-size:0.85rem; margin-bottom:8px;">
                                 <?php for ($star = 1; $star <= 5; $star++): ?>
-                                    <i class="<?php echo $star <= (int)$review['rating'] ? 'fas' : 'far'; ?> fa-star"></i>
+                                    <i class="<?php echo $star <= $r_rating ? 'fas' : 'far'; ?> fa-star"></i>
                                 <?php endfor; ?>
                             </div>
-                            <p style="font-size:0.9rem; color:#334155; line-height:1.5; margin:0 0 8px;">
-                                <?php echo htmlspecialchars($review['comment'] !== '' ? $review['comment'] : 'Customer did not leave a written comment.'); ?>
+                            <p style="font-size:0.9rem; color:#2a211d; line-height:1.5; margin:0 0 8px;">
+                                <?php echo htmlspecialchars($r_comment !== '' ? $r_comment : 'Customer did not leave a written comment.'); ?>
                             </p>
                             <?php if ($review['seller_reply'] !== ''): ?>
                                 <div style="background:#fff9f2; border-left:3px solid #ef6b2e; padding:10px 12px; border-radius:0 10px 10px 0; margin-top:8px;">
                                     <div style="font-size:0.8rem; font-weight:700; color:#ef6b2e; margin-bottom:2px;">
                                         <i class="fas fa-reply"></i> <?php echo htmlspecialchars($review['seller_reply_name']); ?> replied
                                     </div>
-                                    <div style="font-size:0.86rem; color:#475569;"><?php echo htmlspecialchars($review['seller_reply']); ?></div>
+                                    <div style="font-size:0.86rem; color:#2a211d;"><?php echo htmlspecialchars($review['seller_reply']); ?></div>
                                 </div>
                             <?php endif; ?>
-                            <div style="font-size:0.78rem; color:#94a3b8; margin-top:6px; font-weight:600;">
+                            <div style="font-size:0.78rem; color:#7b6d64; margin-top:6px; font-weight:600;">
                                 Item: <?php echo htmlspecialchars($review['product_name']); ?>
                             </div>
                         </div>
                     <?php endforeach; ?>
                 <?php else: ?>
-                    <div style="text-align:center; padding:30px 20px; color:#64748b;">
-                        <i class="far fa-comment-dots" style="font-size:2.5rem; color:#cbd5e1; margin-bottom:10px; display:block;"></i>
+                    <div style="text-align:center; padding:30px 20px; color:#7b6d64;">
+                        <i class="far fa-comment-dots" style="font-size:2.5rem; color:#efddcd; margin-bottom:10px; display:block;"></i>
                         <p style="margin:0; font-weight:600;">No approved reviews yet for this storefront.</p>
                     </div>
                 <?php endif; ?>
@@ -755,7 +766,7 @@ mysqli_close($conn);
     <div class="preview-overlay" id="storefrontReviewsOverlay"></div>
 </div>
 
-<section class="page-header storefront-header">
+<section class="storefront-header">
     <div class="container">
         <nav class="store-breadcrumb" aria-label="Breadcrumb">
             <a href="locations.php"><?php echo htmlspecialchars($breadcrumb_location); ?></a>
@@ -978,12 +989,14 @@ mysqli_close($conn);
                         <div class="quick-order-tabs" role="tablist" aria-label="Order option">
                             <button type="button"
                                     class="quick-order-tab<?php echo ($_SESSION['delivery_option'] ?? 'pickup') === 'delivery' ? ' active' : ''; ?>"
-                                    data-delivery-option="delivery">
+                                    data-delivery-option="delivery"
+                                    onclick="switchDeliveryOptionTab('delivery')">
                                 Delivery
                             </button>
                             <button type="button"
                                     class="quick-order-tab<?php echo ($_SESSION['delivery_option'] ?? 'pickup') === 'pickup' ? ' active' : ''; ?>"
-                                    data-delivery-option="pickup">
+                                    data-delivery-option="pickup"
+                                    onclick="switchDeliveryOptionTab('pickup')">
                                 Pick-up
                             </button>
                         </div>
@@ -1066,12 +1079,14 @@ mysqli_close($conn);
             <div class="mobile-quick-order-tabs" role="tablist" aria-label="Mobile order option">
                 <button type="button"
                         class="mobile-quick-order-tab<?php echo ($_SESSION['delivery_option'] ?? 'pickup') === 'delivery' ? ' active' : ''; ?>"
-                        data-delivery-option="delivery">
+                        data-delivery-option="delivery"
+                        onclick="switchDeliveryOptionTab('delivery')">
                     Delivery
                 </button>
                 <button type="button"
                         class="mobile-quick-order-tab<?php echo ($_SESSION['delivery_option'] ?? 'pickup') === 'pickup' ? ' active' : ''; ?>"
-                        data-delivery-option="pickup">
+                        data-delivery-option="pickup"
+                        onclick="switchDeliveryOptionTab('pickup')">
                     Pick-up
                 </button>
             </div>
@@ -1134,6 +1149,77 @@ document.addEventListener('DOMContentLoaded', function() {
             catStripWrap.scrollBy({ left: 240, behavior: 'smooth' });
         });
     }
+
+    // Category Tabs Active Line Transfer & Scroll Spy
+    const pandaCatTabs = Array.from(document.querySelectorAll('.panda-cat-tab'));
+    const menuCategorySections = Array.from(document.querySelectorAll('.menu-category'));
+
+    function setPandaCatTabActive(targetTab) {
+        if (!targetTab) return;
+        pandaCatTabs.forEach(function(tab) {
+            tab.classList.remove('active');
+        });
+        targetTab.classList.add('active');
+
+        if (catStripWrap) {
+            const wrapRect = catStripWrap.getBoundingClientRect();
+            const tabRect = targetTab.getBoundingClientRect();
+            if (tabRect.left < wrapRect.left || tabRect.right > wrapRect.right) {
+                const scrollLeft = targetTab.offsetLeft - (wrapRect.width / 2) + (tabRect.width / 2);
+                catStripWrap.scrollTo({ left: scrollLeft, behavior: 'smooth' });
+            }
+        }
+    }
+
+    pandaCatTabs.forEach(function(tab) {
+        tab.addEventListener('click', function(e) {
+            e.preventDefault();
+            const catSlug = this.getAttribute('data-category');
+            const targetSection = document.getElementById(catSlug);
+
+            setPandaCatTabActive(this);
+
+            if (targetSection) {
+                const headerOffset = (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--site-header-offset')) || 92) + 75;
+                const elementPosition = targetSection.getBoundingClientRect().top + window.pageYOffset;
+                const offsetPosition = elementPosition - headerOffset;
+
+                window.scrollTo({
+                    top: offsetPosition,
+                    behavior: 'smooth'
+                });
+            }
+        });
+    });
+
+    window.addEventListener('scroll', function() {
+        if (menuCategorySections.length === 0) return;
+        
+        const headerOffset = (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--site-header-offset')) || 92) + 110;
+        const scrollPosition = window.pageYOffset + headerOffset;
+
+        let currentCategorySection = null;
+        for (let i = menuCategorySections.length - 1; i >= 0; i--) {
+            const section = menuCategorySections[i];
+            if (section.style.display === 'none') continue;
+            if (section.offsetTop <= scrollPosition) {
+                currentCategorySection = section;
+                break;
+            }
+        }
+
+        if (!currentCategorySection && menuCategorySections.length > 0) {
+            currentCategorySection = menuCategorySections.find(function(s) { return s.style.display !== 'none'; });
+        }
+
+        if (currentCategorySection) {
+            const catSlug = currentCategorySection.getAttribute('id');
+            const matchingTab = pandaCatTabs.find(function(t) { return t.getAttribute('data-category') === catSlug; });
+            if (matchingTab && !matchingTab.classList.contains('active')) {
+                setPandaCatTabActive(matchingTab);
+            }
+        }
+    }, { passive: true });
 
     let menuSearchQuery = '';
 
@@ -1237,10 +1323,20 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function setQuickOrderTabsActive(option) {
-        [...quickOrderTabs, ...mobileQuickOrderTabs].forEach((tab) => {
+        document.querySelectorAll('.quick-order-tab, .mobile-quick-order-tab').forEach((tab) => {
             tab.classList.toggle('active', tab.dataset.deliveryOption === option);
         });
     }
+
+    window.switchDeliveryOptionTab = async function(option) {
+        const normalizedOption = option === 'delivery' ? 'delivery' : 'pickup';
+        setQuickOrderTabsActive(normalizedOption);
+        try {
+            await setDeliveryOption(normalizedOption);
+        } catch (error) {
+            console.error('Failed to update delivery option:', error);
+        }
+    };
 
     function updateQuickOrderSummary(data) {
         if (!quickOrderTotal && !mobileQuickOrderTotal) return;
@@ -1332,28 +1428,31 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function setDeliveryOption(option) {
         const normalizedOption = option === 'delivery' ? 'delivery' : 'pickup';
+        setQuickOrderTabsActive(normalizedOption);
+
         const payload = new URLSearchParams({ delivery_option: normalizedOption });
         if (normalizedOption === 'pickup') {
             const selectedPickupStoreId = document.querySelector('input[name="pickup_location"]:checked')?.value
-                || defaultPickupLocation
-                || 1;
+                || (typeof defaultPickupLocation !== 'undefined' ? defaultPickupLocation : 1);
             payload.set('pickup_location', String(selectedPickupStoreId));
         }
 
-        const response = await fetch('update_delivery_option.php', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: payload
-        });
+        try {
+            const response = await fetch('update_delivery_option.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: payload
+            });
 
-        const result = await response.json();
-        if (!result.success) {
-            throw new Error(result.message || 'Unable to update delivery option');
+            const result = await response.json();
+            if (result.success && typeof updateCartSidebar === 'function') {
+                await updateCartSidebar();
+            }
+        } catch (error) {
+            console.error('Delivery option update failed:', error);
         }
-
-        await updateCartSidebar();
     }
 
     async function handleCheckoutStart() {
@@ -1634,29 +1733,13 @@ document.addEventListener('DOMContentLoaded', function() {
     window.addEventListener('load', scheduleMenuSideStackSync);
     setTimeout(scheduleMenuSideStackSync, 120);
 
-    function bindDeliveryOptionTabs(tabs) {
-        tabs.forEach((tab) => {
-            tab.addEventListener('click', async () => {
-                const selectedOption = tab.dataset.deliveryOption === 'delivery' ? 'delivery' : 'pickup';
-                setQuickOrderTabsActive(selectedOption);
-                try {
-                    await setDeliveryOption(selectedOption);
-                } catch (error) {
-                    console.error('Failed to update delivery option:', error);
-                    Swal.fire({
-                        icon: 'warning',
-                        title: 'Unable to update option',
-                        text: 'Please try selecting the delivery option again.',
-                        confirmButtonColor: '#b3261e'
-                    });
-                    updateQuickOrderSummary(window.cartData || {});
-                }
-            });
-        });
-    }
-
-    bindDeliveryOptionTabs(quickOrderTabs);
-    bindDeliveryOptionTabs(mobileQuickOrderTabs);
+    document.addEventListener('click', function(e) {
+        const tabBtn = e.target.closest('.quick-order-tab, .mobile-quick-order-tab');
+        if (tabBtn) {
+            const selectedOption = tabBtn.dataset.deliveryOption === 'delivery' ? 'delivery' : 'pickup';
+            setDeliveryOption(selectedOption);
+        }
+    });
 
     if (quickSeeSummaryBtn) {
         quickSeeSummaryBtn.addEventListener('click', openCartSidebar);
@@ -1784,140 +1867,16 @@ document.addEventListener('click', function(e) {
         } else {
             document.getElementById('previewAddonsSection').style.display = 'none';
         }
-        
-        // Set initial price
+              // Set initial price
         updateOrderSummary();
         
         // Show modal
-        productPreviewModal.style.display = 'block';
-        setTimeout(() => {
-            productPreviewModal.classList.add('active');
-        }, 10);
-    }
-    
-    function updateOrderSummary() {
-        const activeSizeBtn = document.querySelector('.size-preview-btn.active');
-        if (!activeSizeBtn || !currentProduct) return;
-        
-        const size = activeSizeBtn.dataset.size;
-        const unitPrice = parseFloat(activeSizeBtn.dataset.price);
-        const quantity = parseInt(document.querySelector('.qty-input').value) || 1;
-        
-    if (e.target.closest('.view-details-btn')) {
-        const button = e.target.closest('.view-details-btn');
-        currentProduct = {
-            id: button.getAttribute('data-id'),
-            product_id: button.getAttribute('data-product-id'), // String product_id
-            name: button.getAttribute('data-name'),
-            description: button.getAttribute('data-description'),
-            image: button.getAttribute('data-image'),
-            sizes: JSON.parse(button.getAttribute('data-sizes')),
-            weights: JSON.parse(button.getAttribute('data-weights')),
-            goodFor: JSON.parse(button.getAttribute('data-good-for')),
-            sizePrices: JSON.parse(button.getAttribute('data-size-prices')),
-            addons: JSON.parse(button.getAttribute('data-addons')),
-            stock: parseInt(button.getAttribute('data-stock'))
-        };
-        
-        showProductPreview(currentProduct);
-    }
-});
-    
-    function showProductPreview(product) {
-        // Set product image
-        const img = document.getElementById('previewProductImage');
-        const placeholderText = encodeURIComponent(product.name);
-        const resolvedImage = product.image || `https://via.placeholder.com/400x300?text=${placeholderText}`;
-        img.src = resolvedImage;
-        img.onerror = function() {
-            this.src = `https://via.placeholder.com/400x300?text=${placeholderText}`;
-        };
-        
-        // Set product info
-        document.getElementById('previewProductName').textContent = product.name;
-        document.getElementById('previewDescription').textContent = product.description;
-        document.getElementById('summaryProduct').textContent = product.name;
-        
-        // Update quantity input max based on stock
-        const qtyInput = document.querySelector('.qty-input');
-        if (qtyInput) {
-            qtyInput.max = product.stock;
-            qtyInput.value = 1;
-            
-            // Add or update stock display
-            let stockDisplay = document.getElementById('previewStockDisplay');
-            if (!stockDisplay) {
-                stockDisplay = document.createElement('div');
-                stockDisplay.id = 'previewStockDisplay';
-                stockDisplay.style.fontSize = '0.85rem';
-                stockDisplay.style.color = '#666';
-                stockDisplay.style.marginTop = '5px';
-                document.querySelector('.quantity-selection').appendChild(stockDisplay);
-            }
-            stockDisplay.textContent = `${product.stock} units available`;
+        if (productPreviewModal) {
+            productPreviewModal.style.display = 'block';
+            setTimeout(() => {
+                productPreviewModal.classList.add('active');
+            }, 10);
         }
-        
-        // Create size buttons
-        const sizeButtons = document.getElementById('previewSizeButtons');
-        sizeButtons.innerHTML = '';
-        
-        product.sizes.forEach((size, index) => {
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.className = 'size-preview-btn' + (index === 0 ? ' active' : '');
-            button.textContent = size;
-            button.dataset.size = size;
-            button.dataset.price = product.sizePrices[size];
-            
-            // Add weight and pax info to button
-            const weightInfo = product.weights[size] ? ` | ${product.weights[size]}` : '';
-            const paxInfo = product.goodFor[size] ? ` | ${product.goodFor[size]}` : '';
-            
-            if (weightInfo || paxInfo) {
-                const infoSpan = document.createElement('span');
-                infoSpan.className = 'size-info';
-                infoSpan.textContent = weightInfo + paxInfo;
-                button.appendChild(infoSpan);
-            }
-            
-            button.addEventListener('click', function() {
-                document.querySelectorAll('.size-preview-btn').forEach(btn => btn.classList.remove('active'));
-                this.classList.add('active');
-                updateOrderSummary();
-            });
-            
-            sizeButtons.appendChild(button);
-        });
-        
-        // Create addons checkboxes
-        const addonsList = document.getElementById('previewAddonsList');
-        addonsList.innerHTML = '';
-        
-        if (product.addons && product.addons.length > 0) {
-            document.getElementById('previewAddonsSection').style.display = 'block';
-            
-            product.addons.forEach(addon => {
-                const label = document.createElement('label');
-                label.className = 'addon-checkbox';
-                label.innerHTML = `
-                    <input type="checkbox" value="${addon}">
-                    <span>${addon}</span>
-                `;
-                label.querySelector('input').addEventListener('change', updateOrderSummary);
-                addonsList.appendChild(label);
-            });
-        } else {
-            document.getElementById('previewAddonsSection').style.display = 'none';
-        }
-        
-        // Set initial price
-        updateOrderSummary();
-        
-        // Show modal
-        productPreviewModal.style.display = 'block';
-        setTimeout(() => {
-            productPreviewModal.classList.add('active');
-        }, 10);
     }
     
     function updateOrderSummary() {
@@ -2019,7 +1978,48 @@ document.addEventListener('click', function(e) {
     if (storefrontReviewsOverlay) {
         storefrontReviewsOverlay.addEventListener('click', closeStorefrontReviews);
     }
-});
+    
+    // Filter & Sort Storefront Reviews
+    document.querySelectorAll('.store-review-filter-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.store-review-filter-btn').forEach(function(b) {
+                b.classList.remove('active');
+            });
+            this.classList.add('active');
+
+            const filter = this.getAttribute('data-filter');
+            const container = document.getElementById('storefrontReviewsList');
+            if (!container) return;
+
+            const items = Array.from(container.querySelectorAll('.store-review-item'));
+            items.sort(function(a, b) {
+                const ratingA = parseInt(a.getAttribute('data-rating')) || 0;
+                const ratingB = parseInt(b.getAttribute('data-rating')) || 0;
+                const timeA = parseInt(a.getAttribute('data-timestamp')) || 0;
+                const timeB = parseInt(b.getAttribute('data-timestamp')) || 0;
+                const hasCommentA = parseInt(a.getAttribute('data-has-comment')) || 0;
+                const hasCommentB = parseInt(b.getAttribute('data-has-comment')) || 0;
+
+                if (filter === 'newest') {
+                    return timeB - timeA;
+                } else if (filter === 'highest') {
+                    if (ratingB !== ratingA) return ratingB - ratingA;
+                    return timeB - timeA;
+                } else if (filter === 'lowest') {
+                    if (ratingA !== ratingB) return ratingA - ratingB;
+                    return timeB - timeA;
+                } else {
+                    if (hasCommentB !== hasCommentA) return hasCommentB - hasCommentA;
+                    if (ratingB !== ratingA) return ratingB - ratingA;
+                    return timeB - timeA;
+                }
+            });
+
+            items.forEach(function(item) {
+                container.appendChild(item);
+            });
+        });
+    });
     
     // Cart Sidebar Functions
     const cartSidebar = document.getElementById('cartSidebar');
@@ -2239,17 +2239,141 @@ document.addEventListener('click', function(e) {
         }
     });
     
+    
+    // Cart item quantity controls
+    document.addEventListener('click', async function(e) {
+        if (e.target.closest('.qty-decrease') || e.target.closest('.qty-increase') || e.target.closest('.cart-item-remove')) {
+            const button = e.target.closest('.qty-decrease, .qty-increase, .cart-item-remove');
+            const index = button.getAttribute('data-index');
+            const action = button.classList.contains('qty-decrease') ? 'decrease' : 
+                          button.classList.contains('qty-increase') ? 'increase' : 'remove';
+            
+            try {
+                const response = await fetch('update_cart.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        'index': index,
+                        'action': action
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    updateCartSidebar();
+                    
+                    // Show notification
+                    Swal.fire({
+                        icon: 'success',
+                        title: action === 'remove' ? 'Removed!' : 'Updated!',
+                        text: action === 'remove' ? 'Item removed from cart' : 'Cart updated',
+                        toast: true,
+                        position: 'top-end',
+                        showConfirmButton: false,
+                        timer: 1500
+                    });
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+    });
+    
+    // Clear cart
+    document.getElementById('clearCart').addEventListener('click', async function() {
+        Swal.fire({
+            title: 'Clear Cart?',
+            text: 'Are you sure you want to clear your entire cart?',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#b3261e',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Yes, clear cart',
+            cancelButtonText: 'Cancel'
+        }).then(async (result) => {
+            if (result.isConfirmed) {
+                try {
+                    const response = await fetch('update_cart.php', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: new URLSearchParams({
+                            'action': 'clear'
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        updateCartSidebar();
+                        
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Cart Cleared!',
+                            text: 'Your cart has been cleared.',
+                            toast: true,
+                            position: 'top-end',
+                            showConfirmButton: false,
+                            timer: 1500
+                        });
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                }
+            }
+        });
+    });
+    
+    // Close modals with Escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            // closeProductPreview(); // This is handled by its own function now
+            closeCartSidebar();
+        }
+    });
+    
     // Initialize cart sidebar
     updateCartSidebar();
 });
 </script>
 
 <style>
+/* Storefront Review Filters */
+.store-review-filter-btn {
+    padding: 7px 16px !important;
+    border-radius: 999px !important;
+    background-color: #fff9f2 !important;
+    color: #2a211d !important;
+    font-size: 0.84rem !important;
+    font-weight: 600 !important;
+    border: 1px solid #efddcd !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    white-space: nowrap !important;
+}
+
+.store-review-filter-btn:hover {
+    border-color: #b3261e !important;
+    color: #b3261e !important;
+    background-color: #fffaf3 !important;
+}
+
+.store-review-filter-btn.active {
+    background-color: #b3261e !important;
+    color: #ffffff !important;
+    border-color: #b3261e !important;
+    font-weight: 700 !important;
+    box-shadow: 0 4px 12px rgba(179, 38, 30, 0.2) !important;
+}
+
 /* Menu Page Styles */
 :root {
     --primary-color: #b3261e;
     --primary-dark: #8f261a;
-    --secondary-color: #ef6b2e;
     --text-main: #2d3436;
     --text-light: #636e72;
     --bg-light: #f8f9fa;
@@ -2304,7 +2428,7 @@ document.addEventListener('click', function(e) {
 .panda-menu-sticky-bar {
     position: sticky !important;
     top: var(--site-header-offset, 64px) !important;
-    z-index: 120 !important;
+    z-index: 80 !important;
     background: #ffffff !important;
     border-bottom: 1px solid #e2e8f0 !important;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04) !important;
@@ -2589,16 +2713,16 @@ document.addEventListener('click', function(e) {
 
 .menu-items-grid {
     display: grid !important;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)) !important;
-    gap: 22px !important;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)) !important;
+    gap: 16px !important;
 }
 
 .menu-item {
     background: #ffffff !important;
     border: 1px solid #efddcd !important;
-    border-radius: 18px !important;
+    border-radius: 16px !important;
     overflow: hidden !important;
-    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.03) !important;
+    box-shadow: 0 3px 10px rgba(15, 23, 42, 0.03) !important;
     transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
     display: flex !important;
     flex-direction: column !important;
@@ -2608,13 +2732,13 @@ document.addEventListener('click', function(e) {
 
 .menu-item:hover {
     transform: translateY(-4px) !important;
-    box-shadow: 0 12px 28px rgba(179, 38, 30, 0.08) !important;
+    box-shadow: 0 10px 24px rgba(179, 38, 30, 0.08) !important;
     border-color: #e8d4c3 !important;
 }
 
 .item-image {
     position: relative !important;
-    height: 180px !important;
+    height: 140px !important;
     overflow: hidden !important;
     background: #f8fafc !important;
 }
@@ -2632,20 +2756,20 @@ document.addEventListener('click', function(e) {
 
 .top-seller-badge {
     position: absolute !important;
-    top: 10px !important;
-    left: 10px !important;
+    top: 8px !important;
+    left: 8px !important;
     background: #ef6b2e !important;
     color: #ffffff !important;
-    font-size: 0.72rem !important;
+    font-size: 0.68rem !important;
     font-weight: 800 !important;
-    padding: 4px 10px !important;
+    padding: 3px 8px !important;
     border-radius: 999px !important;
     box-shadow: 0 3px 8px rgba(239, 107, 46, 0.3) !important;
     z-index: 2 !important;
 }
 
 .item-content {
-    padding: 16px 18px 18px 18px !important;
+    padding: 12px 14px 14px 14px !important;
     flex-grow: 1 !important;
     display: flex !important;
     flex-direction: column !important;
@@ -2653,11 +2777,11 @@ document.addEventListener('click', function(e) {
 
 .item-content h3 {
     font-family: 'Outfit', sans-serif !important;
-    font-size: 1.08rem !important;
+    font-size: 0.96rem !important;
     font-weight: 800 !important;
     color: #171922 !important;
-    margin: 0 0 6px !important;
-    line-height: 1.3 !important;
+    margin: 0 0 4px !important;
+    line-height: 1.25 !important;
 }
 
 .item-card-bottom {
@@ -2712,14 +2836,6 @@ document.addEventListener('click', function(e) {
 
 .item-description {
     color: var(--text-light);
-    margin-bottom: 20px;
-    line-height: 1.6;
-    font-size: 0.9rem;
-    flex-grow: 1;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
 }
 
 .item-specs {
@@ -2967,166 +3083,6 @@ document.addEventListener('click', function(e) {
     border: none;
     transition: var(--transition);
     display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    box-shadow: 0 4px 15px rgba(179, 38, 30, 0.3);
-}
-
-.item-actions .btn-primary:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 25px rgba(179, 38, 30, 0.5);
-}
-
-.item-actions .btn-primary:disabled {
-    background: #e0e0e0;
-    color: #9e9e9e;
-    cursor: not-allowed;
-    box-shadow: none;
-    transform: none;
-}
-
-.item-unavailable .item-image img {
-    filter: grayscale(100%);
-}
-
-.item-sold-out-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(255, 255, 255, 0.6);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 2;
-    pointer-events: none;
-}
-
-.item-sold-out-overlay span {
-    background-color: white;
-    color: var(--primary-color);
-    padding: 10px 25px;
-    border-radius: 50px;
-    font-weight: 800;
-    font-size: 1.4rem;
-    text-transform: uppercase;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-}
-
-/* Product Preview Modal */
-.product-preview-modal {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 2000;
-}
-
-.product-preview-modal.active {
-    display: block;
-}
-
-.preview-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0,0,0,0.7);
-    z-index: 2001;
-}
-
-.preview-modal-content {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) scale(0.9);
-    width: 90%;
-    max-width: 900px;
-    max-height: 90vh;
-    background-color: white;
-    border-radius: 20px;
-    overflow: hidden;
-    z-index: 2002;
-    opacity: 0;
-    transition: var(--transition-fade);
-}
-
-.product-preview-modal.active .preview-modal-content {
-    transform: translate(-50%, -50%) scale(1);
-    opacity: 1;
-}
-
-.preview-close {
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    background-color: white;
-    border: none;
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    font-size: 1.5rem;
-    color: var(--text-main);
-    cursor: pointer;
-    z-index: 10;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-    transition: var(--transition);
-}
-
-.preview-close:hover {
-    background-color: var(--primary-color);
-    color: white;
-}
-
-.preview-body {
-    display: flex;
-    height: 100%;
-    max-height: 80vh;
-}
-
-.preview-image {
-    flex: 1;
-    background-color: #f5f5f5;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-}
-
-.preview-image img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.preview-details {
-    flex: 1;
-    padding: 40px;
-    overflow-y: auto;
-}
-
-.preview-details h3 {
-    color: var(--text-main);
-    font-size: 1.8rem;
-    margin-bottom: 15px;
-    font-weight: 700;
-}
-
-.preview-description {
-    color: #666;
-    margin-bottom: 25px;
-    line-height: 1.6;
-}
-
-.preview-price-section {
-    margin-bottom: 30px;
-    padding: 20px;
-    background-color: #f9f9f9;
     border-radius: 10px;
 }
 
@@ -4424,13 +4380,14 @@ body {
 }
 
 /* Compact Storefront Header */
+.page-header.storefront-header,
 .storefront-header {
-    margin: 0;
-    padding: 18px 0 14px;
-    background: linear-gradient(180deg, #fffaf3 0%, #fff6ea 100%);
-    border-bottom: 1px solid var(--menu-border);
-    color: var(--menu-ink);
-    text-align: left;
+    margin: 0 !important;
+    padding: 18px 0 14px !important;
+    background: linear-gradient(180deg, #fffaf3 0%, #fff6ea 100%) !important;
+    border-bottom: 1px solid var(--menu-border) !important;
+    color: var(--menu-ink) !important;
+    text-align: left !important;
 }
 
 .store-breadcrumb {
@@ -4470,9 +4427,12 @@ body {
 }
 
 .store-logo-tile {
-    width: 128px;
-    height: 128px;
-    border-radius: 18px;
+    width: 128px !important;
+    height: 128px !important;
+    max-width: 128px !important;
+    max-height: 128px !important;
+    flex-shrink: 0 !important;
+    border-radius: 18px !important;
     border: 1px solid var(--menu-border);
     background: #fff;
     box-shadow: 0 12px 24px rgba(74, 32, 20, 0.09);
@@ -4480,7 +4440,186 @@ body {
     align-items: center;
     justify-content: center;
     position: relative;
+    overflow: hidden !important;
+}
+
+.store-logo-tile img {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+    object-fit: cover !important;
+    display: block !important;
+    position: relative;
+    z-index: 2;
+}
+
+.store-logo.item-sold-out-overlay span {
+    background-color: #ffffff;
+    color: #b3261e;
+    padding: 8px 18px;
+    border-radius: 999px;
+    font-weight: 800;
+    font-size: 1.1rem;
+    text-transform: uppercase;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+}
+
+/* Product Preview Modal */
+.product-preview-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 2000;
+}
+
+.product-preview-modal.active {
+    display: block;
+}
+
+.preview-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(23, 25, 34, 0.65);
+    backdrop-filter: blur(4px);
+    z-index: 2001;
+}
+
+.preview-modal-content {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.95);
+    width: 92%;
+    max-width: 860px;
+    max-height: 88vh;
+    background-color: #ffffff;
+    border-radius: 24px;
     overflow: hidden;
+    z-index: 2002;
+    opacity: 0;
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.2);
+    transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.product-preview-modal.active .preview-modal-content {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+}
+
+.preview-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    font-size: 1.3rem;
+    color: #171922;
+    cursor: pointer;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    transition: all 0.2s ease;
+}
+
+.preview-close:hover {
+    background-color: #b3261e;
+    color: #ffffff;
+    border-color: #b3261e;
+}
+
+.preview-body {
+    display: flex;
+    max-height: 88vh;
+    overflow: hidden;
+}
+
+@media (max-width: 768px) {
+    .preview-body {
+        flex-direction: column;
+        overflow-y: auto;
+    }
+}
+
+.preview-image {
+    flex: 1;
+    min-width: 340px;
+    background-color: #f8fafc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+}
+
+.preview-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.preview-details {
+    flex: 1.2;
+    padding: 28px 32px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.preview-details h3 {
+    font-family: 'Outfit', sans-serif;
+    color: #171922;
+    font-size: 1.6rem;
+    font-weight: 800;
+    margin: 0 0 8px 0;
+    line-height: 1.25;
+}
+
+.preview-description {
+    color: #64748b;
+    font-size: 0.92rem;
+    margin-bottom: 20px;
+    line-height: 1.5;
+}
+
+.preview-price-section {
+    margin-bottom: 20px;
+    padding: 16px 20px;
+    background-color: #fff9f2;
+    border: 1px solid #efddcd;
+    border-radius: 16px;
+}
+
+.preview-price-section h4 {
+    color: #171922;
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 0 0 8px 0;
+}
+
+.price-amount {
+    color: #b3261e;
+    font-weight: 800;
+    font-size: 1.5rem;
+    font-family: 'Outfit', sans-serif;
+}
+
+.size-weight-info {
+    margin-top: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
 }
 
 .store-logo-tile img {
@@ -4619,6 +4758,8 @@ body {
 
 .quick-order-panel {
     padding: 14px;
+    position: relative !important;
+    z-index: 90 !important;
 }
 
 .quick-order-tabs {
@@ -4628,6 +4769,9 @@ body {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 6px;
+    position: relative !important;
+    z-index: 100 !important;
+    pointer-events: auto !important;
 }
 
 .quick-order-tab {
@@ -4637,8 +4781,11 @@ body {
     font-weight: 700;
     border-radius: 10px;
     padding: 11px 8px;
-    cursor: pointer;
+    cursor: pointer !important;
     transition: var(--transition-fast);
+    position: relative !important;
+    z-index: 101 !important;
+    pointer-events: auto !important;
 }
 
 .quick-order-tab.active {
@@ -5106,13 +5253,28 @@ body {
 
 @media (max-width: 860px) {
     .storefront-overview {
-        grid-template-columns: 1fr;
-        gap: 14px;
+        grid-template-columns: 100px minmax(0, 1fr) !important;
+        gap: 14px !important;
+        align-items: center !important;
     }
 
     .store-logo-tile {
-        width: 110px;
-        height: 110px;
+        width: 100px !important;
+        height: 100px !important;
+        max-width: 100px !important;
+        max-height: 100px !important;
+        flex-shrink: 0 !important;
+        justify-self: start !important;
+        border-radius: 16px !important;
+        overflow: hidden !important;
+    }
+
+    .store-logo-tile img {
+        width: 100% !important;
+        height: 100% !important;
+        max-width: 100% !important;
+        max-height: 100% !important;
+        object-fit: cover !important;
     }
 }
 
