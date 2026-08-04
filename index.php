@@ -564,8 +564,16 @@ foreach ($stores as &$store) {
 }
 unset($store);
 
-$stores = array_values(array_filter($stores, static function ($store) {
-    return !empty($store['is_cavite']);
+$has_any_cavite_stores = false;
+foreach ($stores as $s) {
+    if (!empty($s['is_cavite'])) {
+        $has_any_cavite_stores = true;
+        break;
+    }
+}
+
+$stores = array_values(array_filter($stores, static function ($store) use ($has_any_cavite_stores) {
+    return $has_any_cavite_stores ? !empty($store['is_cavite']) : true;
 }));
 usort($stores, static function ($a, $b) {
     return [$b['is_open'] ? 1 : 0, $b['live'] ? 1 : 0, $b['count'], $b['type'] === 'platform' ? 1 : 0, $a['name']]
