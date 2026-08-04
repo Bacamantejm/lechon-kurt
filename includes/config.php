@@ -31,6 +31,20 @@ if (!function_exists('appConfigValue')) {
     }
 }
 
+if (!function_exists('getPayMongoSecretKey')) {
+    function getPayMongoSecretKey(): string {
+        $key = appConfigValue('PAYMONGO_SECRET_KEY', '');
+        return (strpos($key, 'YOUR_PAYMONGO') === false) ? trim($key) : '';
+    }
+}
+
+if (!function_exists('getPayMongoPublicKey')) {
+    function getPayMongoPublicKey(): string {
+        $key = appConfigValue('PAYMONGO_PUBLIC_KEY', '');
+        return (strpos($key, 'YOUR_PAYMONGO') === false) ? trim($key) : '';
+    }
+}
+
 if (!function_exists('appConfigBool')) {
     function appConfigBool($key, $default = true) {
         $has_value = false;
