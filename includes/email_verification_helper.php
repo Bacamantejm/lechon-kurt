@@ -56,6 +56,7 @@ if (!function_exists('ensureUserEmailVerificationSchema')) {
         $columns = [
             'email_verified_at' => "ALTER TABLE users ADD COLUMN email_verified_at DATETIME NULL DEFAULT NULL",
             'email_verification_token' => "ALTER TABLE users ADD COLUMN email_verification_token VARCHAR(64) NULL DEFAULT NULL",
+            'email_otp_code' => "ALTER TABLE users ADD COLUMN email_otp_code VARCHAR(10) NULL DEFAULT NULL",
             'email_verification_expires' => "ALTER TABLE users ADD COLUMN email_verification_expires DATETIME NULL DEFAULT NULL",
             'email_verification_sent_at' => "ALTER TABLE users ADD COLUMN email_verification_sent_at DATETIME NULL DEFAULT NULL",
         ];
@@ -113,12 +114,14 @@ if (!function_exists('issueUserEmailVerification')) {
         }
 
         $token = bin2hex(random_bytes(32));
-        $expires_at = date('Y-m-d H:i:s', strtotime('+24 hours'));
+        $otp_code = str_pad((string)random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
+        $expires_at = date('Y-m-d H:i:s', strtotime('+15 minutes'));
 
         $update_stmt = mysqli_prepare(
             $conn,
             "UPDATE users
              SET email_verification_token = ?,
+                 email_otp_code = ?,
                  email_verification_expires = ?,
                  email_verification_sent_at = NOW(),
                  email_verified_at = NULL
@@ -127,28 +130,121 @@ if (!function_exists('issueUserEmailVerification')) {
         );
 
         if (!$update_stmt) {
-            return ['success' => false, 'message' => 'Unable to prepare verification email token.'];
+            return ['success' => false, 'message' => 'Unable to prepare verification OTP token.'];
         }
 
-        mysqli_stmt_bind_param($update_stmt, "ssi", $token, $expires_at, $user_id);
+        mysqli_stmt_bind_param($update_stmt, "sssi", $token, $otp_code, $expires_at, $user_id);
         $saved = mysqli_stmt_execute($update_stmt);
         mysqli_stmt_close($update_stmt);
 
         if (!$saved) {
-            return ['success' => false, 'message' => 'Unable to save email verification token.'];
+            return ['success' => false, 'message' => 'Unable to save email verification code.'];
         }
 
         require_once dirname(__DIR__) . '/email_service.php';
-        $verification_url = buildPlatformAbsoluteUrl('verify_email.php?token=' . urlencode($token));
+        $verification_url = buildPlatformAbsoluteUrl('verify_email.php?email=' . urlencode($email) . '&token=' . urlencode($token));
         $mailer = new EmailService($conn);
-        $sent = $mailer->sendRegistrationVerificationEmail($email, $full_name, $verification_url);
+        $sent = $mailer->sendRegistrationOtpEmail($email, $full_name, $otp_code);
 
         return [
             'success' => $sent,
-            'message' => $sent ? 'Verification email sent.' : 'Verification email could not be sent.',
+            'message' => $sent ? 'Verification OTP code sent to your email.' : 'Verification email could not be sent.',
             'verification_url' => $verification_url,
             'token' => $token,
+            'otp_code' => $otp_code,
             'expires_at' => $expires_at
+        ];
+    }
+}
+
+if (!function_exists('verifyUserEmailOtp')) {
+    function verifyUserEmailOtp($conn, $email, $otp_code)
+    {
+        ensureUserEmailVerificationSchema($conn);
+
+        $email = strtolower(trim((string)$email));
+        $otp_code = preg_replace('/[^0-9]/', '', (string)$otp_code);
+
+        if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return ['success' => false, 'message' => 'Please provide a valid email address.'];
+        }
+
+        if (strlen($otp_code) !== 6) {
+            return ['success' => false, 'message' => 'Please enter a valid 6-digit OTP verification code.'];
+        }
+
+        $stmt = mysqli_prepare(
+            $conn,
+            "SELECT id, email, full_name, email_verified_at, email_otp_code, email_verification_expires
+             FROM users
+             WHERE email = ?
+             LIMIT 1"
+        );
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Unable to check verification details right now.'];
+        }
+
+        mysqli_stmt_bind_param($stmt, "s", $email);
+        mysqli_stmt_execute($stmt);
+        $result = mysqli_stmt_get_result($stmt);
+        $user = $result ? mysqli_fetch_assoc($result) : null;
+        mysqli_stmt_close($stmt);
+
+        if (!$user) {
+            return ['success' => false, 'message' => 'No account found matching that email address.'];
+        }
+
+        if (!empty($user['email_verified_at'])) {
+            return [
+                'success' => true,
+                'already_verified' => true,
+                'email' => (string)$user['email'],
+                'message' => 'Your email address is already verified. You can sign in now.'
+            ];
+        }
+
+        $db_otp = trim((string)($user['email_otp_code'] ?? ''));
+        if ($db_otp === '' || $db_otp !== $otp_code) {
+            return ['success' => false, 'message' => 'Invalid verification code. Please check your email and try again.'];
+        }
+
+        $expires_at = trim((string)($user['email_verification_expires'] ?? ''));
+        if ($expires_at !== '' && strtotime($expires_at) !== false && strtotime($expires_at) < time()) {
+            return [
+                'success' => false,
+                'expired' => true,
+                'email' => (string)$user['email'],
+                'message' => 'This verification code has expired. Please request a new code.'
+            ];
+        }
+
+        $update_stmt = mysqli_prepare(
+            $conn,
+            "UPDATE users
+             SET email_verified_at = NOW(),
+                 email_otp_code = NULL,
+                 email_verification_token = NULL,
+                 email_verification_expires = NULL
+             WHERE id = ?
+             LIMIT 1"
+        );
+        if (!$update_stmt) {
+            return ['success' => false, 'message' => 'Unable to activate your account right now.'];
+        }
+
+        $user_id = (int)$user['id'];
+        mysqli_stmt_bind_param($update_stmt, "i", $user_id);
+        $updated = mysqli_stmt_execute($update_stmt);
+        mysqli_stmt_close($update_stmt);
+
+        if (!$updated) {
+            return ['success' => false, 'message' => 'Unable to activate your account right now.'];
+        }
+
+        return [
+            'success' => true,
+            'email' => (string)$user['email'],
+            'message' => 'Your account has been verified successfully! You can now sign in.'
         ];
     }
 }

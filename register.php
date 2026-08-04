@@ -543,19 +543,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $_SESSION['registration_csrf_token'] = bin2hex(random_bytes(32));
             session_regenerate_id(true);
 
-            $verification_notice = 'Your account was created successfully. We sent a confirmation email to ' . $email . '. Please open it and click the verification button to activate your account.';
-            $verification_link = '';
+            $verification_notice = 'We sent a 6-digit verification code to ' . $email . '. Enter the code below to complete your registration.';
             if (empty($email_verification['success'])) {
-                $verification_notice = 'Your account was created successfully. We could not send the confirmation email automatically, but you can verify your address from the next screen.';
-                $verification_link = (string)($email_verification['verification_url'] ?? '');
+                $verification_notice = 'Your account was created successfully. Enter your verification details below.';
             }
 
             $_SESSION['register_success'] = true;
             $_SESSION['register_email'] = $email;
             $_SESSION['registration_verification_notice'] = $verification_notice;
-            $_SESSION['registration_verification_link'] = $verification_link;
 
-            header('Location: login.php');
+            header('Location: verify_email.php?email=' . urlencode($email));
             exit;
         }
 
