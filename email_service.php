@@ -70,21 +70,26 @@ class EmailService {
 
         if ($has_real_smtp_credentials && !$force_local_setting) {
             $this->mail->isSMTP();
-            $this->mail->Host = $smtp_host;
-            $this->mail->SMTPAuth = true;
-            $this->mail->Username = $smtp_username;
-            $this->mail->Password = $smtp_password;
-            $this->mail->SMTPSecure = $smtp_secure_mode;
-            $this->mail->Port = $smtp_port;
-            $this->mail->SMTPAutoTLS = true;
+            $this->mail->Host         = $smtp_host;
+            $this->mail->SMTPAuth     = true;
+            $this->mail->Username     = $smtp_username;
+            $this->mail->Password     = $smtp_password;
+            $this->mail->SMTPSecure   = $smtp_secure_mode;
+            $this->mail->Port         = $smtp_port;
+            $this->mail->SMTPAutoTLS  = true;
+            $this->mail->SMTPKeepAlive = true; // reuse the TCP connection
+            $this->mail->Timeout      = 10;    // abort if server doesn't respond in 10s
 
-            $debug_enabled = appConfigBool('SMTP_DEBUG', APP_ENV === 'local');
+            // Only enable verbose debug logging when explicitly requested.
+            // Leaving this on in local env was the primary cause of ~5-minute delivery delays.
+            $debug_enabled = appConfigBool('SMTP_DEBUG', false);
             if ($debug_enabled) {
-                $this->mail->SMTPDebug = SMTP::DEBUG_SERVER;
+                $this->mail->SMTPDebug  = SMTP::DEBUG_SERVER;
                 $this->mail->Debugoutput = function ($str, $level) {
                     error_log("PHPMailer[$level]: $str");
                 };
             }
+
         } elseif ($use_local_mailer) {
             $this->mail->isSMTP();
             $this->mail->Host = $smtp_host;
@@ -300,8 +305,115 @@ class EmailService {
             return false;
         }
     }
-    
+
+    public function sendPasswordResetEmail(string $email, string $full_name, string $reset_link): bool {
+        try {
+            $this->resetMessage();
+            $safe_email = trim($email);
+            if ($safe_email === '') {
+                return false;
+            }
+
+            $safe_name = htmlspecialchars(trim($full_name) !== '' ? $full_name : 'there');
+            $safe_link = htmlspecialchars($reset_link);
+
+            $html = "<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='UTF-8'>
+<meta name='viewport' content='width=device-width,initial-scale=1.0'>
+<title>Reset Your Password</title>
+</head>
+<body style='margin:0;padding:0;background-color:#fff8ef;font-family:Arial,Helvetica,sans-serif;'>
+  <table width='100%' cellpadding='0' cellspacing='0' style='background-color:#fff8ef;padding:40px 16px;'>
+    <tr>
+      <td align='center'>
+        <table width='100%' cellpadding='0' cellspacing='0' style='max-width:600px;background:#ffffff;border:1px solid #efddcd;border-radius:20px;overflow:hidden;box-shadow:0 8px 32px rgba(74,32,20,0.10);'>
+
+          <!-- Header -->
+          <tr>
+            <td style='background:linear-gradient(135deg,#b3261e 0%,#ef6b2e 100%);padding:36px 40px 32px;text-align:center;'>
+              <p style='margin:0 0 10px;font-size:13px;color:rgba(255,255,255,0.75);letter-spacing:1.5px;text-transform:uppercase;font-weight:600;'>Lechon Delights</p>
+              <h1 style='margin:0;font-size:26px;color:#ffffff;font-weight:700;line-height:1.3;'>Reset Your Password</h1>
+              <p style='margin:10px 0 0;font-size:14px;color:rgba(255,255,255,0.85);'>A password reset was requested for your account.</p>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style='padding:36px 40px;'>
+              <p style='margin:0 0 18px;font-size:16px;color:#2a211d;'>Hi <strong>{$safe_name}</strong>,</p>
+              <p style='margin:0 0 28px;font-size:15px;color:#7b6d64;line-height:1.7;'>
+                We received a request to reset the password for your Lechon Delights account. Click the button below to choose a new password. This link is valid for <strong style='color:#2a211d;'>10 minutes</strong>.
+              </p>
+
+              <!-- CTA Button -->
+              <table width='100%' cellpadding='0' cellspacing='0'>
+                <tr>
+                  <td align='center' style='padding:8px 0 32px;'>
+                    <a href='{$safe_link}'
+                       style='display:inline-block;background:linear-gradient(135deg,#b3261e 0%,#ef6b2e 100%);color:#ffffff;text-decoration:none;padding:15px 36px;border-radius:12px;font-size:16px;font-weight:700;letter-spacing:0.3px;box-shadow:0 6px 20px rgba(179,38,30,0.30);'>
+                      Reset My Password
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Divider -->
+              <table width='100%' cellpadding='0' cellspacing='0' style='margin-bottom:24px;'>
+                <tr>
+                  <td style='border-top:1px solid #efddcd;'></td>
+                </tr>
+              </table>
+
+              <p style='margin:0 0 10px;font-size:13px;color:#7b6d64;'>If the button above does not work, copy and paste this link into your browser:</p>
+              <p style='margin:0 0 28px;font-size:12px;color:#b3261e;word-break:break-all;background:#fff5ea;border:1px solid #efddcd;border-radius:8px;padding:12px 14px;'>{$safe_link}</p>
+
+              <!-- Security note -->
+              <table width='100%' cellpadding='0' cellspacing='0'>
+                <tr>
+                  <td style='background:#fff5ea;border:1px solid #efddcd;border-radius:10px;padding:16px 18px;'>
+                    <p style='margin:0;font-size:13px;color:#7b6d64;line-height:1.6;'>
+                      <strong style='color:#2a211d;'>Didn't request this?</strong> You can safely ignore this email. Your password will remain unchanged and this link will expire automatically.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style='background:#fff8ef;border-top:1px solid #efddcd;padding:20px 40px;text-align:center;'>
+              <p style='margin:0;font-size:12px;color:#7b6d64;line-height:1.7;'>
+                &copy; " . date('Y') . " Lechon Delights &nbsp;&bull;&nbsp; This is an automated security message. Please do not reply.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>";
+
+            $alt_body = "Hi {$full_name},\n\nWe received a request to reset your Lechon Delights account password.\n\nClick the link below to reset it (valid for 10 minutes):\n{$reset_link}\n\nIf you did not request this, you can safely ignore this email.\n\n-- Lechon Delights";
+
+            $this->mail->addAddress($safe_email);
+            $this->mail->Subject = 'Reset Your Password - Lechon Delights';
+            $this->mail->Body    = $html;
+            $this->mail->AltBody = $alt_body;
+            return $this->mail->send();
+        } catch (Exception $e) {
+            $this->recordFailure("Password reset email failed: " . $e->getMessage(), $e);
+            error_log("PHPMailer error info: " . $this->mail->ErrorInfo);
+            return false;
+        }
+    }
+
     public function sendOrderConfirmation($order_id) {
+
         try {
             $this->resetMessage();
             // Get order details
