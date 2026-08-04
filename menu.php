@@ -1947,6 +1947,102 @@ document.addEventListener('click', function(e) {
     if (previewClose) previewClose.addEventListener('click', closeProductPreview);
     if (previewOverlay) previewOverlay.addEventListener('click', closeProductPreview);
 
+    if (addToCartConfirm) {
+        addToCartConfirm.addEventListener('click', async function() {
+            if (!currentProduct) return;
+            
+            const activeSizeBtn = document.querySelector('.size-preview-btn.active');
+            const size = activeSizeBtn ? activeSizeBtn.dataset.size : 'Regular';
+            const price = activeSizeBtn ? parseFloat(activeSizeBtn.dataset.price) : (currentProduct.price || 0);
+            const quantity = parseInt(document.querySelector('.qty-input').value) || 1;
+            
+            const selectedAddons = [];
+            document.querySelectorAll('.addon-checkbox input:checked').forEach(cb => {
+                selectedAddons.push(cb.value);
+            });
+
+            addToCartConfirm.disabled = true;
+            addToCartConfirm.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+
+            try {
+                const formData = new FormData();
+                formData.append('product_id', currentProduct.id);
+                formData.append('quantity', quantity);
+                formData.append('size', size);
+                formData.append('price', price);
+                formData.append('addons', JSON.stringify(selectedAddons));
+
+                const response = await fetch('add_to_cart.php', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    closeProductPreview();
+                    updateCartSidebar();
+
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Added to Cart!',
+                            text: data.message || 'Item successfully added to your cart.',
+                            toast: true,
+                            position: 'top-end',
+                            showConfirmButton: false,
+                            timer: 2000
+                        });
+                    }
+                } else {
+                    if (data.code === 'MIXED_TENANT_ADD_BLOCKED' || data.code === 'MIXED_TENANT_CART_EXISTING') {
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                icon: 'warning',
+                                title: 'Different Store Item',
+                                text: data.message,
+                                showCancelButton: true,
+                                confirmButtonColor: '#b3261e',
+                                confirmButtonText: 'Go to Cart',
+                                cancelButtonText: 'Keep Current Cart'
+                            }).then((result) => {
+                                if (result.isConfirmed) {
+                                    openCartSidebar();
+                                }
+                            });
+                        } else {
+                            alert(data.message);
+                        }
+                    } else {
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Cannot Add Item',
+                                text: data.message || 'Failed to add item to cart.',
+                                confirmButtonColor: '#b3261e'
+                            });
+                        } else {
+                            alert(data.message);
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('Add to cart error:', err);
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'An error occurred while adding the item to cart. Please try again.',
+                        confirmButtonColor: '#b3261e'
+                    });
+                }
+            } finally {
+                addToCartConfirm.disabled = false;
+                addToCartConfirm.innerHTML = '<i class="fas fa-cart-plus"></i> Add to Cart';
+            }
+        });
+    }
+
     // Foodpanda Storefront Reviews Modal controls
     const openStorefrontReviewsBtn = document.getElementById('openStorefrontReviewsBtn');
     const storefrontReviewsModal = document.getElementById('storefrontReviewsModal');

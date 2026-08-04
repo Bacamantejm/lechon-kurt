@@ -130,12 +130,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             sendJsonResponse(false, 'Unable to process request. Please try again.');
     }
 
-    // Enforce single-tenant cart before modifying cart contents
+    // Fallback unassigned product seller_id to 1 (main store)
     if (($product_seller_id ?? 0) <= 0) {
-        if (isset($conn) && $conn instanceof mysqli) {
-            mysqli_close($conn);
-        }
-        sendJsonResponse(false, 'This item is not linked to a valid store and cannot be added right now.');
+        $product_seller_id = 1;
     }
 
     $current_cart_seller_id = 0;
