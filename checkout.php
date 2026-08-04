@@ -522,7 +522,7 @@ $remaining = $total - $downpayment;
                         </p>
                         </div>
 
-                        <div class="form-row address-fields-row">
+                        <div class="form-row address-fields-row" style="display: none;">
                             <div class="form-group">
                                 <label for="street_address">Street Address *</label>
                                 <input type="text" id="street_address" name="street_address"
@@ -538,7 +538,7 @@ $remaining = $total - $downpayment;
                             </div>
                         </div>
 
-                        <div class="form-row address-fields-row">
+                        <div class="form-row address-fields-row" style="display: none;">
                             <div class="form-group">
                                 <label for="checkout_region">Region (PSGC) *</label>
                                 <select id="checkout_region">
@@ -554,7 +554,7 @@ $remaining = $total - $downpayment;
                             </div>
                         </div>
 
-                        <div class="form-row address-fields-row">
+                        <div class="form-row address-fields-row" style="display: none;">
                             <div class="form-group">
                                 <label for="checkout_city">City / Municipality *</label>
                                 <select id="checkout_city">
