@@ -518,9 +518,11 @@ class EmailService {
             $this->resetMessage();
             // Get order details
             $query = "
-                SELECT o.*, u.email as customer_email, u.full_name as customer_name
+                SELECT o.*, 
+                       COALESCE(NULLIF(o.customer_email, ''), u.email) as customer_email, 
+                       COALESCE(NULLIF(o.customer_name, ''), u.full_name) as customer_name
                 FROM orders o
-                JOIN users u ON o.user_id = u.id
+                LEFT JOIN users u ON o.user_id = u.id
                 WHERE o.id = ?
             ";
             
@@ -588,8 +590,12 @@ class EmailService {
         try {
             $this->resetMessage();
             // Get order details
-            $query = "SELECT o.*, u.email as customer_email, u.full_name as customer_name FROM orders o 
-                     JOIN users u ON o.user_id = u.id WHERE o.id = ?";
+            $query = "SELECT o.*, 
+                             COALESCE(NULLIF(o.customer_email, ''), u.email) as customer_email, 
+                             COALESCE(NULLIF(o.customer_name, ''), u.full_name) as customer_name 
+                      FROM orders o 
+                      LEFT JOIN users u ON o.user_id = u.id 
+                      WHERE o.id = ?";
             $stmt = mysqli_prepare($this->conn, $query);
             mysqli_stmt_bind_param($stmt, "i", $order_id);
             mysqli_stmt_execute($stmt);
