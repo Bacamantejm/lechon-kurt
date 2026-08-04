@@ -1486,6 +1486,9 @@ include 'includes/header.php';
     align-self: start;
     padding: 24px;
     border-radius: 26px;
+    background: #fbf8f5;
+    border: 1px solid #ebd8c5;
+    box-shadow: 0 10px 25px rgba(42, 33, 29, 0.04);
 }
 
 .market-sidebar h3,

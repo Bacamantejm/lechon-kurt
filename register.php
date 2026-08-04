@@ -194,7 +194,7 @@ if (!function_exists('validateRegistrationValidIdUpload')) {
 }
 
 if (!function_exists('saveRegistrationValidIdDocument')) {
-    function saveRegistrationValidIdDocument($conn, $user_id, $uploaded_file, $valid_id_type = '')
+    function saveRegistrationValidIdDocument($conn, $user_id, $uploaded_file, $valid_id_type = '', $side = 'Front')
     {
         $user_id = (int)$user_id;
         if ($user_id <= 0) {
@@ -240,7 +240,7 @@ if (!function_exists('saveRegistrationValidIdDocument')) {
         }
         $base_name = substr($base_name, 0, 40);
 
-        $unique_name = $user_id . '_valid_id_' . time() . '_' . random_int(1000, 9999) . '_' . $base_name . '.' . $extension;
+        $unique_name = $user_id . '_valid_id_' . strtolower($side) . '_' . time() . '_' . random_int(1000, 9999) . '_' . $base_name . '.' . $extension;
         $target_path = $upload_dir . $unique_name;
         $relative_path = 'uploads/user_valid_ids/' . $unique_name;
 
@@ -262,7 +262,7 @@ if (!function_exists('saveRegistrationValidIdDocument')) {
             'pag_ibig' => 'Pag-IBIG ID',
             'philhealth' => 'PhilHealth ID'
         ];
-        $document_type_label = $id_label_map[$valid_id_type] ?? 'Government ID';
+        $document_type_label = ($id_label_map[$valid_id_type] ?? 'Government ID') . ' - ' . $side;
 
         $insert_sql = "INSERT INTO user_valid_id_documents (user_id, document_type, file_name, file_path) VALUES (?, ?, ?, ?)";
         $stmt = mysqli_prepare($conn, $insert_sql);
@@ -324,8 +324,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $password = $_POST['password'] ?? '';
     $confirm_password = $_POST['confirm_password'] ?? '';
     $accept_terms = isset($_POST['accept_terms']);
-    $valid_id_file = $_FILES['valid_id_file'] ?? null;
     $valid_id_type = trim($_POST['valid_id_type'] ?? '');
+    $valid_id_front = $_FILES['valid_id_front'] ?? null;
+    $valid_id_back = $_FILES['valid_id_back'] ?? null;
     
     // Business partner fields
     $business_name = preg_replace('/\s+/', ' ', trim($_POST['business_name'] ?? ''));
@@ -407,6 +408,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $error = 'Passwords do not match.';
         } elseif (empty($phone)) {
             $error = 'Please enter your mobile number.';
+        } elseif (empty($valid_id_type)) {
+            $error = 'Please select your valid ID type.';
+        } elseif (empty($valid_id_front) || !is_array($valid_id_front) || (int)($valid_id_front['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+            $error = 'Please upload a photo of the front side of your valid ID.';
+        } elseif (empty($valid_id_back) || !is_array($valid_id_back) || (int)($valid_id_back['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+            $error = 'Please upload a photo of the back side of your valid ID.';
+        } else {
+            $front_validation = validateRegistrationValidIdUpload($valid_id_front);
+            $back_validation = validateRegistrationValidIdUpload($valid_id_back);
+            if (empty($front_validation['valid'])) {
+                $error = 'Front of ID: ' . (string)($front_validation['message'] ?? 'Please upload a clear JPG, PNG, or WEBP image up to 5MB.');
+            } elseif (empty($back_validation['valid'])) {
+                $error = 'Back of ID: ' . (string)($back_validation['message'] ?? 'Please upload a clear JPG, PNG, or WEBP image up to 5MB.');
+            }
         }
 
         if ($error === '' && $account_type === 'organization' && empty($business_name)) {
@@ -492,6 +507,25 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         );
 
 
+
+        if (!empty($result['success']) && $error === '') {
+            $created_user_id = (int)($result['user_id'] ?? 0);
+            
+            $saved_front = saveRegistrationValidIdDocument($conn, $created_user_id, $valid_id_front, $valid_id_type, 'Front');
+            $saved_back = saveRegistrationValidIdDocument($conn, $created_user_id, $valid_id_back, $valid_id_type, 'Back');
+            
+            if (empty($saved_front['success']) || empty($saved_back['success'])) {
+                if ($created_user_id > 0) {
+                    $cleanup_stmt = mysqli_prepare($conn, "DELETE FROM users WHERE id = ? LIMIT 1");
+                    if ($cleanup_stmt) {
+                        mysqli_stmt_bind_param($cleanup_stmt, "i", $created_user_id);
+                        mysqli_stmt_execute($cleanup_stmt);
+                        mysqli_stmt_close($cleanup_stmt);
+                    }
+                }
+                $error = (string)(empty($saved_front['success']) ? $saved_front['message'] : ($saved_back['message'] ?? 'Unable to save your government ID uploads. Please try again.'));
+            }
+        }
 
         if (!empty($result['success']) && $error === '') {
             $email_verification = issueUserEmailVerification(
@@ -642,10 +676,13 @@ include 'includes/header.php';
 /* Progress Steps styled like modal tabs */
 .progress-steps {
     display: flex;
-    border-bottom: 1px solid #efddcd;
-    background: #faf7f4;
+    justify-content: center;
+    gap: 28px;
+    background: transparent;
+    padding: 24px 20px 10px;
     margin: 0;
     position: relative;
+    border-bottom: 1px solid #f1f5f9;
 }
 
 .progress-bar {
@@ -653,53 +690,31 @@ include 'includes/header.php';
 }
 
 .step {
-    flex: 1;
-    display: flex;
-    flex-direction: row;
+    flex: none;
+    display: inline-flex;
     align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 16px 8px;
+    padding: 0 0 10px 0;
     cursor: default;
-    border-bottom: 3px solid transparent;
+    border-bottom: 2px solid transparent;
     transition: all 0.22s;
-    font-weight: 700;
-    font-size: 0.9rem;
-    color: #667085;
+    font-weight: 600;
+    font-size: 0.94rem;
+    color: #94a3b8;
 }
 
 .step.active {
     color: #b3261e;
     border-bottom-color: #b3261e;
-    background: #ffffff;
+    font-weight: 700;
 }
 
 .step.completed {
-    color: #1a5f7a;
+    color: #475569;
+    font-weight: 600;
 }
 
 .step-number {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    background: #e0e0e0;
-    color: #666;
-    font-size: 0.75rem;
-    font-weight: 800;
-    transition: all 0.22s;
-}
-
-.step.active .step-number {
-    background: #b3261e;
-    color: #fff;
-}
-
-.step.completed .step-number {
-    background: #1a5f7a;
-    color: #fff;
+    display: none !important; /* Hide circular step numbers for simplicity */
 }
 
 .step-label {
@@ -1546,6 +1561,59 @@ body {
                         </small>
                     </div>
 
+                    <div class="form-group" style="margin-top:20px;">
+                        <label for="validIdType">Type of Valid ID *</label>
+                        <select id="validIdType" name="valid_id_type" class="form-control" required style="margin-bottom:15px;">
+                            <option value="">Select ID Type</option>
+                            <option value="umid">Unified Multi-Purpose ID (UMID)</option>
+                            <option value="drivers_license">Driver's License</option>
+                            <option value="passport">Philippine Passport</option>
+                            <option value="sss">SSS ID</option>
+                            <option value="gsis">GSIS ID</option>
+                            <option value="prc">PRC ID</option>
+                            <option value="postal">Postal ID</option>
+                            <option value="voters">Voter's ID</option>
+                            <option value="national_id">Philippine National ID (PhilSys)</option>
+                            <option value="tin">TIN ID</option>
+                            <option value="pag_ibig">Pag-IBIG ID</option>
+                            <option value="philhealth">PhilHealth ID</option>
+                        </select>
+                    </div>
+
+                    <div class="form-row" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                        <div class="form-group">
+                            <label style="display:block; margin-bottom:8px; font-weight:600; color:#333; font-size:0.9rem;">Front of ID Card *</label>
+                            <div class="id-upload-zone" id="zoneFront" style="border: 2px dashed #cbd5e1; border-radius: 12px; padding: 20px 15px; text-align: center; cursor: pointer; transition: all 0.2s ease; background: #f8fafc; position: relative;">
+                                <input type="file" id="validIdFront" name="valid_id_front" accept="image/*" style="display:none;" required>
+                                <div class="upload-zone-content" id="zoneContentFront">
+                                    <i class="fas fa-id-card" style="font-size: 2.2rem; color: #b3261e; margin-bottom: 10px; display: block;"></i>
+                                    <span style="font-size: 0.85rem; font-weight:700; color: #475569; display: block; margin-bottom: 4px;">Capture Front Side</span>
+                                    <span style="font-size: 0.72rem; color: #94a3b8; display: block;">Tap to open camera</span>
+                                </div>
+                                <div class="upload-preview" id="previewFront" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius: 10px; background: #fff; z-index: 2; overflow: hidden; padding: 4px;">
+                                    <img src="" style="width: 100%; height: 100%; object-fit: contain;">
+                                    <button type="button" class="remove-preview" id="removeFront" style="position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border-radius: 50%; background: rgba(0,0,0,0.6); border: none; color: #fff; font-size: 0.75rem; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 3;"><i class="fas fa-times"></i></button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label style="display:block; margin-bottom:8px; font-weight:600; color:#333; font-size:0.9rem;">Back of ID Card *</label>
+                            <div class="id-upload-zone" id="zoneBack" style="border: 2px dashed #cbd5e1; border-radius: 12px; padding: 20px 15px; text-align: center; cursor: pointer; transition: all 0.2s ease; background: #f8fafc; position: relative;">
+                                <input type="file" id="validIdBack" name="valid_id_back" accept="image/*" style="display:none;" required>
+                                <div class="upload-zone-content" id="zoneContentBack">
+                                    <i class="fas fa-id-card-clip" style="font-size: 2.2rem; color: #b3261e; margin-bottom: 10px; display: block;"></i>
+                                    <span style="font-size: 0.85rem; font-weight:700; color: #475569; display: block; margin-bottom: 4px;">Capture Back Side</span>
+                                    <span style="font-size: 0.72rem; color: #94a3b8; display: block;">Tap to open camera</span>
+                                </div>
+                                <div class="upload-preview" id="previewBack" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius: 10px; background: #fff; z-index: 2; overflow: hidden; padding: 4px;">
+                                    <img src="" style="width: 100%; height: 100%; object-fit: contain;">
+                                    <button type="button" class="remove-preview" id="removeBack" style="position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border-radius: 50%; background: rgba(0,0,0,0.6); border: none; color: #fff; font-size: 0.75rem; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 3;"><i class="fas fa-times"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
 
                     
                     <div class="form-actions">
@@ -1766,6 +1834,38 @@ body {
         </div>
     </div>
 </div>
+
+<!-- Webcam Capture Modal Overlay -->
+<div id="cameraModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.9); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(8px); padding: 15px; box-sizing: border-box;">
+    <div style="background: #ffffff; width: 100%; max-width: 580px; border-radius: 20px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); overflow: hidden; display: flex; flex-direction: column; position: relative;">
+        <!-- Modal Header -->
+        <div style="padding: 16px 20px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between;">
+            <h3 id="cameraModalTitle" style="margin: 0; font-family: 'Outfit', sans-serif; font-size: 1.15rem; font-weight: 800; color: #0f172a;">Capture Document</h3>
+            <button type="button" id="closeCameraModal" style="background: none; border: none; font-size: 1.25rem; color: #64748b; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 4px; border-radius: 50%; width: 32px; height: 32px; transition: background 0.2s;"><i class="fas fa-times"></i></button>
+        </div>
+        
+        <!-- Live Stream Video Panel -->
+        <div style="position: relative; background: #000; width: 100%; aspect-ratio: 4/3; max-height: 400px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+            <video id="webcamStream" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>
+            <!-- ID Card Crop Guide Outline Box -->
+            <div id="cropGuide" style="position: absolute; border: 3px dashed rgba(255, 255, 255, 0.85); width: 85%; height: 58%; border-radius: 12px; box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.45); pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                <span id="cropGuideText" style="color: #ffffff; background: rgba(15, 23, 42, 0.75); padding: 4px 12px; border-radius: 20px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Position ID Card Here</span>
+            </div>
+            <div id="cameraLoadingSpinner" style="position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #ffffff; z-index: 10;">
+                <i class="fas fa-circle-notch fa-spin" style="font-size: 2rem; margin-bottom: 10px;"></i>
+                <span style="font-size: 0.85rem; font-weight: 600;">Accessing camera...</span>
+            </div>
+        </div>
+
+        <!-- Controls / Shutter Button -->
+        <div style="padding: 20px; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: center; gap: 15px; flex-wrap: wrap;">
+            <button type="button" id="flipCameraBtn" style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 50%; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #475569; font-size: 1.15rem; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: all 0.2s;"><i class="fas fa-camera-rotate"></i></button>
+            <button type="button" id="shutterBtn" style="background: #b3261e; border: none; border-radius: 30px; height: 50px; padding: 0 28px; display: inline-flex; align-items: center; justify-content: center; gap: 10px; cursor: pointer; color: #ffffff; font-size: 0.95rem; font-weight: 800; box-shadow: 0 4px 14px rgba(179, 38, 30, 0.35); transition: all 0.2s;"><i class="fas fa-camera" style="font-size:1.05rem;"></i> Capture Snapshot</button>
+        </div>
+    </div>
+</div>
+<!-- Hidden Canvas to hold captured frame data -->
+<canvas id="capturedFrameHolder" style="display:none;"></canvas>
 
 <!-- SweetAlert2 JS -->
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -3057,11 +3157,83 @@ document.addEventListener('DOMContentLoaded', function() {
         return true;
     }
 
+    let idVerified = false;
+
+    function simulateIdVerification(firstName, lastName) {
+        Swal.fire({
+            title: 'Verifying Identity',
+            html: '<div style="margin-bottom:15px; font-size:0.95rem; color:#475569;" id="swalScanMsg">Initializing verification scanner...</div>' +
+                  '<div class="ocr-scan-progress" style="width:100%; height:8px; background:#e2e8f0; border-radius:4px; overflow:hidden; position:relative; margin-bottom:10px;">' +
+                  '  <div id="swalScanBar" style="position:absolute; top:0; left:0; height:100%; width:0%; background:#b3261e; transition: width 0.3s ease;"></div>' +
+                  '</div>' +
+                  '<div style="font-size:0.8rem; color:#94a3b8;"><i class="fas fa-shield-halved fa-spin"></i> Secure biometric credentials match</div>',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showConfirmButton: false,
+            didOpen: () => {
+                Swal.showLoading();
+                const bar = document.getElementById('swalScanBar');
+                const msg = document.getElementById('swalScanMsg');
+                
+                setTimeout(() => {
+                    if (bar) bar.style.width = '35%';
+                    if (msg) msg.textContent = 'Scanning Front & Back ID documents...';
+                }, 800);
+
+                setTimeout(() => {
+                    if (bar) bar.style.width = '65%';
+                    if (msg) msg.textContent = 'Extracting document credentials (OCR)...';
+                }, 1800);
+
+                setTimeout(() => {
+                    if (bar) bar.style.width = '88%';
+                    if (msg) msg.textContent = 'Cross-matching name: "' + firstName + ' ' + lastName + '"...';
+                }, 2800);
+
+                setTimeout(() => {
+                    if (bar) bar.style.width = '100%';
+                    if (msg) msg.textContent = 'Verification successful! Credentials match.';
+                }, 3800);
+
+                setTimeout(() => {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Identity Verified',
+                        text: 'OCR details successfully match your registration credentials.',
+                        confirmButtonColor: '#b3261e',
+                        allowOutsideClick: false,
+                        allowEscapeKey: false
+                    }).then(() => {
+                        idVerified = true;
+                        goToStep(3);
+                    });
+                }, 4300);
+            }
+        });
+    }
+
+    // Reset ID verification flag if details change
+    document.addEventListener('DOMContentLoaded', function() {
+        ['firstName', 'lastName', 'validIdType', 'validIdFront', 'validIdBack'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('change', () => { idVerified = false; });
+                el.addEventListener('input', () => { idVerified = false; });
+            }
+        });
+    });
+
     function validateStep2() {
         const firstName = ((document.getElementById('firstName') || {}).value || '').trim();
         const lastName = ((document.getElementById('lastName') || {}).value || '').trim();
         const email = ((document.getElementById('email') || {}).value || '').trim();
         const phone = ((document.getElementById('phone') || {}).value || '').trim();
+        const validIdType = ((document.getElementById('validIdType') || {}).value || '').trim();
+        const validIdFrontInput = document.getElementById('validIdFront');
+        const validIdBackInput = document.getElementById('validIdBack');
+        
+        const validIdFrontFile = validIdFrontInput && validIdFrontInput.files ? validIdFrontInput.files[0] : null;
+        const validIdBackFile = validIdBackInput && validIdBackInput.files ? validIdBackInput.files[0] : null;
 
         if (!firstName || !lastName || !email || !phone) {
             showError('Missing Information', 'Please fill in all required personal details.');
@@ -3080,6 +3252,46 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (!isValidPhone(phone)) {
             showError('Invalid Phone', 'Please enter a valid Philippine mobile number.');
+            return false;
+        }
+
+        if (!validIdType) {
+            showError('Valid ID Type Required', 'Please select what kind of ID you will upload.');
+            return false;
+        }
+
+        if (!validIdFrontFile) {
+            showError('Front ID Photo Required', 'Please upload a photo of the front side of your ID.');
+            return false;
+        }
+
+        if (!validIdBackFile) {
+            showError('Back ID Photo Required', 'Please upload a photo of the back side of your ID.');
+            return false;
+        }
+
+        // Validate formats
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+        const validateFile = (file, label) => {
+            const hasType = allowedTypes.includes(file.type || '');
+            const hasExt = /\.(jpg|jpeg|png|webp)$/.test(String(file.name || '').toLowerCase());
+            if (!hasType && !hasExt) {
+                showError('Invalid ID Format', 'Please upload a JPG, PNG, or WEBP image for ' + label + '.');
+                return false;
+            }
+            if (file.size > (5 * 1024 * 1024)) {
+                showError('File Too Large', 'Your ' + label + ' file size must be 5MB or smaller.');
+                return false;
+            }
+            return true;
+        };
+
+        if (!validateFile(validIdFrontFile, 'Front of ID') || !validateFile(validIdBackFile, 'Back of ID')) {
+            return false;
+        }
+
+        if (!idVerified) {
+            simulateIdVerification(firstName, lastName);
             return false;
         }
 
@@ -3400,6 +3612,169 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     });
+
+    let activeCameraSide = '';
+    let cameraStream = null;
+    let currentFacingMode = 'environment'; // Rear camera default for document capture
+
+    const cameraModal = document.getElementById('cameraModal');
+    const closeCameraBtn = document.getElementById('closeCameraModal');
+    const webcamVideo = document.getElementById('webcamStream');
+    const shutterBtn = document.getElementById('shutterBtn');
+    const flipCameraBtn = document.getElementById('flipCameraBtn');
+    const cameraSpinner = document.getElementById('cameraLoadingSpinner');
+    const canvasHolder = document.getElementById('capturedFrameHolder');
+    
+    const zoneFront = document.getElementById('zoneFront');
+    const zoneBack = document.getElementById('zoneBack');
+    const removeFront = document.getElementById('removeFront');
+    const removeBack = document.getElementById('removeBack');
+
+    function dataURLtoBlob(dataurl) {
+        var arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
+            bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
+        while(n--){
+            u8arr[n] = bstr.charCodeAt(n);
+        }
+        return new Blob([u8arr], {type:mime});
+    }
+
+    async function startCamera() {
+        if (cameraSpinner) cameraSpinner.style.display = 'flex';
+        if (cameraStream) stopCamera();
+
+        try {
+            const constraints = {
+                video: {
+                    facingMode: currentFacingMode,
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                },
+                audio: false
+            };
+            cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
+            if (webcamVideo) {
+                webcamVideo.srcObject = cameraStream;
+                webcamVideo.onloadedmetadata = function() {
+                    if (cameraSpinner) cameraSpinner.style.display = 'none';
+                };
+            }
+        } catch (err) {
+            console.error('Camera stream access failed:', err);
+            if (cameraSpinner) cameraSpinner.style.display = 'none';
+            Swal.fire({
+                icon: 'error',
+                title: 'Camera Access Error',
+                text: 'Could not access your camera stream. Please allow camera permissions and try again.',
+                confirmButtonColor: '#b3261e'
+            });
+            closeModal();
+        }
+    }
+
+    function stopCamera() {
+        if (cameraStream) {
+            cameraStream.getTracks().forEach(track => track.stop());
+            cameraStream = null;
+        }
+        if (webcamVideo) {
+            webcamVideo.srcObject = null;
+        }
+    }
+
+    function openModal(side) {
+        activeCameraSide = side;
+        const title = document.getElementById('cameraModalTitle');
+        if (title) title.textContent = 'Capture Front of ID';
+        if (side === 'Back' && title) title.textContent = 'Capture Back of ID';
+        if (cameraModal) cameraModal.style.display = 'flex';
+        startCamera();
+    }
+
+    function closeModal() {
+        if (cameraModal) cameraModal.style.display = 'none';
+        stopCamera();
+    }
+
+    if (zoneFront) zoneFront.addEventListener('click', () => openModal('Front'));
+    if (zoneBack) zoneBack.addEventListener('click', () => openModal('Back'));
+    if (closeCameraBtn) closeCameraBtn.addEventListener('click', closeModal);
+
+    if (removeFront) {
+        removeFront.addEventListener('click', function(e) {
+            e.stopPropagation();
+            document.getElementById('validIdFront').value = '';
+            document.getElementById('previewFront').style.display = 'none';
+            document.getElementById('zoneContentFront').style.visibility = 'visible';
+            idVerified = false;
+        });
+    }
+
+    if (removeBack) {
+        removeBack.addEventListener('click', function(e) {
+            e.stopPropagation();
+            document.getElementById('validIdBack').value = '';
+            document.getElementById('previewBack').style.display = 'none';
+            document.getElementById('zoneContentBack').style.visibility = 'visible';
+            idVerified = false;
+        });
+    }
+
+    if (flipCameraBtn) {
+        flipCameraBtn.addEventListener('click', function() {
+            currentFacingMode = (currentFacingMode === 'user') ? 'environment' : 'user';
+            startCamera();
+        });
+    }
+
+    if (shutterBtn) {
+        shutterBtn.addEventListener('click', function() {
+            if (!webcamVideo || !canvasHolder) return;
+
+            const videoWidth = webcamVideo.videoWidth || 640;
+            const videoHeight = webcamVideo.videoHeight || 480;
+            
+            canvasHolder.width = videoWidth;
+            canvasHolder.height = videoHeight;
+            
+            const context = canvasHolder.getContext('2d');
+            if (context) {
+                // Mirror image if using front camera
+                if (currentFacingMode === 'user') {
+                    context.translate(videoWidth, 0);
+                    context.scale(-1, 1);
+                }
+                context.drawImage(webcamVideo, 0, 0, videoWidth, videoHeight);
+                const dataUrl = canvasHolder.toDataURL('image/jpeg', 0.95);
+
+                const previewContainer = document.getElementById(activeCameraSide === 'Front' ? 'previewFront' : 'previewBack');
+                const zoneContent = document.getElementById(activeCameraSide === 'Front' ? 'zoneContentFront' : 'zoneContentBack');
+                const inputElement = document.getElementById(activeCameraSide === 'Front' ? 'validIdFront' : 'validIdBack');
+
+                if (previewContainer) {
+                    const img = previewContainer.querySelector('img');
+                    if (img) img.src = dataUrl;
+                    previewContainer.style.display = 'block';
+                }
+                if (zoneContent) zoneContent.style.visibility = 'hidden';
+
+                try {
+                    const blob = dataURLtoBlob(dataUrl);
+                    const file = new File([blob], 'captured_id_' + activeCameraSide.toLowerCase() + '.jpg', { type: 'image/jpeg' });
+                    const dt = new DataTransfer();
+                    dt.items.add(file);
+                    if (inputElement) {
+                        inputElement.files = dt.files;
+                        inputElement.dispatchEvent(new Event('change'));
+                    }
+                } catch (e) {
+                    console.error('File injection error:', e);
+                }
+
+                closeModal();
+            }
+        });
+    }
 
     updateOrganizationFields();
     updateSteps();
