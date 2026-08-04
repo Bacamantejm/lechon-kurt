@@ -596,7 +596,7 @@ $remaining = $total - $downpayment;
                                 <i class="fas fa-crosshairs"></i>
                             </button>
                         </div>
-                        <div id="map" style="height: 300px; margin-top: 10px; border-radius: 8px;"></div>
+                        <div id="map" style="height: 300px; margin-top: 10px; border-radius: 8px; display: none;"></div>
                         <input type="hidden" id="latitude" name="latitude">
                         <input type="hidden" id="longitude" name="longitude">
                         <input type="hidden" id="distance_km" name="distance_km">
@@ -749,6 +749,10 @@ $remaining = $total - $downpayment;
 <!-- Add SweetAlert2 CSS & JS -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<!-- Leaflet Map API -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
 <!-- Google Maps API -->
 <script src="https://maps.googleapis.com/maps/api/js?key=<?php echo rawurlencode($google_maps_api_key); ?>&libraries=places,geometry&callback=initMap" async defer></script>
@@ -2460,6 +2464,7 @@ function recalculateOrderTotals() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+    if (typeof initMap === 'function') initMap();
 const regionSelect = document.getElementById('checkout_region');
 const provinceSelect = document.getElementById('checkout_province');
 const citySelect = document.getElementById('checkout_city');
@@ -3295,99 +3300,96 @@ const initializeCheckoutPsgcAddress = async () => {
     }
 };
 
+window.showMapContainer = function() {
+    const mapDiv = document.getElementById('map');
+    if (mapDiv && mapDiv.style.display === 'none') {
+        mapDiv.style.display = 'block';
+        if (map) {
+            map.invalidateSize();
+        }
+    }
+};
+
 window.initializeCheckoutMap = function() {
     if (isMapInitialized) {
         return;
     }
     isMapInitialized = true;
 
-    console.log("Initializing Google Maps...");
+    console.log("Initializing Leaflet Map...");
     
-    // Initialize map centered on Metro Manila
-    map = new google.maps.Map(document.getElementById("map"), {
-        center: { lat: 14.5995, lng: 120.9842 }, // Metro Manila coordinates
-        zoom: 11,
-    });
+    map = L.map('map').setView([14.5995, 120.9842], 11);
     
-    geocoder = new google.maps.Geocoder();
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
     
-    // Initialize autocomplete for address search
+    marker = L.marker([14.5995, 120.9842], {
+        draggable: true
+    }).addTo(map);
+    
     const input = document.getElementById("address_search");
-    autocomplete = new google.maps.places.Autocomplete(input);
-    autocomplete.bindTo("bounds", map);
-    
-    // Add marker
-    marker = new google.maps.Marker({
-        map: map,
-        draggable: true,
-        animation: google.maps.Animation.DROP,
-    });
-    
-    // When place is selected from autocomplete
-    autocomplete.addListener("place_changed", async () => {
-        const place = autocomplete.getPlace();
-        
-        if (!place.geometry) {
-            Swal.fire('Address not found', "No details available for: '" + (place.name || '') + "'", 'warning');
-            return;
-        }
-        
-        // Update map and marker
-        map.setCenter(place.geometry.location);
-        map.setZoom(17);
-        marker.setPosition(place.geometry.location);
-
-        const lat = place.geometry.location.lat();
-        const lng = place.geometry.location.lng();
-        const googleLikeResult = [{
-            formatted_address: String(place.formatted_address || '').trim(),
-            address_components: place.address_components || [],
-            types: place.types || []
-        }];
-
-        const resolved = await resolveAddressContextFromCoordinates(lat, lng, googleLikeResult);
-        const mergedParts = mergeAddressParts(extractAddressParts(place.address_components || []), resolved.parts || {});
-        await applyResolvedMapAddress({
-            lat,
-            lng,
-            formattedAddress: resolved.formatted || String(place.formatted_address || '').trim(),
-            parts: mergedParts
+    if (input) {
+        let debounceTimer;
+        input.addEventListener('focus', function() {
+            window.showMapContainer();
         });
-
-        calculateDeliveryFee(lat, lng);
-    });
+        input.addEventListener('input', function() {
+            window.showMapContainer();
+            clearTimeout(debounceTimer);
+            const query = this.value.trim();
+            if (query.length < 4) return;
+            
+            debounceTimer = setTimeout(async () => {
+                try {
+                    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=ph&limit=1`);
+                    const data = await res.json();
+                    if (data && data.length > 0) {
+                        const first = data[0];
+                        const lat = parseFloat(first.lat);
+                        const lng = parseFloat(first.lon);
+                        
+                        map.setView([lat, lng], 17);
+                        marker.setLatLng([lat, lng]);
+                        
+                        updateAddressFromCoordinates(lat, lng);
+                        calculateDeliveryFee(lat, lng);
+                    }
+                } catch (err) {
+                    console.error('Nominatim search error:', err);
+                }
+            }, 800);
+        });
+    }
     
-    // When marker is dragged
-    marker.addListener("dragend", () => {
-        const position = marker.getPosition();
-        updateAddressFromCoordinates(position.lat(), position.lng()).catch((error) => {
+    marker.on("dragend", () => {
+        const position = marker.getLatLng();
+        updateAddressFromCoordinates(position.lat, position.lng).catch((error) => {
             console.error('Unable to sync PSGC fields from marker drag:', error);
         });
-        calculateDeliveryFee(position.lat(), position.lng());
+        calculateDeliveryFee(position.lat, position.lng);
     });
     
-    // When map is clicked
-    map.addListener("click", (event) => {
-        marker.setPosition(event.latLng);
-        updateAddressFromCoordinates(event.latLng.lat(), event.latLng.lng()).catch((error) => {
+    map.on("click", (event) => {
+        const coords = event.latlng;
+        marker.setLatLng(coords);
+        updateAddressFromCoordinates(coords.lat, coords.lng).catch((error) => {
             console.error('Unable to sync PSGC fields from map click:', error);
         });
-        calculateDeliveryFee(event.latLng.lat(), event.latLng.lng());
+        calculateDeliveryFee(coords.lat, coords.lng);
     });
     
-    console.log("Google Maps initialized successfully");
+    console.log("Leaflet Map initialized successfully");
 };
 
 // Use My Location Button Logic
 document.getElementById('useMyLocation').addEventListener('click', function() {
+    window.showMapContainer();
     if (!map || !marker) {
-        if (window.google && window.google.maps && typeof window.initializeCheckoutMap === 'function') {
+        if (typeof window.initializeCheckoutMap === 'function') {
             window.initializeCheckoutMap();
         }
-    }
-    if (!geocoder) {
-        Swal.fire('Map not ready', 'Please wait for the map to finish loading.', 'warning');
-        return;
     }
 
     if (navigator.geolocation) {
@@ -3405,9 +3407,8 @@ document.getElementById('useMyLocation').addEventListener('click', function() {
             };
             
             if (map && marker) {
-                map.setCenter(pos);
-                map.setZoom(17);
-                marker.setPosition(pos);
+                map.setView([pos.lat, pos.lng], 17);
+                marker.setLatLng([pos.lat, pos.lng]);
             }
             try {
                 const synced = await updateAddressFromCoordinates(pos.lat, pos.lng);
@@ -3631,8 +3632,11 @@ function updateAddressFromCoordinates(lat, lng) {
 
 // Search button handler
 document.getElementById("searchAddress").addEventListener("click", async () => {
-    if ((!geocoder || !map || !marker) && window.google && window.google.maps && typeof window.initializeCheckoutMap === 'function') {
-        window.initializeCheckoutMap();
+    window.showMapContainer();
+    if (!map || !marker) {
+        if (typeof window.initializeCheckoutMap === 'function') {
+            window.initializeCheckoutMap();
+        }
     }
     if (!map || !marker) {
         Swal.fire('Map not ready', 'Please wait for the map to finish loading.', 'warning');
@@ -3641,45 +3645,33 @@ document.getElementById("searchAddress").addEventListener("click", async () => {
 
     const address = String(document.getElementById("address_search").value || '').trim();
     if (address) {
-        const applyCoords = async (lat, lng) => {
-            if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) return false;
-            const point = { lat: Number(lat), lng: Number(lng) };
-            map.setCenter(point);
-            marker.setPosition(point);
-            await updateAddressFromCoordinates(point.lat, point.lng);
-            return true;
-        };
-
-        if (!geocoder || !googleGeocodingServiceAvailable) {
-            const fallback = await forwardGeocodeFromNominatim(address);
-            if (fallback && await applyCoords(fallback.lat, fallback.lng)) {
-                Swal.fire('Fallback geocoding applied', 'Google Geocoding is unavailable for this key, so a backup geocoder was used.', 'info');
+        Swal.fire({
+            title: 'Searching address...',
+            allowOutsideClick: false,
+            didOpen: () => { Swal.showLoading(); }
+        });
+        
+        try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&countrycodes=ph&limit=1`);
+            const data = await res.json();
+            if (data && data.length > 0) {
+                const first = data[0];
+                const lat = parseFloat(first.lat);
+                const lng = parseFloat(first.lon);
+                
+                map.setView([lat, lng], 17);
+                marker.setLatLng([lat, lng]);
+                
+                await updateAddressFromCoordinates(lat, lng);
+                calculateDeliveryFee(lat, lng);
+                Swal.close();
             } else {
                 Swal.fire('Address not found', 'Please try a more specific address.', 'warning');
             }
-            return;
+        } catch (err) {
+            console.error('Nominatim search button error:', err);
+            Swal.fire('Search Error', 'Failed to retrieve address details. Please try again.', 'error');
         }
-
-        geocoder.geocode({ address: address }, async (results, status) => {
-            if (status === "OK" && Array.isArray(results) && results[0]?.geometry?.location) {
-                await applyCoords(results[0].geometry.location.lat(), results[0].geometry.location.lng());
-                return;
-            }
-
-            if (isGoogleGeocodingUnavailableStatus(status)) {
-                googleGeocodingServiceAvailable = false;
-            }
-
-            const fallback = await forwardGeocodeFromNominatim(address);
-            if (fallback && await applyCoords(fallback.lat, fallback.lng)) {
-                if (isGoogleGeocodingUnavailableStatus(status)) {
-                    Swal.fire('Fallback geocoding applied', 'Google Geocoding is unavailable for this key, so a backup geocoder was used.', 'info');
-                }
-                return;
-            }
-
-            Swal.fire('Address not found', 'Please try a more specific address.', 'warning');
-        });
     } else {
         Swal.fire('Missing address', 'Please enter an address to search.', 'warning');
     }
