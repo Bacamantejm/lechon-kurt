@@ -1,14 +1,9 @@
-# Secure Uploads Directory
-#
-# This file enhances security by preventing the web server from executing
-# any scripts that might be uploaded to this directory.
+# API Directory Configuration
+# Prevent directory browsing
+Options -Indexes
 
-# 1. Set the default handler for all files to 'text/plain'.
-# This tells the browser to display files as plain text instead of executing them.
-SetHandler text/plain
-
-# 2. For common, safe image types, remove the handler.
-# This allows the browser to render them as images normally.
-<FilesMatch "\.(?i:jpg|jpeg|png|gif|webp)$">
-    SetHandler none
+# Protect hidden files
+<FilesMatch "^\.">
+    Order allow,deny
+    Deny from all
 </FilesMatch>
