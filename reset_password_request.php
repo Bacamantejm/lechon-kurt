@@ -96,7 +96,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if (!mysqli_stmt_execute($upd_stmt)) {
                         $error = 'Unable to process your request right now. Please try again shortly.';
                     } else {
-                        mysqli_stmt_close($upd_stmt);
                         if (sendPasswordResetEmail($conn, $email, $full_name, $token)) {
                             $success = 'Password reset link has been sent to your email. Please check your inbox and spam folder.';
                         } else {
@@ -107,9 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             }
                         }
                     }
-                    if ($upd_stmt) {
-                        @mysqli_stmt_close($upd_stmt);
-                    }
+                    mysqli_stmt_close($upd_stmt);
                 }
             } else {
                 mysqli_stmt_close($check_stmt);
