@@ -5617,6 +5617,14 @@ body {
 .swal2-container {
     z-index: 99999 !important;
 }
+.menu-section {
+    overflow: visible !important;
+}
+.panda-menu-sticky-bar {
+    position: sticky !important;
+    top: var(--site-header-offset, 72px) !important;
+    z-index: 999 !important;
+}
 </style>
 
 <?php include 'includes/footer.php'; ?>
