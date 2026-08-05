@@ -1732,7 +1732,8 @@ body {
                                 <div class="upload-zone-content" id="zoneContentFront">
                                     <i class="fas fa-id-card" style="font-size: 2.2rem; color: #b3261e; margin-bottom: 10px; display: block;"></i>
                                     <span style="font-size: 0.85rem; font-weight:700; color: #475569; display: block; margin-bottom: 4px;">Capture Front Side</span>
-                                    <span style="font-size: 0.72rem; color: #94a3b8; display: block;">Tap to open camera</span>
+                                    <span style="font-size: 0.72rem; color: #94a3b8; display: block; margin-bottom: 8px;">Tap to open camera</span>
+                                    <button type="button" class="direct-upload-btn" data-side="Front" style="display: inline-block; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 5px 12px; font-size: 0.75rem; font-weight: 700; color: #475569; cursor: pointer; transition: all 0.2s ease;">Or upload file</button>
                                 </div>
                                 <div class="upload-preview" id="previewFront" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius: 10px; background: #fff; z-index: 2; overflow: hidden; padding: 4px;">
                                     <img src="" style="width: 100%; height: 100%; object-fit: contain;">
@@ -1748,7 +1749,8 @@ body {
                                 <div class="upload-zone-content" id="zoneContentBack">
                                     <i class="fas fa-id-card-clip" style="font-size: 2.2rem; color: #b3261e; margin-bottom: 10px; display: block;"></i>
                                     <span style="font-size: 0.85rem; font-weight:700; color: #475569; display: block; margin-bottom: 4px;">Capture Back Side</span>
-                                    <span style="font-size: 0.72rem; color: #94a3b8; display: block;">Tap to open camera</span>
+                                    <span style="font-size: 0.72rem; color: #94a3b8; display: block; margin-bottom: 8px;">Tap to open camera</span>
+                                    <button type="button" class="direct-upload-btn" data-side="Back" style="display: inline-block; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 5px 12px; font-size: 0.75rem; font-weight: 700; color: #475569; cursor: pointer; transition: all 0.2s ease;">Or upload file</button>
                                 </div>
                                 <div class="upload-preview" id="previewBack" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius: 10px; background: #fff; z-index: 2; overflow: hidden; padding: 4px;">
                                     <img src="" style="width: 100%; height: 100%; object-fit: contain;">
@@ -3680,9 +3682,26 @@ document.addEventListener('DOMContentLoaded', function() {
         stopCamera();
     }
 
-    if (zoneFront) zoneFront.addEventListener('click', () => openModal('Front'));
-    if (zoneBack) zoneBack.addEventListener('click', () => openModal('Back'));
+    if (zoneFront) zoneFront.addEventListener('click', (e) => {
+        if (e.target.closest('.direct-upload-btn') || e.target.closest('.remove-preview')) return;
+        openModal('Front');
+    });
+    if (zoneBack) zoneBack.addEventListener('click', (e) => {
+        if (e.target.closest('.direct-upload-btn') || e.target.closest('.remove-preview')) return;
+        openModal('Back');
+    });
     if (closeCameraBtn) closeCameraBtn.addEventListener('click', closeModal);
+
+    // "Or upload file" buttons — bypass camera, go straight to file picker
+    document.querySelectorAll('.direct-upload-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const side = this.getAttribute('data-side');
+            const inputId = side === 'Front' ? 'validIdFront' : 'validIdBack';
+            const fileInput = document.getElementById(inputId);
+            if (fileInput) fileInput.click();
+        });
+    });
 
     if (removeFront) {
         removeFront.addEventListener('click', function(e) {
