@@ -379,7 +379,7 @@ if (!function_exists('callPhilSysVerificationProvider')) {
 }
 
 if (!function_exists('verifyGovernmentIdWithConfiguredProvider')) {
-    function verifyGovernmentIdWithConfiguredProvider($first_name, $last_name, $uploaded_file, $address = '')
+    function verifyGovernmentIdWithConfiguredProvider($first_name, $last_name, $uploaded_file, $address = '', $expected_id_type = '')
     {
         $provider = getGovernmentVerificationProviderChoice();
         $threshold = 0.75;
@@ -399,7 +399,7 @@ if (!function_exists('verifyGovernmentIdWithConfiguredProvider')) {
         }
 
         if ($provider === 'ocr_space') {
-            return verifyGovernmentIdWithOcrApi($first_name, $last_name, $uploaded_file, $address);
+            return verifyGovernmentIdWithOcrApi($first_name, $last_name, $uploaded_file, $address, $expected_id_type);
         }
 
         if (isPhilSysVerificationReady()) {
@@ -418,7 +418,7 @@ if (!function_exists('verifyGovernmentIdWithConfiguredProvider')) {
             }
         }
 
-        return verifyGovernmentIdWithOcrApi($first_name, $last_name, $uploaded_file, $address);
+        return verifyGovernmentIdWithOcrApi($first_name, $last_name, $uploaded_file, $address, $expected_id_type);
     }
 }
 

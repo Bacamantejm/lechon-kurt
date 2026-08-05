@@ -226,7 +226,7 @@ if (!function_exists('getGovernmentIdVerificationApiKey')) {
 }
 
 if (!function_exists('verifyGovernmentIdWithOcrApi')) {
-    function verifyGovernmentIdWithOcrApi($first_name, $last_name, $uploaded_file, $address = '')
+    function verifyGovernmentIdWithOcrApi($first_name, $last_name, $uploaded_file, $address = '', $expected_id_type = '')
     {
         if (!is_array($uploaded_file) || (int)($uploaded_file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
             return [
@@ -341,6 +341,57 @@ if (!function_exists('verifyGovernmentIdWithOcrApi')) {
         }
 
         $parsed_text = extractOcrParsedText($response_payload);
+
+        if ($expected_id_type !== '') {
+            $detected_details = extractGovernmentIdDetailsFromOcrText($parsed_text);
+            $detected_type = strtolower(trim((string)($detected_details['id_type'] ?? '')));
+            $expected_type = strtolower(trim((string)$expected_id_type));
+
+            $type_aliases = [
+                'drivers_license' => ['drivers_license', 'driver', 'drivers', 'lto'],
+                'national_id' => ['national_id', 'philsys', 'philid'],
+                'passport' => ['passport'],
+                'prc' => ['prc'],
+                'tin' => ['tin'],
+                'sss' => ['sss'],
+                'gsis' => ['gsis'],
+                'owwa' => ['owwa'],
+                'postal' => ['postal'],
+                'ibp' => ['ibp'],
+                'ofw' => ['ofw'],
+                'senior_citizen' => ['senior_citizen', 'senior'],
+                'umid' => ['umid'],
+                'company' => ['company'],
+                'pagibig' => ['pagibig', 'pag-ibig', 'hdmf'],
+                'philhealth' => ['philhealth']
+            ];
+
+            $is_matched = false;
+            if ($detected_type === $expected_type) {
+                $is_matched = true;
+            } else {
+                foreach ($type_aliases as $canonical => $aliases) {
+                    if (in_array($detected_type, $aliases, true) && in_array($expected_type, $aliases, true)) {
+                        $is_matched = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!$is_matched && $detected_type !== '') {
+                $friendly_expected = str_replace('_', ' ', strtoupper($expected_type));
+                $friendly_detected = str_replace('_', ' ', strtoupper($detected_type));
+                return [
+                    'success' => true,
+                    'verified' => false,
+                    'message' => "The uploaded ID does not match your selected ID type (Expected: {$friendly_expected}, Detected: {$friendly_detected}).",
+                    'provider' => 'ocr_space',
+                    'score' => 0.0,
+                    'ocr_text_excerpt' => substr($parsed_text, 0, 500)
+                ];
+            }
+        }
+
         $match = calculateIdentityProfileMatchScore($parsed_text, $first_name, $last_name, $address);
         $threshold = (float)($match['overall_threshold'] ?? 0.75);
         $verified = !empty($match['name_verified']) && !empty($match['address_verified']) && (float)$match['overall_score'] >= $threshold;
@@ -369,6 +420,403 @@ if (!function_exists('verifyGovernmentIdWithOcrApi')) {
             'address_total_tokens' => (int)$match['address_total_tokens'],
             'matched_address_tokens' => $match['matched_address_tokens'],
             'ocr_text_excerpt' => substr($parsed_text, 0, 500)
+        ];
+    }
+}
+
+if (!function_exists('normalizeGovernmentIdExtractionText')) {
+    function normalizeGovernmentIdExtractionText($value)
+    {
+        $value = strtoupper((string)$value);
+        $value = preg_replace('/[^A-Z0-9\s]/', ' ', $value);
+        $value = preg_replace('/\s+/', ' ', trim((string)$value));
+        return $value;
+    }
+}
+
+if (!function_exists('cleanGovernmentIdNumberValue')) {
+    function cleanGovernmentIdNumberValue($value, $id_type)
+    {
+        $value = strtoupper(trim((string)$value));
+        $id_type = strtolower(trim((string)$id_type));
+
+        if ($id_type === 'drivers_license' || $id_type === 'tin' || $id_type === 'sss' || $id_type === 'national_id' || $id_type === 'pagibig' || $id_type === 'philhealth') {
+            return preg_replace('/[^A-Z0-9]/', '', $value);
+        }
+
+        if ($id_type === 'postal' || $id_type === 'company' || $id_type === 'government') {
+            return preg_replace('/[^A-Z0-9]/', '', $value);
+        }
+
+        return preg_replace('/\s+/', '', $value);
+    }
+}
+
+if (!function_exists('detectGovernmentIdTypeFromText')) {
+    function detectGovernmentIdTypeFromText($ocr_text)
+    {
+        $normalized = normalizeGovernmentIdExtractionText($ocr_text);
+        if ($normalized === '') {
+            return '';
+        }
+
+        $has_drivers_license_indicators = function ($text) {
+            return (strpos($text, 'DRIVER') !== false && strpos($text, 'LICENSE') !== false) ||
+                strpos($text, 'LTO') !== false ||
+                strpos($text, 'LAND TRANSPORTATION') !== false;
+        };
+
+        $checks = [
+            'passport' => ['PASSPORT'],
+            'prc' => ['PRC', 'PROFESSIONAL REGULATION COMMISSION'],
+            'tin' => ['TIN', 'TAX IDENTIFICATION NUMBER'],
+            'sss' => ['SSS'],
+            'gsis' => ['GSIS'],
+            'owwa' => ['OWWA'],
+            'postal' => ['POSTAL'],
+            'ibp' => ['IBP'],
+            'ofw' => ['OFW'],
+            'senior_citizen' => ['SENIOR CITIZEN', 'SENIOR'],
+            'umid' => ['UMID', 'UNIFIED MULTI PURPOSE ID', 'UNIFIED MULTI-PURPOSE ID'],
+            'company' => ['COMPANY'],
+            'national_id' => ['NATIONAL ID', 'PHILSYS', 'PHILID'],
+            'pagibig' => ['PAG IBIG', 'PAGIBIG', 'HDMF'],
+            'philhealth' => ['PHILHEALTH'],
+        ];
+
+        if ($has_drivers_license_indicators($normalized)) {
+            foreach (['DRIVER S LICENSE', 'DRIVERS LICENSE', 'LICENSE NO', 'LICENSE NUMBER'] as $label) {
+                if (strpos($normalized, $label) !== false) {
+                    return 'drivers_license';
+                }
+            }
+        }
+
+        foreach ($checks as $id_type => $labels) {
+            foreach ($labels as $label) {
+                if (strpos($normalized, $label) !== false) {
+                    return $id_type;
+                }
+            }
+        }
+
+        return '';
+    }
+}
+
+if (!function_exists('extractGovernmentIdNumberFromText')) {
+    function extractGovernmentIdNumberFromText($ocr_text, $id_type)
+    {
+        $normalized = normalizeGovernmentIdExtractionText($ocr_text);
+        if ($normalized === '' || trim((string)$id_type) === '') {
+            return '';
+        }
+
+        $patterns = [];
+        switch (strtolower(trim((string)$id_type))) {
+            case 'passport':
+                $patterns = [
+                    '/PASSPORT(?:\s+NO(?:\.?)?|\s+NUMBER)?\s*([A-Z0-9]{9})\b/',
+                    '/\b([A-Z0-9]{9})\b/'
+                ];
+                break;
+            case 'drivers_license':
+                $patterns = [
+                    '/(?:DRIVER S LICENSE|DRIVERS LICENSE|LAND TRANSPORTATION OFFICE|LTO)(?:\s+NO(?:\.?)?|\s+NUMBER)?\s*([A-Z0-9\-]{8,20})\b/',
+                    '/(?:DRIVER S LICENSE|DRIVERS LICENSE)(?:\s*[:\-])?\s*([A-Z0-9\-]{8,20})\b/'
+                ];
+                break;
+            case 'prc':
+                $patterns = [
+                    '/PRC(?:\s+NO(?:\.?)?|\s+NUMBER)?\s*([0-9]{7})\b/',
+                    '/\b([0-9]{7})\b/'
+                ];
+                break;
+            case 'tin':
+                $patterns = [
+                    '/TIN(?:\s+NO(?:\.?)?|\s+NUMBER)?\s*([0-9\-\s]{12,20})\b/',
+                    '/\b([0-9]{12})\b/'
+                ];
+                break;
+            case 'sss':
+                $patterns = [
+                    '/SSS(?:\s+NO(?:\.?)?|\s+NUMBER)?\s*([0-9\-\s]{10,16})\b/',
+                    '/\b([0-9]{10})\b/'
+                ];
+                break;
+            case 'gsis':
+                $patterns = [
+                    '/GSIS(?:\s+NO(?:\.?)?|\s+NUMBER)?\s*([0-9\-\s]{11,16})\b/',
+                    '/\b([0-9]{11})\b/'
+                ];
+                break;
+            case 'owwa':
+                $patterns = [
+                    '/OWWA(?:\s+NO(?:\.?)?|\s+NUMBER)?\s*([0-9\-\s]{11,16})\b/',
+                    '/\b([0-9]{11})\b/'
+                ];
+                break;
+            case 'postal':
+                $patterns = [
+                    '/POSTAL(?:\s+ID|\s+NO(?:\.?)?|\s+NUMBER)?\s*([A-Z0-9\-\s]{16,24})\b/',
+                    '/\b([A-Z0-9]{16})\b/'
+                ];
+                break;
+            case 'ibp':
+                $patterns = [
+                    '/IBP(?:\s+NO(?:\.?)?|\s+NUMBER)?\s*([0-9\-\s]{5,12})\b/',
+                    '/\b([0-9]{5})\b/'
+                ];
+                break;
+            case 'ofw':
+                $patterns = [
+                    '/OFW(?:\s+NO(?:\.?)?|\s+NUMBER)?\s*([0-9\-\s]{11,16})\b/',
+                    '/\b([0-9]{11})\b/'
+                ];
+                break;
+            case 'senior_citizen':
+                $patterns = [
+                    '/SENIOR(?:\s+CITIZEN)?(?:\s+ID)?(?:\s+NO(?:\.?)?|\s+NUMBER)?\s*([0-9\-\s]{4,8})\b/',
+                    '/\b([0-9]{4})\b/'
+                ];
+                break;
+            case 'umid':
+                $patterns = [
+                    '/UMID(?:\s+NO(?:\.?)?|\s+NUMBER)?\s*([A-Z0-9\-]{8,20})\b/',
+                    '/UNIFIED\s+MULTI(?:\-|\s)?PURPOSE(?:D)?\s+ID(?:\s+NO(?:\.?)?|\s+NUMBER)?\s*([A-Z0-9\-]{8,20})\b/',
+                    '/UNIFIED\s+MULTI(?:\-|\s)?PURPOSE(?:D)?\s+IDENTIFICATION(?:\s+CARD)?(?:\s+NO(?:\.?)?|\s+NUMBER)?\s*([A-Z0-9\-]{8,20})\b/'
+                ];
+                break;
+            case 'company':
+                $patterns = [
+                    '/COMPANY(?:\s+ID|\s+NO(?:\.?)?|\s+NUMBER)?\s*([A-Z0-9\-\s]{5,20})\b/',
+                    '/\b([A-Z0-9]{5,20})\b/'
+                ];
+                break;
+            case 'national_id':
+                $patterns = [
+                    '/(?:NATIONAL ID|PHILSYS|PHILID)(?:\s+NO(?:\.?)?|\s+NUMBER)?\s*([0-9\-\s]{16,24})\b/',
+                    '/\b([0-9]{16})\b/'
+                ];
+                break;
+            case 'pagibig':
+                $patterns = [
+                    '/(?:PAG IBIG|PAGIBIG|HDMF)(?:\s+NO(?:\.?)?|\s+NUMBER)?\s*([0-9\-\s]{12,20})\b/',
+                    '/\b([0-9]{12})\b/'
+                ];
+                break;
+            case 'philhealth':
+                $patterns = [
+                    '/PHILHEALTH(?:\s+NO(?:\.?)?|\s+NUMBER)?\s*([0-9\-\s]{12,20})\b/',
+                    '/\b([0-9]{12})\b/'
+                ];
+                break;
+            case 'government':
+                $patterns = [
+                    '/\b([A-Z0-9]{6,20})\b/'
+                ];
+                break;
+        }
+
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $normalized, $matches) && !empty($matches[1])) {
+                return cleanGovernmentIdNumberValue($matches[1], $id_type);
+            }
+        }
+
+        if ($id_type === 'drivers_license' || $id_type === 'umid') {
+            return '';
+        }
+
+        if ($id_type === 'national_id' && strpos($normalized, 'UMID') !== false) {
+            return '';
+        }
+
+        return '';
+    }
+}
+
+if (!function_exists('extractGovernmentIdDetailsFromOcrText')) {
+    function extractGovernmentIdDetailsFromOcrText($ocr_text)
+    {
+        $detected_type = detectGovernmentIdTypeFromText($ocr_text);
+        $ordered_types = [
+            'passport',
+            'drivers_license',
+            'prc',
+            'tin',
+            'sss',
+            'gsis',
+            'owwa',
+            'postal',
+            'ibp',
+            'ofw',
+            'senior_citizen',
+            'umid',
+            'company',
+            'national_id',
+            'pagibig',
+            'philhealth'
+        ];
+
+        if ($detected_type !== '') {
+            array_unshift($ordered_types, $detected_type);
+            $ordered_types = array_values(array_unique($ordered_types));
+        }
+
+        foreach ($ordered_types as $id_type) {
+            $id_number = extractGovernmentIdNumberFromText($ocr_text, $id_type);
+            if ($id_number !== '') {
+                return [
+                    'success' => true,
+                    'id_type' => $id_type,
+                    'id_number' => $id_number,
+                    'confidence' => $id_type === $detected_type ? 0.9 : 0.65,
+                    'source' => $id_type === $detected_type ? 'label_and_pattern' : 'pattern_only',
+                    'ocr_text_excerpt' => substr(trim((string)$ocr_text), 0, 800)
+                ];
+            }
+        }
+
+        if (strpos($normalized_ocr = normalizeGovernmentIdExtractionText($ocr_text), 'UMID') !== false) {
+            return [
+                'success' => false,
+                'id_type' => '',
+                'id_number' => '',
+                'confidence' => 0,
+                'source' => 'umid_without_number',
+                'ocr_text_excerpt' => substr(trim((string)$ocr_text), 0, 800)
+            ];
+        }
+
+        return [
+            'success' => false,
+            'id_type' => '',
+            'id_number' => '',
+            'confidence' => 0,
+            'source' => 'none',
+            'ocr_text_excerpt' => substr(trim((string)$ocr_text), 0, 800)
+        ];
+    }
+}
+
+if (!function_exists('extractGovernmentIdDetailsWithOcrApi')) {
+    function extractGovernmentIdDetailsWithOcrApi($uploaded_file)
+    {
+        if (!is_array($uploaded_file) || (int)($uploaded_file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            return [
+                'success' => false,
+                'message' => 'Valid ID file was not uploaded correctly.'
+            ];
+        }
+
+        $tmp_path = (string)($uploaded_file['tmp_name'] ?? '');
+        if ($tmp_path === '' || !is_uploaded_file($tmp_path)) {
+            return [
+                'success' => false,
+                'message' => 'Uploaded valid ID file is invalid.'
+            ];
+        }
+
+        if (!function_exists('curl_init')) {
+            return [
+                'success' => false,
+                'message' => 'Valid ID OCR is unavailable on this server (cURL missing).'
+            ];
+        }
+
+        $api_key = getGovernmentIdVerificationApiKey();
+        if ($api_key === '') {
+            return [
+                'success' => false,
+                'message' => 'Valid ID OCR API key is not configured.'
+            ];
+        }
+
+        $mime_type = function_exists('mime_content_type') ? mime_content_type($tmp_path) : '';
+        $original_name = trim((string)($uploaded_file['name'] ?? 'valid_id_upload'));
+        if ($original_name === '') {
+            $original_name = 'valid_id_upload';
+        }
+
+        $cfile = curl_file_create($tmp_path, $mime_type !== '' ? $mime_type : 'application/octet-stream', $original_name);
+        $endpoint = 'https://api.ocr.space/parse/image';
+        $post_fields = [
+            'apikey' => $api_key,
+            'language' => 'eng',
+            'isOverlayRequired' => 'false',
+            'OCREngine' => '2',
+            'detectOrientation' => 'true',
+            'scale' => 'true',
+            'file' => $cfile
+        ];
+
+        $ch = curl_init($endpoint);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => $post_fields,
+            CURLOPT_TIMEOUT => 35,
+            CURLOPT_CONNECTTIMEOUT => 10
+        ]);
+
+        $raw_response = curl_exec($ch);
+        $curl_error = curl_error($ch);
+        $http_code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($raw_response === false) {
+            return [
+                'success' => false,
+                'message' => 'Valid ID OCR request failed: ' . ($curl_error !== '' ? $curl_error : 'network error')
+            ];
+        }
+
+        $response_payload = json_decode((string)$raw_response, true);
+        if (!is_array($response_payload)) {
+            return [
+                'success' => false,
+                'message' => 'Valid ID OCR returned an unreadable response.'
+            ];
+        }
+
+        if ($http_code >= 400 || !empty($response_payload['IsErroredOnProcessing'])) {
+            $api_error = '';
+            if (!empty($response_payload['ErrorMessage'])) {
+                $api_error = is_array($response_payload['ErrorMessage'])
+                    ? implode(' ', array_map('strval', $response_payload['ErrorMessage']))
+                    : (string)$response_payload['ErrorMessage'];
+            }
+            return [
+                'success' => false,
+                'message' => 'Valid ID OCR could not process the uploaded image: ' . ($api_error !== '' ? $api_error : 'OCR processing failed')
+            ];
+        }
+
+        $parsed_text = extractOcrParsedText($response_payload);
+        $details = extractGovernmentIdDetailsFromOcrText($parsed_text);
+        $ocr_excerpt = substr(trim((string)$parsed_text), 0, 800);
+        if (empty($details['success']) || empty($details['id_type']) || empty($details['id_number'])) {
+            return [
+                'success' => false,
+                'message' => 'No valid Philippine ID type or ID number was detected in the uploaded image.',
+                'ocr_text_excerpt' => $ocr_excerpt
+            ];
+        }
+
+        $confidence = (float)($details['confidence'] ?? 0);
+        if ($confidence < 0.65) {
+            return [
+                'success' => false,
+                'message' => 'The uploaded image did not look like a valid Philippine ID. Please upload a clear photo of a valid ID.',
+                'ocr_text_excerpt' => $ocr_excerpt
+            ];
+        }
+
+        return [
+            'success' => true,
+            'details' => $details,
+            'ocr_text_excerpt' => $ocr_excerpt
         ];
     }
 }

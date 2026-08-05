@@ -457,6 +457,10 @@ if (!$is_embedded) {
 }
 ?>
 
+<!-- Leaflet Map API -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
 <div class="<?php echo $is_embedded ? 'address-embed-wrap' : 'account-page'; ?>">
     <div class="<?php echo $is_embedded ? 'address-embed-container' : 'container'; ?>">
         <div class="address-book-head">
@@ -1920,104 +1924,52 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         setTimeout(() => {
-            if (window.google && google.maps && google.maps.event && mapInstance) {
-                google.maps.event.trigger(mapInstance, 'resize');
-                const markerPosition = mapMarker?.getPosition?.();
-                if (markerPosition) {
-                    mapInstance.setCenter(markerPosition);
+            if (mapInstance) {
+                mapInstance.invalidateSize();
+                const markerLatLng = mapMarker?.getLatLng?.();
+                if (markerLatLng) {
+                    mapInstance.setView(markerLatLng, mapInstance.getZoom());
                 }
             }
             if (mapSearchInput) mapSearchInput.focus();
         }, 80);
     };
 
-    const ensureGoogleMapsLoaded = () => {
-        if (window.google && window.google.maps) return Promise.resolve(true);
-        if (mapsLoadPromise) return mapsLoadPromise;
-        if (!addressBookGoogleMapsApiKey) {
-            fireSwal('Map Unavailable', 'Google Maps API key is missing.', 'error');
-            return Promise.resolve(false);
-        }
-
-        mapsLoadPromise = new Promise((resolve) => {
-            const existing = document.querySelector('script[data-address-book-map="1"]');
-            if (existing) {
-                existing.addEventListener('load', () => resolve(!!(window.google && window.google.maps)), { once: true });
-                existing.addEventListener('error', () => resolve(false), { once: true });
-                return;
-            }
-
-            const script = document.createElement('script');
-            script.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(addressBookGoogleMapsApiKey) + '&libraries=places';
-            script.async = true;
-            script.defer = true;
-            script.dataset.addressBookMap = '1';
-            script.onload = () => resolve(!!(window.google && window.google.maps));
-            script.onerror = () => resolve(false);
-            document.head.appendChild(script);
-        });
-
-        return mapsLoadPromise;
-    };
-
     const ensureMapReady = async () => {
-        const loaded = await ensureGoogleMapsLoaded();
-        if (!loaded || !window.google || !google.maps || !mapCanvas) {
-            fireSwal('Map Unavailable', 'Google Maps failed to load. Please refresh and try again.', 'error');
+        if (!window.L || !mapCanvas) {
+            fireSwal('Map Unavailable', 'Leaflet Map failed to load. Please refresh and try again.', 'error');
             return false;
         }
 
         if (!mapInstance) {
-            mapInstance = new google.maps.Map(mapCanvas, {
-                center: defaultCoordinates,
-                zoom: 15,
-                mapTypeControl: false,
-                streetViewControl: false,
-                fullscreenControl: false
-            });
+            mapInstance = L.map(mapCanvas).setView([defaultCoordinates.lat, defaultCoordinates.lng], 15);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(mapInstance);
 
-            mapGeocoder = new google.maps.Geocoder();
-            mapMarker = new google.maps.Marker({
-                map: mapInstance,
-                draggable: true,
-                position: defaultCoordinates
-            });
+            mapMarker = L.marker([defaultCoordinates.lat, defaultCoordinates.lng], {
+                draggable: true
+            }).addTo(mapInstance);
 
-            mapInstance.addListener('click', (event) => {
-                if (!event || !event.latLng) return;
-                const point = { lat: event.latLng.lat(), lng: event.latLng.lng() };
+            mapInstance.on('click', (event) => {
+                if (!event || !event.latlng) return;
+                const point = { lat: event.latlng.lat, lng: event.latlng.lng };
                 setMapPoint(point, true);
             });
 
-            mapMarker.addListener('dragend', () => {
-                const markerPos = mapMarker.getPosition();
-                if (!markerPos) return;
-                const point = { lat: markerPos.lat(), lng: markerPos.lng() };
+            mapMarker.on('dragend', () => {
+                const latlng = mapMarker.getLatLng();
+                if (!latlng) return;
+                const point = { lat: latlng.lat, lng: latlng.lng };
                 setMapPoint(point, true);
             });
-
-            if (mapSearchInput && google.maps.places && typeof google.maps.places.Autocomplete === 'function') {
-                mapAutocomplete = new google.maps.places.Autocomplete(mapSearchInput);
-                mapAutocomplete.bindTo('bounds', mapInstance);
-                mapAutocomplete.addListener('place_changed', () => {
-                    const place = mapAutocomplete.getPlace();
-                    if (!place || !place.geometry || !place.geometry.location) return;
-                    const point = { lat: place.geometry.location.lat(), lng: place.geometry.location.lng() };
-                    setMapPoint(point, false);
-                    selectedAddressText = String(place.formatted_address || mapSearchInput.value || '').trim();
-                    selectedAddressComponents = extractAddressParts(place.address_components || []);
-                    if (selectedAddressText && mapSearchInput) mapSearchInput.value = selectedAddressText;
-                });
-            }
         }
         return true;
     };
 
     const reverseGeocode = async (lat, lng) => {
-        const googleResult = await reverseGeocodeFromGoogle(lat, lng);
-        if ((googleResult?.formatted || '') !== '' || composeAddressFromParts(googleResult?.parts || {}, '') !== '') {
-            return googleResult;
-        }
         const fallbackResult = await reverseGeocodeFromNominatim(lat, lng);
         if ((fallbackResult?.formatted || '') !== '' || composeAddressFromParts(fallbackResult?.parts || {}, '') !== '') {
             return fallbackResult;
@@ -2025,51 +1977,23 @@ document.addEventListener('DOMContentLoaded', function () {
         return { formatted: '', parts: null };
     };
 
-    const geocodeAddress = (addressText) => {
-        if (!addressText) return Promise.resolve(false);
-        const applyFromFallback = async () => {
-            const fallback = await forwardGeocodeFromNominatim(addressText);
-            if (!fallback || !fallback.point) {
-                return false;
-            }
-            await setMapPoint(fallback.point, false);
-            selectedAddressText = String(fallback.formatted || addressText).trim();
-            selectedAddressComponents = fallback.parts || null;
-            if (mapSearchInput) mapSearchInput.value = selectedAddressText;
-            return true;
-        };
-
-        if (!mapGeocoder || !mapGoogleGeocodingAvailable) {
-            return applyFromFallback();
+    const geocodeAddress = async (addressText) => {
+        if (!addressText) return false;
+        const fallback = await forwardGeocodeFromNominatim(addressText);
+        if (!fallback || !fallback.point) {
+            return false;
         }
-
-        return new Promise((resolve) => {
-            mapGeocoder.geocode({ address: addressText }, async (results, status) => {
-                if (status !== 'OK' || !Array.isArray(results) || !results.length || !results[0].geometry || !results[0].geometry.location) {
-                    if (isGoogleGeocodingUnavailableStatus(status)) {
-                        mapGoogleGeocodingAvailable = false;
-                    }
-                    resolve(await applyFromFallback());
-                    return;
-                }
-                const point = {
-                    lat: results[0].geometry.location.lat(),
-                    lng: results[0].geometry.location.lng()
-                };
-                setMapPoint(point, false);
-                selectedAddressText = String(results[0].formatted_address || addressText).trim();
-                selectedAddressComponents = extractAddressParts(results[0].address_components || []);
-                if (mapSearchInput) mapSearchInput.value = selectedAddressText;
-                resolve(true);
-            });
-        });
+        await setMapPoint(fallback.point, false);
+        selectedAddressText = String(fallback.formatted || addressText).trim();
+        selectedAddressComponents = fallback.parts || null;
+        if (mapSearchInput) mapSearchInput.value = selectedAddressText;
+        return true;
     };
 
     const setMapPoint = async (point, lookupAddress) => {
         if (!mapInstance || !mapMarker || !point) return;
-        mapInstance.setCenter(point);
-        mapInstance.setZoom(16);
-        mapMarker.setPosition(point);
+        mapInstance.setView([point.lat, point.lng], 16);
+        mapMarker.setLatLng([point.lat, point.lng]);
         selectedCoordinates = point;
 
         if (lookupAddress) {

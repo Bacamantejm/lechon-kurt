@@ -1,11 +1,7 @@
 <?php
 session_start();
-
-$current_page = 'cart';
-$page_title = "Your Cart | Lechon Delights";
-include 'includes/header.php';
-$storefront_seller_id = isset($_SESSION['storefront_seller_id']) ? (int)$_SESSION['storefront_seller_id'] : 0;
-$preorder_checkout_link = 'preorder.php' . ($storefront_seller_id > 0 ? '?seller_id=' . $storefront_seller_id : '');
+header("Location: menu.php?open_cart=1");
+exit;
 
 if (!isset($_SESSION['cart']) || !is_array($_SESSION['cart'])) {
     $_SESSION['cart'] = [];

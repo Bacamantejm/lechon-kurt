@@ -51,7 +51,7 @@ if ($seller_scope_id === null) {
             SELECT 1
             FROM order_items oi_scope
             INNER JOIN products p_scope
-                ON (oi_scope.product_id = p_scope.product_id OR oi_scope.product_id = CAST(p_scope.id AS CHAR))
+                ON (oi_scope.product_id COLLATE utf8mb4_general_ci = p_scope.product_id COLLATE utf8mb4_general_ci OR oi_scope.product_id COLLATE utf8mb4_general_ci = CAST(p_scope.id AS CHAR) COLLATE utf8mb4_general_ci)
             WHERE oi_scope.order_id = o.id
               AND p_scope.seller_id = " . (int)$seller_scope_id . "
         )";
@@ -160,7 +160,7 @@ if ($seller_scope_id !== null) {
             SELECT 1
             FROM order_items oi_scope
             INNER JOIN products p_scope
-                ON (oi_scope.product_id = p_scope.product_id OR oi_scope.product_id = CAST(p_scope.id AS CHAR))
+                ON (oi_scope.product_id COLLATE utf8mb4_general_ci = p_scope.product_id COLLATE utf8mb4_general_ci OR oi_scope.product_id COLLATE utf8mb4_general_ci = CAST(p_scope.id AS CHAR) COLLATE utf8mb4_general_ci)
             WHERE oi_scope.order_id = o.id
               AND p_scope.seller_id = " . (int)$seller_scope_id . "
         )";
@@ -682,7 +682,7 @@ if ($seller_scope_id !== null) {
                                                  FROM order_items oi 
                                                  JOIN orders o ON oi.order_id = o.id
                                                  LEFT JOIN products p
-                                                   ON (oi.product_id = p.product_id OR oi.product_id = CAST(p.id AS CHAR))
+                                                   ON (oi.product_id COLLATE utf8mb4_general_ci = p.product_id COLLATE utf8mb4_general_ci OR oi.product_id COLLATE utf8mb4_general_ci = CAST(p.id AS CHAR) COLLATE utf8mb4_general_ci)
                                                  WHERE o.is_archived = 0 
                                                    AND o.status IN ('confirmed', 'preparing', 'delivered', 'completed') 
                                                    AND DATE(o.created_at) >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)" . ($seller_scope_id !== null ? " AND p.seller_id = " . (int)$seller_scope_id : "") . "
@@ -696,7 +696,7 @@ if ($seller_scope_id !== null) {
                                                  FROM order_items oi 
                                                  JOIN orders o ON oi.order_id = o.id
                                                  LEFT JOIN products p
-                                                   ON (oi.product_id = p.product_id OR oi.product_id = CAST(p.id AS CHAR))
+                                                   ON (oi.product_id COLLATE utf8mb4_general_ci = p.product_id COLLATE utf8mb4_general_ci OR oi.product_id COLLATE utf8mb4_general_ci = CAST(p.id AS CHAR) COLLATE utf8mb4_general_ci)
                                                  WHERE o.is_archived = 0 
                                                    AND o.status IN ('confirmed', 'preparing', 'delivered', 'completed') 
                                                    AND MONTH(o.created_at) = MONTH(CURDATE()) AND YEAR(o.created_at) = YEAR(CURDATE())" . ($seller_scope_id !== null ? " AND p.seller_id = " . (int)$seller_scope_id : "") . "

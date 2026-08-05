@@ -576,6 +576,7 @@ include 'includes/header.php';
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <!-- Add this for better mobile input handling -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+<script src="dist/bundle.iife.js"></script>
 
 <style>
 .registration-page {
@@ -1404,7 +1405,7 @@ body {
 
 .registration-container {
     max-width: 100% !important;
-    width: 100vw;
+    width: 100%;
     min-height: calc(100vh - 64px) !important;
     background-color: white;
     border-radius: 0 !important;
@@ -1417,13 +1418,70 @@ body {
 
 .registration-image-side {
     width: 50%;
-    background: #ff541c; /* Match solid orange background of the mascot */
-    display: flex;
+    background: linear-gradient(135deg, #fff2eb 0%, #ffd9ce 100%) !important;
+    display: flex !important;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 0;
-    border: none;
+    padding: 40px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
     min-height: calc(100vh - 64px) !important;
+}
+
+.brand-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 3.8rem;
+    font-weight: 900;
+    letter-spacing: -1.5px;
+    margin: 0;
+    color: #b3261e !important;
+    text-shadow: 0 4px 12px rgba(179,38,30,0.15);
+}
+
+.brand-subtitle {
+    font-size: 1.25rem;
+    color: #7b6d64 !important;
+    margin-top: 15px;
+    max-width: 340px;
+    font-weight: 600;
+    line-height: 1.6;
+}
+
+.floating-pigs-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.floating-pig {
+    position: absolute;
+    font-size: 3.5rem;
+    opacity: 0.16;
+    animation: floatPig 8s ease-in-out infinite alternate;
+}
+
+.pig-1 { top: 10%; left: 15%; animation-duration: 9s; font-size: 4rem; }
+.pig-2 { top: 25%; right: 15%; animation-duration: 11s; animation-delay: 1s; font-size: 3.5rem; }
+.pig-3 { bottom: 20%; left: 20%; animation-duration: 10s; animation-delay: 2s; font-size: 4.5rem; }
+.pig-4 { bottom: 15%; right: 25%; animation-duration: 8s; animation-delay: 0.5s; font-size: 3rem; }
+.pig-5 { top: 50%; left: 40%; animation-duration: 12s; animation-delay: 1.5s; font-size: 3.8rem; }
+
+@keyframes floatPig {
+    0% {
+        transform: translateY(0) rotate(0deg) scale(1);
+    }
+    50% {
+        transform: translateY(-20px) rotate(8deg) scale(1.05);
+    }
+    100% {
+        transform: translateY(10px) rotate(-8deg) scale(0.95);
+    }
 }
 
 .mascot-img-wrap {
@@ -1464,10 +1522,15 @@ body {
     }
     .registration-form-side {
         width: 100%;
-        height: 100vh;
+        height: auto;
+        min-height: calc(100vh - 64px);
     }
     .registration-image-side {
         display: none !important;
+    }
+    /* Prevent automatic zoom-in on focus on mobile devices */
+    input, select, textarea, .form-control {
+        font-size: 16px !important;
     }
 }
 @keyframes pigRun {
@@ -1481,15 +1544,26 @@ body {
         transform: translateY(0) rotate(5deg) scaleX(-1);
     }
 }
+.footer {
+    margin-top: 0 !important;
+}
 </style>
 
 <div class="registration-page">
     <div class="registration-container">
-        <!-- Left Side: Mascot Image Panel -->
-        <!-- Left Side: Branding Panel -->
-        <div class="registration-image-side" style="background: var(--reg-red, #b3261e); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; text-align: center; color: #ffffff;">
-            <h1 style="font-family: 'Outfit', sans-serif; font-size: 3.5rem; font-weight: 900; letter-spacing: -1.5px; margin: 0; color: #ffffff; text-shadow: 0 4px 12px rgba(0,0,0,0.1);">Lechon Delights</h1>
-            <p style="font-size: 1.1rem; opacity: 0.9; margin-top: 15px; max-width: 320px; font-weight: 500; line-height: 1.5;">Cavite's Finest Lechon at Your Doorsteps</p>
+        <!-- Left Side: Branding Panel with Floating Mascot Pigs -->
+        <div class="registration-image-side">
+            <div class="floating-pigs-container">
+                <div class="floating-pig pig-1">🐷</div>
+                <div class="floating-pig pig-2">🐷</div>
+                <div class="floating-pig pig-3">🐷</div>
+                <div class="floating-pig pig-4">🐷</div>
+                <div class="floating-pig pig-5">🐷</div>
+            </div>
+            <div class="brand-content" style="position: relative; z-index: 10;">
+                <h1 class="brand-title">Lechon Delights</h1>
+                <p class="brand-subtitle">Cavite's Finest Lechon at Your Doorsteps</p>
+            </div>
         </div>
 
         <!-- Right Side: Registration Form Panel -->
@@ -1658,7 +1732,8 @@ body {
                                 <div class="upload-zone-content" id="zoneContentFront">
                                     <i class="fas fa-id-card" style="font-size: 2.2rem; color: #b3261e; margin-bottom: 10px; display: block;"></i>
                                     <span style="font-size: 0.85rem; font-weight:700; color: #475569; display: block; margin-bottom: 4px;">Capture Front Side</span>
-                                    <span style="font-size: 0.72rem; color: #94a3b8; display: block;">Tap to open camera</span>
+                                    <span style="font-size: 0.72rem; color: #94a3b8; display: block; margin-bottom: 8px;">Tap to open camera</span>
+                                    <button type="button" class="direct-upload-btn" data-side="Front" style="display: inline-block; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 5px 12px; font-size: 0.75rem; font-weight: 700; color: #475569; cursor: pointer; transition: all 0.2s ease;">Or upload file</button>
                                 </div>
                                 <div class="upload-preview" id="previewFront" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius: 10px; background: #fff; z-index: 2; overflow: hidden; padding: 4px;">
                                     <img src="" style="width: 100%; height: 100%; object-fit: contain;">
@@ -1674,7 +1749,8 @@ body {
                                 <div class="upload-zone-content" id="zoneContentBack">
                                     <i class="fas fa-id-card-clip" style="font-size: 2.2rem; color: #b3261e; margin-bottom: 10px; display: block;"></i>
                                     <span style="font-size: 0.85rem; font-weight:700; color: #475569; display: block; margin-bottom: 4px;">Capture Back Side</span>
-                                    <span style="font-size: 0.72rem; color: #94a3b8; display: block;">Tap to open camera</span>
+                                    <span style="font-size: 0.72rem; color: #94a3b8; display: block; margin-bottom: 8px;">Tap to open camera</span>
+                                    <button type="button" class="direct-upload-btn" data-side="Back" style="display: inline-block; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 5px 12px; font-size: 0.75rem; font-weight: 700; color: #475569; cursor: pointer; transition: all 0.2s ease;">Or upload file</button>
                                 </div>
                                 <div class="upload-preview" id="previewBack" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius: 10px; background: #fff; z-index: 2; overflow: hidden; padding: 4px;">
                                     <img src="" style="width: 100%; height: 100%; object-fit: contain;">
@@ -2970,12 +3046,26 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let idVerified = false;
 
-    function simulateIdVerification(firstName, lastName) {
+    function verifyIdWithBackend(firstName, lastName) {
+        const validIdType = ((document.getElementById('validIdType') || {}).value || '').trim();
+        const frontInput = document.getElementById('validIdFront');
+        const frontFile = frontInput && frontInput.files ? frontInput.files[0] : null;
+        const csrfToken = document.querySelector('input[name="csrf_token"]')?.value || '';
+
+        if (!frontFile) {
+            showError('ID Photo Required', 'Please upload or capture the front side of your ID.');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('valid_id_file', frontFile);
+        formData.append('csrf_token', csrfToken);
+
         Swal.fire({
-            title: 'Verifying Identity',
-            html: '<div style="margin-bottom:15px; font-size:0.95rem; color:#475569;" id="swalScanMsg">Initializing verification scanner...</div>' +
+            title: 'Processing ID Document',
+            html: '<div style="margin-bottom:15px; font-size:0.95rem; color:#475569;" id="swalScanMsg">Extracting details from your ID...</div>' +
                   '<div class="ocr-scan-progress" style="width:100%; height:8px; background:#e2e8f0; border-radius:4px; overflow:hidden; position:relative; margin-bottom:10px;">' +
-                  '  <div id="swalScanBar" style="position:absolute; top:0; left:0; height:100%; width:0%; background:#b3261e; transition: width 0.3s ease;"></div>' +
+                  '  <div id="swalScanBar" style="position:absolute; top:0; left:0; height:100%; width:10%; background:#b3261e; transition: width 0.3s ease;"></div>' +
                   '</div>' +
                   '<div style="font-size:0.8rem; color:#94a3b8;"><i class="fas fa-shield-halved fa-spin"></i> Secure biometric credentials match</div>',
             allowOutsideClick: false,
@@ -2986,39 +3076,114 @@ document.addEventListener('DOMContentLoaded', function() {
                 const bar = document.getElementById('swalScanBar');
                 const msg = document.getElementById('swalScanMsg');
                 
-                setTimeout(() => {
-                    if (bar) bar.style.width = '35%';
-                    if (msg) msg.textContent = 'Scanning Front & Back ID documents...';
-                }, 800);
+                if (bar) bar.style.width = '30%';
 
-                setTimeout(() => {
-                    if (bar) bar.style.width = '65%';
-                    if (msg) msg.textContent = 'Extracting document credentials (OCR)...';
-                }, 1800);
+                // Step 1: Extract details and run PHIDValidator check
+                fetch('api/extract_valid_id_details.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json().then(data => ({ status: response.status, data })))
+                .then(({ status, data }) => {
+                    if (status !== 200 || !data.success) {
+                        throw new Error(data.message || 'OCR extraction failed.');
+                    }
 
-                setTimeout(() => {
-                    if (bar) bar.style.width = '88%';
+                    const details = data.details || {};
+                    const detectedType = details.id_type || '';
+                    const detectedNumber = details.id_number || '';
+
+                    if (bar) bar.style.width = '60%';
+                    if (msg) msg.textContent = 'Validating ID format...';
+
+                    let formatValid = false;
+                    if (window.PHIDValidator) {
+                        const validatorMap = {
+                            'passport': window.PHIDValidator.validatePassport,
+                            'drivers_license': window.PHIDValidator.validateDriversLicense,
+                            'prc': window.PHIDValidator.validatePRC,
+                            'tin': window.PHIDValidator.validateTIN,
+                            'sss': window.PHIDValidator.validateSSS,
+                            'gsis': window.PHIDValidator.validateGSIS,
+                            'owwa': window.PHIDValidator.validateOWWA,
+                            'postal': window.PHIDValidator.validatePostal,
+                            'ibp': window.PHIDValidator.validateIBP,
+                            'ofw': window.PHIDValidator.validateOFW,
+                            'government': window.PHIDValidator.validateGovernment,
+                            'senior_citizen': window.PHIDValidator.validateSeniorCitizen,
+                            'company': window.PHIDValidator.validateCompany,
+                            'national_id': window.PHIDValidator.validateNationalID,
+                            'pagibig': window.PHIDValidator.validatePagibig,
+                            'pag_ibig': window.PHIDValidator.validatePagibig,
+                            'philhealth': window.PHIDValidator.validatePhilhealth
+                        };
+
+                        const validateFn = validatorMap[detectedType];
+                        if (typeof validateFn === 'function') {
+                            const res = validateFn(detectedNumber);
+                            formatValid = !!(res && res.isValid);
+                        } else {
+                            formatValid = true;
+                        }
+                    } else {
+                        formatValid = true;
+                    }
+
+                    if (!formatValid) {
+                        throw new Error('The extracted ID number does not match standard Philippine formats.');
+                    }
+
+                    if (bar) bar.style.width = '80%';
                     if (msg) msg.textContent = 'Cross-matching name: "' + firstName + ' ' + lastName + '"...';
-                }, 2800);
 
-                setTimeout(() => {
-                    if (bar) bar.style.width = '100%';
-                    if (msg) msg.textContent = 'Verification successful! Credentials match.';
-                }, 3800);
+                    const verifyData = new FormData();
+                    verifyData.append('first_name', firstName);
+                    verifyData.append('last_name', lastName);
+                    verifyData.append('valid_id_type', validIdType);
+                    verifyData.append('valid_id', frontFile);
+                    verifyData.append('csrf_token', csrfToken);
 
-                setTimeout(() => {
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'Identity Verified',
-                        text: 'OCR details successfully match your registration credentials.',
-                        confirmButtonColor: '#b3261e',
-                        allowOutsideClick: false,
-                        allowEscapeKey: false
-                    }).then(() => {
-                        idVerified = true;
-                        goToStep(3);
+                    return fetch('api/verify_government_id.php', {
+                        method: 'POST',
+                        body: verifyData
                     });
-                }, 4300);
+                })
+                .then(response => {
+                    if (!response) return;
+                    return response.json().then(data => ({ status: response.status, data }));
+                })
+                .then(resObj => {
+                    if (!resObj) return;
+                    const { status, data } = resObj;
+                    if (status === 200 && data.success && data.verified) {
+                        if (bar) bar.style.width = '100%';
+                        if (msg) msg.textContent = 'Verification successful!';
+                        
+                        setTimeout(() => {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Identity Verified',
+                                text: 'OCR details successfully match your registration credentials.',
+                                confirmButtonColor: '#b3261e',
+                                allowOutsideClick: false,
+                                allowEscapeKey: false
+                            }).then(() => {
+                                idVerified = true;
+                                goToStep(3);
+                            });
+                        }, 500);
+                    } else {
+                        throw new Error(data.message || 'Name or type match failed.');
+                    }
+                })
+                .catch(error => {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Verification Failed',
+                        text: error.message || 'ID details do not match or verification failed.',
+                        confirmButtonColor: '#b3261e'
+                    });
+                });
             }
         });
     }
@@ -3102,7 +3267,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         if (!idVerified) {
-            simulateIdVerification(firstName, lastName);
+            verifyIdWithBackend(firstName, lastName);
             return false;
         }
 
@@ -3517,9 +3682,26 @@ document.addEventListener('DOMContentLoaded', function() {
         stopCamera();
     }
 
-    if (zoneFront) zoneFront.addEventListener('click', () => openModal('Front'));
-    if (zoneBack) zoneBack.addEventListener('click', () => openModal('Back'));
+    if (zoneFront) zoneFront.addEventListener('click', (e) => {
+        if (e.target.closest('.direct-upload-btn') || e.target.closest('.remove-preview')) return;
+        openModal('Front');
+    });
+    if (zoneBack) zoneBack.addEventListener('click', (e) => {
+        if (e.target.closest('.direct-upload-btn') || e.target.closest('.remove-preview')) return;
+        openModal('Back');
+    });
     if (closeCameraBtn) closeCameraBtn.addEventListener('click', closeModal);
+
+    // "Or upload file" buttons — bypass camera, go straight to file picker
+    document.querySelectorAll('.direct-upload-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const side = this.getAttribute('data-side');
+            const inputId = side === 'Front' ? 'validIdFront' : 'validIdBack';
+            const fileInput = document.getElementById(inputId);
+            if (fileInput) fileInput.click();
+        });
+    });
 
     if (removeFront) {
         removeFront.addEventListener('click', function(e) {
