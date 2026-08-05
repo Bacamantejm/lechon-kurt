@@ -213,14 +213,6 @@ function suRunSchemaUpdates(mysqli $conn): array {
             $results,
             'query_compat_schema'
         );
-
-        mysqli_query($conn, "SET SESSION sql_mode = ''");
-        @mysqli_query($conn, "UPDATE `orders` SET `delivery_date` = CURDATE() WHERE CAST(`delivery_date` AS CHAR) LIKE '0000%' OR `delivery_date` IS NULL");
-        @mysqli_query($conn, "ALTER TABLE `orders` MODIFY COLUMN `order_number` VARCHAR(64) NOT NULL");
-        @mysqli_query($conn, "ALTER TABLE `order_items` MODIFY COLUMN `product_id` VARCHAR(64) NULL DEFAULT NULL");
-        @mysqli_query($conn, "ALTER TABLE `order_items` MODIFY COLUMN `product_name` VARCHAR(255) NOT NULL");
-        suAddResult($results, 'query_compat_schema.orders.order_number', 'ok', 'Column order_number size is ready.');
-        suAddResult($results, 'query_compat_schema.order_items.product_id', 'ok', 'Column order_items size is ready.');
     } catch (Throwable $e) {
         $has_errors = true;
         suAddResult($results, 'query_compat_schema', 'error', $e->getMessage());

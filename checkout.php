@@ -754,10 +754,8 @@ $remaining = $total - $downpayment;
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
-<?php if (!empty($google_maps_api_key)): ?>
 <!-- Google Maps API -->
-<script src="https://maps.googleapis.com/maps/api/js?key=<?php echo rawurlencode($google_maps_api_key); ?>&libraries=places,geometry&loading=async&callback=initMap" async defer></script>
-<?php endif; ?>
+<script src="https://maps.googleapis.com/maps/api/js?key=<?php echo rawurlencode($google_maps_api_key); ?>&libraries=places,geometry&callback=initMap" async defer></script>
 
 <style>
 /* Add new styles for payment breakdown */

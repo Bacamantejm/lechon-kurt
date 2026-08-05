@@ -291,8 +291,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $payment_status = 'pending'; // Will be updated after payment
     }
     
-    // Generate order number (19 chars: ORD-YYYYMMDD-XXXXXX)
-    $order_number = 'ORD-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -6));
+    // Generate order number
+    $order_number = 'ORD-' . date('Ymd') . '-' . strtoupper(uniqid());
     
     // Start transaction
     mysqli_begin_transaction($conn);
@@ -626,97 +626,71 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         mysqli_commit($conn);
         pvClearAppliedVoucherSession();
         
-        // Calculate paid and balance amounts for order success display
+        // All payments go through PayMongo
         $payment_amount = ($payment_type === 'downpayment') ? $downpayment_amount : $total_amount;
-        $amount_paid = ($payment_status === 'paid' || $payment_status === 'partial') ? $payment_amount : 0;
-        if ($payment_method === 'cod') {
-            $amount_paid = ($payment_type === 'downpayment') ? $downpayment_amount : 0;
-        }
 
-        // Store order success data in session for receipt display
-        $_SESSION['order_success'] = [
-            'order_id'           => $order_id,
-            'order_number'       => $order_number,
-            'amount_paid'        => $amount_paid,
-            'total_amount'       => $total_amount,
-            'payment_method'     => $payment_method,
-            'payment_type'       => $payment_type,
-            'downpayment_amount' => $downpayment_amount,
-            'remaining_balance'  => $remaining_balance
+        // Initialize PayMongo
+        $paymongo = new PayMongoIntegration(
+            'sk_test_YOUR_PAYMONGO_SECRET_KEY_HERE',
+            'pk_test_YOUR_PAYMONGO_PUBLIC_KEY_HERE'
+        );
+
+        // Prepare checkout session data
+        $checkoutData = [
+            'amount' => $payment_amount,
+            'description' => 'Order #' . $order_number . ' - Lechon Delights',
+            'order_id' => $order_id,
+            'customer_name' => $full_name,
+            'customer_email' => $email,
+            'customer_phone' => $phone,
+            'success_url' => 'http://' . $_SERVER['HTTP_HOST'] . '/lechonsystem/payment_success.php?order_id=' . $order_id,
+            'cancel_url' => 'http://' . $_SERVER['HTTP_HOST'] . '/lechonsystem/payment_cancel.php?order_id=' . $order_id,
+            'payment_method' => $payment_method
         ];
 
-        // Send order confirmation email with order summary
-        try {
-            $emailService = new EmailService($conn);
-            $emailService->sendOrderConfirmation($order_id);
-        } catch (Exception $e) {
-            error_log("Order confirmation email sending error: " . $e->getMessage());
-        }
+        $result = $paymongo->createCheckoutSession($checkoutData);
 
-        // Clear user cart
-        unset($_SESSION['cart']);
-
-        // Resolve PayMongo API keys from config/env/constants
-        $paymongo_secret = getPayMongoSecretKey();
-        $paymongo_public = getPayMongoPublicKey();
-        $is_online_payment = in_array(strtolower($payment_method), ['gcash', 'paymaya', 'card', 'paymongo'], true);
-        $has_valid_paymongo_keys = ($paymongo_secret !== '' && (strpos($paymongo_secret, 'sk_test_') === 0 || strpos($paymongo_secret, 'sk_live_') === 0));
-
-        if ($is_online_payment) {
-            if ($has_valid_paymongo_keys) {
-                try {
-                    $paymongo = new PayMongoIntegration($paymongo_secret, $paymongo_public);
-                    $checkoutData = [
-                        'amount' => $payment_amount,
-                        'description' => 'Order #' . $order_number . ' - Lechon Delights',
-                        'order_id' => $order_id,
-                        'customer_name' => $full_name,
-                        'customer_email' => $email,
-                        'customer_phone' => $phone,
-                        'success_url' => 'http://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/lechonsystem/payment_success.php?order_id=' . $order_id,
-                        'cancel_url' => 'http://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/lechonsystem/payment_cancel.php?order_id=' . $order_id,
-                        'payment_method' => $payment_method
-                    ];
-
-                    $result = $paymongo->createCheckoutSession($checkoutData);
-
-                    if (!empty($result['success']) && !empty($result['checkout_url'])) {
-                        if (!empty($payments_table_exists)) {
-                            $query = "UPDATE payments SET checkout_session_id = ? WHERE order_id = ? ORDER BY id DESC LIMIT 1";
-                            $stmt = mysqli_prepare($conn, $query);
-                            if ($stmt) {
-                                mysqli_stmt_bind_param($stmt, "si", $result['session_id'], $order_id);
-                                mysqli_stmt_execute($stmt);
-                                mysqli_stmt_close($stmt);
-                            }
-                        }
-
-                        checkoutRedirectTo($result['checkout_url'], [
-                            'order_id' => (int)$order_id
-                        ]);
-                        exit;
-                    } else {
-                        error_log("PayMongo API Session notice: " . ($result['error'] ?? 'Unconfigured API keys'));
-                    }
-                } catch (Throwable $pe) {
-                    error_log("PayMongo integration exception: " . $pe->getMessage());
+        if ($result['success']) {
+            // Save checkout session ID to database
+            if (!empty($payments_table_exists)) {
+                $query = "UPDATE payments SET checkout_session_id = ? WHERE order_id = ? ORDER BY id DESC LIMIT 1";
+                $stmt = mysqli_prepare($conn, $query);
+                if ($stmt) {
+                    mysqli_stmt_bind_param($stmt, "si", $result['session_id'], $order_id);
+                    mysqli_stmt_execute($stmt);
+                    mysqli_stmt_close($stmt);
+                } else {
+                    error_log("Unable to update checkout session ID: " . mysqli_error($conn));
                 }
             }
 
-            // Redirect to PayMongo Gateway Simulator for local / sandbox mode when live API keys are not defined
-            checkoutRedirectTo('paymongo_checkout.php?order_id=' . $order_id, [
+            // Send order confirmation email
+            try {
+                $emailService = new EmailService($conn);
+                $emailService->sendOrderConfirmation($order_id);
+            } catch (Exception $e) {
+                error_log("Email sending error: " . $e->getMessage());
+            }
+
+            // Redirect to PayMongo checkout
+            checkoutRedirectTo($result['checkout_url'], [
                 'order_id' => (int)$order_id
             ]);
-            exit;
-        }
+        } else {
+            // Handle error
+            $errorMessage = $result['error'] ?? 'Unknown error occurred';
+            error_log("PayMongo checkout creation failed: " . $errorMessage);
 
-        // Direct redirect to order success page for COD, cash, or bank transfer
-        checkoutRedirectTo('order_success.php', [
-            'order_id' => (int)$order_id
-        ]);
+            checkoutFail(
+                'Payment Error',
+                'Could not create payment session: ' . $errorMessage,
+                502,
+                ['order_id' => (int)$order_id]
+            );
+        }
         
     } catch (Throwable $e) {
-        // Rollback transaction on failure
+        // Rollback transaction
         if (isset($conn) && mysqli_ping($conn)) {
             mysqli_rollback($conn);
         }
@@ -726,7 +700,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         checkoutFail(
             'Order Error',
             'There was an error processing your order: ' . $e->getMessage(),
-            400
+            500
         );
     }
 } else {
