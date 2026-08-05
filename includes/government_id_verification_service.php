@@ -226,7 +226,7 @@ if (!function_exists('getGovernmentIdVerificationApiKey')) {
 }
 
 if (!function_exists('verifyGovernmentIdWithOcrApi')) {
-    function verifyGovernmentIdWithOcrApi($first_name, $last_name, $uploaded_file, $address = '')
+    function verifyGovernmentIdWithOcrApi($first_name, $last_name, $uploaded_file, $address = '', $expected_id_type = '')
     {
         if (!is_array($uploaded_file) || (int)($uploaded_file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
             return [
@@ -341,6 +341,57 @@ if (!function_exists('verifyGovernmentIdWithOcrApi')) {
         }
 
         $parsed_text = extractOcrParsedText($response_payload);
+
+        if ($expected_id_type !== '') {
+            $detected_details = extractGovernmentIdDetailsFromOcrText($parsed_text);
+            $detected_type = strtolower(trim((string)($detected_details['id_type'] ?? '')));
+            $expected_type = strtolower(trim((string)$expected_id_type));
+
+            $type_aliases = [
+                'drivers_license' => ['drivers_license', 'driver', 'drivers', 'lto'],
+                'national_id' => ['national_id', 'philsys', 'philid'],
+                'passport' => ['passport'],
+                'prc' => ['prc'],
+                'tin' => ['tin'],
+                'sss' => ['sss'],
+                'gsis' => ['gsis'],
+                'owwa' => ['owwa'],
+                'postal' => ['postal'],
+                'ibp' => ['ibp'],
+                'ofw' => ['ofw'],
+                'senior_citizen' => ['senior_citizen', 'senior'],
+                'umid' => ['umid'],
+                'company' => ['company'],
+                'pagibig' => ['pagibig', 'pag-ibig', 'hdmf'],
+                'philhealth' => ['philhealth']
+            ];
+
+            $is_matched = false;
+            if ($detected_type === $expected_type) {
+                $is_matched = true;
+            } else {
+                foreach ($type_aliases as $canonical => $aliases) {
+                    if (in_array($detected_type, $aliases, true) && in_array($expected_type, $aliases, true)) {
+                        $is_matched = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!$is_matched && $detected_type !== '') {
+                $friendly_expected = str_replace('_', ' ', strtoupper($expected_type));
+                $friendly_detected = str_replace('_', ' ', strtoupper($detected_type));
+                return [
+                    'success' => true,
+                    'verified' => false,
+                    'message' => "The uploaded ID does not match your selected ID type (Expected: {$friendly_expected}, Detected: {$friendly_detected}).",
+                    'provider' => 'ocr_space',
+                    'score' => 0.0,
+                    'ocr_text_excerpt' => substr($parsed_text, 0, 500)
+                ];
+            }
+        }
+
         $match = calculateIdentityProfileMatchScore($parsed_text, $first_name, $last_name, $address);
         $threshold = (float)($match['overall_threshold'] ?? 0.75);
         $verified = !empty($match['name_verified']) && !empty($match['address_verified']) && (float)$match['overall_score'] >= $threshold;

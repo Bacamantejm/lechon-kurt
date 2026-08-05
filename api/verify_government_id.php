@@ -30,6 +30,7 @@ if ($csrf_token === '' || $session_csrf === '' || !hash_equals($session_csrf, $c
 $first_name = trim((string)($_POST['first_name'] ?? ''));
 $last_name = trim((string)($_POST['last_name'] ?? ''));
 $address = trim((string)($_POST['address'] ?? ''));
+$valid_id_type = trim((string)($_POST['valid_id_type'] ?? ''));
 if ($first_name === '' || $last_name === '') {
     http_response_code(422);
     echo json_encode([
@@ -44,7 +45,8 @@ $verification = verifyGovernmentIdWithConfiguredProvider(
     $first_name,
     $last_name,
     $_FILES['valid_id'] ?? null,
-    $address
+    $address,
+    $valid_id_type
 );
 $valid_id_file_hash = '';
 if (isset($_FILES['valid_id']) && is_array($_FILES['valid_id']) && (int)($_FILES['valid_id']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
