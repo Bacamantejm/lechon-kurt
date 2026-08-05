@@ -2799,25 +2799,14 @@ document.addEventListener('DOMContentLoaded', function () {
     guestCtaBtns.forEach(btn => {
         btn.addEventListener('click', function(e) {
             e.preventDefault();
-            Swal.fire({
-                title: 'Welcome to Lechon Delights',
-                text: 'To proceed, please choose whether to log in to your existing account or create a new one.',
-                icon: 'question',
-                showCancelButton: true,
-                showDenyButton: true,
-                confirmButtonText: '<i class="fas fa-sign-in-alt"></i> Log In',
-                denyButtonText: '<i class="fas fa-user-plus"></i> Create Account',
-                cancelButtonText: 'Cancel',
-                confirmButtonColor: '#b3261e',
-                denyButtonColor: '#ef6b2e',
-                cancelButtonColor: '#6b7280'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    window.location.href = 'login.php';
-                } else if (result.isDenied) {
-                    window.location.href = 'register.php';
+            const authOverlay = document.getElementById('authPopupOverlay');
+            if (authOverlay) {
+                const loginTab = authOverlay.querySelector('[data-auth-tab="login"]');
+                if (loginTab) {
+                    loginTab.click();
                 }
-            });
+                authOverlay.classList.add('active');
+            }
         });
     });
 
