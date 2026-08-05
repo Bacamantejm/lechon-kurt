@@ -576,6 +576,7 @@ include 'includes/header.php';
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <!-- Add this for better mobile input handling -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+<script src="dist/bundle.iife.js"></script>
 
 <style>
 .registration-page {
@@ -2973,12 +2974,26 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let idVerified = false;
 
-    function simulateIdVerification(firstName, lastName) {
+    function verifyIdWithBackend(firstName, lastName) {
+        const validIdType = ((document.getElementById('validIdType') || {}).value || '').trim();
+        const frontInput = document.getElementById('validIdFront');
+        const frontFile = frontInput && frontInput.files ? frontInput.files[0] : null;
+        const csrfToken = document.querySelector('input[name="csrf_token"]')?.value || '';
+
+        if (!frontFile) {
+            showError('ID Photo Required', 'Please upload or capture the front side of your ID.');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('valid_id_file', frontFile);
+        formData.append('csrf_token', csrfToken);
+
         Swal.fire({
-            title: 'Verifying Identity',
-            html: '<div style="margin-bottom:15px; font-size:0.95rem; color:#475569;" id="swalScanMsg">Initializing verification scanner...</div>' +
+            title: 'Processing ID Document',
+            html: '<div style="margin-bottom:15px; font-size:0.95rem; color:#475569;" id="swalScanMsg">Extracting details from your ID...</div>' +
                   '<div class="ocr-scan-progress" style="width:100%; height:8px; background:#e2e8f0; border-radius:4px; overflow:hidden; position:relative; margin-bottom:10px;">' +
-                  '  <div id="swalScanBar" style="position:absolute; top:0; left:0; height:100%; width:0%; background:#b3261e; transition: width 0.3s ease;"></div>' +
+                  '  <div id="swalScanBar" style="position:absolute; top:0; left:0; height:100%; width:10%; background:#b3261e; transition: width 0.3s ease;"></div>' +
                   '</div>' +
                   '<div style="font-size:0.8rem; color:#94a3b8;"><i class="fas fa-shield-halved fa-spin"></i> Secure biometric credentials match</div>',
             allowOutsideClick: false,
@@ -2989,39 +3004,114 @@ document.addEventListener('DOMContentLoaded', function() {
                 const bar = document.getElementById('swalScanBar');
                 const msg = document.getElementById('swalScanMsg');
                 
-                setTimeout(() => {
-                    if (bar) bar.style.width = '35%';
-                    if (msg) msg.textContent = 'Scanning Front & Back ID documents...';
-                }, 800);
+                if (bar) bar.style.width = '30%';
 
-                setTimeout(() => {
-                    if (bar) bar.style.width = '65%';
-                    if (msg) msg.textContent = 'Extracting document credentials (OCR)...';
-                }, 1800);
+                // Step 1: Extract details and run PHIDValidator check
+                fetch('api/extract_valid_id_details.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json().then(data => ({ status: response.status, data })))
+                .then(({ status, data }) => {
+                    if (status !== 200 || !data.success) {
+                        throw new Error(data.message || 'OCR extraction failed.');
+                    }
 
-                setTimeout(() => {
-                    if (bar) bar.style.width = '88%';
+                    const details = data.details || {};
+                    const detectedType = details.id_type || '';
+                    const detectedNumber = details.id_number || '';
+
+                    if (bar) bar.style.width = '60%';
+                    if (msg) msg.textContent = 'Validating ID format...';
+
+                    let formatValid = false;
+                    if (window.PHIDValidator) {
+                        const validatorMap = {
+                            'passport': window.PHIDValidator.validatePassport,
+                            'drivers_license': window.PHIDValidator.validateDriversLicense,
+                            'prc': window.PHIDValidator.validatePRC,
+                            'tin': window.PHIDValidator.validateTIN,
+                            'sss': window.PHIDValidator.validateSSS,
+                            'gsis': window.PHIDValidator.validateGSIS,
+                            'owwa': window.PHIDValidator.validateOWWA,
+                            'postal': window.PHIDValidator.validatePostal,
+                            'ibp': window.PHIDValidator.validateIBP,
+                            'ofw': window.PHIDValidator.validateOFW,
+                            'government': window.PHIDValidator.validateGovernment,
+                            'senior_citizen': window.PHIDValidator.validateSeniorCitizen,
+                            'company': window.PHIDValidator.validateCompany,
+                            'national_id': window.PHIDValidator.validateNationalID,
+                            'pagibig': window.PHIDValidator.validatePagibig,
+                            'pag_ibig': window.PHIDValidator.validatePagibig,
+                            'philhealth': window.PHIDValidator.validatePhilhealth
+                        };
+
+                        const validateFn = validatorMap[detectedType];
+                        if (typeof validateFn === 'function') {
+                            const res = validateFn(detectedNumber);
+                            formatValid = !!(res && res.isValid);
+                        } else {
+                            formatValid = true;
+                        }
+                    } else {
+                        formatValid = true;
+                    }
+
+                    if (!formatValid) {
+                        throw new Error('The extracted ID number does not match standard Philippine formats.');
+                    }
+
+                    if (bar) bar.style.width = '80%';
                     if (msg) msg.textContent = 'Cross-matching name: "' + firstName + ' ' + lastName + '"...';
-                }, 2800);
 
-                setTimeout(() => {
-                    if (bar) bar.style.width = '100%';
-                    if (msg) msg.textContent = 'Verification successful! Credentials match.';
-                }, 3800);
+                    const verifyData = new FormData();
+                    verifyData.append('first_name', firstName);
+                    verifyData.append('last_name', lastName);
+                    verifyData.append('valid_id_type', validIdType);
+                    verifyData.append('valid_id', frontFile);
+                    verifyData.append('csrf_token', csrfToken);
 
-                setTimeout(() => {
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'Identity Verified',
-                        text: 'OCR details successfully match your registration credentials.',
-                        confirmButtonColor: '#b3261e',
-                        allowOutsideClick: false,
-                        allowEscapeKey: false
-                    }).then(() => {
-                        idVerified = true;
-                        goToStep(3);
+                    return fetch('api/verify_government_id.php', {
+                        method: 'POST',
+                        body: verifyData
                     });
-                }, 4300);
+                })
+                .then(response => {
+                    if (!response) return;
+                    return response.json().then(data => ({ status: response.status, data }));
+                })
+                .then(resObj => {
+                    if (!resObj) return;
+                    const { status, data } = resObj;
+                    if (status === 200 && data.success && data.verified) {
+                        if (bar) bar.style.width = '100%';
+                        if (msg) msg.textContent = 'Verification successful!';
+                        
+                        setTimeout(() => {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Identity Verified',
+                                text: 'OCR details successfully match your registration credentials.',
+                                confirmButtonColor: '#b3261e',
+                                allowOutsideClick: false,
+                                allowEscapeKey: false
+                            }).then(() => {
+                                idVerified = true;
+                                goToStep(3);
+                            });
+                        }, 500);
+                    } else {
+                        throw new Error(data.message || 'Name or type match failed.');
+                    }
+                })
+                .catch(error => {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Verification Failed',
+                        text: error.message || 'ID details do not match or verification failed.',
+                        confirmButtonColor: '#b3261e'
+                    });
+                });
             }
         });
     }
@@ -3105,7 +3195,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         if (!idVerified) {
-            simulateIdVerification(firstName, lastName);
+            verifyIdWithBackend(firstName, lastName);
             return false;
         }
 
