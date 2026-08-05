@@ -15,16 +15,8 @@ if (isset($_SESSION['user_id'])) {
 $error = '';
 $success = '';
 $form_data = [];
-$requested_account_type = strtolower(trim((string)($_GET['account_type'] ?? '')));
-$partner_signup_flag = strtolower(trim((string)($_GET['partner_signup'] ?? '')));
-$is_partner_signup = (
-    $requested_account_type === 'organization' ||
-    in_array($partner_signup_flag, ['1', 'true', 'yes'], true)
-);
-
-if ($is_partner_signup) {
-    $form_data['account_type'] = 'organization';
-}
+$is_partner_signup = false;
+$form_data['account_type'] = 'individual';
 
 if (empty($_SESSION['registration_csrf_token'])) {
     $_SESSION['registration_csrf_token'] = bin2hex(random_bytes(32));
@@ -676,41 +668,33 @@ include 'includes/header.php';
 /* Progress Steps styled like modal tabs */
 .progress-steps {
     display: flex;
-    justify-content: center;
-    gap: 28px;
+    flex-direction: column;
+    align-items: center;
     background: transparent;
     padding: 24px 20px 10px;
     margin: 0;
     position: relative;
-    border-bottom: 1px solid #f1f5f9;
-}
-
-.progress-bar {
-    display: none; /* Hide old progress bar */
 }
 
 .step {
-    flex: none;
-    display: inline-flex;
+    display: none; /* Hide non-active steps to show only the active one solo */
     align-items: center;
-    padding: 0 0 10px 0;
+    padding: 0 0 5px 0;
     cursor: default;
-    border-bottom: 2px solid transparent;
-    transition: all 0.22s;
-    font-weight: 600;
-    font-size: 0.94rem;
-    color: #94a3b8;
+    border: none;
+    font-weight: 800;
+    font-size: 1.15rem;
+    color: #b3261e;
+    animation: fadeIn 0.4s ease;
 }
 
 .step.active {
-    color: #b3261e;
-    border-bottom-color: #b3261e;
-    font-weight: 700;
+    display: inline-flex;
 }
 
-.step.completed {
-    color: #475569;
-    font-weight: 600;
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 .step-number {
@@ -718,8 +702,8 @@ include 'includes/header.php';
 }
 
 .step-label {
-    font-size: 0.88rem;
-    font-weight: 700;
+    font-size: 1.05rem;
+    font-weight: 800;
 }
 
 /* Form Steps */
@@ -875,38 +859,38 @@ include 'includes/header.php';
 /* Button Styles */
 .btn-primary {
     width: 100%;
-    padding: 18px; /* Increased padding for better touch */
+    padding: 12px 20px;
     background: linear-gradient(135deg, #b3261e 0%, #8f261a 100%);
     color: white;
     border: none;
-    border-radius: 10px;
-    font-size: 1.1rem;
+    border-radius: 8px;
+    font-size: 0.95rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.3s;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
+    gap: 8px;
     position: relative;
     overflow: hidden;
     letter-spacing: 0.5px;
-    min-height: 56px; /* Better touch target */
+    min-height: 44px;
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation; /* Improve touch response */
 }
 
 .btn-primary:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 10px 30px rgba(198, 40, 40, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(179, 38, 30, 0.2);
 }
 
 .btn-primary:active {
-    transform: translateY(-1px);
+    transform: translateY(0);
 }
 
 .btn-primary:disabled {
-    background: #cccccc;
+    background: #cbd5e1;
     cursor: not-allowed;
     transform: none;
     box-shadow: none;
@@ -919,8 +903,8 @@ include 'includes/header.php';
 .btn-primary.loading::after {
     content: '';
     position: absolute;
-    width: 22px;
-    height: 22px;
+    width: 18px;
+    height: 18px;
     border: 3px solid rgba(255, 255, 255, 0.3);
     border-top-color: white;
     border-radius: 50%;
@@ -933,21 +917,21 @@ include 'includes/header.php';
 
 .btn-secondary {
     width: 100%;
-    padding: 18px; /* Increased padding for better touch */
+    padding: 12px 20px;
     background: white;
     color: #b3261e;
     border: 2px solid #b3261e;
-    border-radius: 10px;
-    font-size: 1.1rem;
+    border-radius: 8px;
+    font-size: 0.95rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.3s;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
+    gap: 8px;
     letter-spacing: 0.5px;
-    min-height: 56px; /* Better touch target */
+    min-height: 44px;
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation; /* Improve touch response */
 }
@@ -1407,84 +1391,141 @@ body {
 .social-divider, .social-login-buttons {
     display: none !important;
 }
+
+/* Full-screen split layout styling */
+.registration-page {
+    background: #ffffff !important;
+    display: flex;
+    align-items: stretch;
+    justify-content: stretch;
+    min-height: calc(100vh - 64px) !important;
+    padding: 0 !important;
+}
+
+.registration-container {
+    max-width: 100% !important;
+    width: 100vw;
+    min-height: calc(100vh - 64px) !important;
+    background-color: white;
+    border-radius: 0 !important;
+    border: none;
+    box-shadow: none !important;
+    display: flex;
+    flex-direction: row; /* Image left, form right */
+    margin: 0 !important;
+}
+
+.registration-image-side {
+    width: 50%;
+    background: #ff541c; /* Match solid orange background of the mascot */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    min-height: calc(100vh - 64px) !important;
+}
+
+.mascot-img-wrap {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mascot-img-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.registration-form-side {
+    width: 50%;
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    min-height: calc(100vh - 64px) !important;
+}
+
+.registration-form-side-container {
+    max-width: 460px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+@media (max-width: 850px) {
+    .registration-container {
+        flex-direction: column;
+    }
+    .registration-form-side {
+        width: 100%;
+        height: 100vh;
+    }
+    .registration-image-side {
+        display: none !important;
+    }
+}
 </style>
 
 <div class="registration-page">
     <div class="registration-container">
-        <div class="registration-header" style="background:#fff; border-bottom:1px solid #efddcd; padding:30px 24px 20px; text-align:center;">
-            <div style="display:inline-flex; align-items:center; gap:10px; margin-bottom:12px;">
-                <div style="width:36px; height:36px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; overflow:hidden; box-shadow:0 6px 16px rgba(179,38,30,.2);">
-                    <img src="assets/images/logo.jpg" alt="Lechon Delights Logo" style="width:100%; height:100%; object-fit:cover;">
-                </div>
-                <span style="font-size:1.25rem; font-weight:800; color:#0f172a;">Lechon Delights</span>
-            </div>
-            <h2 style="font-size:1.35rem; font-weight:800; color:#0f172a; margin:0 0 4px 0;">Create Account</h2>
-            <p style="font-size:0.9rem; color:#64748b; margin:0;">Join us to order Cavite's finest lechon dishes.</p>
+        <!-- Left Side: Mascot Image Panel -->
+        <!-- Left Side: Branding Panel -->
+        <div class="registration-image-side" style="background: var(--reg-red, #b3261e); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; text-align: center; color: #ffffff;">
+            <h1 style="font-family: 'Outfit', sans-serif; font-size: 3.5rem; font-weight: 900; letter-spacing: -1.5px; margin: 0; color: #ffffff; text-shadow: 0 4px 12px rgba(0,0,0,0.1);">Lechon Delights</h1>
+            <p style="font-size: 1.1rem; opacity: 0.9; margin-top: 15px; max-width: 320px; font-weight: 500; line-height: 1.5;">Cavite's Finest Lechon at Your Doorsteps</p>
         </div>
-        
-        <div class="registration-body">
 
-            <!-- Progress Steps -->
-            <div class="progress-steps">
-                <div class="progress-bar" id="progressBar"></div>
-                <div class="step active" id="step2">
-                    <div class="step-number">1</div>
-                    <div class="step-label">Personal Info</div>
-                </div>
-                <div class="step" id="step3">
-                    <div class="step-number">2</div>
-                    <div class="step-label" id="step3NavLabel">Address Info</div>
-                </div>
-                <div class="step" id="step4">
-                    <div class="step-number">3</div>
-                    <div class="step-label">Create Account</div>
-                </div>
-            </div>
-            
-            <form method="POST" action="" id="registrationForm" data-swal-validate="off" enctype="multipart/form-data" novalidate>
-                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['registration_csrf_token']); ?>">
-
-                <!-- Step 1: Account Type -->
-                <div class="form-step" id="step1Form" style="display:none;">
-                    <h2 style="color: #333; margin-bottom: 25px; font-size: 1.5rem;">
-                        <?php echo $is_partner_signup ? 'Business Partner Sign Up' : 'Select Account Type'; ?>
-                    </h2>
-                    
-                    <div class="account-type-selection">
-                        <?php if (!$is_partner_signup): ?>
-                        <div class="account-type-card" data-type="individual">
-                            <i class="fas fa-user"></i>
-                            <h3>Individual</h3>
-                            <p>Perfect for customers who want to order lechon for themselves, their family, or a special occasion.</p>
-                        </div>
-                        <?php endif; ?>
-                        <div class="account-type-card" data-type="organization">
-                            <i class="fas fa-building"></i>
-                            <h3>Business Partner</h3>
-                            <p>Great for restaurant owners who want to register their business and serve customers across Cavite.</p>
-                        </div>
+        <!-- Right Side: Registration Form Panel -->
+        <div class="registration-form-side">
+            <div class="registration-form-side-container">
+                <div class="registration-header" style="background:#fff; border-bottom:1px solid #efddcd; padding:30px 24px 20px; text-align:center;">
+                    <div style="display:inline-flex; align-items:center; gap:10px; margin-bottom:12px;">
+                        <span style="font-size:1.45rem; font-weight:800; color:#0f172a;">Lechon Delights</span>
                     </div>
-                    
-                    <input type="hidden" name="account_type" id="accountType" value="<?php echo htmlspecialchars($form_data['account_type'] ?? ($is_partner_signup ? 'organization' : 'individual')); ?>">
-                    <input type="hidden" name="psgc_region_name" id="psgcRegionName" value="<?php echo htmlspecialchars($form_data['psgc_region_name'] ?? ''); ?>">
-                    <input type="hidden" name="psgc_province_name" id="psgcProvinceName" value="<?php echo htmlspecialchars($form_data['psgc_province_name'] ?? ''); ?>">
-                    <input type="hidden" name="psgc_city_name" id="psgcCityName" value="<?php echo htmlspecialchars($form_data['psgc_city_name'] ?? ''); ?>">
-                    <input type="hidden" name="psgc_barangay_name" id="psgcBarangayName" value="<?php echo htmlspecialchars($form_data['psgc_barangay_name'] ?? ''); ?>">
-                    
-                    <div class="form-actions">
-                        <button type="button" class="btn-secondary" id="backToLoginBtn">
-                            <i class="fas fa-arrow-left"></i>
-                            Back to Login
-                        </button>
-                        <button type="button" class="btn-primary" id="nextStep1">
-                            Continue
-                            <i class="fas fa-arrow-right"></i>
-                        </button>
-                    </div>
+                    <h2 style="font-size:1.35rem; font-weight:800; color:#0f172a; margin:0 0 4px 0;">Create Account</h2>
+                    <p style="font-size:0.9rem; color:#64748b; margin:0;">Join us to order Cavite's finest lechon dishes.</p>
                 </div>
                 
-                <!-- Step 2: Personal Information -->
-                <div class="form-step active" id="step2Form">
+                <div class="registration-body">
+
+                    <!-- Progress Steps -->
+                    <div class="progress-steps">
+                        <div class="step active" id="step1">
+                            <div class="step-label">Personal Info (Step 1 of 4)</div>
+                        </div>
+                        <div class="step" id="step2">
+                            <div class="step-label">Verification (Step 2 of 4)</div>
+                        </div>
+                        <div class="step" id="step3">
+                            <div class="step-label" id="step3NavLabel">Address Info (Step 3 of 4)</div>
+                        </div>
+                        <div class="step" id="step4">
+                            <div class="step-label">Create Account (Step 4 of 4)</div>
+                        </div>
+                        <div class="progress-container" style="width: 100%; height: 4px; background: #efddcd; border-radius: 2px; margin-top: 10px; overflow: hidden; position: relative;">
+                            <div class="progress-bar" id="progressBar" style="position: absolute; left: 0; top: 0; height: 100%; width: 25%; background: #b3261e; transition: width 0.3s ease; display: block !important;"></div>
+                        </div>
+                    </div>
+                    
+                    <form method="POST" action="" id="registrationForm" data-swal-validate="off" enctype="multipart/form-data" novalidate>
+                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['registration_csrf_token']); ?>">
+
+                        <input type="hidden" name="account_type" id="accountType" value="individual">
+                        <input type="hidden" name="psgc_region_name" id="psgcRegionName" value="<?php echo htmlspecialchars($form_data['psgc_region_name'] ?? ''); ?>">
+                        <input type="hidden" name="psgc_province_name" id="psgcProvinceName" value="<?php echo htmlspecialchars($form_data['psgc_province_name'] ?? ''); ?>">
+                        <input type="hidden" name="psgc_city_name" id="psgcCityName" value="<?php echo htmlspecialchars($form_data['psgc_city_name'] ?? ''); ?>">
+                        <input type="hidden" name="psgc_barangay_name" id="psgcBarangayName" value="<?php echo htmlspecialchars($form_data['psgc_barangay_name'] ?? ''); ?>">
+                    
+
+                
+                <!-- Step 1: Personal Information -->
+                <div class="form-step active" id="step1Form">
                     <h2 style="color: #333; margin-bottom: 25px; font-size: 1.5rem;">Tell us about you</h2>
                     
                     <div class="form-row">
@@ -1530,6 +1571,22 @@ body {
                             </select>
                         </div>
                     </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary" id="prevStep1">
+                            <i class="fas fa-arrow-left"></i>
+                            Back to Login
+                        </button>
+                        <button type="button" class="btn-primary" id="nextStep1">
+                            Continue
+                            <i class="fas fa-arrow-right"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Step 2: Contact & ID Verification -->
+                <div class="form-step" id="step2Form">
+                    <h2 style="color: #333; margin-bottom: 25px; font-size: 1.5rem;">Contact & Verification</h2>
 
                     <div class="form-group">
                         <label for="email">Email Address *</label>
@@ -1614,8 +1671,6 @@ body {
                         </div>
                     </div>
 
-
-                    
                     <div class="form-actions">
                         <button type="button" class="btn-secondary" id="prevStep2">
                             <i class="fas fa-arrow-left"></i>
@@ -1831,6 +1886,8 @@ body {
                 Already have an account? 
                 <a href="login.php">Sign in here</a>
             </div>
+        </div>
+        </div>
         </div>
     </div>
 </div>
@@ -2396,7 +2453,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    let currentStep = 2;
+    let currentStep = 1;
     const totalSteps = 4;
     const steps = document.querySelectorAll('.step');
     const formSteps = document.querySelectorAll('.form-step');
@@ -2985,9 +3042,9 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateSteps() {
         steps.forEach(function(step, index) {
             step.classList.remove('active', 'completed');
-            if (index + 1 === currentStep) {
+            if (index === currentStep - 1) {
                 step.classList.add('active');
-            } else if (index + 1 < currentStep) {
+            } else if (index < currentStep - 1) {
                 step.classList.add('completed');
             }
         });
@@ -2999,7 +3056,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function updateProgressBar() {
         const progressBar = document.getElementById('progressBar');
-        const progress = ((currentStep - 2) / (totalSteps - 2)) * 100;
+        const progress = ((currentStep - 1) / (totalSteps - 1)) * 100;
         if (progressBar) {
             progressBar.style.width = progress + '%';
         }
@@ -3150,10 +3207,19 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function validateStep1() {
-        if (!accountType || !['individual', 'organization'].includes(accountType)) {
-            showError('Account Type Required', 'Please select either Individual or Business Partner to continue.');
+        const firstName = ((document.getElementById('firstName') || {}).value || '').trim();
+        const lastName = ((document.getElementById('lastName') || {}).value || '').trim();
+
+        if (!firstName || !lastName) {
+            showError('Missing Information', 'Please fill in all required personal details.');
             return false;
         }
+
+        if (!isValidName(firstName) || !isValidName(lastName)) {
+            showError('Invalid Name', 'Please use letters, spaces, apostrophes, or hyphens only.');
+            return false;
+        }
+
         return true;
     }
 
@@ -3235,7 +3301,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const validIdFrontFile = validIdFrontInput && validIdFrontInput.files ? validIdFrontInput.files[0] : null;
         const validIdBackFile = validIdBackInput && validIdBackInput.files ? validIdBackInput.files[0] : null;
 
-        if (!firstName || !lastName || !email || !phone) {
+        if (!email || !phone) {
             showError('Missing Information', 'Please fill in all required personal details.');
             return false;
         }
@@ -3415,10 +3481,26 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    const prevStep1 = document.getElementById('prevStep1');
+    if (prevStep1) {
+        prevStep1.addEventListener('click', function() {
+            window.location.href = 'login.php';
+        });
+    }
+
     const nextStep1 = document.getElementById('nextStep1');
     if (nextStep1) {
         nextStep1.addEventListener('click', function() {
-            goToStep(2);
+            if (validateStep1()) {
+                goToStep(2);
+            }
+        });
+    }
+
+    const prevStep2 = document.getElementById('prevStep2');
+    if (prevStep2) {
+        prevStep2.addEventListener('click', function() {
+            goToStep(1);
         });
     }
 
@@ -3431,26 +3513,19 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    const prevStep3 = document.getElementById('prevStep3');
+    if (prevStep3) {
+        prevStep3.addEventListener('click', function() {
+            goToStep(2);
+        });
+    }
+
     const nextStep3 = document.getElementById('nextStep3');
     if (nextStep3) {
         nextStep3.addEventListener('click', function() {
             if (validateStep3()) {
                 goToStep(4);
             }
-        });
-    }
-
-    const prevStep2 = document.getElementById('prevStep2');
-    if (prevStep2) {
-        prevStep2.addEventListener('click', function() {
-            window.location.href = 'login.php';
-        });
-    }
-
-    const prevStep3 = document.getElementById('prevStep3');
-    if (prevStep3) {
-        prevStep3.addEventListener('click', function() {
-            goToStep(2);
         });
     }
 
@@ -3782,15 +3857,12 @@ document.addEventListener('DOMContentLoaded', function() {
     syncAddressPreview();
 
     const serverRegistrationError = <?php echo json_encode($error ?? ''); ?>;
-    const requestedAccountType = <?php echo json_encode($requested_account_type); ?>;
-    if (requestedAccountType && !serverRegistrationError) {
-        goToStep(2);
-    }
+
     if (serverRegistrationError) {
         const loweredError = serverRegistrationError.toLowerCase();
-        let targetStep = 2;
-
-        if (/(email|mobile|phone|name|valid id|government id)/.test(loweredError)) {
+        if (/(name)/.test(loweredError)) {
+            targetStep = 1;
+        } else if (/(email|mobile|phone|valid id|government id)/.test(loweredError)) {
             targetStep = 2;
         } else if (/(business|partner|address|psgc|delivery|restaurant)/.test(loweredError)) {
             targetStep = 3;
