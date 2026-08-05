@@ -804,6 +804,10 @@ include 'includes/header.php';
     .login-left {
         display: none !important;
     }
+    /* Prevent automatic zoom-in on focus on mobile devices */
+    input, select, textarea, .form-control {
+        font-size: 16px !important;
+    }
 }
 
 /* Modern Food Auth Refresh */
