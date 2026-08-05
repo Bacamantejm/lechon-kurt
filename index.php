@@ -2799,14 +2799,7 @@ document.addEventListener('DOMContentLoaded', function () {
     guestCtaBtns.forEach(btn => {
         btn.addEventListener('click', function(e) {
             e.preventDefault();
-            const authOverlay = document.getElementById('authPopupOverlay');
-            if (authOverlay) {
-                const loginTab = authOverlay.querySelector('[data-auth-tab="login"]');
-                if (loginTab) {
-                    loginTab.click();
-                }
-                authOverlay.classList.add('active');
-            }
+            window.location.href = 'login.php';
         });
     });
 
@@ -3631,23 +3624,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Intercept clicks on the sign-in button in the header
-    document.querySelectorAll('.btn-signin').forEach(btn => {
-        btn.addEventListener('click', function(e) {
-            e.preventDefault();
-            switchAuthTab('login');
-            if (authOverlay) authOverlay.classList.add('active');
-        });
-    });
-
-    // Intercept clicks on the register button in the header
-    document.querySelectorAll('.btn-register').forEach(btn => {
-        btn.addEventListener('click', function(e) {
-            e.preventDefault();
-            switchAuthTab('register');
-            if (authOverlay) authOverlay.classList.add('active');
-        });
-    });
+    
     
     if (authClose) {
         authClose.addEventListener('click', function() {

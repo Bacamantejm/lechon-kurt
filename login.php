@@ -242,22 +242,25 @@ include 'includes/header.php';
 <style>
 /* Main Layout Styles */
 .login-page-container {
-    min-height: calc(100vh - 70px);
+    background: #ffffff !important;
     display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 40px 20px;
-    background: linear-gradient(135deg, #fff9f2 0%, #fff 100%);
+    align-items: stretch;
+    justify-content: stretch;
+    min-height: calc(100vh - 64px) !important;
+    padding: 0 !important;
 }
 
 .login-wrapper {
+    max-width: 100% !important;
+    width: 100vw;
+    min-height: calc(100vh - 64px) !important;
     background-color: white;
-    border-radius: 16px;
-    box-shadow: 0 15px 50px rgba(0, 0, 0, 0.1);
-    overflow: hidden;
-    max-width: 500px;
-    width: 100%;
-    min-height: 650px;
+    border-radius: 0 !important;
+    border: none;
+    box-shadow: none !important;
+    display: flex;
+    flex-direction: row; /* Image left, form right */
+    margin: 0 !important;
     animation: fadeIn 0.6s ease-out;
 }
 
@@ -268,12 +271,16 @@ include 'includes/header.php';
 
 /* Left Side - Brand/Info */
 .login-left {
-    background: linear-gradient(135deg, #8f261a 0%, #b3261e 100%);
-    padding: 50px 40px;
-    color: white;
-    position: relative;
-    overflow: hidden;
+    width: 50%;
+    background: #b3261e !important;
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px !important;
     text-align: center;
+    color: #ffffff;
+    min-height: calc(100vh - 64px) !important;
 }
 
 .login-left::before {
@@ -380,10 +387,14 @@ include 'includes/header.php';
 
 /* Right Side - Forms */
 .login-right {
-    padding: 50px 40px;
+    width: 50%;
+    background: #ffffff;
     display: flex;
     flex-direction: column;
+    align-items: center;
     justify-content: center;
+    padding: 40px 20px;
+    min-height: calc(100vh - 64px) !important;
 }
 
 .login-header {
@@ -780,35 +791,17 @@ include 'includes/header.php';
 }
 
 /* Responsive Design */
-@media (max-width: 576px) {
-    .login-page-container {
-        padding: 20px;
-    }
-    
+@media (max-width: 850px) {
     .login-wrapper {
-        min-height: auto;
-    }
-    
-    .login-left, .login-right {
-        padding: 40px 25px;
-    }
-    
-    .brand-logo h1 {
-        font-size: 1.6rem;
-    }
-    
-    .login-left h2 {
-        font-size: 1.6rem;
-    }
-    
-    .login-header h2 {
-        font-size: 1.5rem;
-    }
-    
-    .remember-forgot {
         flex-direction: column;
-        align-items: flex-start;
-        gap: 15px;
+    }
+    .login-right {
+        width: 100%;
+        height: 100vh;
+        padding: 40px 20px;
+    }
+    .login-left {
+        display: none !important;
     }
 }
 
@@ -899,18 +892,40 @@ body {
     border-color: #d7a37f;
     background: #fff2e6;
 }
+.footer {
+    margin-top: 0 !important;
+}
+.auth-link a {
+    color: #b3261e !important;
+    font-weight: 700 !important;
+    text-decoration: none !important;
+}
+.auth-link a:hover {
+    text-decoration: underline !important;
+}
 </style>
 
 <div class="login-page-container">
     <div class="login-wrapper">
+        <!-- Left Side: Branding Panel -->
+        <div class="login-left" style="background: var(--reg-red, #b3261e); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; text-align: center; color: #ffffff;">
+            <h1 style="font-family: 'Outfit', sans-serif; font-size: 3.5rem; font-weight: 900; letter-spacing: -1.5px; margin: 0; color: #ffffff; text-shadow: 0 4px 12px rgba(0,0,0,0.1);">Lechon Delights</h1>
+            <p style="font-size: 1.1rem; opacity: 0.9; margin-top: 15px; max-width: 320px; font-weight: 500; line-height: 1.5;">Cavite's Finest Lechon at Your Doorsteps</p>
+        </div>
+
         <!-- Login Form Section -->
         <div class="login-right">
-            <!-- Login View -->
-            <div id="loginViewContainer" class="auth-panel-view">
-                <div class="login-header">
-                    <h2>Welcome Back!</h2>
-                    <p>Sign in to continue your delicious journey with Lechon Delights</p>
-                </div>
+            <div style="max-width: 460px; width: 100%; margin: 0 auto; display: flex; flex-direction: column;">
+                <!-- Login View -->
+                <div id="loginViewContainer" class="auth-panel-view">
+                    <div class="login-header" style="text-align: center; margin-bottom: 24px;">
+                        <div style="display: inline-flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 12px;">
+                            <img src="assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 48px; height: 48px; object-fit: cover; border-radius: 12px; display: block; border: 1px solid #efddcd; box-shadow: 0 4px 12px rgba(0,0,0,0.06);">
+                            <span style="font-size: 1.6rem; font-weight: 800; color: #171922; font-family: 'Outfit', sans-serif;">Lechon Delights</span>
+                        </div>
+                        <h2>Welcome Back!</h2>
+                        <p>Sign in to continue your delicious journey with Lechon Delights</p>
+                    </div>
                 
                 <?php if ($error): ?>
                 <div class="alert alert-error" id="errorAlert">
@@ -965,30 +980,7 @@ body {
                         <span>Sign In</span>
                     </button>
                     
-                    <!-- Social Login Divider -->
-                    <div class="social-divider">
-                        <span>Or continue with</span>
-                    </div>
-                    
-                    <!-- Social Login Buttons -->
-                    <div class="social-login-buttons">
-                        <button type="button" class="social-btn google-btn" id="googleLoginBtn" title="Login with Google">
-                            <i class="fab fa-google"></i>
-                            <span>Google</span>
-                        </button>
-                        <button type="button" class="social-btn facebook-btn" id="facebookLoginBtn" title="Login with Facebook">
-                            <i class="fab fa-facebook-f"></i>
-                            <span>Facebook</span>
-                        </button>
-                        <button type="button" class="social-btn twitter-btn" id="twitterLoginBtn" title="Login with X">
-                            <i class="fab fa-x-twitter"></i>
-                            <span>X</span>
-                        </button>
-                        <button type="button" class="social-btn instagram-btn" id="instagramLoginBtn" title="Login with Instagram">
-                            <i class="fab fa-instagram"></i>
-                            <span>Instagram</span>
-                        </button>
-                    </div>
+
                     
                     <div class="auth-link">
                         Don't have an account? 
@@ -1030,6 +1022,7 @@ body {
             </div>
         </div>
     </div>
+</div>
 </div>
 
 <!-- SweetAlert2 JS -->
