@@ -1034,12 +1034,20 @@ mysqli_close($conn);
 <!-- Cart Sidebar -->
 <div class="cart-overlay" id="cartOverlay"></div>
 <div class="cart-sidebar" id="cartSidebar">
-    <div class="cart-header">
-        <h3><i class="fas fa-shopping-cart"></i> Your Cart</h3>
-        <button class="cart-close" id="cartClose">&times;</button>
+    <div class="cart-header" style="display: flex; align-items: center; justify-content: space-between; padding: 18px 24px; border-bottom: 1px solid #efddcd; background: #ffffff;">
+        <button class="cart-close" id="cartClose" style="background: none; border: none; font-size: 1.6rem; color: #171922; cursor: pointer; padding: 0; display: inline-flex; align-items: center; justify-content: center; margin: 0; line-height: 1;">&times;</button>
+        <div style="text-align: center; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; margin-right: 24px;">
+            <span style="font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 1.15rem; color: #171922; line-height: 1.2;">Basket</span>
+            <small style="font-size: 0.72rem; color: #667085; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; margin-top: 2px;"><i class="far fa-clock"></i> Delivery time: 30-40 min</small>
+        </div>
     </div>
     
-    <div class="cart-body" id="cartBody">
+    <div class="cart-body" id="cartBody" style="padding: 24px; overflow-y: auto; flex: 1;">
+        <!-- Store Name Header in Drawer -->
+        <div class="cart-store-header" style="margin-bottom: 20px; text-align: left;">
+            <h4 style="font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 1.25rem; color: #171922; margin: 0;"><?php echo htmlspecialchars($store_display_name); ?></h4>
+        </div>
+
         <div class="cart-empty" id="cartEmpty">
             <i class="fas fa-shopping-cart"></i>
             <p>Your cart is empty</p>
@@ -1051,23 +1059,26 @@ mysqli_close($conn);
         </div>
     </div>
     
-    <div class="cart-footer" id="cartFooter" style="display: none;">
-        <div class="cart-summary">
-            <div class="summary-row">
-                <span>Subtotal:</span>
-                <span id="cartSubtotal">PHP 0.00</span>
+    <div class="cart-footer" id="cartFooter" style="display: none; padding: 24px; border-top: 1px solid #efddcd; background: #ffffff; margin-top: auto;">
+        <div class="cart-summary" style="margin-bottom: 20px;">
+            <div class="summary-row" style="display: flex; justify-content: space-between; margin-bottom: 12px; font-size: 0.95rem; color: #667085; font-weight: 600;">
+                <span>Subtotal</span>
+                <span id="cartSubtotal" style="color: #171922; font-weight: 700;">PHP 0.00</span>
             </div>
-            <div class="summary-row total">
-                <span>Total:</span>
+            <div style="font-size: 0.82rem; color: #7b6d64; text-align: left; line-height: 1.4; margin-bottom: 16px;">
+                Delivery Fee will be shown after you review order
+            </div>
+            <div class="summary-row total" style="display: flex; justify-content: space-between; border-top: 1px solid #efddcd; padding-top: 16px; font-size: 1.15rem; font-weight: 800; color: #171922;">
+                <span style="font-family: 'Outfit', sans-serif;">Total</span>
                 <span id="cartTotal">PHP 0.00</span>
             </div>
         </div>
         
-        <div class="cart-actions">
-            <button class="btn-secondary" id="clearCart">Clear Cart</button>
-            <button class="btn-primary" id="checkoutBtn" <?php echo empty($_SESSION['cart']) ? 'disabled' : ''; ?>>
-                Proceed to Checkout
+        <div class="cart-actions" style="display: flex; flex-direction: column; gap: 8px;">
+            <button class="btn-primary" id="checkoutBtn" <?php echo empty($_SESSION['cart']) ? 'disabled' : ''; ?> style="width: 100% !important; background: #b3261e !important; color: #fff !important; border: none !important; border-radius: 8px !important; padding: 14px !important; font-weight: 700 !important; font-size: 1rem !important; cursor: pointer !important; text-align: center !important;">
+                Review Order
             </button>
+            <button class="btn-secondary" id="clearCart" style="background: none; border: none; color: #7b6d64; font-size: 0.85rem; font-weight: 600; cursor: pointer; text-decoration: underline; padding: 8px 0; margin: 0 auto; display: block;">Clear Cart</button>
         </div>
     </div>
 </div>
@@ -2179,25 +2190,24 @@ document.addEventListener('click', function(e) {
                     const cartImageSrc = resolveCartItemImageSource(item);
                     const cartImageFallback = resolveCartItemImageFallback(item);
                     cartItem.innerHTML = `
-                        <div class="cart-item-image">
+                        <div class="cart-item-quantity" style="display: flex; align-items: center; gap: 8px; margin-right: 12px;">
+                            <button class="qty-decrease" data-index="${index}" style="border: 1px solid #efddcd; background: #fff; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; color: #667085; font-weight: bold; cursor: pointer; font-size: 0.85rem; padding: 0;">-</button>
+                            <span style="font-weight: 700; font-size: 0.95rem; color: #171922; min-width: 14px; text-align: center;">${item.quantity}</span>
+                            <button class="qty-increase" data-index="${index}" style="border: 1px solid #efddcd; background: #fff; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; color: #667085; font-weight: bold; cursor: pointer; font-size: 0.85rem; padding: 0;">+</button>
+                        </div>
+                        <div class="cart-item-image" style="width: 48px; height: 48px; border-radius: 6px; overflow: hidden; flex-shrink: 0; margin-right: 12px; background-color: #f5f5f5;">
                             <img src="${escapeHtml(cartImageSrc)}" alt="${escapeHtml(item.name || 'Lechon item')}" 
-                                 onerror="this.onerror=null;this.src='${escapeHtml(cartImageFallback)}'">
+                                 onerror="this.onerror=null;this.src='${escapeHtml(cartImageFallback)}'" style="width: 100%; height: 100%; object-fit: cover;">
                         </div>
-                        <div class="cart-item-details">
-                            <div class="cart-item-name">${item.name}</div>
-                            ${item.size !== 'Regular' ? `<div class="cart-item-size">Size: ${item.size}</div>` : ''}
-                            <div class="cart-item-price">${formatCurrency(parseFloat(item.price))}</div>
+                        <div class="cart-item-details" style="flex: 1; text-align: left; padding: 0;">
+                            <div class="cart-item-name" style="font-weight: 700; color: #171922; font-size: 0.92rem; margin-bottom: 2px;">${item.name}</div>
+                            ${item.size !== 'Regular' ? `<div class="cart-item-size" style="font-size: 0.78rem; color: #667085; margin: 0;">Size: ${item.size}</div>` : ''}
                             ${item.addons && item.addons.length > 0 ? 
-                                `<div class="cart-item-addons">Add-ons: ${item.addons.join(', ')}</div>` : ''}
-                            <div class="cart-item-quantity">
-                                <button class="qty-decrease" data-index="${index}">-</button>
-                                <span>${item.quantity}</span>
-                                <button class="qty-increase" data-index="${index}">+</button>
-                            </div>
+                                `<div class="cart-item-addons" style="font-size: 0.78rem; color: #667085; margin: 0;">Add-ons: ${item.addons.join(', ')}</div>` : ''}
                         </div>
-                        <div class="cart-item-actions">
-                            <div class="cart-item-total">${formatCurrency(item.price * item.quantity)}</div>
-                            <button class="cart-item-remove" data-index="${index}">
+                        <div class="cart-item-price-col" style="text-align: right; margin-left: 12px; font-weight: 700; color: #171922; font-size: 0.92rem; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end;">
+                            <div>${formatCurrency(parseFloat(item.price) * item.quantity)}</div>
+                            <button class="cart-item-remove" data-index="${index}" style="background: none; border: none; color: #7b6d64; cursor: pointer; font-size: 0.8rem; display: block; margin-top: 4px; padding: 0;" title="Remove item">
                                 <i class="fas fa-trash"></i>
                             </button>
                         </div>
@@ -2432,8 +2442,26 @@ document.addEventListener('click', function(e) {
         }
     });
     
+    // Intercept all header cart buttons to open sidebar modal instead of redirecting to cart.php
+    document.querySelectorAll('.cart-btn, #cartToggle').forEach(btn => {
+        btn.removeAttribute('onclick');
+        btn.setAttribute('data-no-redirect', '1');
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            openCartSidebar();
+        });
+    });
+    
     // Initialize cart sidebar
     updateCartSidebar();
+
+    // Auto open cart modal if redirected with open_cart=1 parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('open_cart') === '1') {
+        window.history.replaceState({}, document.title, window.location.pathname);
+        setTimeout(openCartSidebar, 150);
+    }
 });
 </script>
 
@@ -5386,6 +5414,208 @@ body {
     .storefront-meta-row {
         gap: 10px 12px;
     }
+}
+
+/* GrabFood Style Storefront Header and Menu Items Overrides */
+.storefront-header {
+    background-color: #fff9f2 !important;
+    border-bottom: 1px solid #efddcd !important;
+    padding: 32px 0 !important;
+    text-align: left !important;
+}
+.store-breadcrumb {
+    margin-bottom: 16px !important;
+    font-size: 0.85rem !important;
+    color: #667085 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+}
+.store-breadcrumb a {
+    color: #667085 !important;
+    text-decoration: none !important;
+    font-weight: 500 !important;
+}
+.store-breadcrumb a:hover {
+    color: #b3261e !important;
+}
+.store-breadcrumb .breadcrumb-sep {
+    color: #667085 !important;
+    font-size: 0.85rem !important;
+}
+.storefront-overview {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+    align-items: flex-start !important;
+}
+.store-logo-tile {
+    display: none !important;
+}
+.storefront-copy {
+    padding: 0 !important;
+    width: 100% !important;
+}
+.storefront-copy h1 {
+    font-family: 'Outfit', sans-serif !important;
+    font-weight: 800 !important;
+    font-size: 2.2rem !important;
+    color: #171922 !important;
+    margin: 0 0 6px 0 !important;
+    letter-spacing: -0.5px !important;
+}
+.storefront-categories {
+    color: #667085 !important;
+    font-size: 0.9rem !important;
+    font-weight: 600 !important;
+    text-transform: capitalize !important;
+    margin: 0 0 6px 0 !important;
+}
+.storefront-subtitle {
+    color: #7b6d64 !important;
+    font-size: 0.92rem !important;
+    margin: 0 0 12px 0 !important;
+    max-width: 600px !important;
+}
+.storefront-meta-row {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 16px !important;
+    color: #667085 !important;
+    font-size: 0.85rem !important;
+    margin: 8px 0 0 0 !important;
+}
+.storefront-meta-row span, .storefront-meta-row a {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    color: #667085 !important;
+    text-decoration: none !important;
+    font-weight: 500 !important;
+}
+.storefront-meta-row a:hover {
+    color: #b3261e !important;
+}
+.storefront-meta-row i, .storefront-meta-row-secondary i {
+    color: #ef6b2e !important;
+}
+.menu-items-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 20px !important;
+}
+.menu-item {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: flex-start !important;
+    background: #ffffff !important;
+    border: 1px solid #efddcd !important;
+    border-radius: 12px !important;
+    padding: 16px !important;
+    transition: all 0.2s ease !important;
+    position: relative !important;
+    box-shadow: none !important;
+    overflow: hidden !important;
+}
+.menu-item:hover {
+    border-color: #ef6b2e !important;
+    background: #fffdfb !important;
+}
+.menu-item .item-image {
+    width: 110px !important;
+    height: 110px !important;
+    flex-shrink: 0 !important;
+    border-radius: 8px !important;
+    overflow: hidden !important;
+    margin-right: 16px !important;
+    position: relative !important;
+    order: -1 !important;
+}
+.menu-item .item-image img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+}
+.menu-item .item-content {
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    padding: 0 !important;
+    text-align: left !important;
+}
+.menu-item .item-content h3 {
+    font-family: 'Outfit', sans-serif !important;
+    font-weight: 800 !important;
+    font-size: 1.1rem !important;
+    color: #171922 !important;
+    margin: 0 0 6px 0 !important;
+}
+.menu-item .item-description {
+    font-size: 0.85rem !important;
+    color: #667085 !important;
+    line-height: 1.4 !important;
+    margin: 0 0 10px 0 !important;
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2 !important;
+    -webkit-box-orient: vertical !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+.menu-item .item-card-bottom {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    margin-top: auto !important;
+    width: 100% !important;
+}
+.menu-item .panda-price-pill {
+    font-weight: 800 !important;
+    color: #b3261e !important;
+    font-size: 1.05rem !important;
+    background: none !important;
+    padding: 0 !important;
+    border: none !important;
+}
+.menu-item .panda-quick-add-btn {
+    border-radius: 8px !important;
+    background: #b3261e !important;
+    color: #fff !important;
+    border: none !important;
+    padding: 8px 12px !important;
+    font-size: 0.85rem !important;
+}
+.menu-item .panda-quick-add-btn:hover {
+    background: #ef6b2e !important;
+}
+@media (max-width: 768px) {
+    .menu-items-grid {
+        grid-template-columns: 1fr !important;
+        gap: 16px !important;
+    }
+    .storefront-copy h1 {
+        font-size: 1.8rem !important;
+    }
+}
+
+.cart-item {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0 !important;
+    padding: 16px 0 !important;
+    border-bottom: 1px solid #efddcd !important;
+}
+.cart-overlay {
+    background-color: rgba(0, 0, 0, 0.04) !important;
+}
+.cart-sidebar {
+    border-left: 1px solid #efddcd !important;
+    box-shadow: -8px 0 32px rgba(42, 33, 29, 0.08) !important;
+}
+#floatingCartBtn {
+    display: none !important;
+}
+.swal2-container {
+    z-index: 99999 !important;
 }
 </style>
 
