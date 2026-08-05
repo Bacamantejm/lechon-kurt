@@ -12,6 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
+require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/government_id_verification_service.php';
 require_once __DIR__ . '/../includes/government_verification_provider.php';
 
