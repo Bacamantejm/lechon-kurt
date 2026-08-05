@@ -2562,7 +2562,7 @@ body {
                                 <div class="panda-card-content">
                                     <h2 class="panda-card-title">Order Fresh Lechon</h2>
                                     <p class="panda-card-desc">Enjoy crispy skin and juicy meat, roasted fresh for every order.</p>
-                                    <a href="#marketplaceStores" class="panda-card-btn">Order Now</a>
+                                    <a href="register.php" class="panda-card-btn">Order Now</a>
                                 </div>
                                 <div class="panda-card-graphic">
                                     <img src="assets/images/lechon_mascot_user.png" alt="Lechon Delights Mascot" class="panda-mascot-img" loading="lazy">
@@ -2577,7 +2577,7 @@ body {
                                 <div class="panda-card-content">
                                     <h2 class="panda-card-title">Pre-order for Celebrations</h2>
                                     <p class="panda-card-desc">Avoid the rush by booking your whole or half lechon ahead of time.</p>
-                                    <a href="preorder.php" class="panda-card-btn panda-card-btn-alt">Reserve Now</a>
+                                    <a href="register.php" class="panda-card-btn panda-card-btn-alt">Reserve Now</a>
                                 </div>
                                 <div class="panda-card-graphic-cluster">
                                     <div class="panda-float-badge-wrap">
