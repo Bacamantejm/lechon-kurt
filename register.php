@@ -1481,6 +1481,9 @@ body {
         transform: translateY(0) rotate(5deg) scaleX(-1);
     }
 }
+.footer {
+    margin-top: 0 !important;
+}
 </style>
 
 <div class="registration-page">
