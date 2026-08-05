@@ -3861,7 +3861,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 audio: false
             };
-            cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
+            try {
+                cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
+            } catch (firstErr) {
+                console.warn('Specific video constraints failed, trying generic constraints:', firstErr);
+                cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            }
             if (webcamVideo) {
                 webcamVideo.srcObject = cameraStream;
                 webcamVideo.onloadedmetadata = function() {
