@@ -1470,6 +1470,17 @@ body {
         display: none !important;
     }
 }
+@keyframes pigRun {
+    0% {
+        transform: translateY(0) rotate(0deg) scaleX(-1);
+    }
+    50% {
+        transform: translateY(-3px) rotate(-5deg) scaleX(-1);
+    }
+    100% {
+        transform: translateY(0) rotate(5deg) scaleX(-1);
+    }
+}
 </style>
 
 <div class="registration-page">
@@ -1508,8 +1519,10 @@ body {
                         <div class="step" id="step4">
                             <div class="step-label">Create Account (Step 4 of 4)</div>
                         </div>
-                        <div class="progress-container" style="width: 100%; height: 4px; background: #efddcd; border-radius: 2px; margin-top: 10px; overflow: hidden; position: relative;">
-                            <div class="progress-bar" id="progressBar" style="position: absolute; left: 0; top: 0; height: 100%; width: 25%; background: #b3261e; transition: width 0.3s ease; display: block !important;"></div>
+                        <div class="progress-container" style="width: 100%; height: 6px; background: #efddcd; border-radius: 3px; margin-top: 15px; overflow: visible; position: relative;">
+                            <div class="progress-bar" id="progressBar" style="position: absolute; left: 0; top: 0; height: 100%; width: 25%; background: #b3261e; transition: width 0.3s ease; display: block !important; overflow: visible;">
+                                <div class="running-pig" style="position: absolute; right: -14px; top: -20px; font-size: 22px; user-select: none; line-height: 1; animation: pigRun 0.4s infinite alternate ease-in-out;">🐖</div>
+                            </div>
                         </div>
                     </div>
                     
