@@ -1722,12 +1722,7 @@ body {
                     </div>
                     
                     <div class="form-group">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                            <label for="psgcRegion" id="addressSectionLabel" style="margin: 0; font-weight: 700; color: #333;">Home Address (PSGC) *</label>
-                            <button type="button" id="btnLocateMe" class="btn-secondary" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 0.8rem; min-height: 32px; padding: 0 12px; width: auto; font-weight: 700; border-radius: 6px; border: 1px solid #b3261e; background: #fff; color: #b3261e;">
-                                <i class="fas fa-location-crosshairs"></i> Locate Me
-                            </button>
-                        </div>
+                        <label for="psgcRegion" id="addressSectionLabel">Home Address (PSGC) *</label>
                         <div class="form-row">
                             <div class="form-group">
                                 <label for="psgcRegion" id="regionLabel">Region (Luzon only) *</label>
@@ -3541,129 +3536,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    const btnLocateMe = document.getElementById('btnLocateMe');
-    if (btnLocateMe) {
-        btnLocateMe.addEventListener('click', function() {
-            if (!navigator.geolocation) {
-                showError('Geolocation Unavailable', 'Your browser does not support location services.');
-                return;
-            }
 
-            Swal.fire({
-                title: 'Locating...',
-                text: 'Please wait while we determine your location.',
-                allowOutsideClick: false,
-                didOpen: () => { Swal.showLoading(); }
-            });
-
-            navigator.geolocation.getCurrentPosition(async (position) => {
-                const lat = position.coords.latitude;
-                const lng = position.coords.longitude;
-
-                try {
-                    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
-                    const data = await response.json();
-                    
-                    if (data && data.address) {
-                        const addr = data.address;
-                        
-                        const regionName = addr.region || addr.state || '';
-                        const provinceName = addr.province || addr.county || '';
-                        const cityName = addr.city || addr.municipality || addr.town || addr.village || '';
-                        const barangayName = addr.neighbourhood || addr.suburb || addr.quarter || addr.village || '';
-                        const road = addr.road || addr.suburb || '';
-                        const houseNumber = addr.house_number || '';
-                        const streetAddressVal = (houseNumber ? houseNumber + ' ' : '') + road;
-
-                        if (regionSelect) {
-                            const regionVal = findOptionValueFromCandidates(regionSelect, [regionName, 'calabarzon', 'iv-a']);
-                            if (regionVal) {
-                                regionSelect.value = regionVal;
-                                if (psgcRegionNameInput) psgcRegionNameInput.value = regionSelect.options[regionSelect.selectedIndex].text;
-                                await handleRegionChange(true);
-                            }
-                        }
-
-                        if (provinceSelect && provinceName) {
-                            const provinceVal = findOptionValueFromCandidates(provinceSelect, [provinceName]);
-                            if (provinceVal) {
-                                provinceSelect.value = provinceVal;
-                                if (psgcProvinceNameInput) psgcProvinceNameInput.value = provinceSelect.options[provinceSelect.selectedIndex].text;
-                                await handleProvinceChange(true);
-                            }
-                        }
-
-                        if (citySelect && cityName) {
-                            const cityVal = findOptionValueFromCandidates(citySelect, [cityName]);
-                            if (cityVal) {
-                                citySelect.value = cityVal;
-                                if (psgcCityNameInput) psgcCityNameInput.value = citySelect.options[citySelect.selectedIndex].text;
-                                await handleCityChange(true);
-                            }
-                        }
-
-                        if (barangaySelect && barangayName) {
-                            const barangayVal = findOptionValueFromCandidates(barangaySelect, [barangayName]);
-                            if (barangayVal) {
-                                barangaySelect.value = barangayVal;
-                                if (psgcBarangayNameInput) psgcBarangayNameInput.value = barangaySelect.options[barangaySelect.selectedIndex].text;
-                            }
-                        }
-
-                        if (streetAddressVal) {
-                            const streetInput = document.getElementById('streetAddress');
-                            if (streetInput) {
-                                streetInput.value = streetAddressVal;
-                            }
-                        }
-
-                        syncAddressPreview();
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Location found!',
-                            text: 'Your address details have been auto-filled. Please check them for accuracy.',
-                            confirmButtonColor: '#b3261e',
-                            timer: 3000
-                        });
-                    } else {
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Location resolution failed',
-                            text: 'We could not determine your address name from the coordinates.',
-                            confirmButtonColor: '#b3261e'
-                        });
-                    }
-                } catch (err) {
-                    console.error(err);
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Search failed',
-                        text: 'Unable to connect to the reverse-geocoding service.',
-                        confirmButtonColor: '#b3261e'
-                    });
-                }
-            }, (error) => {
-                let message = 'Error: The Geolocation service failed.';
-                if (error && error.code === 1) {
-                    message = 'Location permission was denied. Please allow location access.';
-                } else if (error && error.code === 2) {
-                    message = 'Location could not be determined. Please check your signal and try again.';
-                } else if (error && error.code === 3) {
-                    message = 'Location request timed out. Please try again.';
-                }
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Geolocation Error',
-                    text: message,
-                    confirmButtonColor: '#b3261e'
-                });
-            }, {
-                enableHighAccuracy: true,
-                timeout: 8000,
-                maximumAge: 0
-            });
-        });
-    }
 
     document.querySelectorAll('.toggle-password').forEach(function(button) {
         button.addEventListener('click', function() {
