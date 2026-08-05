@@ -2733,9 +2733,8 @@ const autoPinCheckoutMapFromHeaderPayload = async () => {
     const applyPinFromCoords = async (lat, lng) => {
         if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) return false;
         const point = { lat: Number(lat), lng: Number(lng) };
-        map.setCenter(point);
-        map.setZoom(17);
-        marker.setPosition(point);
+        map.setView([point.lat, point.lng], 17);
+        marker.setLatLng([point.lat, point.lng]);
 
         try {
             await updateAddressFromCoordinates(point.lat, point.lng);
@@ -2853,10 +2852,8 @@ const applySavedAddressToForm = async (savedAddress) => {
         if (longitudeInput) longitudeInput.value = String(lng);
 
         if (map && marker) {
-            const coords = { lat, lng };
-            map.setCenter(coords);
-            map.setZoom(17);
-            marker.setPosition(coords);
+            map.setView([lat, lng], 17);
+            marker.setLatLng([lat, lng]);
             calculateDeliveryFee(lat, lng);
         }
     }
