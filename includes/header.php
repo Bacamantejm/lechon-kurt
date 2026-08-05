@@ -521,11 +521,12 @@ $favorites_feature_enabled = $is_customer_user;
                 <div class="notification-dropdown" id="notificationDropdown"><div class="notification-header">Notifications</div><div class="notification-empty">No new notifications yet.</div></div>
             </div>
             <button class="icon-btn cart-btn" id="cartToggle" onclick="location.href='<?php echo $path_prefix; ?>cart.php'"><i class="fas fa-shopping-cart"></i><span class="badge" id="cartBadge"><?php echo (int)$cart_count; ?></span></button>
-            <?php else: ?>
+            <?php if ($current_page !== 'register' && $current_page !== 'login'): ?>
             <div class="auth-buttons">
                 <a href="<?php echo $path_prefix; ?>login.php" class="btn-signin">Log in</a>
                 <a href="<?php echo $path_prefix; ?>register.php" class="btn-register">Create account</a>
             </div>
+            <?php endif; ?>
             <?php endif; ?>
             <button class="icon-btn mobile-toggle" id="mobileToggle"><i class="fas fa-bars"></i></button>
         </div>
@@ -657,11 +658,12 @@ $favorites_feature_enabled = $is_customer_user;
                     <a href="javascript:void(0);" onclick="confirmLogout()" class="user-dropdown-item logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
                 </div>
             </div>
-            <?php else: ?>
+            <?php if ($current_page !== 'register' && $current_page !== 'login'): ?>
             <div class="auth-buttons">
                 <a href="<?php echo $path_prefix; ?>login.php" class="btn-signin">Log in</a>
                 <a href="<?php echo $path_prefix; ?>login.php?tab=register" class="btn-register">Create account</a>
             </div>
+            <?php endif; ?>
             <?php endif; ?>
             <?php if ($favorites_feature_enabled): ?>
             <a class="icon-btn" id="favoritesToggle" href="<?php echo $favorites_page_href; ?>" title="Favorites"><i class="far fa-heart"></i><span class="badge" id="favoritesBadge" style="display:none;">0</span></a>
@@ -708,7 +710,7 @@ $favorites_feature_enabled = $is_customer_user;
         <li><a href="javascript:void(0);" onclick="confirmLogout()"><i class="fas fa-right-from-bracket"></i> Logout</a></li>
         <?php endif; ?>
     </ul>
-    <?php if (!$is_logged_in_user): ?>
+    <?php if (!$is_logged_in_user && $current_page !== 'register' && $current_page !== 'login'): ?>
     <div class="mobile-auth">
         <a href="<?php echo $path_prefix; ?>login.php" class="btn-signin" style="text-align:center;">Log in</a>
         <a href="<?php echo $path_prefix; ?>login.php?tab=register" class="btn-register" style="text-align:center;">Create account</a>
