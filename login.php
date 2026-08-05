@@ -272,18 +272,77 @@ include 'includes/header.php';
 /* Left Side - Brand/Info */
 .login-left {
     width: 50%;
-    background: #b3261e !important;
+    background: linear-gradient(135deg, #fff2eb 0%, #ffd9ce 100%) !important;
     display: flex !important;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     padding: 40px !important;
     text-align: center;
-    color: #ffffff;
+    position: relative;
+    overflow: hidden;
     min-height: calc(100vh - 64px) !important;
 }
 
 .login-left::before {
+    display: none !important;
+}
+
+.brand-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 3.8rem;
+    font-weight: 900;
+    letter-spacing: -1.5px;
+    margin: 0;
+    color: #b3261e !important;
+    text-shadow: 0 4px 12px rgba(179,38,30,0.15);
+}
+
+.brand-subtitle {
+    font-size: 1.25rem;
+    color: #7b6d64 !important;
+    margin-top: 15px;
+    max-width: 340px;
+    font-weight: 600;
+    line-height: 1.6;
+}
+
+.floating-pigs-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.floating-pig {
+    position: absolute;
+    font-size: 3.5rem;
+    opacity: 0.16;
+    animation: floatPig 8s ease-in-out infinite alternate;
+}
+
+.pig-1 { top: 10%; left: 15%; animation-duration: 9s; font-size: 4rem; }
+.pig-2 { top: 25%; right: 15%; animation-duration: 11s; animation-delay: 1s; font-size: 3.5rem; }
+.pig-3 { bottom: 20%; left: 20%; animation-duration: 10s; animation-delay: 2s; font-size: 4.5rem; }
+.pig-4 { bottom: 15%; right: 25%; animation-duration: 8s; animation-delay: 0.5s; font-size: 3rem; }
+.pig-5 { top: 50%; left: 40%; animation-duration: 12s; animation-delay: 1.5s; font-size: 3.8rem; }
+
+@keyframes floatPig {
+    0% {
+        transform: translateY(0) rotate(0deg) scale(1);
+    }
+    50% {
+        transform: translateY(-20px) rotate(8deg) scale(1.05);
+    }
+    100% {
+        transform: translateY(10px) rotate(-8deg) scale(0.95);
+    }
+}
+
+.dummy-placeholder {
     content: '';
     position: absolute;
     top: 0;
@@ -912,10 +971,19 @@ body {
 
 <div class="login-page-container">
     <div class="login-wrapper">
-        <!-- Left Side: Branding Panel -->
-        <div class="login-left" style="background: var(--reg-red, #b3261e); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; text-align: center; color: #ffffff;">
-            <h1 style="font-family: 'Outfit', sans-serif; font-size: 3.5rem; font-weight: 900; letter-spacing: -1.5px; margin: 0; color: #ffffff; text-shadow: 0 4px 12px rgba(0,0,0,0.1);">Lechon Delights</h1>
-            <p style="font-size: 1.1rem; opacity: 0.9; margin-top: 15px; max-width: 320px; font-weight: 500; line-height: 1.5;">Cavite's Finest Lechon at Your Doorsteps</p>
+        <!-- Left Side: Branding Panel with Floating Mascot Pigs -->
+        <div class="login-left">
+            <div class="floating-pigs-container">
+                <div class="floating-pig pig-1">🐷</div>
+                <div class="floating-pig pig-2">🐷</div>
+                <div class="floating-pig pig-3">🐷</div>
+                <div class="floating-pig pig-4">🐷</div>
+                <div class="floating-pig pig-5">🐷</div>
+            </div>
+            <div class="brand-content" style="position: relative; z-index: 10;">
+                <h1 class="brand-title">Lechon Delights</h1>
+                <p class="brand-subtitle">Cavite's Finest Lechon at Your Doorsteps</p>
+            </div>
         </div>
 
         <!-- Login Form Section -->
