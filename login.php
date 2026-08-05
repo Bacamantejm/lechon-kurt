@@ -252,7 +252,7 @@ include 'includes/header.php';
 
 .login-wrapper {
     max-width: 100% !important;
-    width: 100vw;
+    width: 100%;
     min-height: calc(100vh - 64px) !important;
     background-color: white;
     border-radius: 0 !important;
@@ -797,7 +797,8 @@ include 'includes/header.php';
     }
     .login-right {
         width: 100%;
-        height: 100vh;
+        height: auto;
+        min-height: calc(100vh - 64px);
         padding: 40px 20px;
     }
     .login-left {
