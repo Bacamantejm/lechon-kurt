@@ -78,10 +78,6 @@
 
             <!-- Floating Chat Widget -->
             <?php if ($is_customer_user_footer): ?>
-            <a href="<?php echo $footer_path_prefix; ?>cart.php" class="floating-cart-btn" id="floatingCartBtn" title="View cart" data-tooltip="View Cart">
-                <i class="fas fa-shopping-cart"></i>
-                <span class="badge" id="floatingCartBadge"><?php echo (int)$footer_cart_count; ?></span>
-            </a>
 
             <a href="javascript:void(0);" onclick="toggleOngoingOrdersWidget()" class="floating-order-btn" id="floatingOrderBtn" title="Ongoing orders" data-tooltip="Ongoing Orders" style="display: none;">
                 <i class="fas fa-truck-fast"></i>

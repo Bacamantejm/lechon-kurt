@@ -445,9 +445,23 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_profile'])) {
         }
 
         if ($error_msg === '') {
+            $latitude = isset($_POST['latitude']) ? trim((string)$_POST['latitude']) : '';
+            $longitude = isset($_POST['longitude']) ? trim((string)$_POST['longitude']) : '';
+
             $update_fields = ['full_name = ?', 'phone = ?', 'address = ?'];
             $bind_types = 'sss';
             $bind_values = [$full_name, $phone, $address];
+
+            if (myAccountUserColumnExists($conn, 'latitude')) {
+                $update_fields[] = 'latitude = ?';
+                $bind_types .= 's';
+                $bind_values[] = $latitude;
+            }
+            if (myAccountUserColumnExists($conn, 'longitude')) {
+                $update_fields[] = 'longitude = ?';
+                $bind_types .= 's';
+                $bind_values[] = $longitude;
+            }
 
             if ($is_organization_account && $business_name_column_exists) {
                 $update_fields[] = 'business_name = ?';
@@ -705,6 +719,11 @@ $page_title = "My Account | Lechon Delights";
 include 'includes/header.php';
 ?>
 
+<!-- Leaflet Map CSS and JS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+
 <div class="account-page">
     <div class="container">
         <section class="account-hero">
@@ -724,10 +743,6 @@ include 'includes/header.php';
             </div>
             <div class="hero-badges">
                 <span class="hero-badge"><i class="fas fa-store"></i> Franchise: <?php echo htmlspecialchars($franchise_status_label); ?></span>
-                <button type="button" class="theme-toggle-btn" id="themeToggleBtn" aria-label="Toggle dark mode" title="Toggle dark mode">
-                    <i class="fas fa-moon"></i>
-                    <span>Dark Mode</span>
-                </button>
             </div>
             <div class="hero-actions">
                 <button type="button" class="hero-action-btn open-tab-trigger" data-target-tab="profile">
@@ -899,6 +914,15 @@ include 'includes/header.php';
                                     <i class="fas fa-address-book"></i> Manage Address Book
                                 </button>
                             </p>
+                        </div>
+                        
+                        <!-- Leaflet Pin Location Map -->
+                        <div class="form-group">
+                            <label>Pin Your Location</label>
+                            <div id="profileMap" style="height: 300px; width: 100%; border-radius: 8px; border: 1px solid #efddcd; margin-bottom: 8px; z-index: 1;"></div>
+                            <p class="upload-note">Click or drag on the map to pin your exact location. This helps delivery drivers find you easily.</p>
+                            <input type="hidden" name="latitude" id="profile_latitude" value="<?php echo htmlspecialchars($user['latitude'] ?? ''); ?>">
+                            <input type="hidden" name="longitude" id="profile_longitude" value="<?php echo htmlspecialchars($user['longitude'] ?? ''); ?>">
                         </div>
                         
                         <button type="submit" name="update_profile" class="btn-primary">Update Profile</button>
@@ -1124,12 +1148,13 @@ include 'includes/header.php';
 }
 
 .account-hero {
-    background: linear-gradient(125deg, rgba(179, 38, 30, 0.96), rgba(239, 107, 46, 0.93));
+    background: #b3261e !important;
     color: #fff;
-    border-radius: 20px;
-    padding: 26px;
-    box-shadow: 0 20px 40px rgba(111, 33, 17, 0.28);
-    margin-bottom: 20px;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: none;
+    border: 1px solid #efddcd;
+    margin-bottom: 24px;
 }
 
 .hero-main {
@@ -2215,21 +2240,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    setTheme(getInitialTheme());
+    setTheme('light');
     showToast('success', serverSuccessMsg);
     showToast('error', serverErrorMsg);
     if (typeof Swal !== 'undefined' && (serverSuccessMsg || serverErrorMsg)) {
         document.querySelectorAll('.alert').forEach((alertEl) => {
             alertEl.style.display = 'none';
-        });
-    }
-
-    if (themeToggleBtn) {
-        themeToggleBtn.addEventListener('click', function() {
-            const isDark = accountPage && accountPage.classList.contains('theme-dark');
-            const nextTheme = isDark ? 'light' : 'dark';
-            setTheme(nextTheme);
-            localStorage.setItem(THEME_KEY, nextTheme);
         });
     }
 
@@ -2419,6 +2435,79 @@ document.addEventListener('DOMContentLoaded', function() {
                     } else {
                         this.submit();
                     }
+                }
+            });
+        });
+    }
+
+    // Leaflet profile map initialization
+    const profileMapEl = document.getElementById('profileMap');
+    if (profileMapEl && typeof L !== 'undefined') {
+        const latInput = document.getElementById('profile_latitude');
+        const lngInput = document.getElementById('profile_longitude');
+        
+        let initialLat = parseFloat(latInput.value) || 14.3294; // Default to Cavite
+        let initialLng = parseFloat(lngInput.value) || 120.9367;
+        
+        const profileMap = L.map('profileMap').setView([initialLat, initialLng], 14);
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(profileMap);
+        
+        let marker = L.marker([initialLat, initialLng], {
+            draggable: true
+        }).addTo(profileMap);
+        
+        const addressTextarea = document.getElementById('address');
+        const reverseGeocode = async (lat, lng) => {
+            try {
+                if (addressTextarea) {
+                    addressTextarea.value = "Fetching address for pinned location...";
+                }
+                const endpoint = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&countrycodes=ph&lat=${lat}&lon=${lng}`;
+                const response = await fetch(endpoint, {
+                    method: 'GET',
+                    headers: { Accept: 'application/json' }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data && data.display_name && addressTextarea) {
+                        addressTextarea.value = data.display_name;
+                    }
+                }
+            } catch (error) {
+                console.error("Reverse geocoding failed:", error);
+            }
+        };
+
+        const updateCoords = (lat, lng) => {
+            latInput.value = Number(lat).toFixed(6);
+            lngInput.value = Number(lng).toFixed(6);
+            reverseGeocode(lat, lng);
+        };
+        
+        // Update on marker drag end
+        marker.on('dragend', function(e) {
+            const position = marker.getLatLng();
+            updateCoords(position.lat, position.lng);
+        });
+        
+        // Update on map click
+        profileMap.on('click', function(e) {
+            const position = e.latlng;
+            marker.setLatLng(position);
+            updateCoords(position.lat, position.lng);
+        });
+
+        // Trigger invalidateSize on tab switch to Profile
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                if (this.dataset.tab === 'profile') {
+                    setTimeout(() => {
+                        profileMap.invalidateSize();
+                    }, 100);
                 }
             });
         });

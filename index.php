@@ -2562,7 +2562,7 @@ body {
                                 <div class="panda-card-content">
                                     <h2 class="panda-card-title">Order Fresh Lechon</h2>
                                     <p class="panda-card-desc">Enjoy crispy skin and juicy meat, roasted fresh for every order.</p>
-                                    <a href="#marketplaceStores" class="panda-card-btn">Order Now</a>
+                                    <a href="register.php" class="panda-card-btn guest-cta-btn">Order Now</a>
                                 </div>
                                 <div class="panda-card-graphic">
                                     <img src="assets/images/lechon_mascot_user.png" alt="Lechon Delights Mascot" class="panda-mascot-img" loading="lazy">
@@ -2577,7 +2577,7 @@ body {
                                 <div class="panda-card-content">
                                     <h2 class="panda-card-title">Pre-order for Celebrations</h2>
                                     <p class="panda-card-desc">Avoid the rush by booking your whole or half lechon ahead of time.</p>
-                                    <a href="preorder.php" class="panda-card-btn panda-card-btn-alt">Reserve Now</a>
+                                    <a href="register.php" class="panda-card-btn panda-card-btn-alt guest-cta-btn">Reserve Now</a>
                                 </div>
                                 <div class="panda-card-graphic-cluster">
                                     <div class="panda-float-badge-wrap">
@@ -2794,6 +2794,15 @@ body {
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    // Intercept guest order/reserve button clicks
+    const guestCtaBtns = document.querySelectorAll('.guest-cta-btn');
+    guestCtaBtns.forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            window.location.href = 'login.php';
+        });
+    });
+
     const heroSearch = document.getElementById('heroStoreSearch');
     const gridSearch = document.getElementById('gridStoreSearch');
     const headerSearch = document.getElementById('marketHeaderSearch');
@@ -3615,23 +3624,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Intercept clicks on the sign-in button in the header
-    document.querySelectorAll('.btn-signin').forEach(btn => {
-        btn.addEventListener('click', function(e) {
-            e.preventDefault();
-            switchAuthTab('login');
-            if (authOverlay) authOverlay.classList.add('active');
-        });
-    });
-
-    // Intercept clicks on the register button in the header
-    document.querySelectorAll('.btn-register').forEach(btn => {
-        btn.addEventListener('click', function(e) {
-            e.preventDefault();
-            switchAuthTab('register');
-            if (authOverlay) authOverlay.classList.add('active');
-        });
-    });
+    
     
     if (authClose) {
         authClose.addEventListener('click', function() {

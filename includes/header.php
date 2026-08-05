@@ -83,7 +83,7 @@ $favorites_feature_enabled = $is_customer_user;
         .nav-link,.market-home-link { text-decoration:none; color:#56617a; font-size:.88rem; font-weight:700; min-height:38px; padding:0 12px; border-radius:999px; border:1px solid transparent; display:inline-flex; gap:6px; align-items:center; transition:var(--transition-fast); }
         .nav-link:hover,.nav-link.active,.market-home-link:hover,.market-home-link.active { background:#fff4e8; border-color:var(--line); color:var(--ink); }
         .user-menu-wrapper,.notification-wrapper { position:relative; }
-        .user-dropdown,.notification-dropdown { position:absolute; top:calc(100% + 10px); right:0; min-width:260px; background:#fff; border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow); padding:8px 0; opacity:0; visibility:hidden; transform:translateY(8px); transition:var(--transition-fade); z-index:1200; }
+        .user-dropdown,.notification-dropdown { position:absolute; top:calc(100% + 10px); right:0; min-width:260px; background:#fff; border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow); padding:8px 0; opacity:0; visibility:hidden; transform:translateY(8px); transition:var(--transition-fade); z-index:1500 !important; }
         .notification-dropdown { min-width:310px; }
         .user-menu-wrapper:hover .user-dropdown,.notification-wrapper:hover .notification-dropdown { opacity:1; visibility:visible; transform:translateY(0); }
         .user-dropdown-header { padding:4px 15px 11px; border-bottom:1px solid var(--line); margin-bottom:8px; }
@@ -439,6 +439,9 @@ $favorites_feature_enabled = $is_customer_user;
         @media (max-width:768px){ .mobile-toggle{display:inline-flex !important;} .main-nav{display:none;} .header-shell,.market-header-top,.market-header-bottom{padding-left:14px;padding-right:14px;} .market-header-top{flex-wrap:wrap;} .market-home-search-wrap{order:3;flex-basis:100%;min-width:100%;margin-top:4px;} .btn-signin,.btn-register{padding:0 10px;font-size:.78rem;min-height:34px;} }
         @media (max-width:480px){ .logo-title{font-size:1.02rem;} .logo-sub{font-size:.6rem;} }
     </style>
+    <!-- Leaflet Map CSS and JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 </head>
 <body class="<?php echo $is_market_home_header ? 'market-body' : 'site-body'; ?>">
 <?php if ($is_market_home_header): ?>
@@ -477,6 +480,11 @@ $favorites_feature_enabled = $is_customer_user;
                         <button type="button" class="market-address-pill" data-city="Tagaytay" data-street="Tagaytay, Cavite">Tagaytay</button>
                     </div>
                 </div>
+                <!-- Header Location Pinning Map -->
+                <div style="padding: 0 16px 14px 16px;">
+                    <div id="headerMap" style="height: 180px; width: 100%; border-radius: 8px; border: 1px solid #efddcd; z-index: 1;"></div>
+                    <p style="font-size: 0.72rem; color: #7b6d64; margin: 4px 0 0 0; text-align: left; font-weight: 500;">Drag the pin or click on the map to set your location.</p>
+                </div>
             </div>
         </div>
         <?php endif; ?>
@@ -497,12 +505,12 @@ $favorites_feature_enabled = $is_customer_user;
                     <a href="<?php echo $path_prefix; ?>my_account.php#addresses" class="user-dropdown-item"><i class="fas fa-address-book"></i> Address Book</a>
                     <a href="<?php echo $path_prefix; ?>my_orders.php" class="user-dropdown-item"><i class="fas fa-shopping-bag"></i> My Orders</a>
                     <a href="<?php echo $path_prefix; ?>help_center.php" class="user-dropdown-item"><i class="fas fa-life-ring"></i> Help Center</a>
-                    <a href="<?php echo $path_prefix; ?>subscription_plans.php" class="user-dropdown-item"><i class="fas fa-layer-group"></i> Subscription Plans</a>
                     <?php if ($favorites_feature_enabled): ?>
                     <a href="<?php echo $favorites_page_href; ?>" class="user-dropdown-item"><i class="fas fa-heart"></i> My Favorites</a>
                     <?php endif; ?>
                     <a href="<?php echo $path_prefix; ?>franchise_application.php" class="user-dropdown-item"><i class="fas fa-store"></i> Apply for Business</a>
                     <?php if (isset($_SESSION['account_type']) && $_SESSION['account_type'] === 'organization'): ?>
+                    <a href="<?php echo $path_prefix; ?>subscription_plans.php" class="user-dropdown-item"><i class="fas fa-layer-group"></i> Subscription Plans</a>
                     <a href="<?php echo $path_prefix; ?>seller_products.php" class="user-dropdown-item"><i class="fas fa-box"></i> My Products</a>
                     <a href="<?php echo $path_prefix; ?>seller_vouchers.php" class="user-dropdown-item"><i class="fas fa-tags"></i> My Vouchers</a>
                     <?php endif; ?>
@@ -628,7 +636,9 @@ $favorites_feature_enabled = $is_customer_user;
             <a href="<?php echo $path_prefix; ?>locations.php" class="nav-link <?php echo $current_page === 'locations' ? 'active' : ''; ?>"><i class="fas fa-location-dot"></i> Stores</a>
             <a href="<?php echo $path_prefix; ?>about.php" class="nav-link <?php echo $current_page === 'about' ? 'active' : ''; ?>"><i class="fas fa-book-open"></i> Our Story</a>
             <a href="<?php echo $path_prefix; ?>faq.php" class="nav-link <?php echo $current_page === 'faq' ? 'active' : ''; ?>"><i class="fas fa-circle-question"></i> FAQ</a>
+            <?php if (isset($_SESSION['account_type']) && $_SESSION['account_type'] === 'organization'): ?>
             <a href="<?php echo $path_prefix; ?>subscription_plans.php" class="nav-link <?php echo $current_page === 'subscription_plans' ? 'active' : ''; ?>"><i class="fas fa-layer-group"></i> Plans</a>
+            <?php endif; ?>
         </nav>
         <div class="header-actions">
             <?php if ($is_logged_in_user): ?>
@@ -646,12 +656,12 @@ $favorites_feature_enabled = $is_customer_user;
                     <a href="<?php echo $path_prefix; ?>my_account.php#addresses" class="user-dropdown-item"><i class="fas fa-address-book"></i> Address Book</a>
                     <a href="<?php echo $path_prefix; ?>my_orders.php" class="user-dropdown-item"><i class="fas fa-shopping-bag"></i> My Orders</a>
                     <a href="<?php echo $path_prefix; ?>help_center.php" class="user-dropdown-item"><i class="fas fa-life-ring"></i> Help Center</a>
-                    <a href="<?php echo $path_prefix; ?>subscription_plans.php" class="user-dropdown-item"><i class="fas fa-layer-group"></i> Subscription Plans</a>
                     <?php if ($favorites_feature_enabled): ?>
                     <a href="<?php echo $favorites_page_href; ?>" class="user-dropdown-item"><i class="fas fa-heart"></i> My Favorites</a>
                     <?php endif; ?>
                     <a href="<?php echo $path_prefix; ?>franchise_application.php" class="user-dropdown-item"><i class="fas fa-store"></i> Apply for Business</a>
                     <?php if (isset($_SESSION['account_type']) && $_SESSION['account_type'] === 'organization'): ?>
+                    <a href="<?php echo $path_prefix; ?>subscription_plans.php" class="user-dropdown-item"><i class="fas fa-layer-group"></i> Subscription Plans</a>
                     <a href="<?php echo $path_prefix; ?>seller_products.php" class="user-dropdown-item"><i class="fas fa-box"></i> My Products</a>
                     <a href="<?php echo $path_prefix; ?>seller_vouchers.php" class="user-dropdown-item"><i class="fas fa-tags"></i> My Vouchers</a>
                     <?php endif; ?>
@@ -665,7 +675,7 @@ $favorites_feature_enabled = $is_customer_user;
                 <?php if ($current_page !== 'register' && $current_page !== 'login'): ?>
                 <div class="auth-buttons">
                     <a href="<?php echo $path_prefix; ?>login.php" class="btn-signin">Log in</a>
-                    <a href="<?php echo $path_prefix; ?>login.php?tab=register" class="btn-register">Create account</a>
+                    <a href="<?php echo $path_prefix; ?>register.php" class="btn-register">Create account</a>
                 </div>
                 <?php endif; ?>
             <?php endif; ?>
@@ -698,7 +708,6 @@ $favorites_feature_enabled = $is_customer_user;
         <li><a href="<?php echo $path_prefix; ?>locations.php" class="<?php echo $current_page === 'locations' ? 'active' : ''; ?>"><i class="fas fa-location-dot"></i> Stores</a></li>
         <li><a href="<?php echo $path_prefix; ?>about.php" class="<?php echo $current_page === 'about' ? 'active' : ''; ?>"><i class="fas fa-book-open"></i> Our Story</a></li>
         <li><a href="<?php echo $path_prefix; ?>faq.php" class="<?php echo $current_page === 'faq' ? 'active' : ''; ?>"><i class="fas fa-circle-question"></i> FAQ</a></li>
-        <li><a href="<?php echo $path_prefix; ?>subscription_plans.php" class="<?php echo $current_page === 'subscription_plans' ? 'active' : ''; ?>"><i class="fas fa-layer-group"></i> Subscription Plans</a></li>
         <?php if ($is_logged_in_user): ?>
         <li><a href="<?php echo $path_prefix; ?>my_account.php"><i class="fas fa-user"></i> My Profile</a></li>
         <li><a href="<?php echo $path_prefix; ?>my_account.php#addresses"><i class="fas fa-address-book"></i> Address Book</a></li>
@@ -708,6 +717,7 @@ $favorites_feature_enabled = $is_customer_user;
         <?php endif; ?>
         <li><a href="<?php echo $path_prefix; ?>franchise_application.php"><i class="fas fa-briefcase"></i> Business</a></li>
         <?php if (isset($_SESSION['account_type']) && $_SESSION['account_type'] === 'organization'): ?>
+        <li><a href="<?php echo $path_prefix; ?>subscription_plans.php" class="<?php echo $current_page === 'subscription_plans' ? 'active' : ''; ?>"><i class="fas fa-layer-group"></i> Subscription Plans</a></li>
         <li><a href="<?php echo $path_prefix; ?>seller_products.php"><i class="fas fa-box"></i> My Products</a></li>
         <li><a href="<?php echo $path_prefix; ?>seller_vouchers.php"><i class="fas fa-tags"></i> My Vouchers</a></li>
         <?php endif; ?>
@@ -717,7 +727,7 @@ $favorites_feature_enabled = $is_customer_user;
     <?php if (!$is_logged_in_user && $current_page !== 'register' && $current_page !== 'login'): ?>
     <div class="mobile-auth">
         <a href="<?php echo $path_prefix; ?>login.php" class="btn-signin" style="text-align:center;">Log in</a>
-        <a href="<?php echo $path_prefix; ?>login.php?tab=register" class="btn-register" style="text-align:center;">Create account</a>
+        <a href="<?php echo $path_prefix; ?>register.php" class="btn-register" style="text-align:center;">Create account</a>
     </div>
     <?php endif; ?>
 </aside>
@@ -1532,11 +1542,75 @@ document.addEventListener('DOMContentLoaded', function () {
     const marketQuickAddressSubmitBtn = document.getElementById('marketQuickAddressSubmitBtn');
     const marketAddressPills = document.querySelectorAll('#marketAddressPopover .market-address-pill');
 
+    // Header location Leaflet map
+    let headerMap = null;
+    let headerMarker = null;
+
+    const initHeaderMap = function() {
+        const headerMapEl = document.getElementById('headerMap');
+        if (!headerMapEl || typeof L === 'undefined' || headerMap) return;
+
+        let startLat = 14.3294;
+        let startLng = 120.9367;
+
+        headerMap = L.map('headerMap').setView([startLat, startLng], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap'
+        }).addTo(headerMap);
+
+        headerMarker = L.marker([startLat, startLng], {
+            draggable: true
+        }).addTo(headerMap);
+
+        const geocodeHeaderCoords = async (lat, lng) => {
+            try {
+                if (marketQuickStreetInput) marketQuickStreetInput.value = "Locating...";
+                const endpoint = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&countrycodes=ph&lat=${lat}&lon=${lng}`;
+                const response = await fetch(endpoint, {
+                    headers: { Accept: 'application/json' }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data && data.display_name) {
+                        const addr = data.display_name;
+                        if (marketQuickStreetInput) marketQuickStreetInput.value = addr;
+                        const city = data.address?.city || data.address?.town || data.address?.municipality || 'Cavite';
+                        const payload = { street_address: addr, city: city, postal_code: data.address?.postcode || '', latitude: String(lat), longitude: String(lng) };
+                        fillMarketAddressInputs(payload, { includeMapFields: true });
+                        const stored = persistMarketAddressPayload(payload);
+                        renderMarketAddressDisplay(stored);
+                    }
+                }
+            } catch (e) {
+                console.error("Header map geocoding error:", e);
+            }
+        };
+
+        headerMarker.on('dragend', function() {
+            const pos = headerMarker.getLatLng();
+            geocodeHeaderCoords(pos.lat, pos.lng);
+        });
+
+        headerMap.on('click', function(e) {
+            const pos = e.latlng;
+            headerMarker.setLatLng(pos);
+            geocodeHeaderCoords(pos.lat, pos.lng);
+        });
+    };
+
     const openAddressPopover = function () {
         if (!marketAddressWrap) return;
         marketAddressWrap.classList.add('is-open');
         if (marketSearchBackdrop) marketSearchBackdrop.classList.add('is-active');
         if (marketQuickStreetInput) marketQuickStreetInput.focus();
+        
+        setTimeout(function() {
+            initHeaderMap();
+            if (headerMap) {
+                headerMap.invalidateSize();
+            }
+        }, 120);
     };
 
     const closeAddressPopover = function () {
