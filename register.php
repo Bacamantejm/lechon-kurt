@@ -3844,6 +3844,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     async function startCamera() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            fallbackToFileUpload();
+            return;
+        }
+
         if (cameraSpinner) cameraSpinner.style.display = 'flex';
         if (cameraStream) stopCamera();
 
@@ -3866,15 +3871,53 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (err) {
             console.error('Camera stream access failed:', err);
             if (cameraSpinner) cameraSpinner.style.display = 'none';
-            Swal.fire({
-                icon: 'error',
-                title: 'Camera Access Error',
-                text: 'Could not access your camera stream. Please allow camera permissions and try again.',
-                confirmButtonColor: '#b3261e'
-            });
             closeModal();
+            fallbackToFileUpload();
         }
     }
+
+    function fallbackToFileUpload() {
+        Swal.fire({
+            icon: 'info',
+            title: 'Camera Unreachable',
+            text: 'We could not open your camera stream. You can upload a photo of your ID from your device files instead.',
+            confirmButtonColor: '#b3261e',
+            showCancelButton: true,
+            confirmButtonText: 'Upload ID Photo',
+            cancelButtonText: 'Cancel'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                const currentInputId = activeCameraSide === 'Front' ? 'validIdFront' : 'validIdBack';
+                const fileInput = document.getElementById(currentInputId);
+                if (fileInput) {
+                    fileInput.click();
+                }
+            }
+        });
+    }
+
+    function handleFileSelection(side) {
+        const fileInput = document.getElementById(side === 'Front' ? 'validIdFront' : 'validIdBack');
+        const previewContainer = document.getElementById(side === 'Front' ? 'previewFront' : 'previewBack');
+        const zoneContent = document.getElementById(side === 'Front' ? 'zoneContentFront' : 'zoneContentBack');
+
+        if (fileInput && fileInput.files && fileInput.files[0]) {
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                if (previewContainer) {
+                    const img = previewContainer.querySelector('img');
+                    if (img) img.src = e.target.result;
+                    previewContainer.style.display = 'block';
+                }
+                if (zoneContent) zoneContent.style.visibility = 'hidden';
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+
+    document.getElementById('validIdFront').addEventListener('change', () => handleFileSelection('Front'));
+    document.getElementById('validIdBack').addEventListener('change', () => handleFileSelection('Back'));
 
     function stopCamera() {
         if (cameraStream) {
