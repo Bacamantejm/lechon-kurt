@@ -360,9 +360,14 @@ $remaining = $total - $downpayment;
             <div class="checkout-form">
                 <h3>Complete Your Order</h3>
                 <div class="checkout-flow">
-                    <div class="checkout-flow-step is-active"><span>1</span>Contact</div>
-                    <div class="checkout-flow-step is-active"><span>2</span>Address</div>
-                    <div class="checkout-flow-step is-active"><span>3</span>Payment</div>
+                    <div class="checkout-flow-step is-active" data-step="1" style="cursor: pointer;"><span>1</span>Contact</div>
+                    <div class="checkout-flow-step" data-step="2" style="cursor: pointer;"><span>2</span>Address</div>
+                    <div class="checkout-flow-step" data-step="3" style="cursor: pointer;"><span>3</span>Payment</div>
+                </div>
+                <div class="progress-container" style="width: 100%; height: 6px; background: #efddcd; border-radius: 3px; margin-top: 15px; margin-bottom: 24px; overflow: visible; position: relative;">
+                    <div class="progress-bar" id="checkoutProgressBar" style="position: absolute; left: 0; top: 0; height: 100%; width: 33.33%; background: #b3261e; transition: width 0.3s ease; display: block !important; overflow: visible;">
+                        <div class="running-pig" style="position: absolute; right: -14px; top: -20px; font-size: 22px; user-select: none; line-height: 1; animation: pigRun 0.4s infinite alternate ease-in-out;">🐖</div>
+                    </div>
                 </div>
 
                 <div class="checkout-type-switch" aria-label="Checkout Type">
@@ -453,265 +458,289 @@ $remaining = $total - $downpayment;
                     </div>
                 <?php endif; ?>
                 <form id="checkoutForm" action="process_order.php" method="POST">
-                    <p class="checkout-section-label"><i class="fas fa-user"></i> Contact Details</p>
-                    <div class="form-group">
-                        <label for="full_name">Full Name *</label>
-                        <input type="text" id="full_name" name="full_name" 
-                               value="<?php echo htmlspecialchars($user['full_name'] ?? ''); ?>" 
-                               required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="email">Email *</label>
-                        <input type="email" id="email" name="email" 
-                               value="<?php echo htmlspecialchars($user['email'] ?? ''); ?>" 
-                               required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="phone">Phone Number *</label>
-                        <input type="tel" id="phone" name="phone" 
-                               value="<?php echo htmlspecialchars($user['phone'] ?? ''); ?>" 
-                               required pattern="[0-9]{11}" 
-                               title="11-digit Philippine phone number">
-                    </div>
-
-                    <div class="account-autofill-note">
-                        <i class="fas fa-user-check"></i>
-                        Account details are auto-filled from your profile. You can still edit before placing the order.
-                    </div>
-                    
-                    <div id="deliveryAddressSection" style="<?php echo ($current_checkout_delivery_option === 'delivery') ? '' : 'display: none;'; ?>">
-                        <p class="checkout-section-label"><i class="fas fa-map-marked-alt"></i> Delivery Details</p>
-                        <div class="delivery-address-shell">
-                        <div class="delivery-address-head">
-                            <div>
-                                <h4>Delivery Address</h4>
-                                <p>Use your saved addresses or pin your location for accurate fee and ETA.</p>
-                            </div>
-                            <a href="my_account.php#addresses" class="btn-secondary address-manage-link">
-                                <i class="fas fa-address-book"></i> Manage Address Book
-                            </a>
-                        </div>
-                        <div class="form-group saved-address-group">
-                            <label for="saved_address_select">Saved Addresses</label>
-                            <div class="saved-address-row">
-                                <select id="saved_address_select" class="saved-address-select">
-                                    <option value="">-- Select saved address --</option>
-                                    <?php foreach ($saved_addresses as $saved_address): ?>
-                                        <?php
-                                        $address_option_label = trim((string)($saved_address['label'] ?? 'Saved Address'));
-                                        $address_option_text = $address_option_label . ' - ' . trim((string)($saved_address['full_address'] ?? ''));
-                                        ?>
-                                        <option value="<?php echo (int)$saved_address['id']; ?>"
-                                            <?php echo ((int)$saved_address['id'] === (int)$default_saved_address_id) ? 'selected' : ''; ?>>
-                                            <?php echo htmlspecialchars($address_option_text); ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                                <button type="button" id="applySavedAddressBtn" class="btn-search">
-                                    <i class="fas fa-check-circle"></i> Apply
-                                </button>
-                                <button type="button" id="saveCurrentAddressBtn" class="btn-secondary save-address-btn">
-                                    <i class="fas fa-bookmark"></i> Save Current
-                                </button>
-                            </div>
-                        <p class="help-text">
-                            <i class="fas fa-info-circle"></i>
-                            Pick a saved address or save your current map-selected address for faster next checkout.
-                        </p>
-                        </div>
-
-                        <div class="form-row address-fields-row" style="display: none;">
-                            <div class="form-group">
-                                <label for="street_address">Street Address *</label>
-                                <input type="text" id="street_address" name="street_address"
-                                       placeholder="House no., Street name, Building"
-                                       value="<?php echo htmlspecialchars($user['address'] ?? ''); ?>">
-                            </div>
-                            <div class="form-group">
-                                <label for="postal_code">Postal Code *</label>
-                                <input type="text" id="postal_code" name="postal_code"
-                                       placeholder="e.g. 4026"
-                                       inputmode="numeric"
-                                       maxlength="10">
-                            </div>
-                        </div>
-
-                        <div class="form-row address-fields-row" style="display: none;">
-                            <div class="form-group">
-                                <label for="checkout_region">Region (PSGC) *</label>
-                                <select id="checkout_region">
-                                    <option value="">-- Select Region --</option>
-                                </select>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="checkout_province">Province (Optional for NCR)</label>
-                                <select id="checkout_province">
-                                    <option value="">-- Select Province --</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="form-row address-fields-row" style="display: none;">
-                            <div class="form-group">
-                                <label for="checkout_city">City / Municipality *</label>
-                                <select id="checkout_city">
-                                    <option value="">-- Select City/Municipality --</option>
-                                </select>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="checkout_barangay">Barangay *</label>
-                                <select id="checkout_barangay">
-                                    <option value="">-- Select Barangay --</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <input type="hidden" id="delivery_address" name="delivery_address" value="">
-                        <input type="hidden" id="delivery_region_name" name="delivery_region_name" value="">
-                        <input type="hidden" id="delivery_region_code" name="delivery_region_code" value="">
-                        <input type="hidden" id="delivery_province_name" name="delivery_province_name" value="">
-                        <input type="hidden" id="delivery_province_code" name="delivery_province_code" value="">
-                        <input type="hidden" id="delivery_city_name" name="delivery_city_name" value="">
-                        <input type="hidden" id="delivery_city_code" name="delivery_city_code" value="">
-                        <input type="hidden" id="delivery_barangay_name" name="delivery_barangay_name" value="">
-                        <input type="hidden" id="delivery_barangay_code" name="delivery_barangay_code" value="">
-                        <input type="hidden" id="delivery_postal_code" name="delivery_postal_code" value="">
-                        <input type="hidden" id="saved_address_id" name="saved_address_id" value="<?php echo (int)$default_saved_address_id; ?>">
-                    
-                    <!-- Google Maps Integration -->
-                    <div class="form-group">
-                        <label for="address_search">Map Pinpoint (Recommended)</label>
-                        <div class="address-search-container">
-                            <input type="text" id="address_search" 
-                                   placeholder="Type your address to search on map" 
-                                   class="address-search">
-                            <button type="button" id="searchAddress" class="btn-search">
-                                <i class="fas fa-search"></i> Search
-                            </button>
-                            <button type="button" id="useMyLocation" class="btn-location" title="Use Current Location">
-                                <i class="fas fa-crosshairs"></i>
-                            </button>
-                        </div>
-                        <div id="map" style="height: 300px; margin-top: 10px; border-radius: 8px; display: none;"></div>
-                        <input type="hidden" id="latitude" name="latitude">
-                        <input type="hidden" id="longitude" name="longitude">
-                        <input type="hidden" id="distance_km" name="distance_km">
-                        <input type="hidden" id="calculated_delivery_fee" name="calculated_delivery_fee">
-                        <p class="help-text">
-                            <i class="fas fa-info-circle"></i> 
-                            Pin your exact location to auto-compute delivery fee and improve ETA accuracy.
-                        </p>
-                    </div>
-
+                    <!-- Step 1: Contact Details -->
+                    <div class="step-content is-active" id="stepContent1">
+                        <p class="checkout-section-label"><i class="fas fa-user"></i> Contact Details</p>
                         <div class="form-group">
-                        <label for="delivery_instructions">Delivery Instructions (Optional)</label>
-                        <textarea id="delivery_instructions" name="delivery_instructions" rows="2" 
-                                  placeholder="e.g., Leave at guard house, Call before delivery, etc."></textarea>
-                    </div>
-                    </div>
+                            <label for="full_name">Full Name *</label>
+                            <input type="text" id="full_name" name="full_name" 
+                                   value="<?php echo htmlspecialchars($user['full_name'] ?? ''); ?>" 
+                                   required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="email">Email *</label>
+                            <input type="email" id="email" name="email" 
+                                   value="<?php echo htmlspecialchars($user['email'] ?? ''); ?>" 
+                                   required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="phone">Phone Number *</label>
+                            <input type="tel" id="phone" name="phone" 
+                                   value="<?php echo htmlspecialchars($user['phone'] ?? ''); ?>" 
+                                   required pattern="[0-9]{11}" 
+                                   title="11-digit Philippine phone number">
+                        </div>
+
+                        <div class="account-autofill-note">
+                            <i class="fas fa-user-check"></i>
+                            Account details are auto-filled from your profile. You can still edit before placing the order.
+                        </div>
+                        
+                        <div style="display: flex; justify-content: flex-end; margin-top: 24px;">
+                            <button type="button" class="btn-primary" id="btnNextToAddress" style="background: #b3261e; border: none; padding: 12px 24px; font-weight: 700; border-radius: 8px; color: #fff; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+                                Continue to Delivery <i class="fas fa-arrow-right"></i>
+                            </button>
+                        </div>
                     </div>
                     
-                    <!-- Delivery Date & Time (Auto-set to Today/ASAP) -->
-                    <input type="hidden" name="delivery_date" value="<?php echo date('Y-m-d'); ?>">
-                    <input type="hidden" name="delivery_time" value="ASAP">
-                    
-                    <div class="form-group">
-                        <label for="order_notes">Order Notes (Optional)</label>
-                        <textarea id="order_notes" name="order_notes" rows="2" 
-                                  placeholder="Special instructions for your order"></textarea>
+                    <!-- Step 2: Delivery Details -->
+                    <div class="step-content" id="stepContent2">
+                        <div id="deliveryAddressSection" style="<?php echo ($current_checkout_delivery_option === 'delivery') ? '' : 'display: none;'; ?>">
+                            <p class="checkout-section-label"><i class="fas fa-map-marked-alt"></i> Delivery Details</p>
+                            <div class="delivery-address-shell">
+                                <div class="delivery-address-head">
+                                    <div>
+                                        <h4>Delivery Address</h4>
+                                        <p>Use your saved addresses or pin your location for accurate fee and ETA.</p>
+                                    </div>
+                                    <a href="my_account.php#addresses" class="btn-secondary address-manage-link">
+                                        <i class="fas fa-address-book"></i> Manage Address Book
+                                    </a>
+                                </div>
+                                <div class="form-group saved-address-group">
+                                    <label for="saved_address_select">Saved Addresses</label>
+                                    <div class="saved-address-row">
+                                        <select id="saved_address_select" class="saved-address-select">
+                                            <option value="">-- Select saved address --</option>
+                                            <?php foreach ($saved_addresses as $saved_address): ?>
+                                                <?php
+                                                $address_option_label = trim((string)($saved_address['label'] ?? 'Saved Address'));
+                                                $address_option_text = $address_option_label . ' - ' . trim((string)($saved_address['full_address'] ?? ''));
+                                                ?>
+                                                <option value="<?php echo (int)$saved_address['id']; ?>"
+                                                    <?php echo ((int)$saved_address['id'] === (int)$default_saved_address_id) ? 'selected' : ''; ?>>
+                                                    <?php echo htmlspecialchars($address_option_text); ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                        <button type="button" id="applySavedAddressBtn" class="btn-search">
+                                            <i class="fas fa-check-circle"></i> Apply
+                                        </button>
+                                        <button type="button" id="saveCurrentAddressBtn" class="btn-secondary save-address-btn">
+                                            <i class="fas fa-bookmark"></i> Save Current
+                                        </button>
+                                    </div>
+                                    <p class="help-text">
+                                        <i class="fas fa-info-circle"></i>
+                                        Pick a saved address or save your current map-selected address for faster next checkout.
+                                    </p>
+                                </div>
+
+                                <div class="form-row address-fields-row" style="display: none;">
+                                    <div class="form-group">
+                                        <label for="street_address">Street Address *</label>
+                                        <input type="text" id="street_address" name="street_address"
+                                               placeholder="House no., Street name, Building"
+                                               value="<?php echo htmlspecialchars($user['address'] ?? ''); ?>">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="postal_code">Postal Code *</label>
+                                        <input type="text" id="postal_code" name="postal_code"
+                                               placeholder="e.g. 4026"
+                                               inputmode="numeric"
+                                               maxlength="10">
+                                    </div>
+                                </div>
+
+                                <div class="form-row address-fields-row" style="display: none;">
+                                    <div class="form-group">
+                                        <label for="checkout_region">Region (PSGC) *</label>
+                                        <select id="checkout_region">
+                                            <option value="">-- Select Region --</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="checkout_province">Province (Optional for NCR)</label>
+                                        <select id="checkout_province">
+                                            <option value="">-- Select Province --</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="form-row address-fields-row" style="display: none;">
+                                    <div class="form-group">
+                                        <label for="checkout_city">City / Municipality *</label>
+                                        <select id="checkout_city">
+                                            <option value="">-- Select City/Municipality --</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="checkout_barangay">Barangay *</label>
+                                        <select id="checkout_barangay">
+                                            <option value="">-- Select Barangay --</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <input type="hidden" id="delivery_address" name="delivery_address" value="">
+                                <input type="hidden" id="delivery_region_name" name="delivery_region_name" value="">
+                                <input type="hidden" id="delivery_region_code" name="delivery_region_code" value="">
+                                <input type="hidden" id="delivery_province_name" name="delivery_province_name" value="">
+                                <input type="hidden" id="delivery_province_code" name="delivery_province_code" value="">
+                                <input type="hidden" id="delivery_city_name" name="delivery_city_name" value="">
+                                <input type="hidden" id="delivery_city_code" name="delivery_city_code" value="">
+                                <input type="hidden" id="delivery_barangay_name" name="delivery_barangay_name" value="">
+                                <input type="hidden" id="delivery_barangay_code" name="delivery_barangay_code" value="">
+                                <input type="hidden" id="delivery_postal_code" name="delivery_postal_code" value="">
+                                <input type="hidden" id="saved_address_id" name="saved_address_id" value="<?php echo (int)$default_saved_address_id; ?>">
+                            
+                                <!-- Google Maps Integration -->
+                                <div class="form-group">
+                                    <label for="address_search">Map Pinpoint (Recommended)</label>
+                                    <div class="address-search-container">
+                                        <input type="text" id="address_search" 
+                                               placeholder="Type your address to search on map" 
+                                               class="address-search">
+                                        <button type="button" id="searchAddress" class="btn-search">
+                                            <i class="fas fa-search"></i> Search
+                                        </button>
+                                        <button type="button" id="useMyLocation" class="btn-location" title="Use Current Location">
+                                            <i class="fas fa-crosshairs"></i>
+                                        </button>
+                                    </div>
+                                    <div id="map" style="height: 300px; margin-top: 10px; border-radius: 8px; display: none;"></div>
+                                    <input type="hidden" id="latitude" name="latitude">
+                                    <input type="hidden" id="longitude" name="longitude">
+                                    <input type="hidden" id="distance_km" name="distance_km">
+                                    <input type="hidden" id="calculated_delivery_fee" name="calculated_delivery_fee">
+                                    <p class="help-text">
+                                        <i class="fas fa-info-circle"></i> 
+                                        Pin your exact location to auto-compute delivery fee and improve ETA accuracy.
+                                    </p>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="delivery_instructions">Delivery Instructions (Optional)</label>
+                                    <textarea id="delivery_instructions" name="delivery_instructions" rows="2" 
+                                              placeholder="e.g., Leave at guard house, Call before delivery, etc."></textarea>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Delivery Date & Time (Auto-set to Today/ASAP) -->
+                        <input type="hidden" name="delivery_date" value="<?php echo date('Y-m-d'); ?>">
+                        <input type="hidden" name="delivery_time" value="ASAP">
+                        
+                        <div class="form-group" style="margin-top: 16px;">
+                            <label for="order_notes">Order Notes (Optional)</label>
+                            <textarea id="order_notes" name="order_notes" rows="2" 
+                                      placeholder="Special instructions for your order"></textarea>
+                        </div>
+
+                        <div style="display: flex; justify-content: space-between; margin-top: 24px; gap: 12px;">
+                            <button type="button" class="btn-secondary btn-step-back" data-target="1" style="border: 1px solid #efddcd; padding: 12px 20px; font-weight: 700; border-radius: 8px; cursor: pointer; background: #fff; display: inline-flex; align-items: center; gap: 6px;">
+                                <i class="fas fa-arrow-left"></i> Back
+                            </button>
+                            <button type="button" class="btn-primary" id="btnNextToPayment" style="background: #b3261e; border: none; padding: 12px 24px; font-weight: 700; border-radius: 8px; color: #fff; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+                                Continue to Payment <i class="fas fa-arrow-right"></i>
+                            </button>
+                        </div>
                     </div>
 
-                    <p class="checkout-section-label"><i class="fas fa-receipt"></i> Discounts and Payment</p>
-                    <div class="voucher-section">
-                        <h4>Discount Voucher</h4>
-                        <div class="voucher-input-row">
-                            <input type="text"
-                                   id="voucherCodeInput"
-                                   maxlength="60"
-                                   placeholder="Enter voucher code"
-                                   value="<?php echo htmlspecialchars($applied_voucher_code); ?>">
-                            <button type="button" class="btn-voucher-apply" id="applyVoucherBtn">
-                                <i class="fas fa-ticket-alt"></i> Apply
+                    <!-- Step 3: Discounts and Payment -->
+                    <div class="step-content" id="stepContent3">
+                        <p class="checkout-section-label"><i class="fas fa-receipt"></i> Discounts and Payment</p>
+                        <div class="voucher-section">
+                            <h4>Discount Voucher</h4>
+                            <div class="voucher-input-row">
+                                <input type="text"
+                                       id="voucherCodeInput"
+                                       maxlength="60"
+                                       placeholder="Enter voucher code"
+                                       value="<?php echo htmlspecialchars($applied_voucher_code); ?>">
+                                <button type="button" class="btn-voucher-apply" id="applyVoucherBtn">
+                                    <i class="fas fa-ticket-alt"></i> Apply
+                                </button>
+                                <button type="button" class="btn-voucher-remove" id="removeVoucherBtn" <?php echo $voucher_discount > 0 ? '' : 'style="display:none;"'; ?>>
+                                    Remove
+                                </button>
+                            </div>
+                            <p class="voucher-feedback <?php echo $voucher_discount > 0 ? 'success' : (!empty($voucher_message) ? 'warning' : ''); ?>" id="voucherFeedback">
+                                <?php
+                                if ($voucher_discount > 0) {
+                                    echo 'Applied ' . htmlspecialchars($applied_voucher_code) . ': -PHP ' . number_format($voucher_discount, 2);
+                                } elseif (!empty($voucher_message)) {
+                                    echo htmlspecialchars($voucher_message);
+                                } else {
+                                    echo 'Partner vouchers are created by each shop and automatically validated at checkout.';
+                                }
+                                ?>
+                            </p>
+                        </div>
+                        
+                        <!-- Payment Type Selection -->
+                        <div class="payment-type-section">
+                            <h4>Payment Option</h4>
+                            <div class="payment-type-options">
+                                <label class="payment-type-option">
+                                    <input type="radio" name="payment_type" value="full" checked>
+                                    <div class="option-content">
+                                        <span class="option-title">Full Payment</span>
+                                        <span class="option-amount">PHP <?php echo number_format($total, 2); ?></span>
+                                        <small>Pay the complete amount now</small>
+                                    </div>
+                                </label>
+                                <label class="payment-type-option">
+                                    <input type="radio" name="payment_type" value="downpayment">
+                                    <div class="option-content">
+                                        <span class="option-title">30% Downpayment</span>
+                                        <span class="option-amount">PHP <?php echo number_format($downpayment, 2); ?></span>
+                                        <small>Pay 30% now, balance on delivery (PHP <?php echo number_format($remaining, 2); ?>)</small>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- Payment Info Section -->
+                        <div class="payment-info-section">
+                            <h4>Payment Information</h4>
+                            <div class="payment-info-box">
+                                <p><strong>Amount to Pay:</strong></p>
+                                <p class="payment-amount" id="paymentAmount">PHP <?php echo number_format($total, 2); ?></p>
+                                <p class="payment-note"><i class="fas fa-info-circle"></i> You will be redirected to PayMongo to complete the payment securely.</p>
+                            </div>
+                        </div>
+                        
+                        <input type="hidden" name="payment_method" value="paymongo">
+                        
+                        <div class="terms-agreement">
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="terms" required>
+                                <span>
+                                    I agree to the
+                                    <a href="terms_of_service.php" data-policy-modal="terms">Terms and Conditions</a>
+                                    and
+                                    <a href="privacy_policy.php" data-policy-modal="privacy">Privacy Policy</a>
+                                </span>
+                            </label>
+                        </div>
+                        
+                        <div class="checkout-actions">
+                            <button type="button" class="btn-secondary btn-step-back" data-target="2" style="border: 1px solid #efddcd; padding: 12px 20px; font-weight: 700; border-radius: 8px; cursor: pointer; background: #fff; display: inline-flex; align-items: center; gap: 6px;">
+                                <i class="fas fa-arrow-left"></i> Back
                             </button>
-                            <button type="button" class="btn-voucher-remove" id="removeVoucherBtn" <?php echo $voucher_discount > 0 ? '' : 'style="display:none;"'; ?>>
-                                Remove
+                            <button type="submit" class="btn-primary" id="submitOrder" <?php echo $checkout_tenant_blocked ? 'disabled aria-disabled="true"' : ''; ?> style="background: #b3261e; border: none; padding: 12px 24px; font-weight: 700; border-radius: 8px; color: #fff; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+                                <i class="fas fa-lock"></i> Proceed to Payment
                             </button>
                         </div>
-                        <p class="voucher-feedback <?php echo $voucher_discount > 0 ? 'success' : (!empty($voucher_message) ? 'warning' : ''); ?>" id="voucherFeedback">
-                            <?php
-                            if ($voucher_discount > 0) {
-                                echo 'Applied ' . htmlspecialchars($applied_voucher_code) . ': -PHP ' . number_format($voucher_discount, 2);
-                            } elseif (!empty($voucher_message)) {
-                                echo htmlspecialchars($voucher_message);
-                            } else {
-                                echo 'Partner vouchers are created by each shop and automatically validated at checkout.';
-                            }
-                            ?>
+                        <p class="checkout-final-note">
+                            <i class="fas fa-shield-alt"></i> Your payment details are securely handled via PayMongo.
                         </p>
                     </div>
-                    
-                    <!-- Payment Type Selection -->
-                    <div class="payment-type-section">
-                        <h4>Payment Option</h4>
-                        <div class="payment-type-options">
-                            <label class="payment-type-option">
-                                <input type="radio" name="payment_type" value="full" checked>
-                                <div class="option-content">
-                                    <span class="option-title">Full Payment</span>
-                                    <span class="option-amount">PHP <?php echo number_format($total, 2); ?></span>
-                                    <small>Pay the complete amount now</small>
-                                </div>
-                            </label>
-                            <label class="payment-type-option">
-                                <input type="radio" name="payment_type" value="downpayment">
-                                <div class="option-content">
-                                    <span class="option-title">30% Downpayment</span>
-                                    <span class="option-amount">PHP <?php echo number_format($downpayment, 2); ?></span>
-                                    <small>Pay 30% now, balance on delivery (PHP <?php echo number_format($remaining, 2); ?>)</small>
-                                </div>
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <!-- Payment Info Section -->
-                    <div class="payment-info-section">
-                        <h4>Payment Information</h4>
-                        <div class="payment-info-box">
-                            <p><strong>Amount to Pay:</strong></p>
-                            <p class="payment-amount" id="paymentAmount">PHP <?php echo number_format($total, 2); ?></p>
-                            <p class="payment-note"><i class="fas fa-info-circle"></i> You will be redirected to PayMongo to complete the payment securely.</p>
-                        </div>
-                    </div>
-                    
-                    <input type="hidden" name="payment_method" value="paymongo">
-                    
-                    <div class="terms-agreement">
-                        <label class="checkbox-label">
-                            <input type="checkbox" name="terms" required>
-                            <span>
-                                I agree to the
-                                <a href="terms_of_service.php" data-policy-modal="terms">Terms and Conditions</a>
-                                and
-                                <a href="privacy_policy.php" data-policy-modal="privacy">Privacy Policy</a>
-                            </span>
-                        </label>
-                    </div>
-                    
-                    <div class="checkout-actions">
-                        <a href="menu.php" class="btn-secondary">
-                            <i class="fas fa-arrow-left"></i> Continue Shopping
-                        </a>
-                        <button type="submit" class="btn-primary" id="submitOrder" <?php echo $checkout_tenant_blocked ? 'disabled aria-disabled="true"' : ''; ?>>
-                            <i class="fas fa-lock"></i> Proceed to Payment
-                        </button>
-                    </div>
-                    <p class="checkout-final-note">
-                        <i class="fas fa-shield-alt"></i> Your payment details are securely handled via PayMongo.
-                    </p>
 
                     <div class="checkout-mode-sticky" id="checkoutModeSticky" aria-label="Quick fulfillment switch">
                         <span class="checkout-mode-sticky-label">Quick mode</span>
@@ -1990,6 +2019,235 @@ body {
         padding-bottom: 140px;
     }
 }
+
+/* Minimalist & Clean Checkout Layout Overrides */
+.checkout-grid {
+    display: grid;
+    grid-template-columns: 1.2fr 0.8fr;
+    gap: 32px;
+}
+.checkout-form {
+    order: 1;
+    background-color: #ffffff;
+    border: 1px solid #efddcd;
+    border-radius: 12px;
+    box-shadow: none !important;
+    padding: 32px;
+}
+.checkout-summary {
+    order: 2;
+    background-color: #ffffff;
+    border: 1px solid #efddcd;
+    border-radius: 12px;
+    box-shadow: none !important;
+    padding: 32px;
+}
+.checkout-summary h3, .checkout-form h3 {
+    color: #171922;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 800;
+    font-size: 1.35rem;
+    border-bottom: 1px solid #efddcd;
+    padding-bottom: 12px;
+    margin-bottom: 24px;
+}
+.checkout-section-label {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 800;
+    font-size: 1.02rem;
+    color: #171922;
+    margin: 8px 0 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+.form-group label {
+    font-weight: 700 !important;
+    color: #667085 !important;
+    font-size: 0.76rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.04em !important;
+    margin-bottom: 6px;
+}
+.form-control, select, textarea {
+    border: 1px solid #efddcd !important;
+    border-radius: 8px !important;
+    padding: 11px 14px !important;
+    background: #fcfbf9 !important;
+    font-size: 0.95rem !important;
+    transition: all 0.2s ease !important;
+    color: #171922 !important;
+    box-shadow: none !important;
+}
+.form-control:focus, select:focus, textarea:focus {
+    border-color: #b3261e !important;
+    background: #ffffff !important;
+    box-shadow: 0 0 0 3px rgba(179,38,30,0.1) !important;
+}
+.payment-option {
+    background-color: #fffdfb !important;
+    border: 1px solid #efddcd !important;
+    border-radius: 10px !important;
+    padding: 14px 18px !important;
+    transition: all 0.22s ease !important;
+    box-shadow: none !important;
+}
+.payment-option:hover {
+    background-color: #fff9f2 !important;
+    border-color: #ef6b2e !important;
+}
+.payment-option input[type="radio"]:checked ~ span {
+    color: #b3261e !important;
+    font-weight: 700 !important;
+}
+.payment-breakdown {
+    background-color: #fff9f2 !important;
+    border-radius: 10px !important;
+    border: 1px solid #efddcd !important;
+    border-left: 4px solid #b3261e !important;
+    padding: 14px !important;
+}
+.summary-totals {
+    background-color: #fff9f2 !important;
+    border: 1px solid #efddcd !important;
+    border-radius: 10px !important;
+    padding: 18px !important;
+}
+.total-row.grand-total {
+    border-top: 1px solid #efddcd !important;
+    color: #171922 !important;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 800 !important;
+    font-size: 1.2rem !important;
+    padding-top: 14px !important;
+}
+.voucher-section {
+    background: #fffdfb !important;
+    border: 1px solid #efddcd !important;
+    border-radius: 10px !important;
+}
+.btn-voucher-apply {
+    background: #b3261e !important;
+    box-shadow: none !important;
+    border-radius: 8px !important;
+    font-size: 0.85rem !important;
+}
+.btn-voucher-apply:hover {
+    background: #8f261a !important;
+}
+.checkout-flow-step {
+    border: 1px solid #efddcd !important;
+    background: #ffffff !important;
+    color: #667085 !important;
+    border-radius: 8px !important;
+    font-size: 0.8rem !important;
+    min-height: 38px !important;
+}
+.checkout-flow-step.is-active {
+    background: #b3261e !important;
+    color: #ffffff !important;
+    border-color: #b3261e !important;
+}
+.checkout-flow-step span {
+    border-color: #efddcd !important;
+    width: 20px !important;
+    height: 20px !important;
+    font-size: 0.7rem !important;
+}
+.checkout-flow-step.is-active span {
+    background-color: transparent !important;
+    border-color: #ffffff !important;
+    color: #ffffff !important;
+}
+.checkout-mode-btn {
+    border: 1px solid #efddcd !important;
+    background: #ffffff !important;
+    color: #667085 !important;
+    border-radius: 8px !important;
+    font-weight: 700 !important;
+    transition: all 0.2s ease !important;
+}
+.checkout-mode-btn.is-active {
+    background-color: #b3261e !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+}
+.checkout-mode-card {
+    border-color: #efddcd !important;
+    border-radius: 10px !important;
+}
+.checkout-type-switch {
+    background-color: #fffdfb !important;
+    border-color: #efddcd !important;
+    border-radius: 10px !important;
+}
+.checkout-type-chip {
+    border-radius: 8px !important;
+    border-color: #efddcd !important;
+    font-size: 0.82rem !important;
+}
+.checkout-type-chip.is-active {
+    background-color: #b3261e !important;
+    border-color: #b3261e !important;
+}
+.checkout-kpi {
+    border: 1px solid #efddcd !important;
+    background: #fffdfb !important;
+    border-radius: 8px !important;
+    text-align: center;
+}
+.checkout-kpi-label {
+    color: #667085 !important;
+    font-size: 0.65rem !important;
+}
+.checkout-kpi strong {
+    color: #171922 !important;
+    font-size: 0.9rem !important;
+    font-weight: 800 !important;
+    font-family: 'Outfit', sans-serif !important;
+}
+.summary-item {
+    border-bottom: 1px solid #efddcd !important;
+    padding: 12px 0 !important;
+}
+.item-info h4 {
+    font-weight: 700 !important;
+    font-size: 0.95rem !important;
+    color: #171922 !important;
+}
+.item-price {
+    color: #b3261e !important;
+    font-weight: 700 !important;
+    font-size: 0.95rem !important;
+}
+.delivery-info {
+    background-color: #fffdfb !important;
+    border: 1px solid #efddcd !important;
+    border-radius: 10px !important;
+    color: #667085 !important;
+}
+.delivery-info h4 {
+    color: #171922 !important;
+    font-family: 'Outfit', sans-serif !important;
+    font-weight: 800 !important;
+    font-size: 1.05rem !important;
+    margin-bottom: 8px !important;
+}
+@media (max-width: 992px) {
+    .checkout-grid {
+        grid-template-columns: 1fr;
+        gap: 24px;
+    }
+    .checkout-form {
+        order: 2;
+    }
+    .checkout-summary {
+        order: 1;
+    }
+}
+@keyframes pigRun {
+    0% { transform: translateY(0) scaleX(-1); }
+    100% { transform: translateY(-4px) scaleX(-1); }
+}
 </style>
 
 <script>
@@ -2465,7 +2723,137 @@ function recalculateOrderTotals() {
 
 document.addEventListener('DOMContentLoaded', function() {
     if (typeof initMap === 'function') initMap();
-const regionSelect = document.getElementById('checkout_region');
+
+    // Multi-step form switching logic
+    const steps = document.querySelectorAll('.step-content');
+    const flowSteps = document.querySelectorAll('.checkout-flow-step');
+    
+    function showStep(stepNum) {
+        steps.forEach((step, idx) => {
+            if (idx + 1 === stepNum) {
+                step.style.display = 'block';
+                step.classList.add('is-active');
+            } else {
+                step.style.display = 'none';
+                step.classList.remove('is-active');
+            }
+        });
+        
+        flowSteps.forEach((flowStep, idx) => {
+            if (idx + 1 === stepNum) {
+                flowStep.classList.add('is-active');
+            } else {
+                flowStep.classList.remove('is-active');
+            }
+        });
+
+        const progressBar = document.getElementById('checkoutProgressBar');
+        if (progressBar) {
+            const widthPercent = stepNum === 1 ? '33.33%' : (stepNum === 2 ? '66.66%' : '100%');
+            progressBar.style.width = widthPercent;
+        }
+    }
+
+    function validateStep(stepNum) {
+        if (stepNum === 1) {
+            const fullName = document.getElementById('full_name');
+            const email = document.getElementById('email');
+            const phone = document.getElementById('phone');
+            
+            if (!fullName.value.trim()) {
+                Swal.fire({ icon: 'error', title: 'Validation Error', text: 'Please enter your full name.', confirmButtonColor: '#b3261e' });
+                fullName.focus();
+                return false;
+            }
+            if (!email.value.trim() || !email.checkValidity()) {
+                Swal.fire({ icon: 'error', title: 'Validation Error', text: 'Please enter a valid email address.', confirmButtonColor: '#b3261e' });
+                email.focus();
+                return false;
+            }
+            if (!phone.value.trim() || !phone.checkValidity()) {
+                Swal.fire({ icon: 'error', title: 'Validation Error', text: 'Please enter a valid 11-digit mobile number.', confirmButtonColor: '#b3261e' });
+                phone.focus();
+                return false;
+            }
+        } else if (stepNum === 2) {
+            const isDelivery = document.getElementById('delivery_option_hidden').value === 'delivery';
+            if (isDelivery) {
+                const street = document.getElementById('street_address');
+                const region = document.getElementById('checkout_region');
+                const city = document.getElementById('checkout_city');
+                const barangay = document.getElementById('checkout_barangay');
+                
+                if (!street.value.trim()) {
+                    Swal.fire({ icon: 'error', title: 'Validation Error', text: 'Please enter your street address.', confirmButtonColor: '#b3261e' });
+                    street.focus();
+                    return false;
+                }
+                if (!region.value) {
+                    Swal.fire({ icon: 'error', title: 'Validation Error', text: 'Please select a region.', confirmButtonColor: '#b3261e' });
+                    region.focus();
+                    return false;
+                }
+                if (!city.value) {
+                    Swal.fire({ icon: 'error', title: 'Validation Error', text: 'Please select a city.', confirmButtonColor: '#b3261e' });
+                    city.focus();
+                    return false;
+                }
+                if (!barangay.value) {
+                    Swal.fire({ icon: 'error', title: 'Validation Error', text: 'Please select a barangay.', confirmButtonColor: '#b3261e' });
+                    barangay.focus();
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+    
+    const nextToAddress = document.getElementById('btnNextToAddress');
+    if (nextToAddress) {
+        nextToAddress.addEventListener('click', function() {
+            if (validateStep(1)) {
+                showStep(2);
+                if (typeof map !== 'undefined' && map) {
+                    setTimeout(() => { map.invalidateSize(); }, 200);
+                }
+            }
+        });
+    }
+    
+    const nextToPayment = document.getElementById('btnNextToPayment');
+    if (nextToPayment) {
+        nextToPayment.addEventListener('click', function() {
+            if (validateStep(2)) {
+                showStep(3);
+            }
+        });
+    }
+    
+    document.querySelectorAll('.btn-step-back').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const targetStep = parseInt(this.getAttribute('data-target'));
+            showStep(targetStep);
+        });
+    });
+    
+    flowSteps.forEach(flowStep => {
+        flowStep.addEventListener('click', function() {
+            const targetStep = parseInt(this.getAttribute('data-step'));
+            if (targetStep === 2 && !validateStep(1)) return;
+            if (targetStep === 3) {
+                if (!validateStep(1)) return;
+                if (!validateStep(2)) return;
+            }
+            showStep(targetStep);
+            if (targetStep === 2 && typeof map !== 'undefined' && map) {
+                setTimeout(() => { map.invalidateSize(); }, 200);
+            }
+        });
+    });
+    
+    showStep(1);
+
+    const regionSelect = document.getElementById('checkout_region');
 const provinceSelect = document.getElementById('checkout_province');
 const citySelect = document.getElementById('checkout_city');
 const barangaySelect = document.getElementById('checkout_barangay');
