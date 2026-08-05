@@ -15,16 +15,8 @@ if (isset($_SESSION['user_id'])) {
 $error = '';
 $success = '';
 $form_data = [];
-$requested_account_type = strtolower(trim((string)($_GET['account_type'] ?? '')));
-$partner_signup_flag = strtolower(trim((string)($_GET['partner_signup'] ?? '')));
-$is_partner_signup = (
-    $requested_account_type === 'organization' ||
-    in_array($partner_signup_flag, ['1', 'true', 'yes'], true)
-);
-
-if ($is_partner_signup) {
-    $form_data['account_type'] = 'organization';
-}
+$is_partner_signup = false;
+$form_data['account_type'] = 'individual';
 
 if (empty($_SESSION['registration_csrf_token'])) {
     $_SESSION['registration_csrf_token'] = bin2hex(random_bytes(32));
@@ -673,41 +665,33 @@ include 'includes/header.php';
 /* Progress Steps styled like modal tabs */
 .progress-steps {
     display: flex;
-    justify-content: center;
-    gap: 28px;
+    flex-direction: column;
+    align-items: center;
     background: transparent;
     padding: 24px 20px 10px;
     margin: 0;
     position: relative;
-    border-bottom: 1px solid #f1f5f9;
-}
-
-.progress-bar {
-    display: none; /* Hide old progress bar */
 }
 
 .step {
-    flex: none;
-    display: inline-flex;
+    display: none; /* Hide non-active steps to show only the active one solo */
     align-items: center;
-    padding: 0 0 10px 0;
+    padding: 0 0 5px 0;
     cursor: default;
-    border-bottom: 2px solid transparent;
-    transition: all 0.22s;
-    font-weight: 600;
-    font-size: 0.94rem;
-    color: #94a3b8;
+    border: none;
+    font-weight: 800;
+    font-size: 1.15rem;
+    color: #b3261e;
+    animation: fadeIn 0.4s ease;
 }
 
 .step.active {
-    color: #b3261e;
-    border-bottom-color: #b3261e;
-    font-weight: 700;
+    display: inline-flex;
 }
 
-.step.completed {
-    color: #475569;
-    font-weight: 600;
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 .step-number {
@@ -715,8 +699,8 @@ include 'includes/header.php';
 }
 
 .step-label {
-    font-size: 0.88rem;
-    font-weight: 700;
+    font-size: 1.05rem;
+    font-weight: 800;
 }
 
 /* Form Steps */
@@ -872,38 +856,38 @@ include 'includes/header.php';
 /* Button Styles */
 .btn-primary {
     width: 100%;
-    padding: 18px; /* Increased padding for better touch */
+    padding: 12px 20px;
     background: linear-gradient(135deg, #b3261e 0%, #8f261a 100%);
     color: white;
     border: none;
-    border-radius: 10px;
-    font-size: 1.1rem;
+    border-radius: 8px;
+    font-size: 0.95rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.3s;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
+    gap: 8px;
     position: relative;
     overflow: hidden;
     letter-spacing: 0.5px;
-    min-height: 56px; /* Better touch target */
+    min-height: 44px;
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation; /* Improve touch response */
 }
 
 .btn-primary:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 10px 30px rgba(198, 40, 40, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(179, 38, 30, 0.2);
 }
 
 .btn-primary:active {
-    transform: translateY(-1px);
+    transform: translateY(0);
 }
 
 .btn-primary:disabled {
-    background: #cccccc;
+    background: #cbd5e1;
     cursor: not-allowed;
     transform: none;
     box-shadow: none;
@@ -916,8 +900,8 @@ include 'includes/header.php';
 .btn-primary.loading::after {
     content: '';
     position: absolute;
-    width: 22px;
-    height: 22px;
+    width: 18px;
+    height: 18px;
     border: 3px solid rgba(255, 255, 255, 0.3);
     border-top-color: white;
     border-radius: 50%;
@@ -930,21 +914,21 @@ include 'includes/header.php';
 
 .btn-secondary {
     width: 100%;
-    padding: 18px; /* Increased padding for better touch */
+    padding: 12px 20px;
     background: white;
     color: #b3261e;
     border: 2px solid #b3261e;
-    border-radius: 10px;
-    font-size: 1.1rem;
+    border-radius: 8px;
+    font-size: 0.95rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.3s;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
+    gap: 8px;
     letter-spacing: 0.5px;
-    min-height: 56px; /* Better touch target */
+    min-height: 44px;
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation; /* Improve touch response */
 }
@@ -1404,84 +1388,154 @@ body {
 .social-divider, .social-login-buttons {
     display: none !important;
 }
+
+/* Full-screen split layout styling */
+.registration-page {
+    background: #ffffff !important;
+    display: flex;
+    align-items: stretch;
+    justify-content: stretch;
+    min-height: calc(100vh - 64px) !important;
+    padding: 0 !important;
+}
+
+.registration-container {
+    max-width: 100% !important;
+    width: 100vw;
+    min-height: calc(100vh - 64px) !important;
+    background-color: white;
+    border-radius: 0 !important;
+    border: none;
+    box-shadow: none !important;
+    display: flex;
+    flex-direction: row; /* Image left, form right */
+    margin: 0 !important;
+}
+
+.registration-image-side {
+    width: 50%;
+    background: #ff541c; /* Match solid orange background of the mascot */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    min-height: calc(100vh - 64px) !important;
+}
+
+.mascot-img-wrap {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mascot-img-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.registration-form-side {
+    width: 50%;
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    min-height: calc(100vh - 64px) !important;
+}
+
+.registration-form-side-container {
+    max-width: 460px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+@media (max-width: 850px) {
+    .registration-container {
+        flex-direction: column;
+    }
+    .registration-form-side {
+        width: 100%;
+        height: 100vh;
+    }
+    .registration-image-side {
+        display: none !important;
+    }
+}
+@keyframes pigRun {
+    0% {
+        transform: translateY(0) rotate(0deg) scaleX(-1);
+    }
+    50% {
+        transform: translateY(-3px) rotate(-5deg) scaleX(-1);
+    }
+    100% {
+        transform: translateY(0) rotate(5deg) scaleX(-1);
+    }
+}
 </style>
 
 <div class="registration-page">
     <div class="registration-container">
-        <div class="registration-header" style="background:#fff; border-bottom:1px solid #efddcd; padding:30px 24px 20px; text-align:center;">
-            <div style="display:inline-flex; align-items:center; gap:10px; margin-bottom:12px;">
-                <div style="width:36px; height:36px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; overflow:hidden; box-shadow:0 6px 16px rgba(179,38,30,.2);">
-                    <img src="assets/images/logo.jpg" alt="Lechon Delights Logo" style="width:100%; height:100%; object-fit:cover;">
-                </div>
-                <span style="font-size:1.25rem; font-weight:800; color:#0f172a;">Lechon Delights</span>
-            </div>
-            <h2 style="font-size:1.35rem; font-weight:800; color:#0f172a; margin:0 0 4px 0;">Create Account</h2>
-            <p style="font-size:0.9rem; color:#64748b; margin:0;">Join us to order Cavite's finest lechon dishes.</p>
+        <!-- Left Side: Mascot Image Panel -->
+        <!-- Left Side: Branding Panel -->
+        <div class="registration-image-side" style="background: var(--reg-red, #b3261e); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; text-align: center; color: #ffffff;">
+            <h1 style="font-family: 'Outfit', sans-serif; font-size: 3.5rem; font-weight: 900; letter-spacing: -1.5px; margin: 0; color: #ffffff; text-shadow: 0 4px 12px rgba(0,0,0,0.1);">Lechon Delights</h1>
+            <p style="font-size: 1.1rem; opacity: 0.9; margin-top: 15px; max-width: 320px; font-weight: 500; line-height: 1.5;">Cavite's Finest Lechon at Your Doorsteps</p>
         </div>
-        
-        <div class="registration-body">
 
-            <!-- Progress Steps -->
-            <div class="progress-steps">
-                <div class="progress-bar" id="progressBar"></div>
-                <div class="step active" id="step2">
-                    <div class="step-number">1</div>
-                    <div class="step-label">Personal Info</div>
-                </div>
-                <div class="step" id="step3">
-                    <div class="step-number">2</div>
-                    <div class="step-label" id="step3NavLabel">Address Info</div>
-                </div>
-                <div class="step" id="step4">
-                    <div class="step-number">3</div>
-                    <div class="step-label">Create Account</div>
-                </div>
-            </div>
-            
-            <form method="POST" action="" id="registrationForm" data-swal-validate="off" enctype="multipart/form-data" novalidate>
-                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['registration_csrf_token']); ?>">
-
-                <!-- Step 1: Account Type -->
-                <div class="form-step" id="step1Form" style="display:none;">
-                    <h2 style="color: #333; margin-bottom: 25px; font-size: 1.5rem;">
-                        <?php echo $is_partner_signup ? 'Business Partner Sign Up' : 'Select Account Type'; ?>
-                    </h2>
-                    
-                    <div class="account-type-selection">
-                        <?php if (!$is_partner_signup): ?>
-                        <div class="account-type-card" data-type="individual">
-                            <i class="fas fa-user"></i>
-                            <h3>Individual</h3>
-                            <p>Perfect for customers who want to order lechon for themselves, their family, or a special occasion.</p>
-                        </div>
-                        <?php endif; ?>
-                        <div class="account-type-card" data-type="organization">
-                            <i class="fas fa-building"></i>
-                            <h3>Business Partner</h3>
-                            <p>Great for restaurant owners who want to register their business and serve customers across Cavite.</p>
-                        </div>
+        <!-- Right Side: Registration Form Panel -->
+        <div class="registration-form-side">
+            <div class="registration-form-side-container">
+                <div class="registration-header" style="background:#fff; border-bottom:1px solid #efddcd; padding:30px 24px 20px; text-align:center;">
+                    <div style="display:inline-flex; align-items:center; gap:10px; margin-bottom:12px;">
+                        <span style="font-size:1.45rem; font-weight:800; color:#0f172a;">Lechon Delights</span>
                     </div>
-                    
-                    <input type="hidden" name="account_type" id="accountType" value="<?php echo htmlspecialchars($form_data['account_type'] ?? ($is_partner_signup ? 'organization' : 'individual')); ?>">
-                    <input type="hidden" name="psgc_region_name" id="psgcRegionName" value="<?php echo htmlspecialchars($form_data['psgc_region_name'] ?? ''); ?>">
-                    <input type="hidden" name="psgc_province_name" id="psgcProvinceName" value="<?php echo htmlspecialchars($form_data['psgc_province_name'] ?? ''); ?>">
-                    <input type="hidden" name="psgc_city_name" id="psgcCityName" value="<?php echo htmlspecialchars($form_data['psgc_city_name'] ?? ''); ?>">
-                    <input type="hidden" name="psgc_barangay_name" id="psgcBarangayName" value="<?php echo htmlspecialchars($form_data['psgc_barangay_name'] ?? ''); ?>">
-                    
-                    <div class="form-actions">
-                        <button type="button" class="btn-secondary" id="backToLoginBtn">
-                            <i class="fas fa-arrow-left"></i>
-                            Back to Login
-                        </button>
-                        <button type="button" class="btn-primary" id="nextStep1">
-                            Continue
-                            <i class="fas fa-arrow-right"></i>
-                        </button>
-                    </div>
+                    <h2 style="font-size:1.35rem; font-weight:800; color:#0f172a; margin:0 0 4px 0;">Create Account</h2>
+                    <p style="font-size:0.9rem; color:#64748b; margin:0;">Join us to order Cavite's finest lechon dishes.</p>
                 </div>
                 
-                <!-- Step 2: Personal Information -->
-                <div class="form-step active" id="step2Form">
+                <div class="registration-body">
+
+                    <!-- Progress Steps -->
+                    <div class="progress-steps">
+                        <div class="step active" id="step1">
+                            <div class="step-label">Personal Info (Step 1 of 4)</div>
+                        </div>
+                        <div class="step" id="step2">
+                            <div class="step-label">Verification (Step 2 of 4)</div>
+                        </div>
+                        <div class="step" id="step3">
+                            <div class="step-label" id="step3NavLabel">Address Info (Step 3 of 4)</div>
+                        </div>
+                        <div class="step" id="step4">
+                            <div class="step-label">Create Account (Step 4 of 4)</div>
+                        </div>
+                        <div class="progress-container" style="width: 100%; height: 6px; background: #efddcd; border-radius: 3px; margin-top: 15px; overflow: visible; position: relative;">
+                            <div class="progress-bar" id="progressBar" style="position: absolute; left: 0; top: 0; height: 100%; width: 25%; background: #b3261e; transition: width 0.3s ease; display: block !important; overflow: visible;">
+                                <div class="running-pig" style="position: absolute; right: -14px; top: -20px; font-size: 22px; user-select: none; line-height: 1; animation: pigRun 0.4s infinite alternate ease-in-out;">🐖</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <form method="POST" action="" id="registrationForm" data-swal-validate="off" enctype="multipart/form-data" novalidate>
+                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['registration_csrf_token']); ?>">
+
+                        <input type="hidden" name="account_type" id="accountType" value="individual">
+                        <input type="hidden" name="psgc_region_code" id="psgcRegionCode" value="040000000">
+                        <input type="hidden" name="psgc_province_code" id="psgcProvinceCode" value="042100000">
+                        <input type="hidden" name="psgc_city_code" id="psgcCityCode" value="042109000">
+                        <input type="hidden" name="psgc_barangay_code" id="psgcBarangayCode" value="042109001">
+                    
+
+                
+                <!-- Step 1: Personal Information -->
+                <div class="form-step active" id="step1Form">
                     <h2 style="color: #333; margin-bottom: 25px; font-size: 1.5rem;">Tell us about you</h2>
                     
                     <div class="form-row">
@@ -1527,6 +1581,22 @@ body {
                             </select>
                         </div>
                     </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary" id="prevStep1">
+                            <i class="fas fa-arrow-left"></i>
+                            Back to Login
+                        </button>
+                        <button type="button" class="btn-primary" id="nextStep1">
+                            Continue
+                            <i class="fas fa-arrow-right"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Step 2: Contact & ID Verification -->
+                <div class="form-step" id="step2Form">
+                    <h2 style="color: #333; margin-bottom: 25px; font-size: 1.5rem;">Contact & Verification</h2>
 
                     <div class="form-group">
                         <label for="email">Email Address *</label>
@@ -1611,8 +1681,6 @@ body {
                         </div>
                     </div>
 
-
-                    
                     <div class="form-actions">
                         <button type="button" class="btn-secondary" id="prevStep2">
                             <i class="fas fa-arrow-left"></i>
@@ -1664,33 +1732,33 @@ body {
                     </div>
                     
                     <div class="form-group">
-                        <label for="psgcRegion" id="addressSectionLabel">Home Address (PSGC) *</label>
+                        <label for="psgcRegion" id="addressSectionLabel">Home Address *</label>
                         <div class="form-row">
                             <div class="form-group">
-                                <label for="psgcRegion" id="regionLabel">Region (Luzon only) *</label>
-                                <select id="psgcRegion" name="psgc_region_code" class="form-control" required data-selected="<?php echo htmlspecialchars($form_data['psgc_region_code'] ?? ''); ?>">
-                                    <option value="">Select region</option>
-                                </select>
+                                <label for="psgcRegion" id="regionLabel">Region *</label>
+                                <input type="text" id="psgcRegion" name="psgc_region_name" class="form-control" required
+                                    placeholder="e.g., Region IV-A (CALABARZON)"
+                                    value="<?php echo htmlspecialchars($form_data['psgc_region_name'] ?? ''); ?>">
                             </div>
                             <div class="form-group">
-                                <label for="psgcProvince" id="provinceLabel">Province (Required except NCR) *</label>
-                                <select id="psgcProvince" name="psgc_province_code" class="form-control" required data-selected="<?php echo htmlspecialchars($form_data['psgc_province_code'] ?? ''); ?>">
-                                    <option value="">Select province</option>
-                                </select>
+                                <label for="psgcProvince" id="provinceLabel">Province *</label>
+                                <input type="text" id="psgcProvince" name="psgc_province_name" class="form-control" required
+                                    placeholder="e.g., Cavite"
+                                    value="<?php echo htmlspecialchars($form_data['psgc_province_name'] ?? ''); ?>">
                             </div>
                         </div>
                         <div class="form-row">
                             <div class="form-group">
                                 <label for="psgcCity">City / Municipality *</label>
-                                <select id="psgcCity" name="psgc_city_code" class="form-control" required data-selected="<?php echo htmlspecialchars($form_data['psgc_city_code'] ?? ''); ?>">
-                                    <option value="">Select city or municipality</option>
-                                </select>
+                                <input type="text" id="psgcCity" name="psgc_city_name" class="form-control" required
+                                    placeholder="e.g., Dasmariñas"
+                                    value="<?php echo htmlspecialchars($form_data['psgc_city_name'] ?? ''); ?>">
                             </div>
                             <div class="form-group">
                                 <label for="psgcBarangay">Barangay *</label>
-                                <select id="psgcBarangay" name="psgc_barangay_code" class="form-control" required data-selected="<?php echo htmlspecialchars($form_data['psgc_barangay_code'] ?? ''); ?>">
-                                    <option value="">Select barangay</option>
-                                </select>
+                                <input type="text" id="psgcBarangay" name="psgc_barangay_name" class="form-control" required
+                                    placeholder="e.g., San Agustin"
+                                    value="<?php echo htmlspecialchars($form_data['psgc_barangay_name'] ?? ''); ?>">
                             </div>
                         </div>
                         <div class="form-group">
@@ -1701,9 +1769,6 @@ body {
                                 maxlength="120"
                                 required>
                         </div>
-                        <small id="psgcAddressHelp" style="display:block; margin-top:4px; color:#666; font-size:0.84rem;">
-                            Individual registration is limited to Luzon regions.
-                        </small>
                     </div>
 
                     <div class="form-group">
@@ -1828,6 +1893,8 @@ body {
                 Already have an account? 
                 <a href="login.php">Sign in here</a>
             </div>
+        </div>
+        </div>
         </div>
     </div>
 </div>
@@ -2393,7 +2460,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    let currentStep = 2;
+    let currentStep = 1;
     const totalSteps = 4;
     const steps = document.querySelectorAll('.step');
     const formSteps = document.querySelectorAll('.form-step');
@@ -2668,29 +2735,18 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        if (psgcRegionNameInput) {
-            psgcRegionNameInput.value = getSelectedLabel(regionSelect);
-        }
-        if (psgcProvinceNameInput) {
-            psgcProvinceNameInput.value = getSelectedLabel(provinceSelect);
-        }
-        if (psgcCityNameInput) {
-            psgcCityNameInput.value = getSelectedLabel(citySelect);
-        }
-        if (psgcBarangayNameInput) {
-            psgcBarangayNameInput.value = getSelectedLabel(barangaySelect);
-        }
-
-        if (!psgcEnabled) {
-            return;
-        }
+        const regionVal = regionSelect ? regionSelect.value.trim() : '';
+        const provinceVal = provinceSelect ? provinceSelect.value.trim() : '';
+        const cityVal = citySelect ? citySelect.value.trim() : '';
+        const barangayVal = barangaySelect ? barangaySelect.value.trim() : '';
+        const streetVal = streetAddressInput ? streetAddressInput.value.trim() : '';
 
         const composedAddress = [
-            streetAddressInput ? streetAddressInput.value.trim() : '',
-            psgcBarangayNameInput ? psgcBarangayNameInput.value.trim() : '',
-            psgcCityNameInput ? psgcCityNameInput.value.trim() : '',
-            psgcProvinceNameInput ? psgcProvinceNameInput.value.trim() : '',
-            psgcRegionNameInput ? psgcRegionNameInput.value.trim() : ''
+            streetVal,
+            barangayVal,
+            cityVal,
+            provinceVal,
+            regionVal
         ].filter(Boolean).join(', ');
 
         addressPreviewInput.value = composedAddress;
@@ -2723,268 +2779,14 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    function resetSelect(selectElement, placeholder) {
-        if (!selectElement) {
-            return;
-        }
-        setSelectOptions(selectElement, [], placeholder);
-        selectElement.value = '';
-        selectElement.disabled = true;
-    }
 
-    async function fetchPSGC(path) {
-        const key = String(path || '');
-        if (psgcCache.has(key)) {
-            return psgcCache.get(key);
-        }
-        const response = await fetch(PSGC_API_BASE + key, {
-            method: 'GET',
-            headers: { 'Accept': 'application/json' }
-        });
-        if (!response.ok) {
-            throw new Error('PSGC API request failed');
-        }
-        const payload = await response.json();
-        psgcCache.set(key, payload);
-        return payload;
-    }
-
-    async function loadRegions() {
-        const regions = await fetchPSGC('/regions');
-        const previousValue = regionSelect ? String(regionSelect.value || '').trim() : '';
-        const previousRegionName = psgcRegionNameInput ? String(psgcRegionNameInput.value || '').trim() : '';
-
-        const allowedRegions = regions.filter(function(region) {
-            return String(region.code || '') === CALABARZON_REGION_CODE ||
-                String(region.name || '').toLowerCase().includes('calabarzon');
-        });
-
-        setSelectOptions(regionSelect, allowedRegions, allowedRegions.length ? 'Select region' : 'No allowed region');
-        regionSelect.disabled = allowedRegions.length === 0;
-
-        if (allowedRegions.some(function(region) { return String(region.code || '') === previousValue; })) {
-            regionSelect.value = previousValue;
-        } else {
-            const fallbackRegionCode = findOptionValueFromCandidates(regionSelect, previousRegionName);
-            if (fallbackRegionCode) {
-                regionSelect.value = fallbackRegionCode;
-            } else if (allowedRegions.length === 1) {
-                regionSelect.value = allowedRegions[0].code || CALABARZON_REGION_CODE;
-            }
-        }
-    }
-
-    async function loadProvinces(regionCode) {
-        if (!regionCode) {
-            resetSelect(provinceSelect, 'Select province');
-            return [];
-        }
-
-        const provinces = await fetchPSGC('/regions/' + encodeURIComponent(regionCode) + '/provinces');
-        const previousValue = provinceSelect ? String(provinceSelect.value || '').trim() : '';
-        const previousProvinceName = psgcProvinceNameInput ? String(psgcProvinceNameInput.value || '').trim() : '';
-
-        let allowedProvinces = provinces;
-        if (accountType === 'organization') {
-            allowedProvinces = provinces.filter(function(province) {
-                return String(province.code || '') === CAVITE_PROVINCE_CODE ||
-                    String(province.name || '').toLowerCase().includes('cavite');
-            });
-        }
-
-        setSelectOptions(provinceSelect, allowedProvinces, allowedProvinces.length ? 'Select province' : 'No allowed province');
-        provinceSelect.disabled = allowedProvinces.length === 0;
-
-        if (allowedProvinces.some(function(province) { return String(province.code || '') === previousValue; })) {
-            provinceSelect.value = previousValue;
-        } else {
-            const fallbackProvinceCode = findOptionValueFromCandidates(provinceSelect, previousProvinceName);
-            if (fallbackProvinceCode) {
-                provinceSelect.value = fallbackProvinceCode;
-            } else if (accountType === 'organization' && allowedProvinces.length === 1) {
-                provinceSelect.value = allowedProvinces[0].code || CAVITE_PROVINCE_CODE;
-            }
-        }
-        return allowedProvinces;
-    }
-
-    async function loadCities(regionCode, provinceCode) {
-        if (!regionCode) {
-            resetSelect(citySelect, 'Select city or municipality');
-            return [];
-        }
-
-        let cities = [];
-        if (provinceCode) {
-            cities = await fetchPSGC('/provinces/' + encodeURIComponent(provinceCode) + '/cities-municipalities');
-        } else {
-            cities = await fetchPSGC('/regions/' + encodeURIComponent(regionCode) + '/cities-municipalities');
-        }
-
-        setSelectOptions(citySelect, cities, 'Select city or municipality');
-        citySelect.disabled = cities.length === 0;
-        return cities;
-    }
-
-    async function loadBarangays(cityCode) {
-        if (!cityCode) {
-            resetSelect(barangaySelect, 'Select barangay');
-            return [];
-        }
-
-        const barangays = await fetchPSGC('/cities-municipalities/' + encodeURIComponent(cityCode) + '/barangays');
-        setSelectOptions(barangaySelect, barangays, 'Select barangay');
-        barangaySelect.disabled = barangays.length === 0;
-        return barangays;
-    }
-
-    async function handleRegionChange(isRestore) {
-        const regionCode = regionSelect ? regionSelect.value : '';
-        if (!isRestore) {
-            resetSelect(provinceSelect, 'Select province');
-            resetSelect(citySelect, 'Select city or municipality');
-            resetSelect(barangaySelect, 'Select barangay');
-            if (psgcProvinceNameInput) {
-                psgcProvinceNameInput.value = '';
-            }
-            if (psgcCityNameInput) {
-                psgcCityNameInput.value = '';
-            }
-            if (psgcBarangayNameInput) {
-                psgcBarangayNameInput.value = '';
-            }
-            syncAddressPreview();
-        }
-
-        if (!regionCode) {
-            syncAddressPreview();
-            return;
-        }
-
-        const provinces = await loadProvinces(regionCode);
-        provinceSelect.required = provinces.length > 0;
-        if (provinces.length === 0) {
-            await loadCities(regionCode, '');
-        } else if (provinces.length === 1 && provinceSelect.value) {
-            await handleProvinceChange(true);
-        }
-        syncAddressPreview();
-    }
-
-    async function handleProvinceChange(isRestore) {
-        const regionCode = regionSelect ? regionSelect.value : '';
-        const provinceCode = provinceSelect ? provinceSelect.value : '';
-
-        if (!isRestore) {
-            resetSelect(citySelect, 'Select city or municipality');
-            resetSelect(barangaySelect, 'Select barangay');
-            if (psgcCityNameInput) {
-                psgcCityNameInput.value = '';
-            }
-            if (psgcBarangayNameInput) {
-                psgcBarangayNameInput.value = '';
-            }
-            syncAddressPreview();
-        }
-
-        await loadCities(regionCode, provinceCode);
-        syncAddressPreview();
-    }
-
-    async function handleCityChange(isRestore) {
-        const cityCode = citySelect ? citySelect.value : '';
-        if (!isRestore) {
-            resetSelect(barangaySelect, 'Select barangay');
-            if (psgcBarangayNameInput) {
-                psgcBarangayNameInput.value = '';
-            }
-            syncAddressPreview();
-        }
-
-        await loadBarangays(cityCode);
-        syncAddressPreview();
-    }
-
-    async function restoreAddressSelections() {
-        if (!psgcEnabled) {
-            return;
-        }
-
-        const presetRegionCode = regionSelect ? (regionSelect.getAttribute('data-selected') || '') : '';
-        const presetProvinceCode = provinceSelect ? (provinceSelect.getAttribute('data-selected') || '') : '';
-        const presetCityCode = citySelect ? (citySelect.getAttribute('data-selected') || '') : '';
-        const presetBarangayCode = barangaySelect ? (barangaySelect.getAttribute('data-selected') || '') : '';
-
-        const regionCandidates = toCandidateNames(psgcRegionNameInput ? psgcRegionNameInput.value : '');
-        const provinceCandidates = toCandidateNames(psgcProvinceNameInput ? psgcProvinceNameInput.value : '');
-        const cityCandidates = toCandidateNames(psgcCityNameInput ? psgcCityNameInput.value : '');
-        const barangayCandidates = toCandidateNames(psgcBarangayNameInput ? psgcBarangayNameInput.value : '');
-
-        const regionAppliedCode = applySelectCodeOrName(regionSelect, presetRegionCode, regionCandidates);
-        if (!regionAppliedCode) {
-            if (regionSelect && regionSelect.value) {
-                await handleRegionChange(true);
-            }
-            syncAddressPreview();
-            return;
-        }
-
-        await handleRegionChange(true);
-
-        if (provinceSelect && !provinceSelect.disabled) {
-            applySelectCodeOrName(provinceSelect, presetProvinceCode, provinceCandidates);
-            await handleProvinceChange(true);
-        } else if (provinceSelect && !provinceSelect.required) {
-            await handleProvinceChange(true);
-        }
-
-        let cityAppliedCode = '';
-        if (citySelect && !citySelect.disabled) {
-            cityAppliedCode = applySelectCodeOrName(citySelect, presetCityCode, cityCandidates);
-
-            if (!cityAppliedCode && provinceSelect && !provinceSelect.disabled) {
-                const currentProvinceCode = String(provinceSelect.value || '').trim();
-                const provinceOptions = Array.from(provinceSelect.options || []).filter(function(option) {
-                    return option && option.value;
-                });
-
-                for (let i = 0; i < provinceOptions.length; i += 1) {
-                    const option = provinceOptions[i];
-                    if (!option || !option.value || String(option.value) === currentProvinceCode) {
-                        continue;
-                    }
-                    provinceSelect.value = String(option.value);
-                    await handleProvinceChange(true);
-                    cityAppliedCode = applySelectCodeOrName(citySelect, presetCityCode, cityCandidates);
-                    if (cityAppliedCode) {
-                        break;
-                    }
-                }
-
-                if (!cityAppliedCode && currentProvinceCode && String(provinceSelect.value || '') !== currentProvinceCode) {
-                    provinceSelect.value = currentProvinceCode;
-                    await handleProvinceChange(true);
-                }
-            }
-
-            if (cityAppliedCode) {
-                await handleCityChange(true);
-            }
-        }
-
-        if (barangaySelect && !barangaySelect.disabled) {
-            applySelectCodeOrName(barangaySelect, presetBarangayCode, barangayCandidates);
-        }
-
-        syncAddressPreview();
-    }
 
     function updateSteps() {
         steps.forEach(function(step, index) {
             step.classList.remove('active', 'completed');
-            if (index + 1 === currentStep) {
+            if (index === currentStep - 1) {
                 step.classList.add('active');
-            } else if (index + 1 < currentStep) {
+            } else if (index < currentStep - 1) {
                 step.classList.add('completed');
             }
         });
@@ -2996,7 +2798,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function updateProgressBar() {
         const progressBar = document.getElementById('progressBar');
-        const progress = ((currentStep - 2) / (totalSteps - 2)) * 100;
+        const progress = ((currentStep - 1) / (totalSteps - 1)) * 100;
         if (progressBar) {
             progressBar.style.width = progress + '%';
         }
@@ -3147,10 +2949,19 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function validateStep1() {
-        if (!accountType || !['individual', 'organization'].includes(accountType)) {
-            showError('Account Type Required', 'Please select either Individual or Business Partner to continue.');
+        const firstName = ((document.getElementById('firstName') || {}).value || '').trim();
+        const lastName = ((document.getElementById('lastName') || {}).value || '').trim();
+
+        if (!firstName || !lastName) {
+            showError('Missing Information', 'Please fill in all required personal details.');
             return false;
         }
+
+        if (!isValidName(firstName) || !isValidName(lastName)) {
+            showError('Invalid Name', 'Please use letters, spaces, apostrophes, or hyphens only.');
+            return false;
+        }
+
         return true;
     }
 
@@ -3232,7 +3043,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const validIdFrontFile = validIdFrontInput && validIdFrontInput.files ? validIdFrontInput.files[0] : null;
         const validIdBackFile = validIdBackInput && validIdBackInput.files ? validIdBackInput.files[0] : null;
 
-        if (!firstName || !lastName || !email || !phone) {
+        if (!email || !phone) {
             showError('Missing Information', 'Please fill in all required personal details.');
             return false;
         }
@@ -3304,49 +3115,22 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
+        const regionVal = regionSelect ? regionSelect.value.trim() : '';
+        const provinceVal = provinceSelect ? provinceSelect.value.trim() : '';
+        const cityVal = citySelect ? citySelect.value.trim() : '';
+        const barangayVal = barangaySelect ? barangaySelect.value.trim() : '';
+        const streetVal = streetAddressInput ? streetAddressInput.value.trim() : '';
+
+        if (!regionVal || !provinceVal || !cityVal || !barangayVal || !streetVal) {
+            showError('Incomplete Address', 'Please fill in all address details (Region, Province, City, Barangay, and Street Address).');
+            return false;
+        }
+
         if (!addressPreviewInput || addressPreviewInput.value.trim().length < 10) {
             showError('Address Required', accountType === 'organization'
                 ? 'Please provide a complete business address.'
                 : 'Please provide a complete home address.');
             return false;
-        }
-
-        if (!psgcEnabled) {
-            showError('Address Service Unavailable', 'PSGC address lookup is currently unavailable. Please try again in a few minutes.');
-            return false;
-        }
-
-        if (psgcEnabled) {
-            const selectedRegionLabel = getSelectedLabel(regionSelect);
-            const isNcrRegion = isNcrSelection(regionSelect.value, selectedRegionLabel);
-            const hasRequiredLocationPieces =
-                !!regionSelect.value &&
-                !!citySelect.value &&
-                !!barangaySelect.value &&
-                !!streetAddressInput.value.trim() &&
-                (isNcrRegion || !!provinceSelect.value);
-
-            if (!hasRequiredLocationPieces) {
-                showError('Incomplete Address', accountType === 'organization'
-                    ? 'Please complete your business address details (region, province, city/municipality, barangay, and street).'
-                    : 'Please complete your home address details in Luzon (province may be skipped for NCR).');
-                return false;
-            }
-
-            if (accountType === 'organization') {
-                if (regionSelect.value !== CALABARZON_REGION_CODE || !String(selectedRegionLabel).toLowerCase().includes('calabarzon')) {
-                    showError('Region Restricted', 'Business partner registration is available only in Region IV-A (CALABARZON).');
-                    return false;
-                }
-                const selectedProvinceLabel = getSelectedLabel(provinceSelect);
-                if (provinceSelect.value !== CAVITE_PROVINCE_CODE || !String(selectedProvinceLabel).toLowerCase().includes('cavite')) {
-                    showError('Province Restricted', 'Business partner registration is available only in Cavite.');
-                    return false;
-                }
-            } else if (!isLuzonSelection(regionSelect.value, selectedRegionLabel)) {
-                showError('Region Restricted', 'Individual registration is available only for Luzon regions.');
-                return false;
-            }
         }
 
         return true;
@@ -3412,10 +3196,26 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    const prevStep1 = document.getElementById('prevStep1');
+    if (prevStep1) {
+        prevStep1.addEventListener('click', function() {
+            window.location.href = 'login.php';
+        });
+    }
+
     const nextStep1 = document.getElementById('nextStep1');
     if (nextStep1) {
         nextStep1.addEventListener('click', function() {
-            goToStep(2);
+            if (validateStep1()) {
+                goToStep(2);
+            }
+        });
+    }
+
+    const prevStep2 = document.getElementById('prevStep2');
+    if (prevStep2) {
+        prevStep2.addEventListener('click', function() {
+            goToStep(1);
         });
     }
 
@@ -3428,6 +3228,13 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    const prevStep3 = document.getElementById('prevStep3');
+    if (prevStep3) {
+        prevStep3.addEventListener('click', function() {
+            goToStep(2);
+        });
+    }
+
     const nextStep3 = document.getElementById('nextStep3');
     if (nextStep3) {
         nextStep3.addEventListener('click', function() {
@@ -3437,26 +3244,14 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    const prevStep2 = document.getElementById('prevStep2');
-    if (prevStep2) {
-        prevStep2.addEventListener('click', function() {
-            window.location.href = 'login.php';
-        });
-    }
-
-    const prevStep3 = document.getElementById('prevStep3');
-    if (prevStep3) {
-        prevStep3.addEventListener('click', function() {
-            goToStep(2);
-        });
-    }
-
     const prevStep4 = document.getElementById('prevStep4');
     if (prevStep4) {
         prevStep4.addEventListener('click', function() {
             goToStep(3);
         });
     }
+
+
 
     document.querySelectorAll('.toggle-password').forEach(function(button) {
         button.addEventListener('click', function() {
@@ -3540,33 +3335,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     if (regionSelect && provinceSelect && citySelect && barangaySelect && streetAddressInput && addressPreviewInput) {
-        Promise.resolve()
-            .then(loadRegions)
-            .then(restoreAddressSelections)
-            .catch(function() {
-                setManualAddressFallback('PSGC address lookup is unavailable right now. You can enter your complete address manually.');
-            });
-
-        regionSelect.addEventListener('change', function() {
-            handleRegionChange(false).catch(function() {
-                setManualAddressFallback('PSGC address lookup failed while loading provinces/cities. Use manual address entry for now.');
-            });
+        [regionSelect, provinceSelect, citySelect, barangaySelect, streetAddressInput].forEach(function(input) {
+            input.addEventListener('input', syncAddressPreview);
+            input.addEventListener('change', syncAddressPreview);
         });
-
-        provinceSelect.addEventListener('change', function() {
-            handleProvinceChange(false).catch(function() {
-                setManualAddressFallback('PSGC address lookup failed while loading cities/municipalities.');
-            });
-        });
-
-        citySelect.addEventListener('change', function() {
-            handleCityChange(false).catch(function() {
-                setManualAddressFallback('PSGC address lookup failed while loading barangays.');
-            });
-        });
-
-        barangaySelect.addEventListener('change', syncAddressPreview);
-        streetAddressInput.addEventListener('input', syncAddressPreview);
+        syncAddressPreview();
     }
 
     const registrationForm = document.getElementById('registrationForm');
@@ -3637,6 +3410,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     async function startCamera() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            fallbackToFileUpload();
+            return;
+        }
+
         if (cameraSpinner) cameraSpinner.style.display = 'flex';
         if (cameraStream) stopCamera();
 
@@ -3649,7 +3427,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 audio: false
             };
-            cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
+            try {
+                cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
+            } catch (firstErr) {
+                console.warn('Specific video constraints failed, trying generic constraints:', firstErr);
+                cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            }
             if (webcamVideo) {
                 webcamVideo.srcObject = cameraStream;
                 webcamVideo.onloadedmetadata = function() {
@@ -3659,15 +3442,53 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (err) {
             console.error('Camera stream access failed:', err);
             if (cameraSpinner) cameraSpinner.style.display = 'none';
-            Swal.fire({
-                icon: 'error',
-                title: 'Camera Access Error',
-                text: 'Could not access your camera stream. Please allow camera permissions and try again.',
-                confirmButtonColor: '#b3261e'
-            });
             closeModal();
+            fallbackToFileUpload();
         }
     }
+
+    function fallbackToFileUpload() {
+        Swal.fire({
+            icon: 'info',
+            title: 'Camera Unreachable',
+            text: 'We could not open your camera stream. You can upload a photo of your ID from your device files instead.',
+            confirmButtonColor: '#b3261e',
+            showCancelButton: true,
+            confirmButtonText: 'Upload ID Photo',
+            cancelButtonText: 'Cancel'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                const currentInputId = activeCameraSide === 'Front' ? 'validIdFront' : 'validIdBack';
+                const fileInput = document.getElementById(currentInputId);
+                if (fileInput) {
+                    fileInput.click();
+                }
+            }
+        });
+    }
+
+    function handleFileSelection(side) {
+        const fileInput = document.getElementById(side === 'Front' ? 'validIdFront' : 'validIdBack');
+        const previewContainer = document.getElementById(side === 'Front' ? 'previewFront' : 'previewBack');
+        const zoneContent = document.getElementById(side === 'Front' ? 'zoneContentFront' : 'zoneContentBack');
+
+        if (fileInput && fileInput.files && fileInput.files[0]) {
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                if (previewContainer) {
+                    const img = previewContainer.querySelector('img');
+                    if (img) img.src = e.target.result;
+                    previewContainer.style.display = 'block';
+                }
+                if (zoneContent) zoneContent.style.visibility = 'hidden';
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+
+    document.getElementById('validIdFront').addEventListener('change', () => handleFileSelection('Front'));
+    document.getElementById('validIdBack').addEventListener('change', () => handleFileSelection('Back'));
 
     function stopCamera() {
         if (cameraStream) {
@@ -3773,21 +3594,25 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    [regionSelect, provinceSelect, citySelect, barangaySelect, streetAddressInput].forEach(function(input) {
+        if (input) {
+            input.addEventListener('input', syncAddressPreview);
+            input.addEventListener('change', syncAddressPreview);
+        }
+    });
+
     updateOrganizationFields();
     updateSteps();
     updateProgressBar();
     syncAddressPreview();
 
     const serverRegistrationError = <?php echo json_encode($error ?? ''); ?>;
-    const requestedAccountType = <?php echo json_encode($requested_account_type); ?>;
-    if (requestedAccountType && !serverRegistrationError) {
-        goToStep(2);
-    }
+
     if (serverRegistrationError) {
         const loweredError = serverRegistrationError.toLowerCase();
-        let targetStep = 2;
-
-        if (/(email|mobile|phone|name|valid id|government id)/.test(loweredError)) {
+        if (/(name)/.test(loweredError)) {
+            targetStep = 1;
+        } else if (/(email|mobile|phone|valid id|government id)/.test(loweredError)) {
             targetStep = 2;
         } else if (/(business|partner|address|psgc|delivery|restaurant)/.test(loweredError)) {
             targetStep = 3;
