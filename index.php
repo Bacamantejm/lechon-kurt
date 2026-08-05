@@ -564,8 +564,16 @@ foreach ($stores as &$store) {
 }
 unset($store);
 
-$stores = array_values(array_filter($stores, static function ($store) {
-    return !empty($store['is_cavite']);
+$has_any_cavite_stores = false;
+foreach ($stores as $s) {
+    if (!empty($s['is_cavite'])) {
+        $has_any_cavite_stores = true;
+        break;
+    }
+}
+
+$stores = array_values(array_filter($stores, static function ($store) use ($has_any_cavite_stores) {
+    return $has_any_cavite_stores ? !empty($store['is_cavite']) : true;
 }));
 usort($stores, static function ($a, $b) {
     return [$b['is_open'] ? 1 : 0, $b['live'] ? 1 : 0, $b['count'], $b['type'] === 'platform' ? 1 : 0, $a['name']]
@@ -3422,7 +3430,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             <!-- Register Pane -->
             <div class="auth-popup-pane" id="authPaneRegister">
-                <div class="reg-choice-grid">
+                <div class="reg-choice-grid" style="grid-template-columns: 1fr;">
                     <a href="register.php?account_type=individual" class="reg-choice-card">
                         <div class="reg-choice-icon">
                             <i class="fas fa-user"></i>
@@ -3430,16 +3438,6 @@ document.addEventListener('DOMContentLoaded', function () {
                         <div class="reg-choice-info">
                             <span class="reg-choice-title">Individual Customer</span>
                             <span class="reg-choice-desc">Order delicious lechon dishes, rate food, track deliveries, and manage your account.</span>
-                        </div>
-                    </a>
-                    
-                    <a href="register.php?account_type=organization" class="reg-choice-card">
-                        <div class="reg-choice-icon">
-                            <i class="fas fa-store"></i>
-                        </div>
-                        <div class="reg-choice-info">
-                            <span class="reg-choice-title">Business Partner</span>
-                            <span class="reg-choice-desc">Register your lechon business, manage your storefront menu, and sync billing invoices.</span>
                         </div>
                     </a>
                 </div>

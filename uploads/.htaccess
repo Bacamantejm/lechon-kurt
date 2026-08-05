@@ -1,0 +1,7 @@
+# Secure Uploads Directory
+# Disable execution of scripts uploaded by users
+SetHandler text/plain
+
+<FilesMatch "\.(?i:jpg|jpeg|png|gif|webp|pdf)$">
+    SetHandler none
+</FilesMatch>

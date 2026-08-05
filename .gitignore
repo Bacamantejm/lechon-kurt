@@ -1,5 +1,7 @@
 # Production/local secrets
 includes/deployment_credentials.php
+includes/local_credentials.php
+
 .env
 .env.local
 .env.*.local

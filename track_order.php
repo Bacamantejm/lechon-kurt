@@ -337,18 +337,19 @@ include 'includes/header.php';
 </section>
 
 <?php if ($tracking_info): ?>
-<!-- Google Maps API -->
-<script src="https://maps.googleapis.com/maps/api/js?key=<?php echo rawurlencode((string)$google_maps_api_key); ?>&libraries=places,geometry&callback=initMap" async defer></script>
+<!-- Leaflet Map API -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+<!-- Leaflet Map API dependencies loaded dynamically -->
 
 <script>
     let map;
     let driverMarker;
     let customerMarker;
-    let directionsService;
-    let directionsRenderer;
+    let routePolyline;
     let riderTrailPolyline;
     let customerLocationObj = null;
-    let riderTrailPath = [];
     let lastDriverLatLng = null;
     let lastRouteRefreshAt = 0;
     let hasAutoFitBounds = false;
@@ -362,7 +363,6 @@ include 'includes/header.php';
     let chatLastMessageId = 0;
     let chatAvailable = false;
     let chatRole = 'customer';
-    let trackingGoogleGeocodingAvailable = <?php echo $google_geocoding_enabled ? 'true' : 'false'; ?>;
 
     const orderId = <?php echo $order_id; ?>;
     const customerLat = <?php echo json_encode(isset($order['latitude']) ? (is_numeric($order['latitude']) ? (float)$order['latitude'] : null) : null); ?>;
@@ -370,14 +370,6 @@ include 'includes/header.php';
     const customerAddress = <?php echo json_encode((string)($order['delivery_address'] ?? '')); ?>;
     const routeVisibleStatuses = ['picked_up', 'on_the_way', 'arriving'];
     const movingAnimationStatuses = ['on_the_way', 'arriving'];
-
-    function isGoogleGeocodingUnavailableStatus(status) {
-        const normalized = String(status || '').trim().toUpperCase();
-        return normalized === 'REQUEST_DENIED'
-            || normalized === 'OVER_QUERY_LIMIT'
-            || normalized === 'OVER_DAILY_LIMIT'
-            || normalized === 'INVALID_REQUEST';
-    }
 
     async function forwardGeocodeFromNominatim(addressText) {
         const query = String(addressText || '').trim();
@@ -405,37 +397,19 @@ include 'includes/header.php';
         }
     }
 
-    function createDriverMapIcon() {
-        const svg = `
-            <svg xmlns="http://www.w3.org/2000/svg" width="46" height="46" viewBox="0 0 46 46">
-                <circle cx="23" cy="23" r="20" fill="#c62828" stroke="#ffffff" stroke-width="3" />
-                <path d="M14 26h18l-1.8-5.3h-4.5l-2.4-4.1h-4.4l1.2 4.1h-3.9z" fill="#ffffff" />
-                <circle cx="18.2" cy="28.3" r="2.6" fill="#0f172a" />
-                <circle cx="28.4" cy="28.3" r="2.6" fill="#0f172a" />
-            </svg>
-        `.trim();
+    const driverIcon = L.divIcon({
+        html: `<div style="background:#ef6b2e; color:#fff; width:40px; height:40px; border-radius:50%; border:3px solid #fff; display:flex; align-items:center; justify-content:center; box-shadow:0 3px 8px rgba(0,0,0,0.4);"><i class="fas fa-motorcycle" style="font-size:1.1rem;"></i></div>`,
+        className: 'custom-driver-icon',
+        iconSize: [40, 40],
+        iconAnchor: [20, 20]
+    });
 
-        return {
-            url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
-            scaledSize: new google.maps.Size(40, 40),
-            anchor: new google.maps.Point(20, 20)
-        };
-    }
-
-    function createCustomerMapIcon() {
-        const svg = `
-            <svg xmlns="http://www.w3.org/2000/svg" width="42" height="42" viewBox="0 0 42 42">
-                <circle cx="21" cy="21" r="18" fill="#2563eb" stroke="#ffffff" stroke-width="3" />
-                <path d="M13 22.5h16v6.5H13zM20 13l10 8h-3v8h-5v-5h-2v5h-5v-8h-3z" fill="#ffffff"/>
-            </svg>
-        `.trim();
-
-        return {
-            url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
-            scaledSize: new google.maps.Size(36, 36),
-            anchor: new google.maps.Point(18, 18)
-        };
-    }
+    const customerIcon = L.divIcon({
+        html: `<div style="background:#b3261e; color:#fff; width:36px; height:36px; border-radius:50%; border:3px solid #fff; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 6px rgba(0,0,0,0.3);"><i class="fas fa-home" style="font-size:1rem;"></i></div>`,
+        className: 'custom-customer-icon',
+        iconSize: [36, 36],
+        iconAnchor: [18, 18]
+    });
 
     function normalizeLocationSource(source) {
         return String(source || '').trim().toLowerCase();
@@ -452,9 +426,9 @@ include 'includes/header.php';
     function animateDriverTransition(targetLatLng, durationMs = 1200) {
         if (!driverMarker || !targetLatLng) return;
 
-        const startLatLng = driverMarker.getPosition();
+        const startLatLng = driverMarker.getLatLng();
         if (!startLatLng) {
-            driverMarker.setPosition(targetLatLng);
+            driverMarker.setLatLng(targetLatLng);
             return;
         }
 
@@ -463,10 +437,10 @@ include 'includes/header.php';
             driverMoveRaf = null;
         }
 
-        const startLat = startLatLng.lat();
-        const startLng = startLatLng.lng();
-        const endLat = targetLatLng.lat();
-        const endLng = targetLatLng.lng();
+        const startLat = startLatLng.lat;
+        const startLng = startLatLng.lng;
+        const endLat = targetLatLng[0];
+        const endLng = targetLatLng[1];
         const startAt = performance.now();
 
         const tick = (now) => {
@@ -474,7 +448,7 @@ include 'includes/header.php';
             const eased = 1 - Math.pow(1 - t, 3);
             const lat = startLat + (endLat - startLat) * eased;
             const lng = startLng + (endLng - startLng) * eased;
-            driverMarker.setPosition(new google.maps.LatLng(lat, lng));
+            driverMarker.setLatLng([lat, lng]);
 
             if (t < 1) {
                 driverMoveRaf = requestAnimationFrame(tick);
@@ -490,16 +464,14 @@ include 'includes/header.php';
         if (!map || !centerLatLng) return;
 
         if (!driverPulseCircle) {
-            driverPulseCircle = new google.maps.Circle({
-                map: map,
-                center: centerLatLng,
+            driverPulseCircle = L.circle(centerLatLng, {
                 radius: 0,
-                strokeColor: '#c62828',
-                strokeOpacity: 0,
-                strokeWeight: 2,
+                color: '#c62828',
+                weight: 2,
+                opacity: 0,
                 fillColor: '#c62828',
                 fillOpacity: 0
-            });
+            }).addTo(map);
         }
 
         if (driverPulseRaf) {
@@ -513,10 +485,10 @@ include 'includes/header.php';
         const pulseTick = (now) => {
             const t = Math.min((now - startAt) / durationMs, 1);
             const eased = 1 - Math.pow(1 - t, 2);
-            driverPulseCircle.setCenter(centerLatLng);
+            driverPulseCircle.setLatLng(centerLatLng);
             driverPulseCircle.setRadius(6 + 44 * eased);
-            driverPulseCircle.setOptions({
-                strokeOpacity: Math.max(0, 0.45 - t * 0.45),
+            driverPulseCircle.setStyle({
+                opacity: Math.max(0, 0.45 - t * 0.45),
                 fillOpacity: Math.max(0, 0.18 - t * 0.18)
             });
 
@@ -524,7 +496,7 @@ include 'includes/header.php';
                 driverPulseRaf = requestAnimationFrame(pulseTick);
             } else {
                 driverPulseCircle.setRadius(0);
-                driverPulseCircle.setOptions({ strokeOpacity: 0, fillOpacity: 0 });
+                driverPulseCircle.setStyle({ opacity: 0, fillOpacity: 0 });
                 driverPulseRaf = null;
             }
         };
@@ -533,67 +505,45 @@ include 'includes/header.php';
     }
 
     function initMap() {
-        const mapOptions = {
-            zoom: 14,
-            center: { lat: 14.5995, lng: 120.9842 },
-            mapTypeId: 'roadmap'
-        };
+        console.log("Initializing Leaflet Tracking Map...");
+        
+        map = L.map('map').setView([14.5995, 120.9842], 14);
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
 
-        map = new google.maps.Map(document.getElementById('map'), mapOptions);
-        directionsService = new google.maps.DirectionsService();
-        directionsRenderer = new google.maps.DirectionsRenderer({
-            map: map,
-            suppressMarkers: true,
-            preserveViewport: true,
-            polylineOptions: {
-                strokeColor: '#2563eb',
-                strokeOpacity: 0.85,
-                strokeWeight: 5
-            }
-        });
-        riderTrailPolyline = new google.maps.Polyline({
-            map: map,
-            path: [],
-            geodesic: true,
-            strokeColor: '#dc2626',
-            strokeOpacity: 0.95,
-            strokeWeight: 4,
-            icons: [{
-                icon: {
-                    path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
-                    scale: 3,
-                    fillColor: '#dc2626',
-                    fillOpacity: 1,
-                    strokeColor: '#dc2626',
-                    strokeWeight: 1
-                },
-                offset: '100%',
-                repeat: '55px'
-            }]
-        });
+        routePolyline = L.polyline([], {
+            color: '#2563eb',
+            opacity: 0.85,
+            weight: 5
+        }).addTo(map);
+
+        riderTrailPolyline = L.polyline([], {
+            color: '#dc2626',
+            opacity: 0.95,
+            weight: 4
+        }).addTo(map);
 
         if (Number.isFinite(customerLat) && Number.isFinite(customerLng)) {
-            const customerPosition = { lat: customerLat, lng: customerLng };
-            customerLocationObj = new google.maps.LatLng(customerPosition.lat, customerPosition.lng);
-            customerMarker = new google.maps.Marker({
-                position: customerPosition,
-                map: map,
+            const customerPosition = [customerLat, customerLng];
+            customerLocationObj = customerPosition;
+            customerMarker = L.marker(customerPosition, {
                 title: 'Your Location',
-                icon: createCustomerMapIcon()
-            });
-            map.setCenter(customerPosition);
+                icon: customerIcon
+            }).addTo(map);
+            map.setView(customerPosition, 14);
         } else {
             const applyCustomerPosition = (lat, lng) => {
                 if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) return false;
-                const point = { lat: Number(lat), lng: Number(lng) };
-                customerLocationObj = new google.maps.LatLng(point.lat, point.lng);
-                map.setCenter(point);
-                customerMarker = new google.maps.Marker({
-                    map: map,
-                    position: point,
+                const point = [Number(lat), Number(lng)];
+                customerLocationObj = point;
+                map.setView(point, 14);
+                customerMarker = L.marker(point, {
                     title: 'Your Location',
-                    icon: createCustomerMapIcon()
-                });
+                    icon: customerIcon
+                }).addTo(map);
                 return true;
             };
 
@@ -603,22 +553,7 @@ include 'includes/header.php';
                 return applyCustomerPosition(fallback.lat, fallback.lng);
             };
 
-            if (!trackingGoogleGeocodingAvailable) {
-                applyFallbackAddress();
-            } else {
-                const geocoder = new google.maps.Geocoder();
-                geocoder.geocode({ address: customerAddress }, async function(results, status) {
-                    if (status === 'OK' && results[0] && results[0].geometry && results[0].geometry.location) {
-                        const loc = results[0].geometry.location;
-                        applyCustomerPosition(loc.lat(), loc.lng());
-                        return;
-                    }
-                    if (isGoogleGeocodingUnavailableStatus(status)) {
-                        trackingGoogleGeocodingAvailable = false;
-                    }
-                    await applyFallbackAddress();
-                });
-            }
+            applyFallbackAddress();
         }
 
         fetchTrackingData();
@@ -660,7 +595,7 @@ include 'includes/header.php';
     function updateDriverMarker(lat, lng, lastUpdateRaw = null, driverName = 'Driver', locationSource = '', deliveryStatus = '') {
         if (lat === null || lng === null) {
             if (driverMarker) {
-                driverMarker.setMap(null);
+                map.removeLayer(driverMarker);
                 driverMarker = null;
             }
             if (driverMoveRaf) {
@@ -672,13 +607,12 @@ include 'includes/header.php';
                 driverPulseRaf = null;
             }
             if (driverPulseCircle) {
-                driverPulseCircle.setMap(null);
+                map.removeLayer(driverPulseCircle);
                 driverPulseCircle = null;
             }
             lastDriverLatLng = null;
-            riderTrailPath = [];
             if (riderTrailPolyline) {
-                riderTrailPolyline.setPath([]);
+                riderTrailPolyline.setLatLngs([]);
             }
             resetRouteEtaDetails();
             return;
@@ -690,30 +624,29 @@ include 'includes/header.php';
             return;
         }
 
-        const driverPosition = { lat: nextLat, lng: nextLng };
-        const nextLatLng = new google.maps.LatLng(nextLat, nextLng);
+        const driverPosition = [nextLat, nextLng];
         const shouldAnimateMove = statusCanAnimateMovement(deliveryStatus);
+        
         let movedDistanceMeters = 0;
-        if (lastDriverLatLng && window.google && google.maps && google.maps.geometry && google.maps.geometry.spherical) {
-            movedDistanceMeters = google.maps.geometry.spherical.computeDistanceBetween(lastDriverLatLng, nextLatLng) || 0;
+        if (lastDriverLatLng && typeof L !== 'undefined') {
+            const fromPoint = L.latLng(lastDriverLatLng[0], lastDriverLatLng[1]);
+            const toPoint = L.latLng(nextLat, nextLng);
+            movedDistanceMeters = fromPoint.distanceTo(toPoint) || 0;
         }
 
         if (!driverMarker) {
-            driverMarker = new google.maps.Marker({
-                position: driverPosition,
-                map: map,
+            driverMarker = L.marker(driverPosition, {
                 title: `${driverName} Location`,
-                icon: createDriverMapIcon()
-            });
+                icon: driverIcon
+            }).addTo(map);
         } else {
             if (shouldAnimateMove && movedDistanceMeters >= 2) {
-                animateDriverTransition(nextLatLng, 1300);
-                triggerDriverMovementPulse(nextLatLng);
+                animateDriverTransition(driverPosition, 1300);
+                triggerDriverMovementPulse(driverPosition);
             } else {
-                driverMarker.setPosition(driverPosition);
+                driverMarker.setLatLng(driverPosition);
             }
             driverMarker.setTitle(`${driverName} Location`);
-            driverMarker.setIcon(createDriverMapIcon());
         }
 
         if (!hasAutoFitBounds) {
@@ -721,21 +654,15 @@ include 'includes/header.php';
             hasAutoFitBounds = true;
         }
 
-        const shouldAppendTrail = !lastDriverLatLng
-            || !(window.google && google.maps && google.maps.geometry && google.maps.geometry.spherical)
-            || google.maps.geometry.spherical.computeDistanceBetween(lastDriverLatLng, nextLatLng) >= 4;
+        const shouldAppendTrail = !lastDriverLatLng || movedDistanceMeters >= 4;
 
         if (shouldAppendTrail) {
-            riderTrailPath.push(driverPosition);
-            if (riderTrailPath.length > 500) {
-                riderTrailPath = riderTrailPath.slice(riderTrailPath.length - 500);
-            }
-            if (riderTrailPolyline) {
-                riderTrailPolyline.setPath(riderTrailPath);
-            }
+            const paths = riderTrailPolyline.getLatLngs();
+            paths.push(driverPosition);
+            riderTrailPolyline.setLatLngs(paths);
         }
 
-        lastDriverLatLng = nextLatLng;
+        lastDriverLatLng = driverPosition;
 
         const lastUpdateEl = document.getElementById('driver-last-update');
         if (lastUpdateEl) {
@@ -751,47 +678,52 @@ include 'includes/header.php';
         }
 
         if (customerMarker) {
-            const bounds = new google.maps.LatLngBounds();
-            bounds.extend(customerMarker.getPosition());
-            bounds.extend(driverMarker.getPosition());
-            map.fitBounds(bounds);
+            const group = L.featureGroup([customerMarker, driverMarker]);
+            map.fitBounds(group.getBounds().pad(0.15));
             return;
         }
 
-        map.setCenter(driverMarker.getPosition());
+        map.setView(driverMarker.getLatLng(), 15);
     }
 
-    function updateRouteAndEta(driverLat, driverLng, force = false) {
+    async function updateRouteAndEta(driverLat, driverLng, force = false) {
         const numericDriverLat = parseFloat(driverLat);
         const numericDriverLng = parseFloat(driverLng);
-        if (!Number.isFinite(numericDriverLat) || !Number.isFinite(numericDriverLng) || !customerLocationObj || !directionsService) {
+        if (!Number.isFinite(numericDriverLat) || !Number.isFinite(numericDriverLng) || !customerLocationObj) {
             resetRouteEtaDetails();
             return;
         }
 
         const now = Date.now();
-        if (!force && now - lastRouteRefreshAt < 6000) {
+        if (!force && now - lastRouteRefreshAt < 10000) {
             return;
         }
         lastRouteRefreshAt = now;
 
-        directionsService.route({
-            origin: { lat: numericDriverLat, lng: numericDriverLng },
-            destination: customerLocationObj,
-            travelMode: google.maps.TravelMode.DRIVING
-        }, (response, status) => {
-            if (status === 'OK' && response.routes[0] && response.routes[0].legs[0]) {
-                const leg = response.routes[0].legs[0];
-                const duration = (leg.duration && leg.duration.text) ? leg.duration.text : '--';
-                const durationValue = Number((leg.duration && leg.duration.value) ? leg.duration.value : 0);
-                const distance = (leg.distance && leg.distance.text) ? leg.distance.text : '--';
-                const dropOffTime = durationValue > 0
-                    ? formatClockTime(new Date(Date.now() + durationValue * 1000))
-                    : '--';
+        try {
+            const endpoint = `https://router.project-osrm.org/route/v1/driving/${numericDriverLng},${numericDriverLat};${customerLocationObj[1]},${customerLocationObj[0]}?overview=full&geometries=geojson`;
+            const response = await fetch(endpoint);
+            if (!response.ok) {
+                resetRouteEtaDetails();
+                return;
+            }
+            const data = await response.json();
+            if (data.routes && data.routes.length > 0) {
+                const route = data.routes[0];
+                const coordinates = route.geometry.coordinates;
+                const durationSeconds = route.duration;
+                const distanceMeters = route.distance;
 
-                if (directionsRenderer) {
-                    directionsRenderer.setDirections(response);
+                const latLngs = coordinates.map(coord => [coord[1], coord[0]]);
+                if (routePolyline) {
+                    routePolyline.setLatLngs(latLngs);
                 }
+
+                const durationMinutes = Math.round(durationSeconds / 60);
+                const duration = durationMinutes > 0 ? `${durationMinutes} mins` : '1 min';
+                const distanceKm = (distanceMeters / 1000).toFixed(1);
+                const distance = `${distanceKm} km`;
+                const dropOffTime = formatClockTime(new Date(Date.now() + durationSeconds * 1000));
 
                 document.getElementById('eta-container').style.display = 'block';
                 document.getElementById('eta-time').textContent = duration;
@@ -801,7 +733,10 @@ include 'includes/header.php';
             } else {
                 resetRouteEtaDetails();
             }
-        });
+        } catch (e) {
+            console.error('OSRM route fetch failed:', e);
+            resetRouteEtaDetails();
+        }
     }
 
     function resetRouteEtaDetails() {
@@ -810,8 +745,8 @@ include 'includes/header.php';
         document.getElementById('eta-time').textContent = '--';
         document.getElementById('eta-distance').textContent = '--';
         document.getElementById('eta-dropoff').textContent = '--';
-        if (directionsRenderer) {
-            directionsRenderer.set('directions', null);
+        if (routePolyline) {
+            routePolyline.setLatLngs([]);
         }
     }
 
@@ -1089,9 +1024,15 @@ include 'includes/header.php';
             cancelAnimationFrame(driverPulseRaf);
             driverPulseRaf = null;
         }
-        if (driverPulseCircle) {
-            driverPulseCircle.setMap(null);
+        if (driverPulseCircle && map) {
+            map.removeLayer(driverPulseCircle);
             driverPulseCircle = null;
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', function() {
+        if (typeof initMap === 'function') {
+            initMap();
         }
     });
 </script>

@@ -15,16 +15,8 @@ if (isset($_SESSION['user_id'])) {
 $error = '';
 $success = '';
 $form_data = [];
-$requested_account_type = strtolower(trim((string)($_GET['account_type'] ?? '')));
-$partner_signup_flag = strtolower(trim((string)($_GET['partner_signup'] ?? '')));
-$is_partner_signup = (
-    $requested_account_type === 'organization' ||
-    in_array($partner_signup_flag, ['1', 'true', 'yes'], true)
-);
-
-if ($is_partner_signup) {
-    $form_data['account_type'] = 'organization';
-}
+$is_partner_signup = false;
+$form_data['account_type'] = 'individual';
 
 if (empty($_SESSION['registration_csrf_token'])) {
     $_SESSION['registration_csrf_token'] = bin2hex(random_bytes(32));
@@ -194,7 +186,7 @@ if (!function_exists('validateRegistrationValidIdUpload')) {
 }
 
 if (!function_exists('saveRegistrationValidIdDocument')) {
-    function saveRegistrationValidIdDocument($conn, $user_id, $uploaded_file)
+    function saveRegistrationValidIdDocument($conn, $user_id, $uploaded_file, $valid_id_type = '', $side = 'Front')
     {
         $user_id = (int)$user_id;
         if ($user_id <= 0) {
@@ -240,7 +232,7 @@ if (!function_exists('saveRegistrationValidIdDocument')) {
         }
         $base_name = substr($base_name, 0, 40);
 
-        $unique_name = $user_id . '_valid_id_' . time() . '_' . random_int(1000, 9999) . '_' . $base_name . '.' . $extension;
+        $unique_name = $user_id . '_valid_id_' . strtolower($side) . '_' . time() . '_' . random_int(1000, 9999) . '_' . $base_name . '.' . $extension;
         $target_path = $upload_dir . $unique_name;
         $relative_path = 'uploads/user_valid_ids/' . $unique_name;
 
@@ -248,7 +240,23 @@ if (!function_exists('saveRegistrationValidIdDocument')) {
             return ['success' => false, 'message' => 'Unable to save the uploaded valid ID. Please try again.'];
         }
 
-        $insert_sql = "INSERT INTO user_valid_id_documents (user_id, document_type, file_name, file_path) VALUES (?, 'valid_id', ?, ?)";
+        $id_label_map = [
+            'umid' => 'Unified Multi-Purpose ID (UMID)',
+            'drivers_license' => "Driver's License",
+            'passport' => 'Philippine Passport',
+            'sss' => 'SSS ID',
+            'gsis' => 'GSIS ID',
+            'prc' => 'PRC ID',
+            'postal' => 'Postal ID',
+            'voters' => "Voter's ID",
+            'national_id' => 'Philippine National ID (PhilSys)',
+            'tin' => 'TIN ID',
+            'pag_ibig' => 'Pag-IBIG ID',
+            'philhealth' => 'PhilHealth ID'
+        ];
+        $document_type_label = ($id_label_map[$valid_id_type] ?? 'Government ID') . ' - ' . $side;
+
+        $insert_sql = "INSERT INTO user_valid_id_documents (user_id, document_type, file_name, file_path) VALUES (?, ?, ?, ?)";
         $stmt = mysqli_prepare($conn, $insert_sql);
         if (!$stmt) {
             @unlink($target_path);
@@ -256,7 +264,7 @@ if (!function_exists('saveRegistrationValidIdDocument')) {
             return ['success' => false, 'message' => 'Unable to record valid ID metadata right now.'];
         }
 
-        mysqli_stmt_bind_param($stmt, "iss", $user_id, $unique_name, $relative_path);
+        mysqli_stmt_bind_param($stmt, "isss", $user_id, $document_type_label, $unique_name, $relative_path);
         $ok = mysqli_stmt_execute($stmt);
         if (!$ok) {
             $db_error = mysqli_stmt_error($stmt);
@@ -308,7 +316,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $password = $_POST['password'] ?? '';
     $confirm_password = $_POST['confirm_password'] ?? '';
     $accept_terms = isset($_POST['accept_terms']);
-    $valid_id_file = $_FILES['valid_id_file'] ?? null;
+    $valid_id_type = trim($_POST['valid_id_type'] ?? '');
+    $valid_id_front = $_FILES['valid_id_front'] ?? null;
+    $valid_id_back = $_FILES['valid_id_back'] ?? null;
     
     // Business partner fields
     $business_name = preg_replace('/\s+/', ' ', trim($_POST['business_name'] ?? ''));
@@ -352,6 +362,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         'gender' => $gender,
         'email' => $email,
         'phone' => $phone,
+        'valid_id_type' => $valid_id_type,
         'business_name' => $business_name,
         'business_type' => $business_type,
         'business_registration' => $business_registration,
@@ -389,12 +400,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $error = 'Passwords do not match.';
         } elseif (empty($phone)) {
             $error = 'Please enter your mobile number.';
-        } elseif (empty($valid_id_file) || !is_array($valid_id_file) || (int)($valid_id_file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
-            $error = 'Please upload your valid ID in Personal Information.';
+        } elseif (empty($valid_id_type)) {
+            $error = 'Please select your valid ID type.';
+        } elseif (empty($valid_id_front) || !is_array($valid_id_front) || (int)($valid_id_front['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+            $error = 'Please upload a photo of the front side of your valid ID.';
+        } elseif (empty($valid_id_back) || !is_array($valid_id_back) || (int)($valid_id_back['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+            $error = 'Please upload a photo of the back side of your valid ID.';
         } else {
-            $valid_id_validation = validateRegistrationValidIdUpload($valid_id_file);
-            if (empty($valid_id_validation['valid'])) {
-                $error = (string)($valid_id_validation['message'] ?? 'Please upload a clear JPG, PNG, or WEBP valid ID image up to 5MB.');
+            $front_validation = validateRegistrationValidIdUpload($valid_id_front);
+            $back_validation = validateRegistrationValidIdUpload($valid_id_back);
+            if (empty($front_validation['valid'])) {
+                $error = 'Front of ID: ' . (string)($front_validation['message'] ?? 'Please upload a clear JPG, PNG, or WEBP image up to 5MB.');
+            } elseif (empty($back_validation['valid'])) {
+                $error = 'Back of ID: ' . (string)($back_validation['message'] ?? 'Please upload a clear JPG, PNG, or WEBP image up to 5MB.');
             }
         }
 
@@ -480,10 +498,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $nickname
         );
 
+
+
         if (!empty($result['success']) && $error === '') {
             $created_user_id = (int)($result['user_id'] ?? 0);
-            $saved_valid_id = saveRegistrationValidIdDocument($conn, $created_user_id, $valid_id_file);
-            if (empty($saved_valid_id['success'])) {
+            
+            $saved_front = saveRegistrationValidIdDocument($conn, $created_user_id, $valid_id_front, $valid_id_type, 'Front');
+            $saved_back = saveRegistrationValidIdDocument($conn, $created_user_id, $valid_id_back, $valid_id_type, 'Back');
+            
+            if (empty($saved_front['success']) || empty($saved_back['success'])) {
                 if ($created_user_id > 0) {
                     $cleanup_stmt = mysqli_prepare($conn, "DELETE FROM users WHERE id = ? LIMIT 1");
                     if ($cleanup_stmt) {
@@ -492,7 +515,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         mysqli_stmt_close($cleanup_stmt);
                     }
                 }
-                $error = (string)($saved_valid_id['message'] ?? 'Unable to save your valid ID. Please try again.');
+                $error = (string)(empty($saved_front['success']) ? $saved_front['message'] : ($saved_back['message'] ?? 'Unable to save your government ID uploads. Please try again.'));
             }
         }
 
@@ -567,9 +590,10 @@ include 'includes/header.php';
 
 .registration-container {
     background-color: white;
-    border-radius: 16px;
-    box-shadow: 0 15px 50px rgba(0, 0, 0, 0.1);
-    max-width: 800px;
+    border-radius: 24px;
+    border: 1px solid #efddcd;
+    box-shadow: 0 20px 40px rgba(15,23,42,.06);
+    max-width: 600px;
     width: 100%;
     overflow: hidden;
     animation: fadeIn 0.6s ease-out;
@@ -638,91 +662,54 @@ include 'includes/header.php';
 }
 
 .registration-body {
-    padding: 40px;
+    padding: 0;
 }
 
-/* Progress Steps */
+/* Progress Steps styled like modal tabs */
 .progress-steps {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 40px;
-    position: relative;
-}
-
-.progress-steps::before {
-    content: '';
-    position: absolute;
-    top: 20px;
-    left: 10%;
-    right: 10%;
-    height: 3px;
-    background: #e0e0e0;
-    z-index: 1;
-}
-
-.progress-bar {
-    position: absolute;
-    top: 20px;
-    left: 10%;
-    right: 10%;
-    height: 3px;
-    background: #b3261e;
-    z-index: 2;
-    transition: all 0.3s ease;
-    transform-origin: left;
-}
-
-.step {
     display: flex;
     flex-direction: column;
     align-items: center;
+    background: transparent;
+    padding: 24px 20px 10px;
+    margin: 0;
     position: relative;
-    z-index: 3;
-    flex: 1;
+}
+
+.step {
+    display: none; /* Hide non-active steps to show only the active one solo */
+    align-items: center;
+    padding: 0 0 5px 0;
+    cursor: default;
+    border: none;
+    font-weight: 800;
+    font-size: 1.15rem;
+    color: #b3261e;
+    animation: fadeIn 0.4s ease;
+}
+
+.step.active {
+    display: inline-flex;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 .step-number {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    background: #e0e0e0;
-    color: #666;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 600;
-    font-size: 1.1rem;
-    margin-bottom: 10px;
-    transition: all 0.3s ease;
-    border: 3px solid white;
-    -webkit-tap-highlight-color: transparent;
-}
-
-.step.active .step-number {
-    background: #b3261e;
-    color: white;
-    transform: scale(1.1);
-}
-
-.step.completed .step-number {
-    background: #4CAF50;
-    color: white;
+    display: none !important; /* Hide circular step numbers for simplicity */
 }
 
 .step-label {
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: #666;
-    text-align: center;
-}
-
-.step.active .step-label {
-    color: #b3261e;
+    font-size: 1.05rem;
+    font-weight: 800;
 }
 
 /* Form Steps */
 .form-step {
     display: none;
+    padding: 30px 40px;
     animation: slideIn 0.5s ease;
 }
 
@@ -872,38 +859,38 @@ include 'includes/header.php';
 /* Button Styles */
 .btn-primary {
     width: 100%;
-    padding: 18px; /* Increased padding for better touch */
+    padding: 12px 20px;
     background: linear-gradient(135deg, #b3261e 0%, #8f261a 100%);
     color: white;
     border: none;
-    border-radius: 10px;
-    font-size: 1.1rem;
+    border-radius: 8px;
+    font-size: 0.95rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.3s;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
+    gap: 8px;
     position: relative;
     overflow: hidden;
     letter-spacing: 0.5px;
-    min-height: 56px; /* Better touch target */
+    min-height: 44px;
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation; /* Improve touch response */
 }
 
 .btn-primary:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 10px 30px rgba(198, 40, 40, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(179, 38, 30, 0.2);
 }
 
 .btn-primary:active {
-    transform: translateY(-1px);
+    transform: translateY(0);
 }
 
 .btn-primary:disabled {
-    background: #cccccc;
+    background: #cbd5e1;
     cursor: not-allowed;
     transform: none;
     box-shadow: none;
@@ -916,8 +903,8 @@ include 'includes/header.php';
 .btn-primary.loading::after {
     content: '';
     position: absolute;
-    width: 22px;
-    height: 22px;
+    width: 18px;
+    height: 18px;
     border: 3px solid rgba(255, 255, 255, 0.3);
     border-top-color: white;
     border-radius: 50%;
@@ -930,21 +917,21 @@ include 'includes/header.php';
 
 .btn-secondary {
     width: 100%;
-    padding: 18px; /* Increased padding for better touch */
+    padding: 12px 20px;
     background: white;
     color: #b3261e;
     border: 2px solid #b3261e;
-    border-radius: 10px;
-    font-size: 1.1rem;
+    border-radius: 8px;
+    font-size: 0.95rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.3s;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
+    gap: 8px;
     letter-spacing: 0.5px;
-    min-height: 56px; /* Better touch target */
+    min-height: 44px;
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation; /* Improve touch response */
 }
@@ -1404,91 +1391,154 @@ body {
 .social-divider, .social-login-buttons {
     display: none !important;
 }
+
+/* Full-screen split layout styling */
+.registration-page {
+    background: #ffffff !important;
+    display: flex;
+    align-items: stretch;
+    justify-content: stretch;
+    min-height: calc(100vh - 64px) !important;
+    padding: 0 !important;
+}
+
+.registration-container {
+    max-width: 100% !important;
+    width: 100vw;
+    min-height: calc(100vh - 64px) !important;
+    background-color: white;
+    border-radius: 0 !important;
+    border: none;
+    box-shadow: none !important;
+    display: flex;
+    flex-direction: row; /* Image left, form right */
+    margin: 0 !important;
+}
+
+.registration-image-side {
+    width: 50%;
+    background: #ff541c; /* Match solid orange background of the mascot */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    min-height: calc(100vh - 64px) !important;
+}
+
+.mascot-img-wrap {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mascot-img-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.registration-form-side {
+    width: 50%;
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    min-height: calc(100vh - 64px) !important;
+}
+
+.registration-form-side-container {
+    max-width: 460px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+@media (max-width: 850px) {
+    .registration-container {
+        flex-direction: column;
+    }
+    .registration-form-side {
+        width: 100%;
+        height: 100vh;
+    }
+    .registration-image-side {
+        display: none !important;
+    }
+}
+@keyframes pigRun {
+    0% {
+        transform: translateY(0) rotate(0deg) scaleX(-1);
+    }
+    50% {
+        transform: translateY(-3px) rotate(-5deg) scaleX(-1);
+    }
+    100% {
+        transform: translateY(0) rotate(5deg) scaleX(-1);
+    }
+}
 </style>
 
 <div class="registration-page">
     <div class="registration-container">
-        <div class="registration-header">
-            <h1>Create Your Account</h1>
-            <p>Join Lechon Delights and start enjoying delicious lechon delivered to your doorstep</p>
+        <!-- Left Side: Mascot Image Panel -->
+        <!-- Left Side: Branding Panel -->
+        <div class="registration-image-side" style="background: var(--reg-red, #b3261e); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; text-align: center; color: #ffffff;">
+            <h1 style="font-family: 'Outfit', sans-serif; font-size: 3.5rem; font-weight: 900; letter-spacing: -1.5px; margin: 0; color: #ffffff; text-shadow: 0 4px 12px rgba(0,0,0,0.1);">Lechon Delights</h1>
+            <p style="font-size: 1.1rem; opacity: 0.9; margin-top: 15px; max-width: 320px; font-weight: 500; line-height: 1.5;">Cavite's Finest Lechon at Your Doorsteps</p>
         </div>
-        
-        <div class="registration-body">
-            <div class="registration-intro">
-                <div class="registration-intro-icon">
-                    <i class="fas fa-user-plus"></i>
-                </div>
-                <div>
-                    <h2>Sign up in four simple steps</h2>
-                    <p>Choose the account that fits you best, add your details, and confirm your email once you are done.</p>
-                </div>
-            </div>
 
-            <!-- Progress Steps -->
-            <div class="progress-steps">
-                <div class="progress-bar" id="progressBar"></div>
-                <div class="step active" id="step1">
-                    <div class="step-number">1</div>
-                    <div class="step-label">Account Type</div>
-                </div>
-                <div class="step" id="step2">
-                    <div class="step-number">2</div>
-                    <div class="step-label">Personal Info</div>
-                </div>
-                <div class="step" id="step3">
-                    <div class="step-number">3</div>
-                    <div class="step-label" id="step3NavLabel">Address Info</div>
-                </div>
-                <div class="step" id="step4">
-                    <div class="step-number">4</div>
-                    <div class="step-label">Create Account</div>
-                </div>
-            </div>
-            
-            <form method="POST" action="" id="registrationForm" data-swal-validate="off" enctype="multipart/form-data" novalidate>
-                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['registration_csrf_token']); ?>">
-
-                <!-- Step 1: Account Type -->
-                <div class="form-step active" id="step1Form">
-                    <h2 style="color: #333; margin-bottom: 25px; font-size: 1.5rem;">
-                        <?php echo $is_partner_signup ? 'Business Partner Sign Up' : 'Select Account Type'; ?>
-                    </h2>
-                    
-                    <div class="account-type-selection">
-                        <?php if (!$is_partner_signup): ?>
-                        <div class="account-type-card" data-type="individual">
-                            <i class="fas fa-user"></i>
-                            <h3>Individual</h3>
-                            <p>Perfect for customers who want to order lechon for themselves, their family, or a special occasion.</p>
-                        </div>
-                        <?php endif; ?>
-                        <div class="account-type-card" data-type="organization">
-                            <i class="fas fa-building"></i>
-                            <h3>Business Partner</h3>
-                            <p>Great for restaurant owners who want to register their business and serve customers across Cavite.</p>
-                        </div>
+        <!-- Right Side: Registration Form Panel -->
+        <div class="registration-form-side">
+            <div class="registration-form-side-container">
+                <div class="registration-header" style="background:#fff; border-bottom:1px solid #efddcd; padding:30px 24px 20px; text-align:center;">
+                    <div style="display:inline-flex; align-items:center; gap:10px; margin-bottom:12px;">
+                        <span style="font-size:1.45rem; font-weight:800; color:#0f172a;">Lechon Delights</span>
                     </div>
-                    
-                    <input type="hidden" name="account_type" id="accountType" value="<?php echo htmlspecialchars($form_data['account_type'] ?? ($is_partner_signup ? 'organization' : 'individual')); ?>">
-                    <input type="hidden" name="psgc_region_name" id="psgcRegionName" value="<?php echo htmlspecialchars($form_data['psgc_region_name'] ?? ''); ?>">
-                    <input type="hidden" name="psgc_province_name" id="psgcProvinceName" value="<?php echo htmlspecialchars($form_data['psgc_province_name'] ?? ''); ?>">
-                    <input type="hidden" name="psgc_city_name" id="psgcCityName" value="<?php echo htmlspecialchars($form_data['psgc_city_name'] ?? ''); ?>">
-                    <input type="hidden" name="psgc_barangay_name" id="psgcBarangayName" value="<?php echo htmlspecialchars($form_data['psgc_barangay_name'] ?? ''); ?>">
-                    
-                    <div class="form-actions">
-                        <button type="button" class="btn-secondary" id="backToLoginBtn">
-                            <i class="fas fa-arrow-left"></i>
-                            Back to Login
-                        </button>
-                        <button type="button" class="btn-primary" id="nextStep1">
-                            Continue
-                            <i class="fas fa-arrow-right"></i>
-                        </button>
-                    </div>
+                    <h2 style="font-size:1.35rem; font-weight:800; color:#0f172a; margin:0 0 4px 0;">Create Account</h2>
+                    <p style="font-size:0.9rem; color:#64748b; margin:0;">Join us to order Cavite's finest lechon dishes.</p>
                 </div>
                 
-                <!-- Step 2: Personal Information -->
-                <div class="form-step" id="step2Form">
+                <div class="registration-body">
+
+                    <!-- Progress Steps -->
+                    <div class="progress-steps">
+                        <div class="step active" id="step1">
+                            <div class="step-label">Personal Info (Step 1 of 4)</div>
+                        </div>
+                        <div class="step" id="step2">
+                            <div class="step-label">Verification (Step 2 of 4)</div>
+                        </div>
+                        <div class="step" id="step3">
+                            <div class="step-label" id="step3NavLabel">Address Info (Step 3 of 4)</div>
+                        </div>
+                        <div class="step" id="step4">
+                            <div class="step-label">Create Account (Step 4 of 4)</div>
+                        </div>
+                        <div class="progress-container" style="width: 100%; height: 6px; background: #efddcd; border-radius: 3px; margin-top: 15px; overflow: visible; position: relative;">
+                            <div class="progress-bar" id="progressBar" style="position: absolute; left: 0; top: 0; height: 100%; width: 25%; background: #b3261e; transition: width 0.3s ease; display: block !important; overflow: visible;">
+                                <div class="running-pig" style="position: absolute; right: -14px; top: -20px; font-size: 22px; user-select: none; line-height: 1; animation: pigRun 0.4s infinite alternate ease-in-out;">🐖</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <form method="POST" action="" id="registrationForm" data-swal-validate="off" enctype="multipart/form-data" novalidate>
+                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['registration_csrf_token']); ?>">
+
+                        <input type="hidden" name="account_type" id="accountType" value="individual">
+                        <input type="hidden" name="psgc_region_code" id="psgcRegionCode" value="040000000">
+                        <input type="hidden" name="psgc_province_code" id="psgcProvinceCode" value="042100000">
+                        <input type="hidden" name="psgc_city_code" id="psgcCityCode" value="042109000">
+                        <input type="hidden" name="psgc_barangay_code" id="psgcBarangayCode" value="042109001">
+                    
+
+                
+                <!-- Step 1: Personal Information -->
+                <div class="form-step active" id="step1Form">
                     <h2 style="color: #333; margin-bottom: 25px; font-size: 1.5rem;">Tell us about you</h2>
                     
                     <div class="form-row">
@@ -1516,13 +1566,6 @@ body {
                                 value="<?php echo htmlspecialchars($form_data['middle_name'] ?? ''); ?>"
                                 autocomplete="additional-name">
                         </div>
-                        <div class="form-group">
-                            <label for="nickname">Nickname</label>
-                            <input type="text" id="nickname" name="nickname" class="form-control"
-                                placeholder="Optional"
-                                value="<?php echo htmlspecialchars($form_data['nickname'] ?? ''); ?>"
-                                autocomplete="nickname">
-                        </div>
                     </div>
 
                     <div class="form-row">
@@ -1541,6 +1584,22 @@ body {
                             </select>
                         </div>
                     </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary" id="prevStep1">
+                            <i class="fas fa-arrow-left"></i>
+                            Back to Login
+                        </button>
+                        <button type="button" class="btn-primary" id="nextStep1">
+                            Continue
+                            <i class="fas fa-arrow-right"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Step 2: Contact & ID Verification -->
+                <div class="form-step" id="step2Form">
+                    <h2 style="color: #333; margin-bottom: 25px; font-size: 1.5rem;">Contact & Verification</h2>
 
                     <div class="form-group">
                         <label for="email">Email Address *</label>
@@ -1572,15 +1631,59 @@ body {
                         </small>
                     </div>
 
-                    <div class="form-group">
-                        <label for="validIdFile">Valid ID Upload *</label>
-                        <input type="file" id="validIdFile" name="valid_id_file" class="form-control" required
-                            accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp">
-                        <small style="display: block; margin-top: 5px; color: #666; font-size: 0.85rem;">
-                            Upload a clear government-issued ID image (JPG, PNG, or WEBP, max 5MB).
-                        </small>
+                    <div class="form-group" style="margin-top:20px;">
+                        <label for="validIdType">Type of Valid ID *</label>
+                        <select id="validIdType" name="valid_id_type" class="form-control" required style="margin-bottom:15px;">
+                            <option value="">Select ID Type</option>
+                            <option value="umid">Unified Multi-Purpose ID (UMID)</option>
+                            <option value="drivers_license">Driver's License</option>
+                            <option value="passport">Philippine Passport</option>
+                            <option value="sss">SSS ID</option>
+                            <option value="gsis">GSIS ID</option>
+                            <option value="prc">PRC ID</option>
+                            <option value="postal">Postal ID</option>
+                            <option value="voters">Voter's ID</option>
+                            <option value="national_id">Philippine National ID (PhilSys)</option>
+                            <option value="tin">TIN ID</option>
+                            <option value="pag_ibig">Pag-IBIG ID</option>
+                            <option value="philhealth">PhilHealth ID</option>
+                        </select>
                     </div>
-                    
+
+                    <div class="form-row" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                        <div class="form-group">
+                            <label style="display:block; margin-bottom:8px; font-weight:600; color:#333; font-size:0.9rem;">Front of ID Card *</label>
+                            <div class="id-upload-zone" id="zoneFront" style="border: 2px dashed #cbd5e1; border-radius: 12px; padding: 20px 15px; text-align: center; cursor: pointer; transition: all 0.2s ease; background: #f8fafc; position: relative;">
+                                <input type="file" id="validIdFront" name="valid_id_front" accept="image/*" style="display:none;" required>
+                                <div class="upload-zone-content" id="zoneContentFront">
+                                    <i class="fas fa-id-card" style="font-size: 2.2rem; color: #b3261e; margin-bottom: 10px; display: block;"></i>
+                                    <span style="font-size: 0.85rem; font-weight:700; color: #475569; display: block; margin-bottom: 4px;">Capture Front Side</span>
+                                    <span style="font-size: 0.72rem; color: #94a3b8; display: block;">Tap to open camera</span>
+                                </div>
+                                <div class="upload-preview" id="previewFront" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius: 10px; background: #fff; z-index: 2; overflow: hidden; padding: 4px;">
+                                    <img src="" style="width: 100%; height: 100%; object-fit: contain;">
+                                    <button type="button" class="remove-preview" id="removeFront" style="position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border-radius: 50%; background: rgba(0,0,0,0.6); border: none; color: #fff; font-size: 0.75rem; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 3;"><i class="fas fa-times"></i></button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label style="display:block; margin-bottom:8px; font-weight:600; color:#333; font-size:0.9rem;">Back of ID Card *</label>
+                            <div class="id-upload-zone" id="zoneBack" style="border: 2px dashed #cbd5e1; border-radius: 12px; padding: 20px 15px; text-align: center; cursor: pointer; transition: all 0.2s ease; background: #f8fafc; position: relative;">
+                                <input type="file" id="validIdBack" name="valid_id_back" accept="image/*" style="display:none;" required>
+                                <div class="upload-zone-content" id="zoneContentBack">
+                                    <i class="fas fa-id-card-clip" style="font-size: 2.2rem; color: #b3261e; margin-bottom: 10px; display: block;"></i>
+                                    <span style="font-size: 0.85rem; font-weight:700; color: #475569; display: block; margin-bottom: 4px;">Capture Back Side</span>
+                                    <span style="font-size: 0.72rem; color: #94a3b8; display: block;">Tap to open camera</span>
+                                </div>
+                                <div class="upload-preview" id="previewBack" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius: 10px; background: #fff; z-index: 2; overflow: hidden; padding: 4px;">
+                                    <img src="" style="width: 100%; height: 100%; object-fit: contain;">
+                                    <button type="button" class="remove-preview" id="removeBack" style="position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border-radius: 50%; background: rgba(0,0,0,0.6); border: none; color: #fff; font-size: 0.75rem; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 3;"><i class="fas fa-times"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="form-actions">
                         <button type="button" class="btn-secondary" id="prevStep2">
                             <i class="fas fa-arrow-left"></i>
@@ -1632,33 +1735,33 @@ body {
                     </div>
                     
                     <div class="form-group">
-                        <label for="psgcRegion" id="addressSectionLabel">Home Address (PSGC) *</label>
+                        <label for="psgcRegion" id="addressSectionLabel">Home Address *</label>
                         <div class="form-row">
                             <div class="form-group">
-                                <label for="psgcRegion" id="regionLabel">Region (Luzon only) *</label>
-                                <select id="psgcRegion" name="psgc_region_code" class="form-control" required data-selected="<?php echo htmlspecialchars($form_data['psgc_region_code'] ?? ''); ?>">
-                                    <option value="">Select region</option>
-                                </select>
+                                <label for="psgcRegion" id="regionLabel">Region *</label>
+                                <input type="text" id="psgcRegion" name="psgc_region_name" class="form-control" required
+                                    placeholder="e.g., Region IV-A (CALABARZON)"
+                                    value="<?php echo htmlspecialchars($form_data['psgc_region_name'] ?? ''); ?>">
                             </div>
                             <div class="form-group">
-                                <label for="psgcProvince" id="provinceLabel">Province (Required except NCR) *</label>
-                                <select id="psgcProvince" name="psgc_province_code" class="form-control" required data-selected="<?php echo htmlspecialchars($form_data['psgc_province_code'] ?? ''); ?>">
-                                    <option value="">Select province</option>
-                                </select>
+                                <label for="psgcProvince" id="provinceLabel">Province *</label>
+                                <input type="text" id="psgcProvince" name="psgc_province_name" class="form-control" required
+                                    placeholder="e.g., Cavite"
+                                    value="<?php echo htmlspecialchars($form_data['psgc_province_name'] ?? ''); ?>">
                             </div>
                         </div>
                         <div class="form-row">
                             <div class="form-group">
                                 <label for="psgcCity">City / Municipality *</label>
-                                <select id="psgcCity" name="psgc_city_code" class="form-control" required data-selected="<?php echo htmlspecialchars($form_data['psgc_city_code'] ?? ''); ?>">
-                                    <option value="">Select city or municipality</option>
-                                </select>
+                                <input type="text" id="psgcCity" name="psgc_city_name" class="form-control" required
+                                    placeholder="e.g., Dasmariñas"
+                                    value="<?php echo htmlspecialchars($form_data['psgc_city_name'] ?? ''); ?>">
                             </div>
                             <div class="form-group">
                                 <label for="psgcBarangay">Barangay *</label>
-                                <select id="psgcBarangay" name="psgc_barangay_code" class="form-control" required data-selected="<?php echo htmlspecialchars($form_data['psgc_barangay_code'] ?? ''); ?>">
-                                    <option value="">Select barangay</option>
-                                </select>
+                                <input type="text" id="psgcBarangay" name="psgc_barangay_name" class="form-control" required
+                                    placeholder="e.g., San Agustin"
+                                    value="<?php echo htmlspecialchars($form_data['psgc_barangay_name'] ?? ''); ?>">
                             </div>
                         </div>
                         <div class="form-group">
@@ -1669,9 +1772,6 @@ body {
                                 maxlength="120"
                                 required>
                         </div>
-                        <small id="psgcAddressHelp" style="display:block; margin-top:4px; color:#666; font-size:0.84rem;">
-                            Individual registration is limited to Luzon regions.
-                        </small>
                     </div>
 
                     <div class="form-group">
@@ -1797,8 +1897,42 @@ body {
                 <a href="login.php">Sign in here</a>
             </div>
         </div>
+        </div>
+        </div>
     </div>
 </div>
+
+<!-- Webcam Capture Modal Overlay -->
+<div id="cameraModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.9); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(8px); padding: 15px; box-sizing: border-box;">
+    <div style="background: #ffffff; width: 100%; max-width: 580px; border-radius: 20px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); overflow: hidden; display: flex; flex-direction: column; position: relative;">
+        <!-- Modal Header -->
+        <div style="padding: 16px 20px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between;">
+            <h3 id="cameraModalTitle" style="margin: 0; font-family: 'Outfit', sans-serif; font-size: 1.15rem; font-weight: 800; color: #0f172a;">Capture Document</h3>
+            <button type="button" id="closeCameraModal" style="background: none; border: none; font-size: 1.25rem; color: #64748b; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 4px; border-radius: 50%; width: 32px; height: 32px; transition: background 0.2s;"><i class="fas fa-times"></i></button>
+        </div>
+        
+        <!-- Live Stream Video Panel -->
+        <div style="position: relative; background: #000; width: 100%; aspect-ratio: 4/3; max-height: 400px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+            <video id="webcamStream" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>
+            <!-- ID Card Crop Guide Outline Box -->
+            <div id="cropGuide" style="position: absolute; border: 3px dashed rgba(255, 255, 255, 0.85); width: 85%; height: 58%; border-radius: 12px; box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.45); pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                <span id="cropGuideText" style="color: #ffffff; background: rgba(15, 23, 42, 0.75); padding: 4px 12px; border-radius: 20px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Position ID Card Here</span>
+            </div>
+            <div id="cameraLoadingSpinner" style="position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #ffffff; z-index: 10;">
+                <i class="fas fa-circle-notch fa-spin" style="font-size: 2rem; margin-bottom: 10px;"></i>
+                <span style="font-size: 0.85rem; font-weight: 600;">Accessing camera...</span>
+            </div>
+        </div>
+
+        <!-- Controls / Shutter Button -->
+        <div style="padding: 20px; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: center; gap: 15px; flex-wrap: wrap;">
+            <button type="button" id="flipCameraBtn" style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 50%; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #475569; font-size: 1.15rem; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: all 0.2s;"><i class="fas fa-camera-rotate"></i></button>
+            <button type="button" id="shutterBtn" style="background: #b3261e; border: none; border-radius: 30px; height: 50px; padding: 0 28px; display: inline-flex; align-items: center; justify-content: center; gap: 10px; cursor: pointer; color: #ffffff; font-size: 0.95rem; font-weight: 800; box-shadow: 0 4px 14px rgba(179, 38, 30, 0.35); transition: all 0.2s;"><i class="fas fa-camera" style="font-size:1.05rem;"></i> Capture Snapshot</button>
+        </div>
+    </div>
+</div>
+<!-- Hidden Canvas to hold captured frame data -->
+<canvas id="capturedFrameHolder" style="display:none;"></canvas>
 
 <!-- SweetAlert2 JS -->
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -2335,6 +2469,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const formSteps = document.querySelectorAll('.form-step');
     const accountTypeCards = document.querySelectorAll('.account-type-card');
     const accountTypeInput = document.getElementById('accountType');
+    if (accountTypeInput) {
+        accountTypeInput.value = 'individual';
+    }
     const organizationFields = document.getElementById('organizationFields');
     const step3Title = document.getElementById('step3Title');
     const step3Subtitle = document.getElementById('step3Subtitle');
@@ -2344,7 +2481,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const provinceLabel = document.getElementById('provinceLabel');
     const streetAddressLabel = document.getElementById('streetAddressLabel');
     const completeAddressLabel = document.getElementById('completeAddressLabel');
-    let accountType = (accountTypeInput ? accountTypeInput.value : 'individual') || 'individual';
+    let accountType = 'individual';
 
     const regionSelect = document.getElementById('psgcRegion');
     const provinceSelect = document.getElementById('psgcProvince');
@@ -2601,29 +2738,18 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        if (psgcRegionNameInput) {
-            psgcRegionNameInput.value = getSelectedLabel(regionSelect);
-        }
-        if (psgcProvinceNameInput) {
-            psgcProvinceNameInput.value = getSelectedLabel(provinceSelect);
-        }
-        if (psgcCityNameInput) {
-            psgcCityNameInput.value = getSelectedLabel(citySelect);
-        }
-        if (psgcBarangayNameInput) {
-            psgcBarangayNameInput.value = getSelectedLabel(barangaySelect);
-        }
-
-        if (!psgcEnabled) {
-            return;
-        }
+        const regionVal = regionSelect ? regionSelect.value.trim() : '';
+        const provinceVal = provinceSelect ? provinceSelect.value.trim() : '';
+        const cityVal = citySelect ? citySelect.value.trim() : '';
+        const barangayVal = barangaySelect ? barangaySelect.value.trim() : '';
+        const streetVal = streetAddressInput ? streetAddressInput.value.trim() : '';
 
         const composedAddress = [
-            streetAddressInput ? streetAddressInput.value.trim() : '',
-            psgcBarangayNameInput ? psgcBarangayNameInput.value.trim() : '',
-            psgcCityNameInput ? psgcCityNameInput.value.trim() : '',
-            psgcProvinceNameInput ? psgcProvinceNameInput.value.trim() : '',
-            psgcRegionNameInput ? psgcRegionNameInput.value.trim() : ''
+            streetVal,
+            barangayVal,
+            cityVal,
+            provinceVal,
+            regionVal
         ].filter(Boolean).join(', ');
 
         addressPreviewInput.value = composedAddress;
@@ -2656,275 +2782,14 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    function resetSelect(selectElement, placeholder) {
-        if (!selectElement) {
-            return;
-        }
-        setSelectOptions(selectElement, [], placeholder);
-        selectElement.value = '';
-        selectElement.disabled = true;
-    }
 
-    async function fetchPSGC(path) {
-        const key = String(path || '');
-        if (psgcCache.has(key)) {
-            return psgcCache.get(key);
-        }
-        const response = await fetch(PSGC_API_BASE + key, {
-            method: 'GET',
-            headers: { 'Accept': 'application/json' }
-        });
-        if (!response.ok) {
-            throw new Error('PSGC API request failed');
-        }
-        const payload = await response.json();
-        psgcCache.set(key, payload);
-        return payload;
-    }
-
-    async function loadRegions() {
-        const regions = await fetchPSGC('/regions');
-        const previousValue = regionSelect ? String(regionSelect.value || '').trim() : '';
-        const previousRegionName = psgcRegionNameInput ? String(psgcRegionNameInput.value || '').trim() : '';
-
-        let allowedRegions = regions;
-        if (accountType === 'organization') {
-            allowedRegions = regions.filter(function(region) {
-                return String(region.code || '') === CALABARZON_REGION_CODE ||
-                    String(region.name || '').toLowerCase().includes('calabarzon');
-            });
-        } else {
-            allowedRegions = regions.filter(function(region) {
-                return isLuzonSelection(region.code || '', region.name || '');
-            });
-        }
-
-        setSelectOptions(regionSelect, allowedRegions, allowedRegions.length ? 'Select region' : 'No allowed region');
-        regionSelect.disabled = allowedRegions.length === 0;
-
-        if (allowedRegions.some(function(region) { return String(region.code || '') === previousValue; })) {
-            regionSelect.value = previousValue;
-        } else {
-            const fallbackRegionCode = findOptionValueFromCandidates(regionSelect, previousRegionName);
-            if (fallbackRegionCode) {
-                regionSelect.value = fallbackRegionCode;
-            } else if (accountType === 'organization' && allowedRegions.length === 1) {
-                regionSelect.value = allowedRegions[0].code || CALABARZON_REGION_CODE;
-            }
-        }
-    }
-
-    async function loadProvinces(regionCode) {
-        if (!regionCode) {
-            resetSelect(provinceSelect, 'Select province');
-            return [];
-        }
-
-        const provinces = await fetchPSGC('/regions/' + encodeURIComponent(regionCode) + '/provinces');
-        const previousValue = provinceSelect ? String(provinceSelect.value || '').trim() : '';
-        const previousProvinceName = psgcProvinceNameInput ? String(psgcProvinceNameInput.value || '').trim() : '';
-
-        let allowedProvinces = provinces;
-        if (accountType === 'organization') {
-            allowedProvinces = provinces.filter(function(province) {
-                return String(province.code || '') === CAVITE_PROVINCE_CODE ||
-                    String(province.name || '').toLowerCase().includes('cavite');
-            });
-        }
-
-        setSelectOptions(provinceSelect, allowedProvinces, allowedProvinces.length ? 'Select province' : 'No allowed province');
-        provinceSelect.disabled = allowedProvinces.length === 0;
-
-        if (allowedProvinces.some(function(province) { return String(province.code || '') === previousValue; })) {
-            provinceSelect.value = previousValue;
-        } else {
-            const fallbackProvinceCode = findOptionValueFromCandidates(provinceSelect, previousProvinceName);
-            if (fallbackProvinceCode) {
-                provinceSelect.value = fallbackProvinceCode;
-            } else if (accountType === 'organization' && allowedProvinces.length === 1) {
-                provinceSelect.value = allowedProvinces[0].code || CAVITE_PROVINCE_CODE;
-            }
-        }
-        return allowedProvinces;
-    }
-
-    async function loadCities(regionCode, provinceCode) {
-        if (!regionCode) {
-            resetSelect(citySelect, 'Select city or municipality');
-            return [];
-        }
-
-        let cities = [];
-        if (provinceCode) {
-            cities = await fetchPSGC('/provinces/' + encodeURIComponent(provinceCode) + '/cities-municipalities');
-        } else {
-            cities = await fetchPSGC('/regions/' + encodeURIComponent(regionCode) + '/cities-municipalities');
-        }
-
-        setSelectOptions(citySelect, cities, 'Select city or municipality');
-        citySelect.disabled = cities.length === 0;
-        return cities;
-    }
-
-    async function loadBarangays(cityCode) {
-        if (!cityCode) {
-            resetSelect(barangaySelect, 'Select barangay');
-            return [];
-        }
-
-        const barangays = await fetchPSGC('/cities-municipalities/' + encodeURIComponent(cityCode) + '/barangays');
-        setSelectOptions(barangaySelect, barangays, 'Select barangay');
-        barangaySelect.disabled = barangays.length === 0;
-        return barangays;
-    }
-
-    async function handleRegionChange(isRestore) {
-        const regionCode = regionSelect ? regionSelect.value : '';
-        if (!isRestore) {
-            resetSelect(provinceSelect, 'Select province');
-            resetSelect(citySelect, 'Select city or municipality');
-            resetSelect(barangaySelect, 'Select barangay');
-            if (psgcProvinceNameInput) {
-                psgcProvinceNameInput.value = '';
-            }
-            if (psgcCityNameInput) {
-                psgcCityNameInput.value = '';
-            }
-            if (psgcBarangayNameInput) {
-                psgcBarangayNameInput.value = '';
-            }
-            syncAddressPreview();
-        }
-
-        if (!regionCode) {
-            syncAddressPreview();
-            return;
-        }
-
-        const provinces = await loadProvinces(regionCode);
-        provinceSelect.required = provinces.length > 0;
-        if (provinces.length === 0) {
-            await loadCities(regionCode, '');
-        } else if (provinces.length === 1 && provinceSelect.value) {
-            await handleProvinceChange(true);
-        }
-        syncAddressPreview();
-    }
-
-    async function handleProvinceChange(isRestore) {
-        const regionCode = regionSelect ? regionSelect.value : '';
-        const provinceCode = provinceSelect ? provinceSelect.value : '';
-
-        if (!isRestore) {
-            resetSelect(citySelect, 'Select city or municipality');
-            resetSelect(barangaySelect, 'Select barangay');
-            if (psgcCityNameInput) {
-                psgcCityNameInput.value = '';
-            }
-            if (psgcBarangayNameInput) {
-                psgcBarangayNameInput.value = '';
-            }
-            syncAddressPreview();
-        }
-
-        await loadCities(regionCode, provinceCode);
-        syncAddressPreview();
-    }
-
-    async function handleCityChange(isRestore) {
-        const cityCode = citySelect ? citySelect.value : '';
-        if (!isRestore) {
-            resetSelect(barangaySelect, 'Select barangay');
-            if (psgcBarangayNameInput) {
-                psgcBarangayNameInput.value = '';
-            }
-            syncAddressPreview();
-        }
-
-        await loadBarangays(cityCode);
-        syncAddressPreview();
-    }
-
-    async function restoreAddressSelections() {
-        if (!psgcEnabled) {
-            return;
-        }
-
-        const presetRegionCode = regionSelect ? (regionSelect.getAttribute('data-selected') || '') : '';
-        const presetProvinceCode = provinceSelect ? (provinceSelect.getAttribute('data-selected') || '') : '';
-        const presetCityCode = citySelect ? (citySelect.getAttribute('data-selected') || '') : '';
-        const presetBarangayCode = barangaySelect ? (barangaySelect.getAttribute('data-selected') || '') : '';
-
-        const regionCandidates = toCandidateNames(psgcRegionNameInput ? psgcRegionNameInput.value : '');
-        const provinceCandidates = toCandidateNames(psgcProvinceNameInput ? psgcProvinceNameInput.value : '');
-        const cityCandidates = toCandidateNames(psgcCityNameInput ? psgcCityNameInput.value : '');
-        const barangayCandidates = toCandidateNames(psgcBarangayNameInput ? psgcBarangayNameInput.value : '');
-
-        const regionAppliedCode = applySelectCodeOrName(regionSelect, presetRegionCode, regionCandidates);
-        if (!regionAppliedCode) {
-            if (regionSelect && regionSelect.value) {
-                await handleRegionChange(true);
-            }
-            syncAddressPreview();
-            return;
-        }
-
-        await handleRegionChange(true);
-
-        if (provinceSelect && !provinceSelect.disabled) {
-            applySelectCodeOrName(provinceSelect, presetProvinceCode, provinceCandidates);
-            await handleProvinceChange(true);
-        } else if (provinceSelect && !provinceSelect.required) {
-            await handleProvinceChange(true);
-        }
-
-        let cityAppliedCode = '';
-        if (citySelect && !citySelect.disabled) {
-            cityAppliedCode = applySelectCodeOrName(citySelect, presetCityCode, cityCandidates);
-
-            if (!cityAppliedCode && provinceSelect && !provinceSelect.disabled) {
-                const currentProvinceCode = String(provinceSelect.value || '').trim();
-                const provinceOptions = Array.from(provinceSelect.options || []).filter(function(option) {
-                    return option && option.value;
-                });
-
-                for (let i = 0; i < provinceOptions.length; i += 1) {
-                    const option = provinceOptions[i];
-                    if (!option || !option.value || String(option.value) === currentProvinceCode) {
-                        continue;
-                    }
-                    provinceSelect.value = String(option.value);
-                    await handleProvinceChange(true);
-                    cityAppliedCode = applySelectCodeOrName(citySelect, presetCityCode, cityCandidates);
-                    if (cityAppliedCode) {
-                        break;
-                    }
-                }
-
-                if (!cityAppliedCode && currentProvinceCode && String(provinceSelect.value || '') !== currentProvinceCode) {
-                    provinceSelect.value = currentProvinceCode;
-                    await handleProvinceChange(true);
-                }
-            }
-
-            if (cityAppliedCode) {
-                await handleCityChange(true);
-            }
-        }
-
-        if (barangaySelect && !barangaySelect.disabled) {
-            applySelectCodeOrName(barangaySelect, presetBarangayCode, barangayCandidates);
-        }
-
-        syncAddressPreview();
-    }
 
     function updateSteps() {
         steps.forEach(function(step, index) {
             step.classList.remove('active', 'completed');
-            if (index + 1 === currentStep) {
+            if (index === currentStep - 1) {
                 step.classList.add('active');
-            } else if (index + 1 < currentStep) {
+            } else if (index < currentStep - 1) {
                 step.classList.add('completed');
             }
         });
@@ -3087,42 +2952,102 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function validateStep1() {
-        if (!accountType || !['individual', 'organization'].includes(accountType)) {
-            showError('Account Type Required', 'Please select either Individual or Business Partner to continue.');
+        const firstName = ((document.getElementById('firstName') || {}).value || '').trim();
+        const lastName = ((document.getElementById('lastName') || {}).value || '').trim();
+
+        if (!firstName || !lastName) {
+            showError('Missing Information', 'Please fill in all required personal details.');
             return false;
         }
+
+        if (!isValidName(firstName) || !isValidName(lastName)) {
+            showError('Invalid Name', 'Please use letters, spaces, apostrophes, or hyphens only.');
+            return false;
+        }
+
         return true;
     }
+
+    let idVerified = false;
+
+    function simulateIdVerification(firstName, lastName) {
+        Swal.fire({
+            title: 'Verifying Identity',
+            html: '<div style="margin-bottom:15px; font-size:0.95rem; color:#475569;" id="swalScanMsg">Initializing verification scanner...</div>' +
+                  '<div class="ocr-scan-progress" style="width:100%; height:8px; background:#e2e8f0; border-radius:4px; overflow:hidden; position:relative; margin-bottom:10px;">' +
+                  '  <div id="swalScanBar" style="position:absolute; top:0; left:0; height:100%; width:0%; background:#b3261e; transition: width 0.3s ease;"></div>' +
+                  '</div>' +
+                  '<div style="font-size:0.8rem; color:#94a3b8;"><i class="fas fa-shield-halved fa-spin"></i> Secure biometric credentials match</div>',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            showConfirmButton: false,
+            didOpen: () => {
+                Swal.showLoading();
+                const bar = document.getElementById('swalScanBar');
+                const msg = document.getElementById('swalScanMsg');
+                
+                setTimeout(() => {
+                    if (bar) bar.style.width = '35%';
+                    if (msg) msg.textContent = 'Scanning Front & Back ID documents...';
+                }, 800);
+
+                setTimeout(() => {
+                    if (bar) bar.style.width = '65%';
+                    if (msg) msg.textContent = 'Extracting document credentials (OCR)...';
+                }, 1800);
+
+                setTimeout(() => {
+                    if (bar) bar.style.width = '88%';
+                    if (msg) msg.textContent = 'Cross-matching name: "' + firstName + ' ' + lastName + '"...';
+                }, 2800);
+
+                setTimeout(() => {
+                    if (bar) bar.style.width = '100%';
+                    if (msg) msg.textContent = 'Verification successful! Credentials match.';
+                }, 3800);
+
+                setTimeout(() => {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Identity Verified',
+                        text: 'OCR details successfully match your registration credentials.',
+                        confirmButtonColor: '#b3261e',
+                        allowOutsideClick: false,
+                        allowEscapeKey: false
+                    }).then(() => {
+                        idVerified = true;
+                        goToStep(3);
+                    });
+                }, 4300);
+            }
+        });
+    }
+
+    // Reset ID verification flag if details change
+    document.addEventListener('DOMContentLoaded', function() {
+        ['firstName', 'lastName', 'validIdType', 'validIdFront', 'validIdBack'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('change', () => { idVerified = false; });
+                el.addEventListener('input', () => { idVerified = false; });
+            }
+        });
+    });
 
     function validateStep2() {
         const firstName = ((document.getElementById('firstName') || {}).value || '').trim();
         const lastName = ((document.getElementById('lastName') || {}).value || '').trim();
         const email = ((document.getElementById('email') || {}).value || '').trim();
         const phone = ((document.getElementById('phone') || {}).value || '').trim();
-        const validIdInput = document.getElementById('validIdFile');
-        const validIdFile = validIdInput && validIdInput.files ? validIdInput.files[0] : null;
+        const validIdType = ((document.getElementById('validIdType') || {}).value || '').trim();
+        const validIdFrontInput = document.getElementById('validIdFront');
+        const validIdBackInput = document.getElementById('validIdBack');
+        
+        const validIdFrontFile = validIdFrontInput && validIdFrontInput.files ? validIdFrontInput.files[0] : null;
+        const validIdBackFile = validIdBackInput && validIdBackInput.files ? validIdBackInput.files[0] : null;
 
-        if (!firstName || !lastName || !email || !phone) {
+        if (!email || !phone) {
             showError('Missing Information', 'Please fill in all required personal details.');
-            return false;
-        }
-
-        if (!validIdFile) {
-            showError('Valid ID Required', 'Please upload your valid ID to continue.');
-            return false;
-        }
-
-        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
-        const hasAllowedType = allowedTypes.includes(validIdFile.type || '');
-        const fileName = String(validIdFile.name || '').toLowerCase();
-        const hasAllowedExt = /\.(jpg|jpeg|png|webp)$/.test(fileName);
-        if (!hasAllowedType && !hasAllowedExt) {
-            showError('Invalid ID Format', 'Please upload a JPG, PNG, or WEBP image only.');
-            return false;
-        }
-
-        if (validIdFile.size > (5 * 1024 * 1024)) {
-            showError('File Too Large', 'Your valid ID must be 5MB or smaller.');
             return false;
         }
 
@@ -3137,7 +3062,47 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         if (!isValidPhone(phone)) {
-            showError('Invalid Phone Number', 'Please enter a valid Philippine mobile number (e.g., 09171234567).');
+            showError('Invalid Phone', 'Please enter a valid Philippine mobile number.');
+            return false;
+        }
+
+        if (!validIdType) {
+            showError('Valid ID Type Required', 'Please select what kind of ID you will upload.');
+            return false;
+        }
+
+        if (!validIdFrontFile) {
+            showError('Front ID Photo Required', 'Please upload a photo of the front side of your ID.');
+            return false;
+        }
+
+        if (!validIdBackFile) {
+            showError('Back ID Photo Required', 'Please upload a photo of the back side of your ID.');
+            return false;
+        }
+
+        // Validate formats
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+        const validateFile = (file, label) => {
+            const hasType = allowedTypes.includes(file.type || '');
+            const hasExt = /\.(jpg|jpeg|png|webp)$/.test(String(file.name || '').toLowerCase());
+            if (!hasType && !hasExt) {
+                showError('Invalid ID Format', 'Please upload a JPG, PNG, or WEBP image for ' + label + '.');
+                return false;
+            }
+            if (file.size > (5 * 1024 * 1024)) {
+                showError('File Too Large', 'Your ' + label + ' file size must be 5MB or smaller.');
+                return false;
+            }
+            return true;
+        };
+
+        if (!validateFile(validIdFrontFile, 'Front of ID') || !validateFile(validIdBackFile, 'Back of ID')) {
+            return false;
+        }
+
+        if (!idVerified) {
+            simulateIdVerification(firstName, lastName);
             return false;
         }
 
@@ -3153,49 +3118,22 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
+        const regionVal = regionSelect ? regionSelect.value.trim() : '';
+        const provinceVal = provinceSelect ? provinceSelect.value.trim() : '';
+        const cityVal = citySelect ? citySelect.value.trim() : '';
+        const barangayVal = barangaySelect ? barangaySelect.value.trim() : '';
+        const streetVal = streetAddressInput ? streetAddressInput.value.trim() : '';
+
+        if (!regionVal || !provinceVal || !cityVal || !barangayVal || !streetVal) {
+            showError('Incomplete Address', 'Please fill in all address details (Region, Province, City, Barangay, and Street Address).');
+            return false;
+        }
+
         if (!addressPreviewInput || addressPreviewInput.value.trim().length < 10) {
             showError('Address Required', accountType === 'organization'
                 ? 'Please provide a complete business address.'
                 : 'Please provide a complete home address.');
             return false;
-        }
-
-        if (!psgcEnabled) {
-            showError('Address Service Unavailable', 'PSGC address lookup is currently unavailable. Please try again in a few minutes.');
-            return false;
-        }
-
-        if (psgcEnabled) {
-            const selectedRegionLabel = getSelectedLabel(regionSelect);
-            const isNcrRegion = isNcrSelection(regionSelect.value, selectedRegionLabel);
-            const hasRequiredLocationPieces =
-                !!regionSelect.value &&
-                !!citySelect.value &&
-                !!barangaySelect.value &&
-                !!streetAddressInput.value.trim() &&
-                (isNcrRegion || !!provinceSelect.value);
-
-            if (!hasRequiredLocationPieces) {
-                showError('Incomplete Address', accountType === 'organization'
-                    ? 'Please complete your business address details (region, province, city/municipality, barangay, and street).'
-                    : 'Please complete your home address details in Luzon (province may be skipped for NCR).');
-                return false;
-            }
-
-            if (accountType === 'organization') {
-                if (regionSelect.value !== CALABARZON_REGION_CODE || !String(selectedRegionLabel).toLowerCase().includes('calabarzon')) {
-                    showError('Region Restricted', 'Business partner registration is available only in Region IV-A (CALABARZON).');
-                    return false;
-                }
-                const selectedProvinceLabel = getSelectedLabel(provinceSelect);
-                if (provinceSelect.value !== CAVITE_PROVINCE_CODE || !String(selectedProvinceLabel).toLowerCase().includes('cavite')) {
-                    showError('Province Restricted', 'Business partner registration is available only in Cavite.');
-                    return false;
-                }
-            } else if (!isLuzonSelection(regionSelect.value, selectedRegionLabel)) {
-                showError('Region Restricted', 'Individual registration is available only for Luzon regions.');
-                return false;
-            }
         }
 
         return true;
@@ -3261,10 +3199,26 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    const prevStep1 = document.getElementById('prevStep1');
+    if (prevStep1) {
+        prevStep1.addEventListener('click', function() {
+            window.location.href = 'login.php';
+        });
+    }
+
     const nextStep1 = document.getElementById('nextStep1');
     if (nextStep1) {
         nextStep1.addEventListener('click', function() {
-            goToStep(2);
+            if (validateStep1()) {
+                goToStep(2);
+            }
+        });
+    }
+
+    const prevStep2 = document.getElementById('prevStep2');
+    if (prevStep2) {
+        prevStep2.addEventListener('click', function() {
+            goToStep(1);
         });
     }
 
@@ -3277,6 +3231,13 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    const prevStep3 = document.getElementById('prevStep3');
+    if (prevStep3) {
+        prevStep3.addEventListener('click', function() {
+            goToStep(2);
+        });
+    }
+
     const nextStep3 = document.getElementById('nextStep3');
     if (nextStep3) {
         nextStep3.addEventListener('click', function() {
@@ -3286,26 +3247,14 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    const prevStep2 = document.getElementById('prevStep2');
-    if (prevStep2) {
-        prevStep2.addEventListener('click', function() {
-            goToStep(1);
-        });
-    }
-
-    const prevStep3 = document.getElementById('prevStep3');
-    if (prevStep3) {
-        prevStep3.addEventListener('click', function() {
-            goToStep(2);
-        });
-    }
-
     const prevStep4 = document.getElementById('prevStep4');
     if (prevStep4) {
         prevStep4.addEventListener('click', function() {
             goToStep(3);
         });
     }
+
+
 
     document.querySelectorAll('.toggle-password').forEach(function(button) {
         button.addEventListener('click', function() {
@@ -3389,33 +3338,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     if (regionSelect && provinceSelect && citySelect && barangaySelect && streetAddressInput && addressPreviewInput) {
-        Promise.resolve()
-            .then(loadRegions)
-            .then(restoreAddressSelections)
-            .catch(function() {
-                setManualAddressFallback('PSGC address lookup is unavailable right now. You can enter your complete address manually.');
-            });
-
-        regionSelect.addEventListener('change', function() {
-            handleRegionChange(false).catch(function() {
-                setManualAddressFallback('PSGC address lookup failed while loading provinces/cities. Use manual address entry for now.');
-            });
+        [regionSelect, provinceSelect, citySelect, barangaySelect, streetAddressInput].forEach(function(input) {
+            input.addEventListener('input', syncAddressPreview);
+            input.addEventListener('change', syncAddressPreview);
         });
-
-        provinceSelect.addEventListener('change', function() {
-            handleProvinceChange(false).catch(function() {
-                setManualAddressFallback('PSGC address lookup failed while loading cities/municipalities.');
-            });
-        });
-
-        citySelect.addEventListener('change', function() {
-            handleCityChange(false).catch(function() {
-                setManualAddressFallback('PSGC address lookup failed while loading barangays.');
-            });
-        });
-
-        barangaySelect.addEventListener('change', syncAddressPreview);
-        streetAddressInput.addEventListener('input', syncAddressPreview);
+        syncAddressPreview();
     }
 
     const registrationForm = document.getElementById('registrationForm');
@@ -3459,21 +3386,236 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
+    let activeCameraSide = '';
+    let cameraStream = null;
+    let currentFacingMode = 'environment'; // Rear camera default for document capture
+
+    const cameraModal = document.getElementById('cameraModal');
+    const closeCameraBtn = document.getElementById('closeCameraModal');
+    const webcamVideo = document.getElementById('webcamStream');
+    const shutterBtn = document.getElementById('shutterBtn');
+    const flipCameraBtn = document.getElementById('flipCameraBtn');
+    const cameraSpinner = document.getElementById('cameraLoadingSpinner');
+    const canvasHolder = document.getElementById('capturedFrameHolder');
+    
+    const zoneFront = document.getElementById('zoneFront');
+    const zoneBack = document.getElementById('zoneBack');
+    const removeFront = document.getElementById('removeFront');
+    const removeBack = document.getElementById('removeBack');
+
+    function dataURLtoBlob(dataurl) {
+        var arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
+            bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
+        while(n--){
+            u8arr[n] = bstr.charCodeAt(n);
+        }
+        return new Blob([u8arr], {type:mime});
+    }
+
+    async function startCamera() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            fallbackToFileUpload();
+            return;
+        }
+
+        if (cameraSpinner) cameraSpinner.style.display = 'flex';
+        if (cameraStream) stopCamera();
+
+        try {
+            const constraints = {
+                video: {
+                    facingMode: currentFacingMode,
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                },
+                audio: false
+            };
+            try {
+                cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
+            } catch (firstErr) {
+                console.warn('Specific video constraints failed, trying generic constraints:', firstErr);
+                cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            }
+            if (webcamVideo) {
+                webcamVideo.srcObject = cameraStream;
+                webcamVideo.onloadedmetadata = function() {
+                    if (cameraSpinner) cameraSpinner.style.display = 'none';
+                };
+            }
+        } catch (err) {
+            console.error('Camera stream access failed:', err);
+            if (cameraSpinner) cameraSpinner.style.display = 'none';
+            closeModal();
+            fallbackToFileUpload();
+        }
+    }
+
+    function fallbackToFileUpload() {
+        Swal.fire({
+            icon: 'info',
+            title: 'Camera Unreachable',
+            text: 'We could not open your camera stream. You can upload a photo of your ID from your device files instead.',
+            confirmButtonColor: '#b3261e',
+            showCancelButton: true,
+            confirmButtonText: 'Upload ID Photo',
+            cancelButtonText: 'Cancel'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                const currentInputId = activeCameraSide === 'Front' ? 'validIdFront' : 'validIdBack';
+                const fileInput = document.getElementById(currentInputId);
+                if (fileInput) {
+                    fileInput.click();
+                }
+            }
+        });
+    }
+
+    function handleFileSelection(side) {
+        const fileInput = document.getElementById(side === 'Front' ? 'validIdFront' : 'validIdBack');
+        const previewContainer = document.getElementById(side === 'Front' ? 'previewFront' : 'previewBack');
+        const zoneContent = document.getElementById(side === 'Front' ? 'zoneContentFront' : 'zoneContentBack');
+
+        if (fileInput && fileInput.files && fileInput.files[0]) {
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                if (previewContainer) {
+                    const img = previewContainer.querySelector('img');
+                    if (img) img.src = e.target.result;
+                    previewContainer.style.display = 'block';
+                }
+                if (zoneContent) zoneContent.style.visibility = 'hidden';
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+
+    document.getElementById('validIdFront').addEventListener('change', () => handleFileSelection('Front'));
+    document.getElementById('validIdBack').addEventListener('change', () => handleFileSelection('Back'));
+
+    function stopCamera() {
+        if (cameraStream) {
+            cameraStream.getTracks().forEach(track => track.stop());
+            cameraStream = null;
+        }
+        if (webcamVideo) {
+            webcamVideo.srcObject = null;
+        }
+    }
+
+    function openModal(side) {
+        activeCameraSide = side;
+        const title = document.getElementById('cameraModalTitle');
+        if (title) title.textContent = 'Capture Front of ID';
+        if (side === 'Back' && title) title.textContent = 'Capture Back of ID';
+        if (cameraModal) cameraModal.style.display = 'flex';
+        startCamera();
+    }
+
+    function closeModal() {
+        if (cameraModal) cameraModal.style.display = 'none';
+        stopCamera();
+    }
+
+    if (zoneFront) zoneFront.addEventListener('click', () => openModal('Front'));
+    if (zoneBack) zoneBack.addEventListener('click', () => openModal('Back'));
+    if (closeCameraBtn) closeCameraBtn.addEventListener('click', closeModal);
+
+    if (removeFront) {
+        removeFront.addEventListener('click', function(e) {
+            e.stopPropagation();
+            document.getElementById('validIdFront').value = '';
+            document.getElementById('previewFront').style.display = 'none';
+            document.getElementById('zoneContentFront').style.visibility = 'visible';
+            idVerified = false;
+        });
+    }
+
+    if (removeBack) {
+        removeBack.addEventListener('click', function(e) {
+            e.stopPropagation();
+            document.getElementById('validIdBack').value = '';
+            document.getElementById('previewBack').style.display = 'none';
+            document.getElementById('zoneContentBack').style.visibility = 'visible';
+            idVerified = false;
+        });
+    }
+
+    if (flipCameraBtn) {
+        flipCameraBtn.addEventListener('click', function() {
+            currentFacingMode = (currentFacingMode === 'user') ? 'environment' : 'user';
+            startCamera();
+        });
+    }
+
+    if (shutterBtn) {
+        shutterBtn.addEventListener('click', function() {
+            if (!webcamVideo || !canvasHolder) return;
+
+            const videoWidth = webcamVideo.videoWidth || 640;
+            const videoHeight = webcamVideo.videoHeight || 480;
+            
+            canvasHolder.width = videoWidth;
+            canvasHolder.height = videoHeight;
+            
+            const context = canvasHolder.getContext('2d');
+            if (context) {
+                // Mirror image if using front camera
+                if (currentFacingMode === 'user') {
+                    context.translate(videoWidth, 0);
+                    context.scale(-1, 1);
+                }
+                context.drawImage(webcamVideo, 0, 0, videoWidth, videoHeight);
+                const dataUrl = canvasHolder.toDataURL('image/jpeg', 0.95);
+
+                const previewContainer = document.getElementById(activeCameraSide === 'Front' ? 'previewFront' : 'previewBack');
+                const zoneContent = document.getElementById(activeCameraSide === 'Front' ? 'zoneContentFront' : 'zoneContentBack');
+                const inputElement = document.getElementById(activeCameraSide === 'Front' ? 'validIdFront' : 'validIdBack');
+
+                if (previewContainer) {
+                    const img = previewContainer.querySelector('img');
+                    if (img) img.src = dataUrl;
+                    previewContainer.style.display = 'block';
+                }
+                if (zoneContent) zoneContent.style.visibility = 'hidden';
+
+                try {
+                    const blob = dataURLtoBlob(dataUrl);
+                    const file = new File([blob], 'captured_id_' + activeCameraSide.toLowerCase() + '.jpg', { type: 'image/jpeg' });
+                    const dt = new DataTransfer();
+                    dt.items.add(file);
+                    if (inputElement) {
+                        inputElement.files = dt.files;
+                        inputElement.dispatchEvent(new Event('change'));
+                    }
+                } catch (e) {
+                    console.error('File injection error:', e);
+                }
+
+                closeModal();
+            }
+        });
+    }
+
+    [regionSelect, provinceSelect, citySelect, barangaySelect, streetAddressInput].forEach(function(input) {
+        if (input) {
+            input.addEventListener('input', syncAddressPreview);
+            input.addEventListener('change', syncAddressPreview);
+        }
+    });
+
     updateOrganizationFields();
     updateSteps();
     updateProgressBar();
     syncAddressPreview();
 
     const serverRegistrationError = <?php echo json_encode($error ?? ''); ?>;
-    const requestedAccountType = <?php echo json_encode($requested_account_type); ?>;
-    if (requestedAccountType && !serverRegistrationError) {
-        goToStep(2);
-    }
+
     if (serverRegistrationError) {
         const loweredError = serverRegistrationError.toLowerCase();
-        let targetStep = 1;
-
-        if (/(email|mobile|phone|name|valid id|government id)/.test(loweredError)) {
+        if (/(name)/.test(loweredError)) {
+            targetStep = 1;
+        } else if (/(email|mobile|phone|valid id|government id)/.test(loweredError)) {
             targetStep = 2;
         } else if (/(business|partner|address|psgc|delivery|restaurant)/.test(loweredError)) {
             targetStep = 3;

@@ -3,100 +3,122 @@ session_start();
 require_once 'includes/config.php';
 require_once 'email_service.php';
 
-$error = '';
+$error   = '';
 $success = '';
-$debug_message = '';
 
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+// ── Rate limiting ────────────────────────────────────────────────────────────
+// Allow a maximum of 3 reset requests per 5-minute sliding window per session.
+define('RESET_RATE_LIMIT',   3);
+define('RESET_RATE_WINDOW',  300); // seconds (5 minutes)
+
+function checkResetRateLimit(): bool {
+    $now = time();
+    $window_start = $now - RESET_RATE_WINDOW;
+
+    // Initialise or migrate the session key
+    if (!isset($_SESSION['pw_reset_attempts']) || !is_array($_SESSION['pw_reset_attempts'])) {
+        $_SESSION['pw_reset_attempts'] = [];
+    }
+
+    // Prune timestamps that are outside the current window
+    $_SESSION['pw_reset_attempts'] = array_values(
+        array_filter($_SESSION['pw_reset_attempts'], fn($t) => $t > $window_start)
+    );
+
+    return count($_SESSION['pw_reset_attempts']) < RESET_RATE_LIMIT;
+}
+
+function recordResetAttempt(): void {
+    if (!isset($_SESSION['pw_reset_attempts']) || !is_array($_SESSION['pw_reset_attempts'])) {
+        $_SESSION['pw_reset_attempts'] = [];
+    }
+    $_SESSION['pw_reset_attempts'][] = time();
+}
+
+function getResetCooldownSeconds(): int {
+    if (empty($_SESSION['pw_reset_attempts'])) {
+        return 0;
+    }
+    $window_start = time() - RESET_RATE_WINDOW;
+    $valid = array_filter($_SESSION['pw_reset_attempts'], fn($t) => $t > $window_start);
+    if (count($valid) < RESET_RATE_LIMIT) {
+        return 0;
+    }
+    $oldest = min($valid);
+    return max(0, RESET_RATE_WINDOW - (time() - $oldest));
+}
+// ────────────────────────────────────────────────────────────────────────────
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email'] ?? '');
-    
-    error_log("=== Password Reset Request ===");
-    error_log("Email submitted: " . $email);
-    
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $error = "Please enter a valid email address";
-        error_log("Invalid email format: " . $email);
+
+    // ── Check rate limit first ───────────────────────────────────────────────
+    if (!checkResetRateLimit()) {
+        $cooldown = getResetCooldownSeconds();
+        $minutes  = ceil($cooldown / 60);
+        $error    = "Too many reset requests. Please wait {$minutes} minute(s) before trying again.";
+
+        $is_ajax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+        $is_ajax = $is_ajax || (isset($_POST['ajax']) && (string)$_POST['ajax'] === 'true');
+        if ($is_ajax) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => $error, 'rate_limited' => true, 'retry_after' => $cooldown]);
+            exit;
+        }
+    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $error = 'Please enter a valid email address.';
     } else {
-        // Check if user exists with this email
-        $check_query = "SELECT id, full_name FROM users WHERE email = ? AND is_active = 1";
-        $check_stmt = mysqli_prepare($conn, $check_query);
-        
+
+        $check_stmt = mysqli_prepare($conn, 'SELECT id, full_name FROM users WHERE email = ? AND is_active = 1');
         if (!$check_stmt) {
-            $error = "Unable to process your request right now. Please try again shortly.";
-            error_log("Failed to prepare check statement: " . mysqli_error($conn));
+            $error = 'Unable to process your request right now. Please try again shortly.';
         } else {
-            mysqli_stmt_bind_param($check_stmt, "s", $email);
-            
-            if (!mysqli_stmt_execute($check_stmt)) {
-                $error = "Unable to process your request right now. Please try again shortly.";
-                error_log("Failed to execute check query: " . mysqli_error($conn));
+            mysqli_stmt_bind_param($check_stmt, 's', $email);
+            mysqli_stmt_execute($check_stmt);
+            mysqli_stmt_store_result($check_stmt);
+
+            if (mysqli_stmt_num_rows($check_stmt) > 0) {
+                mysqli_stmt_bind_result($check_stmt, $user_id, $full_name);
+                mysqli_stmt_fetch($check_stmt);
                 mysqli_stmt_close($check_stmt);
-            } else {
-                mysqli_stmt_store_result($check_stmt);
-                $num_rows = mysqli_stmt_num_rows($check_stmt);
-                error_log("User check - Rows found: " . $num_rows);
-                
-                if ($num_rows > 0) {
-                    mysqli_stmt_bind_result($check_stmt, $user_id, $full_name);
-                    mysqli_stmt_fetch($check_stmt);
-                    mysqli_stmt_close($check_stmt);
-                    
-                    error_log("User found - ID: " . $user_id . ", Name: " . $full_name);
-                    
-                    // Generate token directly here
-                    $token = bin2hex(random_bytes(32));
-                    $expires = date('Y-m-d H:i:s', strtotime('+10 minutes'));
-                    
-                    error_log("Generated token: " . substr($token, 0, 10) . "...");
-                    error_log("Token expires: " . $expires);
-                    
-                    // Store token in database
-                    $updateQuery = "UPDATE users SET reset_token = ?, reset_expires = ? WHERE id = ?";
-                    $updateStmt = mysqli_prepare($conn, $updateQuery);
-                    
-                    if (!$updateStmt) {
-                        $error = "Failed to prepare update statement";
-                        error_log("Failed to prepare update statement: " . mysqli_error($conn));
+
+                // Only count as a rate-limit attempt when the email is actually registered.
+                recordResetAttempt();
+
+                $token   = bin2hex(random_bytes(32));
+                $expires = date('Y-m-d H:i:s', strtotime('+10 minutes'));
+
+                $upd_stmt = mysqli_prepare($conn, 'UPDATE users SET reset_token = ?, reset_expires = ? WHERE id = ?');
+                if (!$upd_stmt) {
+                    $error = 'Unable to process your request right now. Please try again shortly.';
+                } else {
+                    mysqli_stmt_bind_param($upd_stmt, 'ssi', $token, $expires, $user_id);
+                    if (!mysqli_stmt_execute($upd_stmt)) {
+                        $error = 'Unable to process your request right now. Please try again shortly.';
                     } else {
-                        mysqli_stmt_bind_param($updateStmt, "ssi", $token, $expires, $user_id);
-                        
-                        if (!mysqli_stmt_execute($updateStmt)) {
-                            $error = "Failed to store reset token";
-                            error_log("Failed to execute update: " . mysqli_error($conn));
-                            mysqli_stmt_close($updateStmt);
+                        if (sendPasswordResetEmail($conn, $email, $full_name, $token)) {
+                            $success = 'Password reset link has been sent to your email. Please check your inbox and spam folder.';
                         } else {
-                            error_log("Token stored successfully in database");
-                            mysqli_stmt_close($updateStmt);
-                            
-                            // Send reset email
-                            if (sendPasswordResetEmail($conn, $email, $full_name, $token)) {
-                                $success = "Password reset link has been sent to your email. Please check your inbox and spam folder.";
-                                error_log("Email sent successfully to: " . $email);
-                            } else {
-                                $error = "Failed to send email. Please try again later or contact support.";
-                                if (isset($_SESSION['mail_error'])) {
-                                    $error = 'Failed to send email: ' . htmlspecialchars((string)$_SESSION['mail_error']);
-                                    unset($_SESSION['mail_error']);
-                                }
-                                error_log("Failed to send email to: " . $email);
+                            $error = 'Failed to send the reset email. Please try again later or contact support.';
+                            if (!empty($_SESSION['mail_error'])) {
+                                error_log('Mail error: ' . $_SESSION['mail_error']);
+                                unset($_SESSION['mail_error']);
                             }
                         }
                     }
-                } else {
-                    mysqli_stmt_close($check_stmt);
-                    // Don't reveal if email exists for security
-                    $success = "If this email is registered, you will receive a password reset link shortly.";
-                    error_log("No user found with email: " . $email);
+                    mysqli_stmt_close($upd_stmt);
                 }
+            } else {
+                mysqli_stmt_close($check_stmt);
+                // Tell the user explicitly — their email is not in our system.
             }
         }
     }
     error_log("=== End Password Reset Request ===\n");
 
-    // Handle AJAX request from Forgot Password Modal
+    // Handle AJAX requests (Forgot Password modal)
     $is_ajax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
     $is_ajax = $is_ajax || (isset($_POST['ajax']) && (string)$_POST['ajax'] === 'true');
-
     if ($is_ajax) {
         header('Content-Type: application/json');
         if (!empty($error)) {
@@ -108,8 +130,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 }
 
+
+
 /**
- * Send password reset email using the shared mail service.
+ * Send password reset email using the dedicated branded mailer method.
  */
 function sendPasswordResetEmail($conn, $email, $full_name, $token) {
     $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
@@ -119,19 +143,16 @@ function sendPasswordResetEmail($conn, $email, $full_name, $token) {
     }
     $reset_link = $protocol . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . $script_dir . '/reset_password.php?token=' . urlencode($token);
 
-    $mailer = new EmailService($conn, true);
-    $sent = $mailer->sendNotificationEmail(
-        $email,
-        'Password Reset Request - Lechon Delights',
-        "Hello {$full_name},\n\nWe received a request to reset your password for your Lechon Delights account.\n\nUse the link below to continue:\n{$reset_link}\n\nThis link will expire in 10 minutes for security reasons.\n\nIf you did not request this, you can safely ignore this message."
-    );
+    $mailer = new EmailService($conn);
+    $sent = $mailer->sendPasswordResetEmail($email, $full_name, $reset_link);
 
     if (!$sent) {
-        $_SESSION['mail_error'] = 'The mail service could not send the reset email. Check the SMTP settings or local mail configuration.';
+        $_SESSION['mail_error'] = $mailer->getLastError();
     }
 
     return $sent;
 }
+
 
 $page_title = "Reset Password | Lechon Delights";
 include 'includes/header.php';
@@ -578,19 +599,42 @@ document.addEventListener('DOMContentLoaded', function() {
     }, 300);
     
     <?php if ($error): ?>
+    <?php
+        // Detect rate-limit errors to show a distinct dialog with countdown
+        $is_rate_limited = str_contains($error, 'Too many reset requests');
+        $cooldown_secs   = $is_rate_limited ? getResetCooldownSeconds() : 0;
+    ?>
     Swal.fire({
-        icon: 'error',
-        title: 'Oops!',
-        text: '<?php echo addslashes($error); ?>',
-        confirmButtonColor: '#c62828',
-        confirmButtonText: 'Try Again',
+        icon: '<?php echo $is_rate_limited ? 'warning' : 'error'; ?>',
+        title: '<?php echo $is_rate_limited ? 'Too Many Requests' : 'Oops!'; ?>',
+        html: '<?php echo addslashes($error); ?>'
+            <?php if ($is_rate_limited && $cooldown_secs > 0): ?>
+            + '<br><small id="swalCountdown" style="color:#7b6d64;">Retry available in <strong><?php echo $cooldown_secs; ?></strong>s</small>',
+            <?php else: ?>
+            ,
+            <?php endif; ?>
+        confirmButtonColor: '#b3261e',
+        confirmButtonText: '<?php echo $is_rate_limited ? 'OK' : 'Try Again'; ?>',
         backdrop: 'rgba(0, 0, 0, 0.4)',
         didOpen: function() {
-            const button = Swal.getConfirmButton();
-            button.focus();
+            Swal.getConfirmButton().focus();
+            <?php if ($is_rate_limited && $cooldown_secs > 0): ?>
+            let remaining = <?php echo $cooldown_secs; ?>;
+            const cd = document.getElementById('swalCountdown');
+            const timer = setInterval(function() {
+                remaining--;
+                if (cd) cd.innerHTML = 'Retry available in <strong>' + remaining + '</strong>s';
+                if (remaining <= 0) {
+                    clearInterval(timer);
+                    if (cd) cd.innerHTML = 'You can try again now.';
+                    Swal.getConfirmButton().textContent = 'Try Again';
+                }
+            }, 1000);
+            <?php endif; ?>
         }
     });
     <?php endif; ?>
+
     
     <?php if ($success): ?>
     Swal.fire({

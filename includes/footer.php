@@ -17,7 +17,7 @@
             <div class="footer-grid">
                 <div class="footer-col footer-brand-col">
                     <a href="<?php echo $footer_path_prefix; ?>index.php" class="footer-logo">
-                        <span class="footer-logo-icon"><i class="fas fa-store"></i></span>
+                        <span class="footer-logo-icon" style="overflow: hidden;"><img src="<?php echo $footer_path_prefix; ?>assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block;"></span>
                         <span class="footer-logo-text"><span class="footer-logo-title">Lechon Delights</span><span class="footer-logo-sub">MARKETPLACE</span></span>
                     </a>
                     <p class="footer-brand-desc">Discover Cavite lechon shops, compare local roast branches in one place, and get authentic roasted delicacies delivered fast.</p>
@@ -1107,14 +1107,7 @@
         // Get the button
         let mybutton = document.getElementById("backToTopBtn");
 
-        // When the user scrolls down 20px from the top of the document, show the button
-        window.onscroll = function() {scrollFunction()};
-
-        function scrollFunction() {
-            if (document.body.scrollTop > 300 || document.documentElement.scrollTop > 300) {
-                mybutton.style.display = "block";
-
-        // When the user scrolls down 20px from the top of the document, show the button
+        // When the user scrolls down 300px from the top of the document, show the button
         window.onscroll = function() {scrollFunction()};
 
         function scrollFunction() {

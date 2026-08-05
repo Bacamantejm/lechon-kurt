@@ -24,7 +24,7 @@ if ($seller_scope_id !== null) {
         SELECT 1
         FROM order_items oi_scope
         INNER JOIN products p_scope
-            ON (oi_scope.product_id = p_scope.product_id OR oi_scope.product_id = CAST(p_scope.id AS CHAR))
+            ON (oi_scope.product_id = p_scope.product_id COLLATE utf8mb4_general_ci OR oi_scope.product_id = CAST(p_scope.id AS CHAR) COLLATE utf8mb4_general_ci)
         WHERE oi_scope.order_id = o.id
           AND p_scope.seller_id = " . (int)$seller_scope_id . "
     )";

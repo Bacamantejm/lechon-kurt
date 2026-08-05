@@ -72,8 +72,8 @@ $favorites_feature_enabled = $is_customer_user;
         .btn-signin,.btn-register { min-height:38px; padding:0 14px; border-radius:999px; border:1px solid; text-decoration:none; font-weight:700; font-size:.84rem; display:inline-flex; align-items:center; justify-content:center; transition:var(--transition-fast); white-space:nowrap; }
         .btn-signin { border-color:var(--ink); color:var(--ink); background:#fff; }
         .btn-signin:hover { background:var(--ink); color:#fff; }
-        .btn-register { border-color:var(--ink); background:var(--ink); color:#fff; }
-        .btn-register:hover { background:#0f1118; border-color:#0f1118; }
+        .btn-register { border-color:var(--ink); background:#fff; color:var(--ink); }
+        .btn-register:hover { background:var(--ink); color:#fff; border-color:var(--ink); }
         .icon-btn { width:38px; height:38px; border-radius:10px; border:1px solid var(--line); background:#fff; color:#222a3d; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; transition:var(--transition-fast); position:relative; font-size:.9rem; }
         .icon-btn:hover { background:var(--ink); color:#fff; border-color:var(--ink); }
         .user-avatar-btn { padding:0; overflow:hidden; }
@@ -445,10 +445,11 @@ $favorites_feature_enabled = $is_customer_user;
 <header class="site-header market-main-header">
     <div class="market-header-top">
         <a href="<?php echo $path_prefix; ?>index.php" class="logo-link">
-            <span class="logo-icon"><i class="fas fa-store"></i></span>
+            <span class="logo-icon"><img src="<?php echo $path_prefix; ?>assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block;"></span>
             <span class="logo-copy"><span class="logo-title">Lechon Delights</span><span class="logo-sub">Marketplace</span></span>
         </a>
 
+        <?php if ($current_page !== 'register' && $current_page !== 'login'): ?>
         <div class="market-address-wrap" id="marketAddressWrap">
             <button type="button" class="market-address-trigger" id="marketAddressToggle">
                 <i class="fas fa-location-dot"></i><span class="address-text" id="marketAddressDisplay"><?php echo htmlspecialchars($market_header_address_display); ?></span><i class="fas fa-chevron-down"></i>
@@ -478,6 +479,7 @@ $favorites_feature_enabled = $is_customer_user;
                 </div>
             </div>
         </div>
+        <?php endif; ?>
 
         <div class="header-actions">
             <?php if ($is_logged_in_user): ?>
@@ -522,10 +524,12 @@ $favorites_feature_enabled = $is_customer_user;
             </div>
             <button class="icon-btn cart-btn" id="cartToggle" onclick="location.href='<?php echo $path_prefix; ?>cart.php'"><i class="fas fa-shopping-cart"></i><span class="badge" id="cartBadge"><?php echo (int)$cart_count; ?></span></button>
             <?php else: ?>
-            <div class="auth-buttons">
-                <a href="<?php echo $path_prefix; ?>login.php" class="btn-signin">Log in</a>
-                <a href="<?php echo $path_prefix; ?>register.php" class="btn-register">Create account</a>
-            </div>
+                <?php if ($current_page !== 'register' && $current_page !== 'login'): ?>
+                <div class="auth-buttons">
+                    <a href="<?php echo $path_prefix; ?>login.php" class="btn-signin">Log in</a>
+                    <a href="<?php echo $path_prefix; ?>register.php" class="btn-register">Create account</a>
+                </div>
+                <?php endif; ?>
             <?php endif; ?>
             <button class="icon-btn mobile-toggle" id="mobileToggle"><i class="fas fa-bars"></i></button>
         </div>
@@ -614,7 +618,7 @@ $favorites_feature_enabled = $is_customer_user;
 <header class="site-header standard-header">
     <div class="header-shell standard-top">
         <a href="<?php echo $path_prefix; ?>index.php" class="logo-link">
-            <span class="logo-icon"><i class="fas fa-store"></i></span>
+            <span class="logo-icon"><img src="<?php echo $path_prefix; ?>assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block;"></span>
             <span class="logo-copy"><span class="logo-title">Lechon Delights</span><span class="logo-sub">Marketplace</span></span>
         </a>
         <nav class="main-nav">
@@ -658,10 +662,12 @@ $favorites_feature_enabled = $is_customer_user;
                 </div>
             </div>
             <?php else: ?>
-            <div class="auth-buttons">
-                <a href="<?php echo $path_prefix; ?>login.php" class="btn-signin">Log in</a>
-                <a href="<?php echo $path_prefix; ?>login.php?tab=register" class="btn-register">Create account</a>
-            </div>
+                <?php if ($current_page !== 'register' && $current_page !== 'login'): ?>
+                <div class="auth-buttons">
+                    <a href="<?php echo $path_prefix; ?>login.php" class="btn-signin">Log in</a>
+                    <a href="<?php echo $path_prefix; ?>login.php?tab=register" class="btn-register">Create account</a>
+                </div>
+                <?php endif; ?>
             <?php endif; ?>
             <?php if ($favorites_feature_enabled): ?>
             <a class="icon-btn" id="favoritesToggle" href="<?php echo $favorites_page_href; ?>" title="Favorites"><i class="far fa-heart"></i><span class="badge" id="favoritesBadge" style="display:none;">0</span></a>
@@ -680,7 +686,7 @@ $favorites_feature_enabled = $is_customer_user;
 <aside class="mobile-menu" id="mobileMenu">
     <div class="mobile-menu-header">
         <a href="<?php echo $path_prefix; ?>index.php" class="logo-link">
-            <span class="logo-icon" style="width:38px;height:38px;font-size:.88rem;"><i class="fas fa-store"></i></span>
+            <span class="logo-icon" style="width:38px;height:38px;font-size:.88rem;"><img src="<?php echo $path_prefix; ?>assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block;"></span>
             <span class="logo-copy"><span class="logo-title" style="font-size:1.04rem;">Lechon Delights</span><span class="logo-sub">Marketplace</span></span>
         </a>
         <button class="mobile-menu-close" id="mobileMenuClose"><i class="fas fa-times"></i></button>
@@ -708,7 +714,7 @@ $favorites_feature_enabled = $is_customer_user;
         <li><a href="javascript:void(0);" onclick="confirmLogout()"><i class="fas fa-right-from-bracket"></i> Logout</a></li>
         <?php endif; ?>
     </ul>
-    <?php if (!$is_logged_in_user): ?>
+    <?php if (!$is_logged_in_user && $current_page !== 'register' && $current_page !== 'login'): ?>
     <div class="mobile-auth">
         <a href="<?php echo $path_prefix; ?>login.php" class="btn-signin" style="text-align:center;">Log in</a>
         <a href="<?php echo $path_prefix; ?>login.php?tab=register" class="btn-register" style="text-align:center;">Create account</a>
