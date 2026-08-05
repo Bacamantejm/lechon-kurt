@@ -96,8 +96,8 @@ if ($payment_method === 'paymongo') {
 
         // Initialize PayMongo with API keys
         $paymongo = new PayMongoIntegration(
-            'sk_test_YOUR_PAYMONGO_SECRET_KEY_HERE',
-            'pk_test_YOUR_PAYMONGO_PUBLIC_KEY_HERE'
+            appConfigValue('PAYMONGO_SECRET_KEY'),
+            appConfigValue('PAYMONGO_PUBLIC_KEY')
         );
 
         // Retrieve and verify checkout session

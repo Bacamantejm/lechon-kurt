@@ -19,8 +19,8 @@ $preorder_service = new PreOrderService($conn);
 
 // Initialize PayMongo with API keys
 $paymongo = new PayMongoIntegration(
-    'sk_test_YOUR_PAYMONGO_SECRET_KEY_HERE',  // Secret key
-    'pk_test_YOUR_PAYMONGO_PUBLIC_KEY_HERE'   // Public key
+    appConfigValue('PAYMONGO_SECRET_KEY'),
+    appConfigValue('PAYMONGO_PUBLIC_KEY')
 );
 
 // Get pre-order ID and payment type

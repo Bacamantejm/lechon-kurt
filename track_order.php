@@ -43,214 +43,310 @@ include 'includes/header.php';
 
 <style>
     .tracking-page {
-        padding: 56px 0 70px;
-        background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
-        min-height: 80vh;
+        padding: 50px 0 80px;
+        background: linear-gradient(180deg, #fff9f2 0%, #fff4e8 100%);
+        min-height: 85vh;
     }
-    .tracking-container { max-width: 1240px; margin: 0 auto; }
-    .tracking-header { text-align: center; margin-bottom: 24px; }
+    .tracking-container { max-width: 1240px; margin: 0 auto; padding: 0 16px; }
+    
+    .tracking-header { text-align: center; margin-bottom: 28px; }
+    .tracking-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: #fff0eb;
+        color: #b3261e;
+        border: 1px solid #efddcd;
+        padding: 6px 16px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        margin-bottom: 12px;
+    }
     .tracking-header h1 {
-        font-size: clamp(1.9rem, 4.4vw, 2.5rem);
-        color: #b71c1c;
-        margin-bottom: 8px;
-        letter-spacing: 0.2px;
+        font-size: clamp(2rem, 4.5vw, 2.6rem);
+        color: #171922;
+        font-weight: 800;
+        margin-bottom: 6px;
+        letter-spacing: -0.3px;
     }
-    .tracking-header p { font-size: 1.03rem; color: #5f6c7a; margin: 0; }
+    .tracking-header h1 span {
+        background: linear-gradient(135deg, #b3261e, #ef6b2e);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+    .tracking-order-num {
+        display: inline-block;
+        font-size: 0.95rem;
+        color: #7b6d64;
+        background: #ffffff;
+        border: 1px solid #efddcd;
+        padding: 4px 14px;
+        border-radius: 8px;
+        font-family: monospace;
+        font-weight: 600;
+    }
+
     .tracking-meta {
-        margin-top: 18px;
+        margin-top: 22px;
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 12px;
+        gap: 16px;
     }
     .tracking-meta-card {
-        background: #fff;
-        border: 1px solid #e6ebf1;
-        border-radius: 12px;
-        padding: 12px 14px;
-        box-shadow: 0 5px 14px rgba(15, 23, 42, 0.06);
+        background: #ffffff;
+        border: 1px solid #efddcd;
+        border-radius: 16px;
+        padding: 16px 18px;
+        box-shadow: 0 8px 24px rgba(42, 33, 29, 0.04);
         display: flex;
         align-items: center;
-        gap: 10px;
+        gap: 14px;
         text-align: left;
+        transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.22s ease;
+    }
+    .tracking-meta-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 30px rgba(179, 38, 30, 0.08);
+        border-color: #e8d4c3;
     }
     .tracking-meta-card i {
-        width: 34px;
-        height: 34px;
-        border-radius: 10px;
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        background: #ffebee;
-        color: #c62828;
+        background: linear-gradient(135deg, #b3261e, #ef6b2e);
+        color: #ffffff;
+        font-size: 1.1rem;
+        box-shadow: 0 6px 16px rgba(179, 38, 30, 0.2);
+        flex-shrink: 0;
     }
     .tracking-meta-card span {
         display: block;
-        font-size: 0.78rem;
-        color: #7b8794;
+        font-size: 0.76rem;
+        color: #7b6d64;
         text-transform: uppercase;
-        letter-spacing: 0.4px;
+        letter-spacing: 0.5px;
         font-weight: 700;
     }
     .tracking-meta-card strong {
         display: block;
-        color: #243142;
-        font-size: 0.92rem;
+        color: #171922;
+        font-size: 1.05rem;
         font-weight: 800;
-        margin-top: 1px;
+        margin-top: 2px;
     }
-    .tracking-grid { display: grid; grid-template-columns: 1.8fr 1fr; gap: 22px; }
+
+    .tracking-grid { display: grid; grid-template-columns: 1.85fr 1fr; gap: 24px; }
+    
     #map {
-        height: 560px;
+        height: 600px;
         width: 100%;
-        border-radius: 14px;
-        border: 1px solid #e6ebf1;
-        box-shadow: 0 12px 28px rgba(15, 23, 42, 0.11);
+        border-radius: 18px;
+        border: 1px solid #efddcd;
+        box-shadow: 0 14px 34px rgba(23, 25, 34, 0.08);
+        overflow: hidden;
     }
+
     .status-panel {
-        background: white;
-        border-radius: 14px;
-        padding: 22px;
-        border: 1px solid #e6ebf1;
-        box-shadow: 0 12px 24px rgba(15, 23, 42, 0.09);
+        background: #ffffff;
+        border-radius: 18px;
+        padding: 24px;
+        border: 1px solid #efddcd;
+        box-shadow: 0 14px 34px rgba(23, 25, 34, 0.07);
     }
     .status-panel h3 {
-        font-size: 1.35rem;
-        margin-bottom: 16px;
-        border-bottom: 1px solid #eef1f5;
-        padding-bottom: 12px;
-        color: #172230;
+        font-size: 1.3rem;
+        font-weight: 800;
+        margin-bottom: 18px;
+        border-bottom: 1px solid #f3e8de;
+        padding-bottom: 14px;
+        color: #171922;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
     }
-    .status-item { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
-    .status-icon { width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; }
-    .eta-badge {
-        background-color: #e3f2fd;
-        color: #0c4a92;
-        padding: 10px 12px;
-        border-radius: 10px;
+    .status-panel h3 .live-indicator {
+        font-size: 0.75rem;
+        background: #e8f5e9;
+        color: #2e7d32;
+        border: 1px solid #c8e6c9;
+        padding: 3px 10px;
+        border-radius: 12px;
         font-weight: 700;
         display: inline-flex;
         align-items: center;
-        gap: 8px;
-        margin-bottom: 14px;
-        border: 1px solid #b8d5f5;
+        gap: 6px;
+    }
+    .status-panel h3 .live-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #2e7d32;
+        animation: blink 1.5s infinite;
+    }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+    .eta-badge {
+        background: linear-gradient(135deg, #fff9f2 0%, #fff4e8 100%);
+        color: #b3261e;
+        padding: 14px 16px;
+        border-radius: 14px;
+        font-weight: 800;
+        font-size: 1.1rem;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 16px;
+        border: 1px solid #efddcd;
+        box-shadow: 0 4px 14px rgba(179, 38, 30, 0.05);
         width: 100%;
     }
+    .eta-badge i { font-size: 1.25rem; color: #ef6b2e; }
+
     .route-metrics {
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
-        border-radius: 10px;
-        padding: 10px 12px;
-        margin-bottom: 14px;
+        background: #fffaf5;
+        border: 1px solid #efddcd;
+        border-radius: 14px;
+        padding: 14px 16px;
+        margin-bottom: 18px;
     }
     .route-metric-row {
         display: flex;
         justify-content: space-between;
-        font-size: 0.9rem;
-        color: #334155;
-        padding: 3px 0;
+        align-items: center;
+        font-size: 0.88rem;
+        color: #7b6d64;
+        padding: 6px 0;
+        border-bottom: 1px dashed #f3e3d4;
     }
+    .route-metric-row:last-child { border-bottom: 0; }
+    .route-metric-row span { display: flex; align-items: center; gap: 8px; }
+    .route-metric-row span i { color: #ef6b2e; width: 14px; text-align: center; }
     .route-metric-row strong {
-        color: #0f172a;
+        color: #171922;
+        font-weight: 800;
     }
+
+    .status-item { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; background: #fffaf5; border: 1px solid #efddcd; border-radius: 14px; padding: 14px; }
+    .status-icon { width: 46px; height: 46px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0; }
     .status-icon.pending { background: #fff3e0; color: #f57c00; }
-    .status-icon.assigned { background: #e3f2fd; color: #1976d2; }
-    .status-icon.on_the_way { background: #e0f7fa; color: #0097a7; }
-    .status-icon.delivered { background: #e8f5e9; color: #388e3c; }
-    .status-text strong { display: block; font-size: 1.03rem; color: #1f2937; }
-    .status-text span { font-size: 0.88rem; color: #606f7f; line-height: 1.45; }
-    .driver-info { margin-top: 18px; padding-top: 16px; border-top: 1px solid #eef1f5; }
-    .driver-info p { margin: 5px 0; }
-    .delivery-chat-panel { margin-top: 18px; padding-top: 16px; border-top: 1px solid #eef1f5; }
-    .delivery-chat-panel h4 { margin-bottom: 10px; color: #18253a; }
+    .status-icon.assigned { background: #fff0eb; color: #b3261e; }
+    .status-icon.on_the_way { background: #fff0eb; color: #ef6b2e; }
+    .status-icon.delivered { background: #e8f5e9; color: #2e7d32; }
+    .status-text strong { display: block; font-size: 1.05rem; color: #171922; font-weight: 800; }
+    .status-text span { font-size: 0.88rem; color: #667085; line-height: 1.45; margin-top: 2px; display: block; }
+
+    .driver-info { margin-top: 20px; padding-top: 18px; border-top: 1px solid #f3e8de; }
+    .driver-info h4 { margin-bottom: 12px; color: #171922; font-size: 1rem; font-weight: 800; }
+    .driver-card-mini { display: flex; align-items: center; justify-content: space-between; background: #fffaf5; border: 1px solid #efddcd; border-radius: 14px; padding: 12px 14px; }
+    .driver-meta-name { font-weight: 800; color: #171922; font-size: 0.98rem; }
+    .btn-call-driver {
+        background: linear-gradient(135deg, #b3261e, #ef6b2e);
+        color: #ffffff !important;
+        border: 0;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-weight: 700;
+        font-size: 0.85rem;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        box-shadow: 0 4px 12px rgba(179, 38, 30, 0.2);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .btn-call-driver:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(179, 38, 30, 0.3); color: #fff !important; }
+
+    .delivery-address-info { margin-top: 20px; padding-top: 18px; border-top: 1px solid #f3e8de; }
+    .delivery-address-info h4 { margin-bottom: 8px; color: #171922; font-size: 1rem; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+    .delivery-address-info h4 i { color: #b3261e; }
+    .delivery-address-info p { color: #667085; font-size: 0.92rem; margin: 0; line-height: 1.5; }
+
+    .delivery-chat-panel { margin-top: 20px; padding-top: 18px; border-top: 1px solid #f3e8de; }
+    .delivery-chat-panel h4 { margin-bottom: 12px; color: #171922; font-size: 1rem; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+    .delivery-chat-panel h4 i { color: #ef6b2e; }
     .delivery-chat-messages {
         max-height: 240px;
         overflow-y: auto;
-        background: #f8fafc;
-        border: 1px solid #e4e9f0;
-        border-radius: 10px;
-        padding: 12px;
-        margin-bottom: 10px;
+        background: #fffaf5;
+        border: 1px solid #efddcd;
+        border-radius: 14px;
+        padding: 14px;
+        margin-bottom: 12px;
     }
-    .chat-empty {
-        color: #6b7280;
-        text-align: center;
-        padding: 12px;
-        font-size: 0.9rem;
-    }
-    .chat-message {
-        margin-bottom: 10px;
-        display: flex;
-        flex-direction: column;
-        max-width: 85%;
-    }
-    .chat-message.customer { margin-left: auto; align-items: flex-end; }
-    .chat-message.driver { margin-right: auto; align-items: flex-start; }
-    .chat-bubble {
-        border-radius: 12px;
-        padding: 8px 12px;
-        word-break: break-word;
-        line-height: 1.35;
-        font-size: 0.92rem;
-    }
-    .chat-message.customer .chat-bubble { background: #c62828; color: #fff; }
-    .chat-message.driver .chat-bubble { background: #ffffff; color: #333; border: 1px solid #e5e7eb; }
-    .chat-time { font-size: 0.75rem; color: #6b7280; margin-top: 2px; }
-    .chat-unavailable {
-        font-size: 0.9rem;
-        color: #6b7280;
-        background: #f3f4f6;
-        border: 1px dashed #d1d5db;
-        border-radius: 8px;
-        padding: 10px;
-        margin-bottom: 10px;
-    }
+    .chat-empty { color: #7b6d64; text-align: center; padding: 16px; font-size: 0.9rem; }
+    .chat-message.customer .chat-bubble { background: linear-gradient(135deg, #b3261e, #ef6b2e); color: #ffffff; border-radius: 14px 14px 2px 14px; box-shadow: 0 4px 12px rgba(179, 38, 30, 0.15); }
+    .chat-message.driver .chat-bubble { background: #ffffff; color: #171922; border: 1px solid #efddcd; border-radius: 14px 14px 14px 2px; }
+    .chat-time { font-size: 0.72rem; color: #7b6d64; margin-top: 3px; }
+    
     .delivery-chat-form { display: flex; gap: 8px; align-items: flex-end; }
     .delivery-chat-form textarea {
         flex: 1;
-        min-height: 42px;
+        min-height: 44px;
         max-height: 120px;
-        border: 1px solid #d7dde5;
-        border-radius: 10px;
-        padding: 8px 10px;
-        resize: vertical;
+        border: 1px solid #efddcd;
+        border-radius: 12px;
+        padding: 10px 12px;
+        font-size: 0.92rem;
+        background: #ffffff;
+        color: #171922;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .delivery-chat-form textarea:focus {
+        outline: none;
+        border-color: #b3261e;
+        box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.12);
     }
     .delivery-chat-form button {
         border: 0;
-        border-radius: 10px;
-        background: #c62828;
-        color: #fff;
-        padding: 9px 14px;
-        font-weight: 600;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #b3261e, #ef6b2e);
+        color: #ffffff;
+        padding: 11px 20px;
+        font-weight: 700;
+        box-shadow: 0 4px 14px rgba(179, 38, 30, 0.2);
+        transition: transform 0.18s ease, background 0.18s ease;
     }
-    .delivery-chat-form button:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
+    .delivery-chat-form button:hover:not(:disabled) {
+        transform: translateY(-1px);
     }
+
     .view-proof-link {
-        display: inline-block;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
         margin-top: 10px;
-        padding: 8px 15px;
-        background-color: #28a745;
-        color: white;
+        padding: 8px 16px;
+        background: #2e7d32;
+        color: white !important;
         text-decoration: none;
-        border-radius: 5px;
-        font-weight: 600;
+        border-radius: 8px;
+        font-weight: 700;
+        font-size: 0.88rem;
     }
     .rate-delivery-btn {
-        display: inline-block;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
         margin-top: 10px;
-        padding: 8px 15px;
-        background-color: #ffc107;
-        color: #333;
+        padding: 8px 16px;
+        background: #ffb300;
+        color: #171922 !important;
         text-decoration: none;
-        border-radius: 5px;
-        font-weight: 600;
+        border-radius: 8px;
+        font-weight: 700;
+        font-size: 0.88rem;
         border: none;
         cursor: pointer;
     }
     .rate-delivery-btn.disabled {
-        background-color: #e9ecef;
-        color: #6c757d;
+        background: #e9ecef;
+        color: #6c757d !important;
         cursor: not-allowed;
     }
     @media (max-width: 992px) {
@@ -263,8 +359,9 @@ include 'includes/header.php';
 <section class="tracking-page">
     <div class="container tracking-container">
         <div class="tracking-header">
-            <h1>Track Your Order</h1>
-            <p>Order #<?php echo htmlspecialchars($order['order_number']); ?></p>
+            <div class="tracking-badge"><i class="fas fa-satellite-dish"></i> Live Order Tracking</div>
+            <h1>Track <span>Your Order</span></h1>
+            <div class="tracking-order-num">#<?php echo htmlspecialchars($order['order_number']); ?></div>
             <div class="tracking-meta">
                 <div class="tracking-meta-card">
                     <i class="fas fa-truck"></i>
@@ -291,28 +388,49 @@ include 'includes/header.php';
         </div>
 
         <?php if ($tracking_info): ?>
+        <div id="trackingNotificationToast" style="display:none; background:#171922; color:#fff; border-left:4px solid #ef6b2e; padding:14px 18px; border-radius:14px; margin-bottom:18px; box-shadow:0 10px 25px rgba(23,25,34,0.15);">
+            <div style="display:flex; align-items:center; justify-content:space-between;">
+                <div style="display:flex; align-items:center; gap:14px;">
+                    <div style="width:42px; height:42px; border-radius:50%; background:linear-gradient(135deg,#b3261e,#ef6b2e); display:flex; align-items:center; justify-content:center; color:#fff; font-size:1.2rem; flex-shrink:0; box-shadow:0 4px 12px rgba(179,38,30,0.3);">
+                        <i class="fas fa-motorcycle"></i>
+                    </div>
+                    <div>
+                        <strong id="toastTitle" style="display:block; font-size:1.05rem; color:#fff; font-weight:800;">Rider En Route!</strong>
+                        <span id="toastMessage" style="font-size:0.92rem; color:#cbd5e1; line-height:1.4;">Your rider has picked up your order and left the store.</span>
+                    </div>
+                </div>
+                <button onclick="document.getElementById('trackingNotificationToast').style.display='none'" style="background:transparent; border:0; color:#94a3b8; font-size:1.3rem; cursor:pointer; padding:0 6px;">&times;</button>
+            </div>
+        </div>
         <div class="tracking-grid">
             <div id="map"></div>
             <div class="status-panel">
-                <h3>Delivery Status</h3>
+                <h3>Delivery Status <span class="live-indicator"><span class="live-dot"></span> LIVE</span></h3>
                 <div id="eta-container" style="display:none;">
-                    <div class="eta-badge"><i class="fas fa-clock"></i> ETA: <span id="eta-time">Calculating...</span></div>
+                    <div class="eta-badge"><i class="fas fa-stopwatch"></i> ETA: <span id="eta-time">Calculating...</span></div>
                 </div>
                 <div id="routeMetrics" class="route-metrics" style="display:none;">
-                    <div class="route-metric-row"><span>Distance</span><strong id="eta-distance">--</strong></div>
-                    <div class="route-metric-row"><span>Estimated Drop-off</span><strong id="eta-dropoff">--</strong></div>
-                    <div class="route-metric-row"><span>Last Rider Update</span><strong id="driver-last-update">--</strong></div>
+                    <div class="route-metric-row"><span><i class="fas fa-route"></i> Distance</span><strong id="eta-distance">--</strong></div>
+                    <div class="route-metric-row"><span><i class="fas fa-flag-checkered"></i> Estimated Drop-off</span><strong id="eta-dropoff">--</strong></div>
+                    <div class="route-metric-row"><span><i class="fas fa-sync-alt"></i> Last Rider Update</span><strong id="driver-last-update">--</strong></div>
                 </div>
                 <div id="status-display">
                     <!-- Status will be updated by JS -->
                 </div>
                 <div class="driver-info" id="driver-info-panel" style="display: none;">
                     <h4>Driver Information</h4>
-                    <p><strong>Name:</strong> <span id="driverName"></span></p>
-                    <p id="driverPhoneRow" style="display: none;"><strong>Phone:</strong> <a id="driverPhoneLink" href="#" rel="noopener"></a></p>
+                    <div class="driver-card-mini">
+                        <div>
+                            <div class="driver-meta-name" id="driverName">--</div>
+                            <span style="font-size:0.8rem; color:#7b6d64;">Assigned Delivery Rider</span>
+                        </div>
+                        <div id="driverPhoneRow" style="display: none;">
+                            <a id="driverPhoneLink" href="#" class="btn-call-driver"><i class="fas fa-phone-alt"></i> Call</a>
+                        </div>
+                    </div>
                 </div>
-                <div class="delivery-address-info" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee;">
-                    <h4>Delivery Address</h4>
+                <div class="delivery-address-info">
+                    <h4><i class="fas fa-map-marker-alt"></i> Delivery Address</h4>
                     <p><?php echo htmlspecialchars($order['delivery_address']); ?></p>
                 </div>
                 <div class="delivery-chat-panel">
@@ -368,47 +486,72 @@ include 'includes/header.php';
     const customerLat = <?php echo json_encode(isset($order['latitude']) ? (is_numeric($order['latitude']) ? (float)$order['latitude'] : null) : null); ?>;
     const customerLng = <?php echo json_encode(isset($order['longitude']) ? (is_numeric($order['longitude']) ? (float)$order['longitude'] : null) : null); ?>;
     const customerAddress = <?php echo json_encode((string)($order['delivery_address'] ?? '')); ?>;
-    const routeVisibleStatuses = ['picked_up', 'on_the_way', 'arriving'];
-    const movingAnimationStatuses = ['on_the_way', 'arriving'];
+    const routeVisibleStatuses = ['assigned', 'picked_up', 'on_the_way', 'arriving'];
+    const movingAnimationStatuses = ['assigned', 'picked_up', 'on_the_way', 'arriving'];
 
     async function forwardGeocodeFromNominatim(addressText) {
-        const query = String(addressText || '').trim();
-        if (!query) return null;
-        try {
-            const endpoint = 'https://nominatim.openstreetmap.org/search?format=jsonv2'
-                + '&addressdetails=1'
-                + '&countrycodes=ph'
-                + '&limit=1'
-                + '&q=' + encodeURIComponent(query);
-            const response = await fetch(endpoint, {
-                method: 'GET',
-                headers: { Accept: 'application/json' }
-            });
-            if (!response.ok) return null;
-            const payload = await response.json();
-            if (!Array.isArray(payload) || !payload.length) return null;
-            const first = payload[0] || {};
-            const lat = Number(first?.lat);
-            const lng = Number(first?.lon);
-            if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-            return { lat, lng };
-        } catch (error) {
-            return null;
+        const raw = String(addressText || '').trim();
+        if (!raw) return null;
+
+        const parts = raw.split(',').map(p => p.trim()).filter(Boolean);
+        const candidates = [];
+        
+        candidates.push(raw);
+        if (parts.length > 2) {
+            candidates.push(parts.slice(1).join(', '));
         }
+        const cleaned = raw.replace(/\b\d{4}\b/g, '').replace(/CALABARZON|MIMAROPA|BICOL|Central Luzon|NCR|Metro Manila/gi, '').trim();
+        if (cleaned && cleaned !== raw) {
+            candidates.push(cleaned);
+            if (parts.length > 2) {
+                candidates.push(parts.slice(1).join(', ').replace(/\b\d{4}\b/g, '').replace(/CALABARZON|MIMAROPA|BICOL|Central Luzon|NCR|Metro Manila/gi, '').trim());
+            }
+        }
+        if (parts.length >= 2) {
+            candidates.push(parts.slice(-2).join(', '));
+        }
+
+        for (const query of candidates) {
+            if (!query || query.length < 3) continue;
+            try {
+                const endpoint = 'https://nominatim.openstreetmap.org/search?format=jsonv2'
+                    + '&addressdetails=1'
+                    + '&countrycodes=ph'
+                    + '&limit=1'
+                    + '&q=' + encodeURIComponent(query);
+                const response = await fetch(endpoint, {
+                    method: 'GET',
+                    headers: { Accept: 'application/json' }
+                });
+                if (!response.ok) continue;
+                const payload = await response.json();
+                if (Array.isArray(payload) && payload.length > 0) {
+                    const first = payload[0] || {};
+                    const lat = Number(first?.lat);
+                    const lng = Number(first?.lon);
+                    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+                        return { lat, lng };
+                    }
+                }
+            } catch (error) {
+                // Continue to next candidate query
+            }
+        }
+        return null;
     }
 
     const driverIcon = L.divIcon({
-        html: `<div style="background:#ef6b2e; color:#fff; width:40px; height:40px; border-radius:50%; border:3px solid #fff; display:flex; align-items:center; justify-content:center; box-shadow:0 3px 8px rgba(0,0,0,0.4);"><i class="fas fa-motorcycle" style="font-size:1.1rem;"></i></div>`,
+        html: `<div style="background:linear-gradient(135deg, #b3261e, #ef6b2e); color:#fff; width:44px; height:44px; border-radius:50%; border:3px solid #fff; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 14px rgba(179,38,30,0.4);"><i class="fas fa-motorcycle" style="font-size:1.2rem;"></i></div>`,
         className: 'custom-driver-icon',
-        iconSize: [40, 40],
-        iconAnchor: [20, 20]
+        iconSize: [44, 44],
+        iconAnchor: [22, 22]
     });
 
     const customerIcon = L.divIcon({
-        html: `<div style="background:#b3261e; color:#fff; width:36px; height:36px; border-radius:50%; border:3px solid #fff; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 6px rgba(0,0,0,0.3);"><i class="fas fa-home" style="font-size:1rem;"></i></div>`,
+        html: `<div style="background:#171922; color:#fff; width:38px; height:38px; border-radius:50%; border:3px solid #fff; display:flex; align-items:center; justify-content:center; box-shadow:0 3px 10px rgba(0,0,0,0.3);"><i class="fas fa-home" style="font-size:1.05rem; color:#ef6b2e;"></i></div>`,
         className: 'custom-customer-icon',
-        iconSize: [36, 36],
-        iconAnchor: [18, 18]
+        iconSize: [38, 38],
+        iconAnchor: [19, 19]
     });
 
     function normalizeLocationSource(source) {
@@ -466,10 +609,10 @@ include 'includes/header.php';
         if (!driverPulseCircle) {
             driverPulseCircle = L.circle(centerLatLng, {
                 radius: 0,
-                color: '#c62828',
+                color: '#b3261e',
                 weight: 2,
                 opacity: 0,
-                fillColor: '#c62828',
+                fillColor: '#b3261e',
                 fillOpacity: 0
             }).addTo(map);
         }
@@ -515,15 +658,16 @@ include 'includes/header.php';
         }).addTo(map);
 
         routePolyline = L.polyline([], {
-            color: '#2563eb',
+            color: '#b3261e',
             opacity: 0.85,
             weight: 5
         }).addTo(map);
 
         riderTrailPolyline = L.polyline([], {
-            color: '#dc2626',
+            color: '#ef6b2e',
             opacity: 0.95,
-            weight: 4
+            weight: 4,
+            dashArray: '6, 8'
         }).addTo(map);
 
         if (Number.isFinite(customerLat) && Number.isFinite(customerLng)) {
@@ -550,16 +694,81 @@ include 'includes/header.php';
             const applyFallbackAddress = async () => {
                 const fallback = await forwardGeocodeFromNominatim(customerAddress);
                 if (!fallback) return false;
-                return applyCustomerPosition(fallback.lat, fallback.lng);
+                const ok = applyCustomerPosition(fallback.lat, fallback.lng);
+                if (ok && lastDriverLatLng) {
+                    fitMapToDriverAndCustomer();
+                    updateRouteAndEta(lastDriverLatLng[0], lastDriverLatLng[1], true);
+                }
+                return ok;
             };
 
             applyFallbackAddress();
         }
 
+        requestBrowserNotificationPermission();
         fetchTrackingData();
-        trackingPollTimer = setInterval(fetchTrackingData, 8000);
+        trackingPollTimer = setInterval(fetchTrackingData, 4000);
 
         initDeliveryChat();
+    }
+
+    let previousDeliveryStatus = '';
+
+    function requestBrowserNotificationPermission() {
+        if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+            Notification.requestPermission();
+        }
+    }
+
+    function playNotificationChime() {
+        try {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (!AudioCtx) return;
+            const audioCtx = new AudioCtx();
+            const osc1 = audioCtx.createOscillator();
+            const osc2 = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+
+            osc1.type = 'sine';
+            osc2.type = 'sine';
+            osc1.frequency.setValueAtTime(587.33, audioCtx.currentTime);
+            osc2.frequency.setValueAtTime(880, audioCtx.currentTime + 0.12);
+
+            gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.5);
+
+            osc1.connect(gain);
+            osc2.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            osc1.start(audioCtx.currentTime);
+            osc2.start(audioCtx.currentTime + 0.12);
+            osc1.stop(audioCtx.currentTime + 0.12);
+            osc2.stop(audioCtx.currentTime + 0.5);
+        } catch (e) {}
+    }
+
+    function triggerRiderDepartureNotification(driverName = 'Your Driver') {
+        const toast = document.getElementById('trackingNotificationToast');
+        const toastTitle = document.getElementById('toastTitle');
+        const toastMsg = document.getElementById('toastMessage');
+
+        if (toast && toastTitle && toastMsg) {
+            toastTitle.textContent = "🚴 Rider En Route!";
+            toastMsg.textContent = `${driverName} has picked up your order and is now en route to your delivery address!`;
+            toast.style.display = 'block';
+        }
+
+        playNotificationChime();
+
+        if ('Notification' in window && Notification.permission === 'granted') {
+            try {
+                new Notification("Lechon Delights - Rider En Route!", {
+                    body: `${driverName} has picked up your order and is on the way!`,
+                    icon: 'assets/images/logo.png'
+                });
+            } catch (e) {}
+        }
     }
 
     async function fetchTrackingData() {
@@ -571,7 +780,15 @@ include 'includes/header.php';
                 return;
             }
 
-            activeDeliveryStatus = String(data.status || '').toLowerCase();
+            const newStatus = String(data.status || '').toLowerCase();
+            if (previousDeliveryStatus && previousDeliveryStatus !== newStatus) {
+                if (['picked_up', 'on_the_way'].includes(newStatus) && !['picked_up', 'on_the_way'].includes(previousDeliveryStatus)) {
+                    triggerRiderDepartureNotification(data.driver_name || 'Your Rider');
+                }
+            }
+            previousDeliveryStatus = newStatus;
+
+            activeDeliveryStatus = newStatus;
             updateStatusPanel(data);
             updateDriverMarker(
                 data.latitude,
@@ -666,9 +883,15 @@ include 'includes/header.php';
 
         const lastUpdateEl = document.getElementById('driver-last-update');
         if (lastUpdateEl) {
-            const label = lastUpdateRaw ? formatServerDateTime(lastUpdateRaw) : '--';
-            const source = normalizeLocationSource(locationSource) === 'employees_geo_tracking' ? ' (Live GPS)' : '';
-            lastUpdateEl.textContent = `${label}${source}`;
+            const label = lastUpdateRaw ? formatServerDateTime(lastUpdateRaw) : 'Just now';
+            let sourceLabel = '';
+            const normSource = normalizeLocationSource(locationSource);
+            if (normSource === 'employees_geo_tracking' || normSource === 'logistics_tracking') {
+                sourceLabel = ' (Live GPS)';
+            } else if (normSource === 'store_origin') {
+                sourceLabel = ' (Store Pickup)';
+            }
+            lastUpdateEl.textContent = `${label}${sourceLabel}`;
         }
     }
 
@@ -779,25 +1002,43 @@ include 'includes/header.php';
         let statusText = 'Pending';
         let statusDesc = 'Your order is being processed.';
 
+        const driverName = data.driver_name || 'Driver';
+        const driverPhone = data.driver_phone || '';
+
         switch (data.status) {
             case 'assigned':
                 iconClass = 'assigned';
                 icon = 'fas fa-user-check';
-                statusText = 'Driver Assigned';
-                statusDesc = 'A driver is on their way to pick up your order.';
+                statusText = data.driver_name ? `Rider Assigned: ${driverName}` : 'Rider Assigned';
+                statusDesc = data.driver_name 
+                    ? `<strong>${driverName}</strong> is assigned and on their way to pick up your order.` 
+                    : 'A driver is on their way to pick up your order.';
+                if (driverPhone) {
+                    statusDesc += `<br><a href="tel:${driverPhone}" class="btn-call-driver" style="margin-top:10px;"><i class="fas fa-phone-alt"></i> Call ${driverName} (${driverPhone})</a>`;
+                }
                 break;
             case 'picked_up':
             case 'on_the_way':
                 iconClass = 'on_the_way';
-                icon = 'fas fa-truck';
-                statusText = 'On The Way';
-                statusDesc = 'Your order has been picked up and is en route to you.';
+                icon = 'fas fa-motorcycle';
+                statusText = data.driver_name ? `En Route: ${driverName}` : 'On The Way';
+                statusDesc = data.driver_name 
+                    ? `<strong>${driverName}</strong> has picked up your order and is en route to your location.` 
+                    : 'Your order has been picked up and is en route to you.';
+                if (driverPhone) {
+                    statusDesc += `<br><a href="tel:${driverPhone}" class="btn-call-driver" style="margin-top:10px;"><i class="fas fa-phone-alt"></i> Call ${driverName} (${driverPhone})</a>`;
+                }
                 break;
             case 'arriving':
                 iconClass = 'on_the_way';
                 icon = 'fas fa-map-marker-alt';
-                statusText = 'Arriving Soon';
-                statusDesc = 'Your driver is near your location.';
+                statusText = data.driver_name ? `Arriving Soon: ${driverName}` : 'Arriving Soon';
+                statusDesc = data.driver_name 
+                    ? `<strong>${driverName}</strong> is near your delivery address.` 
+                    : 'Your driver is near your location.';
+                if (driverPhone) {
+                    statusDesc += `<br><a href="tel:${driverPhone}" class="btn-call-driver" style="margin-top:10px;"><i class="fas fa-phone-alt"></i> Call ${driverName} (${driverPhone})</a>`;
+                }
                 break;
             case 'delivered':
                 iconClass = 'delivered';
