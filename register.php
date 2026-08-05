@@ -1517,10 +1517,10 @@ body {
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['registration_csrf_token']); ?>">
 
                         <input type="hidden" name="account_type" id="accountType" value="individual">
-                        <input type="hidden" name="psgc_region_name" id="psgcRegionName" value="<?php echo htmlspecialchars($form_data['psgc_region_name'] ?? ''); ?>">
-                        <input type="hidden" name="psgc_province_name" id="psgcProvinceName" value="<?php echo htmlspecialchars($form_data['psgc_province_name'] ?? ''); ?>">
-                        <input type="hidden" name="psgc_city_name" id="psgcCityName" value="<?php echo htmlspecialchars($form_data['psgc_city_name'] ?? ''); ?>">
-                        <input type="hidden" name="psgc_barangay_name" id="psgcBarangayName" value="<?php echo htmlspecialchars($form_data['psgc_barangay_name'] ?? ''); ?>">
+                        <input type="hidden" name="psgc_region_code" id="psgcRegionCode" value="040000000">
+                        <input type="hidden" name="psgc_province_code" id="psgcProvinceCode" value="042100000">
+                        <input type="hidden" name="psgc_city_code" id="psgcCityCode" value="042109000">
+                        <input type="hidden" name="psgc_barangay_code" id="psgcBarangayCode" value="042109001">
                     
 
                 
@@ -1722,33 +1722,33 @@ body {
                     </div>
                     
                     <div class="form-group">
-                        <label for="psgcRegion" id="addressSectionLabel">Home Address (PSGC) *</label>
+                        <label for="psgcRegion" id="addressSectionLabel">Home Address *</label>
                         <div class="form-row">
                             <div class="form-group">
-                                <label for="psgcRegion" id="regionLabel">Region (Luzon only) *</label>
-                                <select id="psgcRegion" name="psgc_region_code" class="form-control" required data-selected="<?php echo htmlspecialchars($form_data['psgc_region_code'] ?? ''); ?>">
-                                    <option value="">Select region</option>
-                                </select>
+                                <label for="psgcRegion" id="regionLabel">Region *</label>
+                                <input type="text" id="psgcRegion" name="psgc_region_name" class="form-control" required
+                                    placeholder="e.g., Region IV-A (CALABARZON)"
+                                    value="<?php echo htmlspecialchars($form_data['psgc_region_name'] ?? ''); ?>">
                             </div>
                             <div class="form-group">
-                                <label for="psgcProvince" id="provinceLabel">Province (Required except NCR) *</label>
-                                <select id="psgcProvince" name="psgc_province_code" class="form-control" required data-selected="<?php echo htmlspecialchars($form_data['psgc_province_code'] ?? ''); ?>">
-                                    <option value="">Select province</option>
-                                </select>
+                                <label for="psgcProvince" id="provinceLabel">Province *</label>
+                                <input type="text" id="psgcProvince" name="psgc_province_name" class="form-control" required
+                                    placeholder="e.g., Cavite"
+                                    value="<?php echo htmlspecialchars($form_data['psgc_province_name'] ?? ''); ?>">
                             </div>
                         </div>
                         <div class="form-row">
                             <div class="form-group">
                                 <label for="psgcCity">City / Municipality *</label>
-                                <select id="psgcCity" name="psgc_city_code" class="form-control" required data-selected="<?php echo htmlspecialchars($form_data['psgc_city_code'] ?? ''); ?>">
-                                    <option value="">Select city or municipality</option>
-                                </select>
+                                <input type="text" id="psgcCity" name="psgc_city_name" class="form-control" required
+                                    placeholder="e.g., Dasmariñas"
+                                    value="<?php echo htmlspecialchars($form_data['psgc_city_name'] ?? ''); ?>">
                             </div>
                             <div class="form-group">
                                 <label for="psgcBarangay">Barangay *</label>
-                                <select id="psgcBarangay" name="psgc_barangay_code" class="form-control" required data-selected="<?php echo htmlspecialchars($form_data['psgc_barangay_code'] ?? ''); ?>">
-                                    <option value="">Select barangay</option>
-                                </select>
+                                <input type="text" id="psgcBarangay" name="psgc_barangay_name" class="form-control" required
+                                    placeholder="e.g., San Agustin"
+                                    value="<?php echo htmlspecialchars($form_data['psgc_barangay_name'] ?? ''); ?>">
                             </div>
                         </div>
                         <div class="form-group">
@@ -1759,9 +1759,6 @@ body {
                                 maxlength="120"
                                 required>
                         </div>
-                        <small id="psgcAddressHelp" style="display:block; margin-top:4px; color:#666; font-size:0.84rem;">
-                            Individual registration is limited to Luzon regions.
-                        </small>
                     </div>
 
                     <div class="form-group">
@@ -2728,29 +2725,18 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        if (psgcRegionNameInput) {
-            psgcRegionNameInput.value = getSelectedLabel(regionSelect);
-        }
-        if (psgcProvinceNameInput) {
-            psgcProvinceNameInput.value = getSelectedLabel(provinceSelect);
-        }
-        if (psgcCityNameInput) {
-            psgcCityNameInput.value = getSelectedLabel(citySelect);
-        }
-        if (psgcBarangayNameInput) {
-            psgcBarangayNameInput.value = getSelectedLabel(barangaySelect);
-        }
-
-        if (!psgcEnabled) {
-            return;
-        }
+        const regionVal = regionSelect ? regionSelect.value.trim() : '';
+        const provinceVal = provinceSelect ? provinceSelect.value.trim() : '';
+        const cityVal = citySelect ? citySelect.value.trim() : '';
+        const barangayVal = barangaySelect ? barangaySelect.value.trim() : '';
+        const streetVal = streetAddressInput ? streetAddressInput.value.trim() : '';
 
         const composedAddress = [
-            streetAddressInput ? streetAddressInput.value.trim() : '',
-            psgcBarangayNameInput ? psgcBarangayNameInput.value.trim() : '',
-            psgcCityNameInput ? psgcCityNameInput.value.trim() : '',
-            psgcProvinceNameInput ? psgcProvinceNameInput.value.trim() : '',
-            psgcRegionNameInput ? psgcRegionNameInput.value.trim() : ''
+            streetVal,
+            barangayVal,
+            cityVal,
+            provinceVal,
+            regionVal
         ].filter(Boolean).join(', ');
 
         addressPreviewInput.value = composedAddress;
@@ -2790,179 +2776,6 @@ document.addEventListener('DOMContentLoaded', function() {
         setSelectOptions(selectElement, [], placeholder);
         selectElement.value = '';
         selectElement.disabled = true;
-    }
-
-    async function fetchPSGC(path) {
-        const key = String(path || '');
-        if (psgcCache.has(key)) {
-            return psgcCache.get(key);
-        }
-        const response = await fetch(PSGC_API_BASE + key, {
-            method: 'GET',
-            headers: { 'Accept': 'application/json' }
-        });
-        if (!response.ok) {
-            throw new Error('PSGC API request failed');
-        }
-        const payload = await response.json();
-        psgcCache.set(key, payload);
-        return payload;
-    }
-
-    async function loadRegions() {
-        const regions = await fetchPSGC('/regions');
-        const previousValue = regionSelect ? String(regionSelect.value || '').trim() : '';
-        const previousRegionName = psgcRegionNameInput ? String(psgcRegionNameInput.value || '').trim() : '';
-
-        const allowedRegions = regions.filter(function(region) {
-            return String(region.code || '') === CALABARZON_REGION_CODE ||
-                String(region.name || '').toLowerCase().includes('calabarzon');
-        });
-
-        setSelectOptions(regionSelect, allowedRegions, allowedRegions.length ? 'Select region' : 'No allowed region');
-        regionSelect.disabled = allowedRegions.length === 0;
-
-        if (allowedRegions.some(function(region) { return String(region.code || '') === previousValue; })) {
-            regionSelect.value = previousValue;
-        } else {
-            const fallbackRegionCode = findOptionValueFromCandidates(regionSelect, previousRegionName);
-            if (fallbackRegionCode) {
-                regionSelect.value = fallbackRegionCode;
-            } else if (allowedRegions.length === 1) {
-                regionSelect.value = allowedRegions[0].code || CALABARZON_REGION_CODE;
-            }
-        }
-    }
-
-    async function loadProvinces(regionCode) {
-        if (!regionCode) {
-            resetSelect(provinceSelect, 'Select province');
-            return [];
-        }
-
-        const provinces = await fetchPSGC('/regions/' + encodeURIComponent(regionCode) + '/provinces');
-        const previousValue = provinceSelect ? String(provinceSelect.value || '').trim() : '';
-        const previousProvinceName = psgcProvinceNameInput ? String(psgcProvinceNameInput.value || '').trim() : '';
-
-        let allowedProvinces = provinces;
-        if (accountType === 'organization') {
-            allowedProvinces = provinces.filter(function(province) {
-                return String(province.code || '') === CAVITE_PROVINCE_CODE ||
-                    String(province.name || '').toLowerCase().includes('cavite');
-            });
-        }
-
-        setSelectOptions(provinceSelect, allowedProvinces, allowedProvinces.length ? 'Select province' : 'No allowed province');
-        provinceSelect.disabled = allowedProvinces.length === 0;
-
-        if (allowedProvinces.some(function(province) { return String(province.code || '') === previousValue; })) {
-            provinceSelect.value = previousValue;
-        } else {
-            const fallbackProvinceCode = findOptionValueFromCandidates(provinceSelect, previousProvinceName);
-            if (fallbackProvinceCode) {
-                provinceSelect.value = fallbackProvinceCode;
-            } else if (accountType === 'organization' && allowedProvinces.length === 1) {
-                provinceSelect.value = allowedProvinces[0].code || CAVITE_PROVINCE_CODE;
-            }
-        }
-        return allowedProvinces;
-    }
-
-    async function loadCities(regionCode, provinceCode) {
-        if (!regionCode) {
-            resetSelect(citySelect, 'Select city or municipality');
-            return [];
-        }
-
-        let cities = [];
-        if (provinceCode) {
-            cities = await fetchPSGC('/provinces/' + encodeURIComponent(provinceCode) + '/cities-municipalities');
-        } else {
-            cities = await fetchPSGC('/regions/' + encodeURIComponent(regionCode) + '/cities-municipalities');
-        }
-
-        setSelectOptions(citySelect, cities, 'Select city or municipality');
-        citySelect.disabled = cities.length === 0;
-        return cities;
-    }
-
-    async function loadBarangays(cityCode) {
-        if (!cityCode) {
-            resetSelect(barangaySelect, 'Select barangay');
-            return [];
-        }
-
-        const barangays = await fetchPSGC('/cities-municipalities/' + encodeURIComponent(cityCode) + '/barangays');
-        setSelectOptions(barangaySelect, barangays, 'Select barangay');
-        barangaySelect.disabled = barangays.length === 0;
-        return barangays;
-    }
-
-    async function handleRegionChange(isRestore) {
-        const regionCode = regionSelect ? regionSelect.value : '';
-        if (!isRestore) {
-            resetSelect(provinceSelect, 'Select province');
-            resetSelect(citySelect, 'Select city or municipality');
-            resetSelect(barangaySelect, 'Select barangay');
-            if (psgcProvinceNameInput) {
-                psgcProvinceNameInput.value = '';
-            }
-            if (psgcCityNameInput) {
-                psgcCityNameInput.value = '';
-            }
-            if (psgcBarangayNameInput) {
-                psgcBarangayNameInput.value = '';
-            }
-            syncAddressPreview();
-        }
-
-        if (!regionCode) {
-            syncAddressPreview();
-            return;
-        }
-
-        const provinces = await loadProvinces(regionCode);
-        provinceSelect.required = provinces.length > 0;
-        if (provinces.length === 0) {
-            await loadCities(regionCode, '');
-        } else if (provinces.length === 1 && provinceSelect.value) {
-            await handleProvinceChange(true);
-        }
-        syncAddressPreview();
-    }
-
-    async function handleProvinceChange(isRestore) {
-        const regionCode = regionSelect ? regionSelect.value : '';
-        const provinceCode = provinceSelect ? provinceSelect.value : '';
-
-        if (!isRestore) {
-            resetSelect(citySelect, 'Select city or municipality');
-            resetSelect(barangaySelect, 'Select barangay');
-            if (psgcCityNameInput) {
-                psgcCityNameInput.value = '';
-            }
-            if (psgcBarangayNameInput) {
-                psgcBarangayNameInput.value = '';
-            }
-            syncAddressPreview();
-        }
-
-        await loadCities(regionCode, provinceCode);
-        syncAddressPreview();
-    }
-
-    async function handleCityChange(isRestore) {
-        const cityCode = citySelect ? citySelect.value : '';
-        if (!isRestore) {
-            resetSelect(barangaySelect, 'Select barangay');
-            if (psgcBarangayNameInput) {
-                psgcBarangayNameInput.value = '';
-            }
-            syncAddressPreview();
-        }
-
-        await loadBarangays(cityCode);
-        syncAddressPreview();
     }
 
     async function restoreAddressSelections() {
@@ -3373,49 +3186,22 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
+        const regionVal = regionSelect ? regionSelect.value.trim() : '';
+        const provinceVal = provinceSelect ? provinceSelect.value.trim() : '';
+        const cityVal = citySelect ? citySelect.value.trim() : '';
+        const barangayVal = barangaySelect ? barangaySelect.value.trim() : '';
+        const streetVal = streetAddressInput ? streetAddressInput.value.trim() : '';
+
+        if (!regionVal || !provinceVal || !cityVal || !barangayVal || !streetVal) {
+            showError('Incomplete Address', 'Please fill in all address details (Region, Province, City, Barangay, and Street Address).');
+            return false;
+        }
+
         if (!addressPreviewInput || addressPreviewInput.value.trim().length < 10) {
             showError('Address Required', accountType === 'organization'
                 ? 'Please provide a complete business address.'
                 : 'Please provide a complete home address.');
             return false;
-        }
-
-        if (!psgcEnabled) {
-            showError('Address Service Unavailable', 'PSGC address lookup is currently unavailable. Please try again in a few minutes.');
-            return false;
-        }
-
-        if (psgcEnabled) {
-            const selectedRegionLabel = getSelectedLabel(regionSelect);
-            const isNcrRegion = isNcrSelection(regionSelect.value, selectedRegionLabel);
-            const hasRequiredLocationPieces =
-                !!regionSelect.value &&
-                !!citySelect.value &&
-                !!barangaySelect.value &&
-                !!streetAddressInput.value.trim() &&
-                (isNcrRegion || !!provinceSelect.value);
-
-            if (!hasRequiredLocationPieces) {
-                showError('Incomplete Address', accountType === 'organization'
-                    ? 'Please complete your business address details (region, province, city/municipality, barangay, and street).'
-                    : 'Please complete your home address details in Luzon (province may be skipped for NCR).');
-                return false;
-            }
-
-            if (accountType === 'organization') {
-                if (regionSelect.value !== CALABARZON_REGION_CODE || !String(selectedRegionLabel).toLowerCase().includes('calabarzon')) {
-                    showError('Region Restricted', 'Business partner registration is available only in Region IV-A (CALABARZON).');
-                    return false;
-                }
-                const selectedProvinceLabel = getSelectedLabel(provinceSelect);
-                if (provinceSelect.value !== CAVITE_PROVINCE_CODE || !String(selectedProvinceLabel).toLowerCase().includes('cavite')) {
-                    showError('Province Restricted', 'Business partner registration is available only in Cavite.');
-                    return false;
-                }
-            } else if (!isLuzonSelection(regionSelect.value, selectedRegionLabel)) {
-                showError('Region Restricted', 'Individual registration is available only for Luzon regions.');
-                return false;
-            }
         }
 
         return true;
@@ -3900,6 +3686,13 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    [regionSelect, provinceSelect, citySelect, barangaySelect, streetAddressInput].forEach(function(input) {
+        if (input) {
+            input.addEventListener('input', syncAddressPreview);
+            input.addEventListener('change', syncAddressPreview);
+        }
+    });
 
     updateOrganizationFields();
     updateSteps();
