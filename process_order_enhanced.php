@@ -212,10 +212,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $payment_status = 'pending';
     }
     
-    // Generate order number
-    $order_number = 'ORD-' . date('Ymd') . '-' . strtoupper(uniqid());
+    ensureOrdersTableSchema($conn);
+
+    // Generate order number (19 chars: ORD-YYYYMMDD-XXXXXX)
+    $order_number = 'ORD-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -6));
     
     // Start transaction
+
     mysqli_begin_transaction($conn);
     
     try {

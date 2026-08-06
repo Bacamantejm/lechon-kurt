@@ -275,6 +275,25 @@ function ensureUserPersonalInfoSchema($conn) {
     }
 }
 
+if (!function_exists('ensureOrdersTableSchema')) {
+    function ensureOrdersTableSchema($conn) {
+        static $checked = false;
+        if ($checked || !$conn) return;
+        $checked = true;
+
+        $res = @mysqli_query($conn, "SHOW COLUMNS FROM orders LIKE 'order_number'");
+        if ($res && $row = mysqli_fetch_assoc($res)) {
+            if (strpos(strtolower($row['Type'] ?? ''), 'varchar(64)') === false) {
+                @mysqli_query($conn, "SET SESSION sql_mode = ''");
+                @mysqli_query($conn, "UPDATE `orders` SET `delivery_date` = CURDATE() WHERE CAST(`delivery_date` AS CHAR) LIKE '0000%' OR `delivery_date` IS NULL");
+                @mysqli_query($conn, "UPDATE `orders` SET `created_at` = NOW() WHERE CAST(`created_at` AS CHAR) LIKE '0000%'");
+                @mysqli_query($conn, "ALTER TABLE `orders` MODIFY COLUMN `order_number` VARCHAR(64) NOT NULL");
+            }
+        }
+    }
+}
+
+
 function resolveUserAvatarPathFromRow($row) {
     $account_type = strtolower(trim((string)($row['account_type'] ?? 'individual')));
     $profile_image = normalizeUserAvatarPath($row['profile_image'] ?? '');
