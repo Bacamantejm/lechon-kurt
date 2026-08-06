@@ -293,6 +293,17 @@ if (!function_exists('ensureOrdersTableSchema')) {
     }
 }
 
+if (!function_exists('getPayMongoSecretKey')) {
+    function getPayMongoSecretKey() {
+        return trim((string)appConfigValue('PAYMONGO_SECRET_KEY', getenv('PAYMONGO_SECRET_KEY') ?: ''));
+    }
+}
+
+if (!function_exists('getPayMongoPublicKey')) {
+    function getPayMongoPublicKey() {
+        return trim((string)appConfigValue('PAYMONGO_PUBLIC_KEY', getenv('PAYMONGO_PUBLIC_KEY') ?: ''));
+    }
+}
 
 function resolveUserAvatarPathFromRow($row) {
     $account_type = strtolower(trim((string)($row['account_type'] ?? 'individual')));

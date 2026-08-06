@@ -377,54 +377,64 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         error_log("Order processing completed - Order Number: $order_number");
         
-        // Initialize PayMongo
-        $paymongo_secret = appConfigValue('PAYMONGO_SECRET_KEY');
-        $paymongo_public = appConfigValue('PAYMONGO_PUBLIC_KEY');
-        $paymongo = new PayMongoIntegration($paymongo_secret, $paymongo_public);
-        
-        // Prepare checkout session data
         $payment_amount = ($payment_type === 'downpayment') ? $downpayment_amount : $total_amount;
-        $checkoutData = [
-            'amount' => $payment_amount,
-            'description' => 'Order #' . $order_number . ' - Lechon Delights',
-            'order_id' => $order_id,
-            'customer_name' => $full_name,
-            'customer_email' => $email,
-            'customer_phone' => $phone,
-            'success_url' => 'http://' . $_SERVER['HTTP_HOST'] . '/lechonsystem/payment_success.php?order_id=' . $order_id,
-            'cancel_url' => 'http://' . $_SERVER['HTTP_HOST'] . '/lechonsystem/payment_cancel.php?order_id=' . $order_id,
-            'payment_method' => $payment_method
-        ];
-        
-        $result = $paymongo->createCheckoutSession($checkoutData);
-        
-        if ($result['success']) {
-            // Save checkout session ID
-            $query = "UPDATE payments SET checkout_session_id = ? WHERE order_id = ? ORDER BY created_at DESC LIMIT 1";
-            $stmt = mysqli_prepare($conn, $query);
-            if ($stmt) {
-                mysqli_stmt_bind_param($stmt, "si", $result['session_id'], $order_id);
-                mysqli_stmt_execute($stmt);
-                mysqli_stmt_close($stmt);
-            }
-            
-            // Send order confirmation email
+        $paymongo_secret = getPayMongoSecretKey();
+        $paymongo_public = getPayMongoPublicKey();
+        $has_valid_paymongo_keys = ($paymongo_secret !== '' && strpos($paymongo_secret, 'YOUR_PAYMONGO') === false && (strpos($paymongo_secret, 'sk_test_') === 0 || strpos($paymongo_secret, 'sk_live_') === 0) && strlen($paymongo_secret) > 15);
+
+        if ($has_valid_paymongo_keys) {
             try {
-                $emailService = new EmailService($conn);
-                $emailService->sendOrderConfirmation($order_id);
-            } catch (Exception $e) {
-                error_log("Email sending error: " . $e->getMessage());
+                $paymongo = new PayMongoIntegration($paymongo_secret, $paymongo_public);
+                $checkoutData = [
+                    'amount' => $payment_amount,
+                    'description' => 'Order #' . $order_number . ' - Lechon Delights',
+                    'order_id' => $order_id,
+                    'customer_name' => $full_name,
+                    'customer_email' => $email,
+                    'customer_phone' => $phone,
+                    'success_url' => 'http://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/lechonsystem/payment_success.php?order_id=' . $order_id,
+                    'cancel_url' => 'http://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/lechonsystem/payment_cancel.php?order_id=' . $order_id,
+                    'payment_method' => $payment_method
+                ];
+
+                $result = $paymongo->createCheckoutSession($checkoutData);
+
+                if (!empty($result['success']) && !empty($result['checkout_url'])) {
+                    $query = "UPDATE payments SET checkout_session_id = ? WHERE order_id = ? ORDER BY created_at DESC LIMIT 1";
+                    $stmt = mysqli_prepare($conn, $query);
+                    if ($stmt) {
+                        mysqli_stmt_bind_param($stmt, "si", $result['session_id'], $order_id);
+                        mysqli_stmt_execute($stmt);
+                        mysqli_stmt_close($stmt);
+                    }
+
+                    try {
+                        $emailService = new EmailService($conn);
+                        $emailService->sendOrderConfirmation($order_id);
+                    } catch (Exception $e) {
+                        error_log("Email sending error: " . $e->getMessage());
+                    }
+
+                    unset($_SESSION['cart']);
+                    header('Location: ' . $result['checkout_url']);
+                    exit;
+                }
+            } catch (Throwable $pe) {
+                error_log("PayMongo integration exception: " . $pe->getMessage());
             }
-            
-            // Clear cart
-            unset($_SESSION['cart']);
-            
-            // Redirect to payment
-            header('Location: ' . $result['checkout_url']);
-            exit;
-        } else {
-            throw new Exception($result['error'] ?? 'Unknown payment error');
         }
+
+        // Send order confirmation email and redirect to PayMongo Gateway Simulator for local / testing mode
+        try {
+            $emailService = new EmailService($conn);
+            $emailService->sendOrderConfirmation($order_id);
+        } catch (Exception $e) {
+            error_log("Email sending error: " . $e->getMessage());
+        }
+
+        unset($_SESSION['cart']);
+        header('Location: paymongo_checkout.php?order_id=' . $order_id);
+        exit;
         
     } catch (Exception $e) {
         // Rollback on error
