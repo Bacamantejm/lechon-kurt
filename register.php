@@ -577,22 +577,29 @@ include 'includes/header.php';
 
 <style>
 .registration-page {
-    min-height: calc(100vh - 200px);
+    background: #ffffff !important;
     display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 40px 20px;
-    background: linear-gradient(135deg, #fff9f2 0%, #fff 100%);
-    -webkit-tap-highlight-color: transparent; /* Remove tap highlight on mobile */
+    align-items: stretch;
+    justify-content: stretch;
+    height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    overflow: hidden !important;
+    padding: 0 !important;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .registration-container {
-    background-color: white;
-    border-radius: 24px;
-    border: 1px solid #efddcd;
-    box-shadow: 0 20px 40px rgba(15,23,42,.06);
-    max-width: 600px;
+    max-width: 100% !important;
     width: 100%;
+    height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    background-color: white;
+    border-radius: 0 !important;
+    border: none;
+    box-shadow: none !important;
+    display: flex;
+    flex-direction: row;
+    margin: 0 !important;
     overflow: hidden;
     animation: fadeIn 0.6s ease-out;
 }
@@ -1396,14 +1403,17 @@ body {
     display: flex;
     align-items: stretch;
     justify-content: stretch;
-    min-height: calc(100vh - 64px) !important;
+    height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    overflow: hidden !important;
     padding: 0 !important;
 }
 
 .registration-container {
     max-width: 100% !important;
     width: 100%;
-    min-height: calc(100vh - 64px) !important;
+    height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
     background-color: white;
     border-radius: 0 !important;
     border: none;
@@ -1411,6 +1421,7 @@ body {
     display: flex;
     flex-direction: row; /* Image left, form right */
     margin: 0 !important;
+    overflow: hidden;
 }
 
 .registration-image-side {
@@ -1424,7 +1435,8 @@ body {
     text-align: center;
     position: relative;
     overflow: hidden;
-    min-height: calc(100vh - 64px) !important;
+    height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
 }
 
 .brand-title {
@@ -1501,14 +1513,18 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    padding: 40px 20px;
-    min-height: calc(100vh - 64px) !important;
+    justify-content: flex-start;
+    padding: 44px 24px 36px !important;
+    height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    overflow-y: auto !important;
+    box-sizing: border-box;
 }
 
 .registration-form-side-container {
-    max-width: 460px;
+    max-width: 440px;
     width: 100%;
+    margin: auto 0;
     display: flex;
     flex-direction: column;
 }
@@ -1566,12 +1582,13 @@ body {
         <!-- Right Side: Registration Form Panel -->
         <div class="registration-form-side">
             <div class="registration-form-side-container">
-                <div class="registration-header" style="background:#fff; border-bottom:1px solid #efddcd; padding:30px 24px 20px; text-align:center;">
-                    <div style="display:inline-flex; align-items:center; gap:10px; margin-bottom:12px;">
-                        <span style="font-size:1.45rem; font-weight:800; color:#0f172a;">Lechon Delights</span>
+                <div class="registration-header" style="background:#fff; text-align:center; margin-bottom:24px; padding:0 0 10px;">
+                    <div style="display:inline-flex; align-items:center; justify-content:center; gap:10px; margin-bottom:12px;">
+                        <img src="assets/images/logo.jpg" alt="Lechon Delights Logo" style="width:48px; height:48px; object-fit:cover; border-radius:12px; display:block; border:1px solid #efddcd; box-shadow:0 4px 12px rgba(0,0,0,0.06);">
+                        <span style="font-size:1.6rem; font-weight:800; color:#171922; font-family:'Outfit', sans-serif;">Lechon Delights</span>
                     </div>
-                    <h2 style="font-size:1.35rem; font-weight:800; color:#0f172a; margin:0 0 4px 0;">Create Account</h2>
-                    <p style="font-size:0.9rem; color:#64748b; margin:0;">Join us to order Cavite's finest lechon dishes.</p>
+                    <h2 style="font-size:1.8rem; font-weight:700; color:#333; margin-bottom:10px;">Create Account</h2>
+                    <p style="font-size:1rem; color:#666; margin:0;">Join us to order Cavite's finest lechon dishes.</p>
                 </div>
                 
                 <div class="registration-body">

@@ -246,14 +246,17 @@ include 'includes/header.php';
     display: flex;
     align-items: stretch;
     justify-content: stretch;
-    min-height: calc(100vh - 64px) !important;
+    height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    overflow: hidden !important;
     padding: 0 !important;
 }
 
 .login-wrapper {
     max-width: 100% !important;
     width: 100%;
-    min-height: calc(100vh - 64px) !important;
+    height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
     background-color: white;
     border-radius: 0 !important;
     border: none;
@@ -262,6 +265,7 @@ include 'includes/header.php';
     flex-direction: row; /* Image left, form right */
     margin: 0 !important;
     animation: fadeIn 0.6s ease-out;
+    overflow: hidden;
 }
 
 @keyframes fadeIn {
@@ -281,7 +285,8 @@ include 'includes/header.php';
     text-align: center;
     position: relative;
     overflow: hidden;
-    min-height: calc(100vh - 64px) !important;
+    height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
 }
 
 .login-left::before {
@@ -451,9 +456,12 @@ include 'includes/header.php';
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    padding: 40px 20px;
-    min-height: calc(100vh - 64px) !important;
+    justify-content: flex-start;
+    padding: 44px 24px 36px !important;
+    height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    overflow-y: auto !important;
+    box-sizing: border-box;
 }
 
 .login-header {
@@ -988,7 +996,7 @@ body {
 
         <!-- Login Form Section -->
         <div class="login-right">
-            <div style="max-width: 460px; width: 100%; margin: 0 auto; display: flex; flex-direction: column;">
+            <div style="max-width: 440px; width: 100%; margin: auto 0; display: flex; flex-direction: column;">
                 <!-- Login View -->
                 <div id="loginViewContainer" class="auth-panel-view">
                     <div class="login-header" style="text-align: center; margin-bottom: 24px;">
