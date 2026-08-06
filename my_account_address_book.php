@@ -755,21 +755,19 @@ if (!$is_embedded) {
 </div>
 
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-
 :root {
     --acc-red: #b3261e;
     --acc-orange: #ef6b2e;
-    --acc-ink: #2f1f18;
-    --acc-muted: #6b7280;
-    --acc-border: #e8ddd2;
-    --acc-shadow: 0 16px 36px rgba(37, 20, 12, 0.12);
+    --acc-ink: #171922;
+    --acc-muted: #667085;
+    --acc-border: #efddcd;
+    --acc-shadow: 0 14px 34px rgba(23, 25, 34, 0.06);
 }
 
 .address-embed-wrap {
-    padding: 4px;
+    padding: 20px;
     background: transparent;
-    font-family: 'Plus Jakarta Sans', 'Segoe UI', Tahoma, sans-serif;
+    font-family: inherit;
 }
 
 .address-embed-container {
@@ -777,13 +775,10 @@ if (!$is_embedded) {
 }
 
 .account-page {
-    padding: 86px 0 56px;
+    padding: 50px 0 80px;
     min-height: 100vh;
-    font-family: 'Plus Jakarta Sans', 'Segoe UI', Tahoma, sans-serif;
-    background:
-        radial-gradient(circle at 95% -5%, rgba(239, 107, 46, 0.2), transparent 38%),
-        radial-gradient(circle at 0% 20%, rgba(179, 38, 30, 0.11), transparent 35%),
-        linear-gradient(180deg, #fffaf4 0%, #fff5ea 44%, #fffdf8 100%);
+    font-family: inherit;
+    background: linear-gradient(180deg, #fff9f2 0%, #fff4e8 100%);
 }
 
 .address-book-head {
@@ -792,37 +787,42 @@ if (!$is_embedded) {
     align-items: flex-start;
     gap: 14px;
     margin-bottom: 20px;
+    border-bottom: 1px solid #f3e8de;
+    padding-bottom: 16px;
 }
 
 .address-book-head h1,
 .address-book-head h2 {
     margin: 0;
-    color: var(--acc-ink);
+    color: #171922;
+    font-weight: 800;
 }
 
 .account-subtitle {
     margin: 6px 0 0;
-    color: var(--acc-muted);
+    color: #667085;
+    font-size: 0.9rem;
 }
 
 .address-grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 18px;
+    gap: 20px;
 }
 
 .address-card {
-    background: #fff;
-    border: 1px solid var(--acc-border);
-    border-radius: 16px;
-    box-shadow: var(--acc-shadow);
+    background: #ffffff;
+    border: 1px solid #efddcd;
+    border-radius: 18px;
+    box-shadow: 0 14px 34px rgba(23, 25, 34, 0.06);
     padding: 24px;
 }
 
 .address-card h2 {
     margin: 0 0 16px;
-    color: var(--acc-ink);
+    color: #171922;
     font-size: 1.25rem;
+    font-weight: 800;
 }
 
 .form-row {
@@ -832,33 +832,37 @@ if (!$is_embedded) {
 }
 
 .form-group {
-    margin-bottom: 14px;
+    margin-bottom: 16px;
 }
 
 .form-group label {
     display: block;
     margin-bottom: 7px;
-    color: #3c2d25;
-    font-weight: 600;
+    color: #171922;
+    font-weight: 700;
+    font-size: 0.92rem;
 }
 
 .form-group input,
 .form-group textarea,
 .form-group select {
     width: 100%;
-    border: 1px solid #e1d5c8;
-    border-radius: 10px;
-    background: #fffefb;
+    border: 1px solid #efddcd;
+    border-radius: 12px;
+    background: #ffffff;
+    color: #171922;
     padding: 11px 12px;
+    font-size: 0.95rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .form-group input:focus,
 .form-group textarea:focus,
 .form-group select:focus {
     outline: none;
-    border-color: #d56f36;
-    box-shadow: 0 0 0 3px rgba(239, 107, 46, 0.15);
-    background: #fff;
+    border-color: #b3261e;
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.12);
+    background: #ffffff;
 }
 
 .psgc-help {

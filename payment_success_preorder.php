@@ -79,8 +79,8 @@ $linked_ids = array_values(array_filter($linked_ids));
 // Verify payment state
 if ($session_id !== '') {
     $paymongo = new PayMongoIntegration(
-        'sk_test_YOUR_PAYMONGO_SECRET_KEY_HERE',
-        'pk_test_YOUR_PAYMONGO_PUBLIC_KEY_HERE'
+        appConfigValue('PAYMONGO_SECRET_KEY'),
+        appConfigValue('PAYMONGO_PUBLIC_KEY')
     );
     $verification = $paymongo->verifyPayment($session_id);
     if (!($verification['success'] ?? false) || strtolower((string)($verification['status'] ?? '')) !== 'paid') {

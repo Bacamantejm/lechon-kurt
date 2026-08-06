@@ -723,10 +723,630 @@ include 'includes/header.php';
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+.account-page {
+    --acc-red: #b3261e;
+    --acc-orange: #ef6b2e;
+    --acc-ink: #171922;
+    --acc-muted: #667085;
+    --acc-border: #efddcd;
+    --acc-shadow: 0 14px 34px rgba(23, 25, 34, 0.06);
+    padding: 40px 0 80px;
+    min-height: 85vh;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    background:
+        radial-gradient(circle at 95% -5%, rgba(239, 107, 46, 0.15), transparent 40%),
+        radial-gradient(circle at 0% 20%, rgba(179, 38, 30, 0.08), transparent 38%),
+        linear-gradient(180deg, #fff9f2 0%, #fff4e8 100%);
+}
+
+.account-page .container {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 0 16px;
+}
+
+.account-hero {
+    background: linear-gradient(135deg, #fff0f3 0%, #ffe5ea 40%, #fff8f0 100%) !important;
+    color: #171922;
+    border-radius: 24px;
+    padding: 32px 36px;
+    box-shadow: 0 10px 28px rgba(74, 32, 20, 0.06);
+    border: 1px solid #ffd0d8;
+    margin-bottom: 24px;
+    position: relative;
+    overflow: hidden;
+}
+
+.account-hero-arch {
+    position: absolute;
+    right: -20px;
+    top: -30px;
+    bottom: -30px;
+    width: 280px;
+    background: rgba(255, 255, 255, 0.65);
+    border-radius: 50% 0 0 50%;
+    pointer-events: none;
+    z-index: 1;
+    transition: transform 0.3s ease;
+}
+
+.account-hero:hover .account-hero-arch {
+    transform: scale(1.05);
+}
+
+.hero-main {
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    position: relative;
+    z-index: 2;
+}
+
+.avatar-pill {
+    width: 76px;
+    height: 76px;
+    border-radius: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 1.6rem;
+    font-family: 'Outfit', sans-serif;
+    background: linear-gradient(135deg, #b3261e 0%, #ef6b2e 100%);
+    color: #ffffff;
+    border: 3px solid #ffffff;
+    box-shadow: 0 8px 20px rgba(179, 38, 30, 0.22);
+    flex-shrink: 0;
+}
+
+.avatar-pill.has-image {
+    padding: 0;
+    overflow: hidden;
+    background: #ffffff;
+}
+
+.avatar-pill-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.market-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 999px;
+    background: #ffe8d2;
+    color: #b3261e;
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+}
+
+.account-page h1 {
+    margin: 0 0 6px;
+    color: #171922;
+    letter-spacing: -0.03em;
+    font-family: 'Outfit', sans-serif;
+    font-size: clamp(1.6rem, 2.6vw, 2.2rem);
+    font-weight: 800;
+    line-height: 1.15;
+}
+
+.account-subtitle {
+    margin: 0;
+    color: #667085;
+    font-size: 0.94rem;
+    line-height: 1.5;
+    max-width: 780px;
+}
+
+.hero-badges {
+    margin-top: 18px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    position: relative;
+    z-index: 2;
+}
+
+.hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border-radius: 999px;
+    padding: 6px 14px;
+    background: #ffffff;
+    border: 1px solid #efddcd;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #171922;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+}
+
+.hero-actions {
+    margin-top: 18px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    position: relative;
+    z-index: 2;
+}
+
+.hero-action-btn {
+    border: 1px solid #efddcd;
+    background: #ffffff;
+    color: #171922;
+    border-radius: 14px;
+    padding: 9px 18px;
+    font-size: 0.86rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 12px rgba(42, 33, 29, 0.04);
+}
+
+.hero-action-btn:hover {
+    background: #fff8ef;
+    border-color: #b3261e;
+    color: #b3261e;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 18px rgba(179, 38, 30, 0.12);
+}
+
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.metric-card {
+    background: #ffffff;
+    border: 1px solid #efddcd;
+    border-radius: 20px;
+    padding: 18px 20px;
+    box-shadow: 0 8px 24px rgba(42, 33, 29, 0.04);
+    transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.metric-card:hover {
+    transform: translateY(-3px);
+    border-color: #e8d4c3;
+    box-shadow: 0 12px 28px rgba(179, 38, 30, 0.1);
+}
+
+.metric-card small {
+    display: block;
+    color: #7b6d64;
+    font-size: 0.76rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 800;
+    margin-bottom: 6px;
+}
+
+.metric-card strong {
+    color: #171922;
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.45rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
+
+.alert {
+    padding: 16px 20px;
+    border-radius: 16px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 700;
+    font-size: 0.92rem;
+}
+
+.alert-success {
+    background-color: #e8f5e9;
+    color: #2e7d32;
+    border: 1px solid #c8e6c9;
+    border-left: 5px solid #2e7d32;
+}
+
+.alert-error {
+    background-color: #ffebee;
+    color: #c62828;
+    border: 1px solid #ffcdd2;
+    border-left: 5px solid #b3261e;
+}
+
+.account-tabs {
+    display: flex;
+    gap: 8px;
+    background-color: #ffffff;
+    border-radius: 20px;
+    padding: 8px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    border: 1px solid #efddcd;
+    box-shadow: 0 8px 24px rgba(42, 33, 29, 0.04);
+}
+
+.tab-btn {
+    flex: 1;
+    min-width: 140px;
+    padding: 12px 18px;
+    background: none;
+    border: none;
+    border-radius: 14px;
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #7b6d64;
+    cursor: pointer;
+    transition: all 0.22s ease;
+    text-align: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.tab-btn:hover {
+    color: #b3261e;
+    background-color: #fff8ef;
+}
+
+.tab-btn.active {
+    background: linear-gradient(135deg, #b3261e 0%, #ef6b2e 100%);
+    color: #ffffff;
+    box-shadow: 0 8px 20px rgba(179, 38, 30, 0.25);
+}
+
+.tab-pane {
+    display: none;
+}
+
+.tab-pane.active {
+    display: block;
+    animation: fadeIn 0.3s ease;
+}
+
+.address-book-pane {
+    background: #ffffff;
+    border: 1px solid #efddcd;
+    border-radius: 24px;
+    box-shadow: 0 10px 28px rgba(74, 32, 20, 0.06);
+    overflow: hidden;
+}
+
+.address-book-frame {
+    width: 100%;
+    min-height: 860px;
+    border: none;
+    display: block;
+    background: transparent;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.profile-card,
+.orders-card,
+.franchise-card,
+.password-card {
+    background-color: #ffffff;
+    padding: 32px;
+    border-radius: 24px;
+    border: 1px solid #efddcd;
+    box-shadow: 0 10px 28px rgba(74, 32, 20, 0.06);
+    margin-bottom: 30px;
+}
+
+.card-head {
+    margin-bottom: 22px;
+    border-bottom: 1px solid #f3e8de;
+    padding-bottom: 18px;
+}
+
+.profile-card h2,
+.orders-card h2,
+.franchise-card h2,
+.password-card h2 {
+    color: #171922;
+    margin: 0 0 4px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.45rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
+
+.card-head p {
+    margin: 0;
+    color: #667085;
+    font-size: 0.92rem;
+}
+
+.info-callout {
+    background: #fff6ed;
+    border: 1px solid #efddcd;
+    border-left: 4px solid #ef6b2e;
+    padding: 14px 18px;
+    border-radius: 16px;
+    margin-bottom: 24px;
+    font-size: 0.9rem;
+    color: #171922;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.info-callout i {
+    font-size: 1.15rem;
+    color: #ef6b2e;
+    flex-shrink: 0;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #b3261e 0%, #ef6b2e 100%);
+    color: #ffffff;
+    border: 0;
+    padding: 12px 24px;
+    border-radius: 14px;
+    font-weight: 700;
+    font-size: 0.92rem;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(179, 38, 30, 0.2);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+}
+
+.btn-primary:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(179, 38, 30, 0.3);
+    color: #ffffff;
+}
+
+.btn-outline {
+    background: #ffffff;
+    color: #171922;
+    border: 1px solid #efddcd;
+    padding: 10px 18px;
+    border-radius: 14px;
+    font-weight: 700;
+    font-size: 0.88rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+}
+
+.btn-outline:hover {
+    background: #fff8ef;
+    border-color: #b3261e;
+    color: #b3261e;
+    transform: translateY(-1px);
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.form-group {
+    margin-bottom: 22px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: #171922;
+    font-weight: 700;
+    font-size: 0.92rem;
+}
+
+.form-group input,
+.form-group textarea,
+.form-group select {
+    width: 100%;
+    padding: 13px 16px;
+    border: 1px solid #efddcd;
+    border-radius: 14px;
+    font-size: 0.95rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    background: #fff8f0;
+    color: #171922;
+}
+
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: #b3261e;
+    box-shadow: 0 0 0 4px rgba(239, 107, 46, 0.12);
+    background: #ffffff;
+}
+
+.form-group input:disabled {
+    background-color: #f8fafc;
+    cursor: not-allowed;
+    color: #7b6d64;
+}
+
+.profile-upload-row {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+    background: #fff8f0;
+    border: 1px solid #efddcd;
+    border-radius: 18px;
+    padding: 18px;
+}
+
+.profile-upload-preview {
+    width: 84px;
+    height: 84px;
+    border-radius: 20px;
+    border: 2px solid #ffffff;
+    background: linear-gradient(135deg, #b3261e 0%, #ef6b2e 100%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.6rem;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 800;
+    color: #ffffff;
+    overflow: hidden;
+    box-shadow: 0 6px 16px rgba(179, 38, 30, 0.18);
+}
+
+.profile-upload-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.profile-upload-fields {
+    flex: 1;
+    min-width: min(100%, 260px);
+}
+
+.upload-note {
+    margin: 6px 0 0;
+    color: #7b6d64;
+    font-size: 0.83rem;
+    line-height: 1.4;
+}
+
+.checkbox-label {
+    margin-top: 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #171922;
+    font-size: 0.88rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: auto;
+    margin: 0;
+}
+
+.orders-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.order-item {
+    background-color: #ffffff;
+    padding: 22px;
+    border-radius: 20px;
+    border: 1px solid #efddcd;
+    border-left: 5px solid #b3261e;
+    box-shadow: 0 6px 18px rgba(42, 33, 29, 0.04);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.order-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 26px rgba(179, 38, 30, 0.08);
+}
+
+.order-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px dashed #f3e8de;
+    padding-bottom: 10px;
+}
+
+.order-number {
+    font-weight: 800;
+    font-family: 'Outfit', sans-serif;
+    color: #171922;
+    font-size: 1.1rem;
+}
+
+.order-date {
+    color: #667085;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.order-details {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.order-status {
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    text-transform: capitalize;
+}
+
+.status-pending { background-color: #fff3e0; color: #f57c00; border: 1px solid #ffe0b2; }
+.status-assigned, .status-picked_up, .status-on_the_way, .status-arriving { background-color: #fff0eb; color: #b3261e; border: 1px solid #efddcd; }
+.status-delivered, .status-completed { background-color: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; }
+.status-cancelled, .status-rejected { background-color: #ffebee; color: #c62828; border: 1px solid #ffcdd2; }
+
+.order-total {
+    font-weight: 800;
+    font-family: 'Outfit', sans-serif;
+    color: #b3261e;
+    font-size: 1.2rem;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 48px 20px;
+    color: #7b6d64;
+}
+
+.empty-state i {
+    font-size: 3.2rem;
+    color: #ef6b2e;
+    margin-bottom: 12px;
+}
+</style>
+
 
 <div class="account-page">
     <div class="container">
         <section class="account-hero">
+            <div class="account-hero-arch"></div>
             <div class="hero-main">
                 <div class="avatar-pill<?php echo $has_profile_image ? ' has-image' : ''; ?>">
                     <?php if ($has_profile_image): ?>
@@ -736,13 +1356,16 @@ include 'includes/header.php';
                     <?php endif; ?>
                 </div>
                 <div>
-                    <p class="hero-kicker">Account Workspace</p>
+                    <span class="market-kicker"><i class="fas fa-crown"></i> Customer Workspace</span>
                     <h1><?php echo htmlspecialchars($user['full_name'] ?? 'My Account'); ?></h1>
                     <p class="account-subtitle">Manage profile details, track orders, check franchise status, and secure your account from one clean dashboard.</p>
                 </div>
             </div>
             <div class="hero-badges">
                 <span class="hero-badge"><i class="fas fa-store"></i> Franchise: <?php echo htmlspecialchars($franchise_status_label); ?></span>
+                <?php if (!empty($user['email'])): ?>
+                <span class="hero-badge"><i class="fas fa-envelope"></i> <?php echo htmlspecialchars($user['email']); ?></span>
+                <?php endif; ?>
             </div>
             <div class="hero-actions">
                 <button type="button" class="hero-action-btn open-tab-trigger" data-target-tab="profile">
@@ -756,19 +1379,19 @@ include 'includes/header.php';
 
         <section class="metrics-grid">
             <article class="metric-card">
-                <small>Total Orders</small>
+                <small><i class="fas fa-box" style="color: #ef6b2e; margin-right: 4px;"></i> Total Orders</small>
                 <strong><?php echo (int)$order_stats['total_orders']; ?></strong>
             </article>
             <article class="metric-card">
-                <small>Active Orders</small>
+                <small><i class="fas fa-motorcycle" style="color: #b3261e; margin-right: 4px;"></i> Active Orders</small>
                 <strong><?php echo (int)$order_stats['active_orders']; ?></strong>
             </article>
             <article class="metric-card">
-                <small>Completed</small>
+                <small><i class="fas fa-check-circle" style="color: #2e7d32; margin-right: 4px;"></i> Completed</small>
                 <strong><?php echo (int)$order_stats['completed_orders']; ?></strong>
             </article>
             <article class="metric-card">
-                <small>Total Spent</small>
+                <small><i class="fas fa-wallet" style="color: #d97706; margin-right: 4px;"></i> Total Spent</small>
                 <strong>&#8369;<?php echo number_format((float)$order_stats['total_spent'], 2); ?></strong>
             </article>
         </section>
@@ -800,6 +1423,10 @@ include 'includes/header.php';
                     <div class="card-head">
                         <h2>Profile Information</h2>
                         <p>Keep your contact details updated for smoother order coordination.</p>
+                    </div>
+                    <div class="info-callout">
+                        <i class="fas fa-circle-info"></i>
+                        <span>Your contact name and phone number are automatically used for delivery receipts and SMS order notifications.</span>
                     </div>
                     <form method="POST" action="" id="profileForm" enctype="multipart/form-data">
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($my_account_csrf); ?>">
@@ -949,6 +1576,10 @@ include 'includes/header.php';
                         <h2>My Orders</h2>
                         <p>Review status, amount, and order history in one timeline.</p>
                     </div>
+                    <div class="info-callout">
+                        <i class="fas fa-truck-fast"></i>
+                        <span>Active orders feature live rider tracking. Click <strong>Track Delivery</strong> to view your rider moving in real-time on the map.</span>
+                    </div>
                     <?php
                     // Get user orders
                     $orders_query = "SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC";
@@ -959,19 +1590,31 @@ include 'includes/header.php';
                     
                     if (mysqli_num_rows($orders_result) > 0): ?>
                     <div class="orders-list">
-                        <?php while ($order = mysqli_fetch_assoc($orders_result)): ?>
+                        <?php while ($order = mysqli_fetch_assoc($orders_result)): 
+                            $status_clean = strtolower((string)$order['status']);
+                            $is_active_order = in_array($status_clean, ['assigned', 'picked_up', 'on_the_way', 'arriving', 'pending', 'confirmed', 'preparing'], true);
+                        ?>
                         <div class="order-item">
                             <div class="order-header">
-                                <div class="order-number">Order #<?php echo $order['order_number']; ?></div>
-                                <div class="order-date"><?php echo date('F j, Y', strtotime($order['created_at'])); ?></div>
+                                <div class="order-number"><i class="fas fa-receipt" style="color:#ef6b2e; margin-right:6px;"></i> Order #<?php echo htmlspecialchars($order['order_number']); ?></div>
+                                <div class="order-date"><i class="far fa-calendar-alt"></i> <?php echo date('M j, Y • g:i A', strtotime($order['created_at'])); ?></div>
                             </div>
                             <div class="order-details">
-                                <div class="order-status status-<?php echo $order['status']; ?>">
-                                    <?php echo ucfirst($order['status']); ?>
+                                <div class="order-status status-<?php echo $status_clean; ?>">
+                                    <?php if ($is_active_order): ?>
+                                    <span style="display:inline-block; width:7px; height:7px; border-radius:50%; background:#b3261e; animation:blink 1.5s infinite; margin-right:6px;"></span>
+                                    <?php endif; ?>
+                                    <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $order['status']))); ?>
                                 </div>
-                                <div class="order-total">&#8369;<?php echo number_format($order['total_amount'], 2); ?></div>
+                                <div class="order-total">&#8369;<?php echo number_format((float)$order['total_amount'], 2); ?></div>
                             </div>
-                            <a href="track_order.php?order_id=<?php echo $order['id']; ?>" class="btn-outline">View Details</a>
+                            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:6px;">
+                                <?php if ($is_active_order): ?>
+                                <a href="track_order.php?order_id=<?php echo $order['id']; ?>" class="btn-primary" style="padding: 8px 16px; font-size:0.85rem;"><i class="fas fa-motorcycle"></i> Track Delivery</a>
+                                <?php else: ?>
+                                <a href="track_order.php?order_id=<?php echo $order['id']; ?>" class="btn-outline" style="padding: 8px 16px; font-size:0.85rem;"><i class="fas fa-eye"></i> View Details</a>
+                                <?php endif; ?>
+                            </div>
                         </div>
                         <?php endwhile; ?>
                     </div>
@@ -1068,6 +1711,10 @@ include 'includes/header.php';
                         <p class="upload-note"><?php echo htmlspecialchars($password_change_hint); ?></p>
                         <?php endif; ?>
                     </div>
+                    <div class="info-callout">
+                        <i class="fas fa-shield-halved"></i>
+                        <span>For account security, password updates require your current password and trigger a 7-day cooldown lock.</span>
+                    </div>
                     <form method="POST" action="" id="passwordForm">
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($my_account_csrf); ?>">
                         <div class="form-group">
@@ -1127,856 +1774,6 @@ include 'includes/header.php';
         </nav>
     </div>
 </div>
-
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-
-.account-page {
-    --acc-red: #b3261e;
-    --acc-orange: #ef6b2e;
-    --acc-ink: #2f1f18;
-    --acc-muted: #6b7280;
-    --acc-border: #e8ddd2;
-    --acc-shadow: 0 16px 36px rgba(37, 20, 12, 0.12);
-    padding: 86px 0 56px;
-    min-height: 100vh;
-    font-family: 'Plus Jakarta Sans', 'Segoe UI', Tahoma, sans-serif;
-    background:
-        radial-gradient(circle at 95% -5%, rgba(239, 107, 46, 0.2), transparent 38%),
-        radial-gradient(circle at 0% 20%, rgba(179, 38, 30, 0.11), transparent 35%),
-        linear-gradient(180deg, #fffaf4 0%, #fff5ea 44%, #fffdf8 100%);
-}
-
-.account-hero {
-    background: #b3261e !important;
-    color: #fff;
-    border-radius: 12px;
-    padding: 24px;
-    box-shadow: none;
-    border: 1px solid #efddcd;
-    margin-bottom: 24px;
-}
-
-.hero-main {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-}
-
-.hero-kicker {
-    margin: 0 0 4px;
-    font-size: 0.78rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    font-weight: 700;
-    opacity: 0.86;
-}
-
-.account-page h1 {
-    margin: 0 0 8px;
-    color: #fff;
-    letter-spacing: 0.2px;
-    font-size: clamp(1.3rem, 2.3vw, 1.9rem);
-}
-
-.account-subtitle {
-    margin: 0;
-    color: rgba(255, 255, 255, 0.9);
-    font-size: 0.95rem;
-    max-width: 800px;
-}
-
-.avatar-pill {
-    width: 58px;
-    height: 58px;
-    border-radius: 14px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 800;
-    font-size: 1.2rem;
-    background: rgba(255, 255, 255, 0.17);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-}
-
-.avatar-pill.has-image {
-    padding: 0;
-    overflow: hidden;
-    background: rgba(255, 255, 255, 0.28);
-}
-
-.avatar-pill-image {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-}
-
-.hero-badges {
-    margin-top: 14px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-
-.hero-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    border-radius: 999px;
-    padding: 8px 11px;
-    background: rgba(255, 255, 255, 0.16);
-    border: 1px solid rgba(255, 255, 255, 0.27);
-    font-size: 0.83rem;
-    font-weight: 600;
-}
-
-.theme-toggle-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    border-radius: 999px;
-    padding: 8px 12px;
-    background: rgba(255, 255, 255, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.35);
-    color: #fff;
-    font-size: 0.82rem;
-    font-weight: 700;
-    cursor: pointer;
-    transition: all 0.25s ease;
-}
-
-.theme-toggle-btn:hover {
-    background: rgba(255, 255, 255, 0.3);
-}
-
-.hero-actions {
-    margin-top: 12px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-
-.hero-action-btn {
-    border: 1px solid rgba(255, 255, 255, 0.35);
-    background: rgba(255, 255, 255, 0.12);
-    color: #fff;
-    border-radius: 999px;
-    padding: 8px 12px;
-    font-size: 0.82rem;
-    font-weight: 700;
-    cursor: pointer;
-    transition: all 0.25s ease;
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-}
-
-.hero-action-btn:hover {
-    background: rgba(255, 255, 255, 0.24);
-}
-
-.metrics-grid {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 12px;
-    margin-bottom: 22px;
-}
-
-.metric-card {
-    background: #fff;
-    border: 1px solid var(--acc-border);
-    border-radius: 14px;
-    padding: 14px;
-    box-shadow: var(--acc-shadow);
-}
-
-.metric-card small {
-    display: block;
-    color: var(--acc-muted);
-    font-size: 0.82rem;
-    margin-bottom: 6px;
-}
-
-.metric-card strong {
-    color: var(--acc-ink);
-    font-size: 1.1rem;
-}
-
-.alert {
-    padding: 15px 20px;
-    border-radius: 10px;
-    margin-bottom: 18px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.alert-success {
-    background-color: #d4edda;
-    color: #155724;
-    border-left: 4px solid #28a745;
-}
-
-.alert-error {
-    background-color: #f8d7da;
-    color: #721c24;
-    border-left: 4px solid #dc3545;
-}
-
-.account-tabs {
-    display: flex;
-    gap: 8px;
-    background-color: #fff7f0;
-    border-radius: 12px;
-    padding: 7px;
-    margin-bottom: 24px;
-    flex-wrap: wrap;
-    border: 1px solid #f1dece;
-    box-shadow: 0 12px 24px rgba(69, 37, 22, 0.08);
-}
-
-.tab-btn {
-    flex: 1;
-    min-width: 140px;
-    padding: 13px 14px;
-    background: none;
-    border: none;
-    border-radius: 10px;
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: #6b5a50;
-    cursor: pointer;
-    transition: all 0.3s;
-    text-align: center;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-}
-
-.tab-link {
-    text-decoration: none;
-}
-
-.tab-btn.active {
-    background-color: #fff;
-    color: var(--acc-red);
-    box-shadow: 0 8px 14px rgba(15, 23, 42, 0.08);
-}
-
-.tab-pane {
-    display: none;
-}
-
-.tab-pane.active {
-    display: block;
-    animation: fadeIn 0.3s ease;
-}
-
-.address-book-pane {
-    background: #fff;
-    border: 1px solid var(--acc-border);
-    border-radius: 16px;
-    box-shadow: var(--acc-shadow);
-    overflow: hidden;
-}
-
-.address-book-frame {
-    width: 100%;
-    min-height: 860px;
-    border: none;
-    display: block;
-    background: transparent;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-
-.profile-card,
-.orders-card,
-.franchise-card,
-.password-card {
-    background-color: #fff;
-    padding: 28px;
-    border-radius: 16px;
-    border: 1px solid var(--acc-border);
-    box-shadow: var(--acc-shadow);
-    margin-bottom: 30px;
-}
-
-.card-head {
-    margin-bottom: 18px;
-}
-
-.profile-card h2,
-.orders-card h2,
-.franchise-card h2,
-.password-card h2 {
-    color: var(--acc-ink);
-    margin: 0 0 6px;
-    font-size: 1.35rem;
-}
-
-.card-head p {
-    margin: 0;
-    color: var(--acc-muted);
-    font-size: 0.9rem;
-}
-
-.form-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 20px;
-    margin-bottom: 20px;
-}
-
-.form-group {
-    margin-bottom: 20px;
-}
-
-.form-group label {
-    display: block;
-    margin-bottom: 8px;
-    color: #3c2d25;
-    font-weight: 600;
-    font-size: 0.92rem;
-}
-
-.form-group input,
-.form-group textarea,
-.form-group select {
-    width: 100%;
-    padding: 12px 14px;
-    border: 1px solid #e1d5c8;
-    border-radius: 10px;
-    font-size: 0.96rem;
-    transition: border-color 0.3s;
-    background: #fffefb;
-}
-
-.form-group input:focus,
-.form-group textarea:focus,
-.form-group select:focus {
-    outline: none;
-    border-color: #d56f36;
-    box-shadow: 0 0 0 3px rgba(239, 107, 46, 0.15);
-    background: #fff;
-}
-
-.form-group input:disabled {
-    background-color: #f8f4ef;
-    cursor: not-allowed;
-    color: #7e6b5f;
-}
-
-.profile-upload-row {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    flex-wrap: wrap;
-}
-
-.profile-upload-preview {
-    width: 84px;
-    height: 84px;
-    border-radius: 14px;
-    border: 1px solid #e2d2c1;
-    background: #fff7f0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.45rem;
-    font-weight: 800;
-    color: #915c3f;
-    overflow: hidden;
-}
-
-.profile-upload-preview img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-}
-
-.profile-upload-fields {
-    flex: 1;
-    min-width: min(100%, 260px);
-}
-
-.upload-note {
-    margin: 7px 0 0;
-    color: #786052;
-    font-size: 0.82rem;
-}
-
-.upload-note.schema-note {
-    margin-top: 6px;
-}
-
-.checkbox-label {
-    margin-top: 8px;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    color: #4f382c;
-    font-size: 0.86rem;
-    font-weight: 600;
-    cursor: pointer;
-}
-
-.checkbox-label input[type="checkbox"] {
-    width: auto;
-    margin: 0;
-}
-
-.orders-list {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-}
-
-.order-item {
-    background-color: #fffaf3;
-    padding: 20px;
-    border-radius: 12px;
-    border: 1px solid #eadbcf;
-    border-left: 4px solid #d55f29;
-}
-
-.order-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 10px;
-}
-
-.order-number {
-    font-weight: 700;
-    color: #3b2a22;
-}
-
-.order-date {
-    color: #6b7280;
-    font-size: 0.88rem;
-}
-
-.order-details {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 15px;
-}
-
-.order-status {
-    padding: 5px 15px;
-    border-radius: 20px;
-    font-size: 0.85rem;
-    font-weight: 700;
-}
-
-.status-pending { background-color: #fff3cd; color: #856404; }
-.status-confirmed { background-color: #d1ecf1; color: #0c5460; }
-.status-processing { background-color: #cce5ff; color: #004085; }
-.status-shipped { background-color: #d4edda; color: #155724; }
-.status-delivered { background-color: #28a745; color: #fff; }
-.status-cancelled { background-color: #f8d7da; color: #721c24; }
-
-.order-total {
-    font-weight: 700;
-    color: var(--acc-red);
-    font-size: 1.1rem;
-}
-
-.empty-state {
-    text-align: center;
-    padding: 40px 20px;
-    color: #666;
-}
-
-.empty-state i {
-    font-size: 3rem;
-    color: #ddd;
-    margin-bottom: 15px;
-}
-
-.empty-state p {
-    margin-bottom: 20px;
-}
-
-.application-status {
-    background-color: #fff8ef;
-    padding: 30px;
-    border-radius: 12px;
-    border: 1px solid #efdcc9;
-    margin-bottom: 20px;
-}
-
-.status-card {
-    background-color: white;
-    padding: 20px;
-    border-radius: 12px;
-    border: 1px solid #e6d8cb;
-    margin-bottom: 20px;
-}
-
-.status-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 10px;
-}
-
-.status-badge {
-    padding: 5px 15px;
-    border-radius: 20px;
-    font-size: 0.85rem;
-    font-weight: 700;
-}
-
-.status-approved { background-color: #d4edda; color: #155724; }
-.status-rejected { background-color: #f8d7da; color: #721c24; }
-.status-pending { background-color: #fff3cd; color: #856404; }
-
-.status-message {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 15px;
-    border-radius: 6px;
-    margin-top: 15px;
-}
-
-.status-message.success {
-    background-color: #d4edda;
-    color: #155724;
-    border-left: 4px solid #28a745;
-}
-
-.status-message.error {
-    background-color: #f8d7da;
-    color: #721c24;
-    border-left: 4px solid #dc3545;
-}
-
-.status-message.info {
-    background-color: #d1ecf1;
-    color: #0c5460;
-    border-left: 4px solid #17a2b8;
-}
-
-.status-actions {
-    margin-top: 14px;
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-}
-
-.requirements-list {
-    background-color: #fff9f3;
-    padding: 25px;
-    border-radius: 12px;
-    border: 1px solid #eadcca;
-    margin: 30px 0;
-}
-
-.requirements-list h4 {
-    color: #333;
-    margin-bottom: 15px;
-}
-
-.requirements-list ol {
-    padding-left: 20px;
-    color: #666;
-    line-height: 1.6;
-}
-
-.requirements-list li {
-    margin-bottom: 8px;
-}
-
-.password-strength {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    margin-bottom: 20px;
-    padding: 15px;
-    background-color: #fff9f3;
-    border-radius: 10px;
-    border: 1px solid #eadcca;
-}
-
-.strength-bars {
-    display: flex;
-    gap: 4px;
-    flex: 1;
-}
-
-.strength-bar {
-    flex: 1;
-    height: 6px;
-    background-color: #e0e0e0;
-    border-radius: 3px;
-}
-
-.btn-large {
-    padding: 15px 30px;
-    font-size: 1.05rem;
-}
-
-.btn-primary,
-.btn-outline {
-    border-radius: 10px;
-    font-weight: 700;
-}
-
-.btn-outline {
-    border: 1px solid #d9c7b5;
-    color: #5c463a;
-    background: #fff8f2;
-}
-
-.btn-outline:hover {
-    background: #fff0e3;
-}
-
-.inline-action {
-    margin-top: 10px;
-}
-
-.btn-inline {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 9px 12px;
-}
-
-.mobile-tab-bar {
-    display: none;
-}
-
-.mobile-tab-btn {
-    border: none;
-    background: transparent;
-    color: #735b4c;
-    text-decoration: none;
-}
-
-.account-page.theme-dark {
-    background:
-        radial-gradient(circle at 95% -5%, rgba(239, 107, 46, 0.2), transparent 38%),
-        radial-gradient(circle at 0% 20%, rgba(179, 38, 30, 0.18), transparent 35%),
-        linear-gradient(180deg, #1a1512 0%, #1f1915 44%, #15110f 100%);
-}
-
-.account-page.theme-dark .metric-card,
-.account-page.theme-dark .profile-card,
-.account-page.theme-dark .orders-card,
-.account-page.theme-dark .address-book-pane,
-.account-page.theme-dark .franchise-card,
-.account-page.theme-dark .password-card,
-.account-page.theme-dark .status-card,
-.account-page.theme-dark .requirements-list,
-.account-page.theme-dark .password-strength,
-.account-page.theme-dark .order-item,
-.account-page.theme-dark .application-status {
-    background: #201a16;
-    border-color: #3a2f27;
-    color: #f3ece6;
-}
-
-.account-page.theme-dark .account-tabs {
-    background: #2b231e;
-    border-color: #3d3129;
-    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
-}
-
-.account-page.theme-dark .tab-btn {
-    color: #d2b7a6;
-}
-
-.account-page.theme-dark .tab-btn.active {
-    background: #1b1512;
-    color: #ffb083;
-}
-
-.account-page.theme-dark .form-group label,
-.account-page.theme-dark .card-head p,
-.account-page.theme-dark .order-date,
-.account-page.theme-dark .empty-state,
-.account-page.theme-dark .requirements-list ol {
-    color: #ccb7aa;
-}
-
-.account-page.theme-dark .profile-card h2,
-.account-page.theme-dark .orders-card h2,
-.account-page.theme-dark .franchise-card h2,
-.account-page.theme-dark .password-card h2,
-.account-page.theme-dark .order-number,
-.account-page.theme-dark .metric-card strong {
-    color: #fff6ef;
-}
-
-.account-page.theme-dark .form-group input,
-.account-page.theme-dark .form-group textarea,
-.account-page.theme-dark .form-group select {
-    background: #2b241f;
-    border-color: #46372c;
-    color: #fff6ef;
-}
-
-.account-page.theme-dark .form-group input:disabled {
-    background: #2c241e;
-    color: #ccb7aa;
-}
-
-.account-page.theme-dark .profile-upload-preview {
-    background: #2b241f;
-    border-color: #4a3a2f;
-    color: #f5d3bc;
-}
-
-.account-page.theme-dark .upload-note,
-.account-page.theme-dark .checkbox-label {
-    color: #ccb7aa;
-}
-
-.account-page.theme-dark .btn-outline {
-    background: #2e251f;
-    border-color: #4b3b2f;
-    color: #ecd7c9;
-}
-
-.account-page.theme-dark .btn-outline:hover {
-    background: #3a2e26;
-}
-
-.account-page.theme-dark .status-message.success {
-    background: rgba(45, 125, 78, 0.2);
-    color: #9ad7b0;
-}
-
-.account-page.theme-dark .status-message.error {
-    background: rgba(154, 55, 63, 0.24);
-    color: #f1b9bf;
-}
-
-.account-page.theme-dark .status-message.info {
-    background: rgba(42, 99, 128, 0.22);
-    color: #a8d6eb;
-}
-
-@media (max-width: 900px) {
-    .metrics-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-}
-
-@media (max-width: 768px) {
-    .account-page {
-        padding-bottom: 110px;
-    }
-
-    .account-hero {
-        padding: 20px;
-    }
-
-    .hero-main {
-        align-items: flex-start;
-    }
-
-    .account-tabs {
-        flex-direction: column;
-    }
-    
-    .tab-btn {
-        min-width: 100%;
-    }
-    
-    .form-row {
-        grid-template-columns: 1fr;
-    }
-
-    .profile-upload-row {
-        align-items: flex-start;
-    }
-    
-    .order-header,
-    .order-details {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 10px;
-    }
-
-    .address-book-frame {
-        min-height: 1180px;
-    }
-
-    .mobile-tab-bar {
-        position: fixed;
-        left: 12px;
-        right: 12px;
-        bottom: 10px;
-        z-index: 999;
-        display: grid;
-        grid-template-columns: repeat(5, minmax(0, 1fr));
-        gap: 4px;
-        border-radius: 16px;
-        padding: 8px 6px calc(8px + env(safe-area-inset-bottom));
-        background: rgba(255, 250, 245, 0.95);
-        border: 1px solid #ead5c3;
-        box-shadow: 0 12px 26px rgba(28, 18, 11, 0.24);
-        backdrop-filter: blur(8px);
-    }
-
-    .mobile-tab-btn {
-        display: inline-flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 3px;
-        min-height: 52px;
-        border-radius: 10px;
-        font-size: 0.69rem;
-        font-weight: 700;
-        color: #735b4c;
-        text-decoration: none;
-    }
-
-    .mobile-tab-btn i {
-        font-size: 0.95rem;
-    }
-
-    .mobile-tab-btn.active {
-        background: #fff;
-        color: var(--acc-red);
-        box-shadow: 0 8px 16px rgba(19, 14, 9, 0.12);
-    }
-
-    .account-page.theme-dark .mobile-tab-bar {
-        background: rgba(36, 28, 23, 0.96);
-        border-color: #4c3d32;
-        box-shadow: 0 12px 26px rgba(0, 0, 0, 0.45);
-    }
-
-    .account-page.theme-dark .mobile-tab-btn {
-        color: #c6ab9c;
-    }
-
-    .account-page.theme-dark .mobile-tab-btn.active {
-        background: #1b1512;
-        color: #ffb083;
-    }
-}
-
-@media (max-width: 480px) {
-    .metrics-grid {
-        grid-template-columns: 1fr;
-    }
-}
-</style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {

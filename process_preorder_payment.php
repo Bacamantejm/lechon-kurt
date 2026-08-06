@@ -184,8 +184,8 @@ if (!$conn) {
 }
 
 // Get PayMongo API keys from config or environment
-$paymongo_secret = getenv('PAYMONGO_SECRET_KEY') ?: 'sk_test_YOUR_PAYMONGO_SECRET_KEY_HERE';
-$paymongo_public = getenv('PAYMONGO_PUBLIC_KEY') ?: 'pk_test_YOUR_PAYMONGO_PUBLIC_KEY_HERE';
+$paymongo_secret = appConfigValue('PAYMONGO_SECRET_KEY');
+$paymongo_public = appConfigValue('PAYMONGO_PUBLIC_KEY');
 
 // Initialize PayMongo
 try {

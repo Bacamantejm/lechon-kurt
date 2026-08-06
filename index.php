@@ -3,6 +3,7 @@ session_start();
 require_once 'includes/config.php';
 require_once __DIR__ . '/includes/favorites_helper.php';
 require_once __DIR__ . '/includes/store_availability_helper.php';
+require_once __DIR__ . '/includes/partner_advertisement_helper.php';
 
 $current_page = 'home';
 $page_title = 'Marketplace Home';
@@ -657,6 +658,34 @@ include 'includes/header.php';
     color: var(--ink);
     padding: 20px 0 56px;
 }
+
+.partner-ad-card {
+    border-radius: 20px;
+    padding: 22px 24px;
+    color: #ffffff;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 10px 28px rgba(23, 25, 34, 0.08);
+    transition: transform 0.25s cubic-bezier(.22,1,.36,1), box-shadow 0.25s ease;
+}
+.partner-ad-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 16px 36px rgba(179, 38, 30, 0.18);
+}
+.partner-ad-card.gradient-red { background: linear-gradient(135deg, #b3261e 0%, #ef6b2e 100%); }
+.partner-ad-card.gradient-orange { background: linear-gradient(135deg, #ef6b2e 0%, #ff9e43 100%); }
+.partner-ad-card.gradient-dark { background: linear-gradient(135deg, #171922 0%, #343a40 100%); }
+
+.partner-ad-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.partner-ad-store { font-size: 0.78rem; font-weight: 700; opacity: 0.95; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 6px; }
+.partner-ad-badge { background: rgba(255, 255, 255, 0.25); backdrop-filter: blur(4px); color: #ffffff; font-weight: 800; font-size: 0.72rem; padding: 4px 10px; border-radius: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+.partner-ad-title { font-size: 1.25rem; font-weight: 800; margin: 0 0 6px 0; color: #ffffff; line-height: 1.25; }
+.partner-ad-desc { font-size: 0.88rem; opacity: 0.92; margin: 0 0 16px 0; line-height: 1.4; color: #ffffff; }
+.partner-ad-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.2); }
+.partner-ad-code { background: #ffffff; color: #171922; font-weight: 800; font-size: 0.82rem; padding: 6px 12px; border-radius: 8px; font-family: monospace; display: flex; align-items: center; gap: 6px; }
+.partner-ad-code i { color: #b3261e; }
+.partner-ad-btn { background: #ffffff; color: #b3261e; text-decoration: none; font-weight: 800; font-size: 0.82rem; padding: 8px 16px; border-radius: 10px; transition: background 0.2s ease, transform 0.2s ease; display: inline-flex; align-items: center; gap: 6px; }
+.partner-ad-btn:hover { background: #171922; color: #ffffff; transform: translateX(2px); }
 
 .market-home::before,
 .market-home::after {
@@ -2617,6 +2646,54 @@ body {
                         </div>
                     <?php endif; ?>
 
+                    <?php 
+                    $featured_ads = paGetActiveAdvertisements($conn, 6);
+                    if (!empty($featured_ads)): 
+                    ?>
+                    <!-- Partner Promos & Advertisements Section -->
+                    <section class="partner-ads-section" style="margin-bottom: 32px;">
+                        <div class="market-head" style="margin-bottom: 14px;">
+                            <div>
+                                <h2 style="font-family:'Outfit',sans-serif; font-size:1.45rem; font-weight:800; color:#171922; display:flex; align-items:center; gap:8px;">
+                                    <i class="fas fa-bullhorn" style="color:#ef6b2e;"></i> Featured Promos & Partner Deals
+                                </h2>
+                                <p style="font-size:0.88rem; color:#7b6d64; margin:0;">Exclusive discounts, voucher codes, and special offers from store owners and partner sellers.</p>
+                            </div>
+                        </div>
+
+                        <div class="partner-ads-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); gap: 18px;">
+                            <?php foreach ($featured_ads as $ad): 
+                                $theme_class = htmlspecialchars($ad['bg_theme'] ?: 'gradient-red');
+                                $seller_name = htmlspecialchars($ad['business_name'] ?: 'Partner Store');
+                                $target_url = htmlspecialchars($ad['target_url'] ?: 'menu.php?seller_id=' . $ad['seller_id']);
+                            ?>
+                                <article class="partner-ad-card <?php echo $theme_class; ?>">
+                                    <div class="partner-ad-header">
+                                        <div class="partner-ad-store">
+                                            <i class="fas fa-store"></i> <?php echo $seller_name; ?>
+                                        </div>
+                                        <?php if (!empty($ad['discount_tag'])): ?>
+                                            <span class="partner-ad-badge"><?php echo htmlspecialchars($ad['discount_tag']); ?></span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <h3 class="partner-ad-title"><?php echo htmlspecialchars($ad['title']); ?></h3>
+                                    <p class="partner-ad-desc"><?php echo htmlspecialchars($ad['subtitle'] ?: 'Special promotional offer for customers.'); ?></p>
+                                    
+                                    <div class="partner-ad-footer">
+                                        <?php if (!empty($ad['promo_code'])): ?>
+                                            <div class="partner-ad-code" title="Use voucher code at checkout">
+                                                <i class="fas fa-ticket-alt"></i> <span><?php echo htmlspecialchars($ad['promo_code']); ?></span>
+                                            </div>
+                                        <?php endif; ?>
+                                        <a href="<?php echo $target_url; ?>" class="partner-ad-btn">
+                                            Claim Deal <i class="fas fa-arrow-right"></i>
+                                        </a>
+                                    </div>
+                                </article>
+                            <?php endforeach; ?>
+                        </div>
+                    </section>
+                    <?php endif; ?>
 
                     <?php if (!empty($top_rated_stores)): ?>
                     <!-- Foodpanda Brands Carousel: Top Lechon Houses -->
