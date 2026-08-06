@@ -60,7 +60,7 @@ if ($tracking_info) {
         $driver_longitude = (float)$tracking_info['current_longitude'];
     }
 
-    // Fallback: if logistics row has no fresh coordinates, pull latest from employee geo tracker.
+    // Fallback 1: if logistics row has no fresh coordinates, pull latest from employee geo tracker.
     if (($driver_latitude === null || $driver_longitude === null) && !empty($tracking_info['driver_id'])) {
         $geo_stmt = $conn->prepare(
             "SELECT current_latitude, current_longitude, last_update
@@ -86,6 +86,75 @@ if ($tracking_info) {
                     $location_updated_at = $geo_row['last_update'];
                     $location_source = 'employees_geo_tracking';
                 }
+            }
+        }
+    }
+
+    // Fallback 2: if rider has no coordinates yet, use the order's branch/store location as pickup origin
+    if ($driver_latitude === null || $driver_longitude === null) {
+        $store_stmt = $conn->prepare(
+            "SELECT sl.latitude, sl.longitude 
+             FROM orders o 
+             LEFT JOIN store_locations sl ON (sl.store_id = o.pickup_location OR sl.id = o.pickup_location)
+             WHERE o.id = ? AND sl.latitude IS NOT NULL AND sl.longitude IS NOT NULL 
+             LIMIT 1"
+        );
+        if ($store_stmt) {
+            $store_stmt->bind_param("i", $order_id);
+            $store_stmt->execute();
+            $store_row = $store_stmt->get_result()->fetch_assoc();
+            $store_stmt->close();
+
+            if ($store_row && is_numeric($store_row['latitude']) && is_numeric($store_row['longitude'])) {
+                $driver_latitude = (float)$store_row['latitude'];
+                $driver_longitude = (float)$store_row['longitude'];
+                if (!$location_updated_at) {
+                    $location_updated_at = date('Y-m-d H:i:s');
+                }
+                $location_source = 'store_origin';
+            }
+        }
+
+        if (($driver_latitude === null || $driver_longitude === null) && !empty($tracking_info['special_instructions'])) {
+            if (preg_match('/fulfillment store:\s*([^|]+)/i', $tracking_info['special_instructions'], $matches)) {
+                $store_name_query = trim($matches[1]);
+                $inst_store_stmt = $conn->prepare("SELECT latitude, longitude FROM store_locations WHERE store_name LIKE ? AND latitude IS NOT NULL AND longitude IS NOT NULL LIMIT 1");
+                if ($inst_store_stmt) {
+                    $like_name = '%' . $store_name_query . '%';
+                    $inst_store_stmt->bind_param("s", $like_name);
+                    $inst_store_stmt->execute();
+                    $inst_store_row = $inst_store_stmt->get_result()->fetch_assoc();
+                    $inst_store_stmt->close();
+                    if ($inst_store_row && is_numeric($inst_store_row['latitude']) && is_numeric($inst_store_row['longitude'])) {
+                        $driver_latitude = (float)$inst_store_row['latitude'];
+                        $driver_longitude = (float)$inst_store_row['longitude'];
+                        if (!$location_updated_at) {
+                            $location_updated_at = date('Y-m-d H:i:s');
+                        }
+                        $location_source = 'store_origin';
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback 3: if rider and order pickup location have no coordinates, use default active store location as origin
+    if ($driver_latitude === null || $driver_longitude === null) {
+        $default_store_res = $conn->query(
+            "SELECT latitude, longitude 
+             FROM store_locations 
+             WHERE is_active = 1 AND latitude IS NOT NULL AND longitude IS NOT NULL AND latitude != 0 
+             ORDER BY store_id ASC 
+             LIMIT 1"
+        );
+        if ($default_store_res && $default_store_row = $default_store_res->fetch_assoc()) {
+            if (is_numeric($default_store_row['latitude']) && is_numeric($default_store_row['longitude'])) {
+                $driver_latitude = (float)$default_store_row['latitude'];
+                $driver_longitude = (float)$default_store_row['longitude'];
+                if (!$location_updated_at) {
+                    $location_updated_at = date('Y-m-d H:i:s');
+                }
+                $location_source = 'store_origin';
             }
         }
     }

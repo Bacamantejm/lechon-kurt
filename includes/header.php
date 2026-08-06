@@ -40,6 +40,33 @@ $preorder_nav_href = $path_prefix . 'preorder.php' . ($storefront_seller_id > 0 
 $favorites_page_href = $path_prefix . 'favorites.php';
 $favorites_api_href = $path_prefix . 'api/favorites.php';
 $favorites_feature_enabled = $is_customer_user;
+
+$ongoing_order_id = 0;
+$ongoing_order_number = '';
+$ongoing_order_status = '';
+
+if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
+    $current_user_id = (int)$_SESSION['user_id'];
+    $ongoing_query = "SELECT o.id, o.order_number, o.status, lt.current_status as tracking_status 
+                      FROM orders o 
+                      LEFT JOIN logistics_tracking lt ON o.id = lt.order_id 
+                      WHERE o.user_id = ? 
+                        AND o.status NOT IN ('delivered', 'cancelled', 'completed', 'rejected') 
+                        AND (o.is_archived IS NULL OR o.is_archived = 0)
+                      ORDER BY o.id DESC LIMIT 1";
+    $ongoing_stmt = $conn->prepare($ongoing_query);
+    if ($ongoing_stmt) {
+        $ongoing_stmt->bind_param("i", $current_user_id);
+        $ongoing_stmt->execute();
+        $ongoing_res = $ongoing_stmt->get_result();
+        if ($ongoing_row = $ongoing_res->fetch_assoc()) {
+            $ongoing_order_id = (int)$ongoing_row['id'];
+            $ongoing_order_number = (string)$ongoing_row['order_number'];
+            $ongoing_order_status = (string)($ongoing_row['tracking_status'] ?: $ongoing_row['status']);
+        }
+        $ongoing_stmt->close();
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -95,6 +122,139 @@ $favorites_feature_enabled = $is_customer_user;
         .notification-header { padding:10px 13px; border-bottom:1px solid var(--line); font-weight:800; font-size:.9rem; }
         .notification-empty { padding:18px 13px; font-size:.9rem; color:var(--muted); }
         .mobile-toggle { display:none !important; }
+
+        /* Header Active Order Pill */
+        .header-ongoing-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: linear-gradient(135deg, #b3261e, #ef6b2e);
+            color: #ffffff !important;
+            padding: 0 14px;
+            min-height: 38px;
+            border-radius: 999px;
+            font-weight: 700;
+            font-size: 0.84rem;
+            text-decoration: none;
+            box-shadow: 0 4px 14px rgba(179, 38, 30, 0.25);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            white-space: nowrap;
+            position: relative;
+        }
+        .header-ongoing-pill:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 18px rgba(179, 38, 30, 0.35);
+        }
+        .ongoing-pulse-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ffffff;
+            box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7);
+            animation: ongoingPulseDot 1.4s infinite;
+        }
+        @keyframes ongoingPulseDot {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(255, 255, 255, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+        }
+
+        /* Floating Sticky Bottom Right Ongoing Order Banner */
+        .sticky-ongoing-widget {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 1100;
+            max-width: 420px;
+            width: calc(100vw - 32px);
+            animation: stickySlideUp 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+        @keyframes stickySlideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .sticky-ongoing-link {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            background: #ffffff;
+            border: 1px solid #efddcd;
+            border-radius: 18px;
+            padding: 14px 18px;
+            box-shadow: 0 14px 34px rgba(23, 25, 34, 0.12);
+            text-decoration: none;
+            color: #171922;
+            transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+        }
+        .sticky-ongoing-link:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 18px 40px rgba(179, 38, 30, 0.15);
+            border-color: #b3261e;
+        }
+        .sticky-ongoing-icon {
+            width: 46px;
+            height: 46px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #b3261e, #ef6b2e);
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            position: relative;
+            flex-shrink: 0;
+            box-shadow: 0 6px 16px rgba(179, 38, 30, 0.25);
+        }
+        .sticky-pulse-ring {
+            position: absolute;
+            inset: -3px;
+            border-radius: 16px;
+            border: 2px solid #ef6b2e;
+            animation: stickyPulse 1.8s infinite;
+            pointer-events: none;
+        }
+        @keyframes stickyPulse {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(1.18); opacity: 0; }
+        }
+        .sticky-ongoing-info { flex: 1; min-width: 0; }
+        .sticky-ongoing-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 2px; }
+        .sticky-live-tag {
+            font-size: 0.68rem;
+            font-weight: 800;
+            background: #e8f5e9;
+            color: #2e7d32;
+            border: 1px solid #c8e6c9;
+            padding: 2px 7px;
+            border-radius: 8px;
+            letter-spacing: 0.5px;
+        }
+        .sticky-ongoing-status {
+            font-size: 0.86rem;
+            color: #667085;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .sticky-ongoing-btn {
+            background: #fff4e8;
+            color: #b3261e;
+            border: 1px solid #efddcd;
+            padding: 8px 14px;
+            border-radius: 10px;
+            font-weight: 800;
+            font-size: 0.84rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+            transition: background 0.2s ease, color 0.2s ease;
+        }
+        .sticky-ongoing-link:hover .sticky-ongoing-btn {
+            background: #b3261e;
+            color: #ffffff;
+            border-color: #b3261e;
+        }
         .mobile-menu-overlay { position:fixed; inset:0; background:rgba(14,20,31,.48); z-index:1290; opacity:0; visibility:hidden; transition:opacity var(--motion-fast) var(--motion-ease), visibility var(--motion-fast) var(--motion-ease); }
         .mobile-menu-overlay.active { opacity:1; visibility:visible; }
         .mobile-menu { position:fixed; top:0; right:-360px; width:min(340px,92vw); height:100vh; background:#fff; border-left:1px solid var(--line); box-shadow:-14px 0 34px rgba(15,23,42,.14); z-index:1300; transition:right var(--motion-base) var(--motion-ease); display:flex; flex-direction:column; }
@@ -513,6 +673,7 @@ $favorites_feature_enabled = $is_customer_user;
                     <a href="<?php echo $path_prefix; ?>subscription_plans.php" class="user-dropdown-item"><i class="fas fa-layer-group"></i> Subscription Plans</a>
                     <a href="<?php echo $path_prefix; ?>seller_products.php" class="user-dropdown-item"><i class="fas fa-box"></i> My Products</a>
                     <a href="<?php echo $path_prefix; ?>seller_vouchers.php" class="user-dropdown-item"><i class="fas fa-tags"></i> My Vouchers</a>
+                    <a href="<?php echo $path_prefix; ?>seller_advertisements.php" class="user-dropdown-item"><i class="fas fa-bullhorn"></i> My Advertisements</a>
                     <?php endif; ?>
                     <?php if ($normalized_user_type === 'admin'): ?>
                     <a href="<?php echo $path_prefix; ?>admin/index.php" class="user-dropdown-item"><i class="fas fa-gauge-high"></i> Admin Panel</a>
@@ -591,6 +752,29 @@ $favorites_feature_enabled = $is_customer_user;
                 </div>
             </div>
         </div>
+    </div>
+    <?php endif; ?>
+
+    <?php if ($ongoing_order_id > 0 && $current_page !== 'track_order'): ?>
+    <div id="stickyOngoingOrderWidget" class="sticky-ongoing-widget">
+        <a href="<?php echo $path_prefix; ?>track_order.php?order_id=<?php echo $ongoing_order_id; ?>" class="sticky-ongoing-link">
+            <div class="sticky-ongoing-icon">
+                <i class="fas fa-motorcycle"></i>
+                <span class="sticky-pulse-ring"></span>
+            </div>
+            <div class="sticky-ongoing-info">
+                <div class="sticky-ongoing-header">
+                    <strong style="font-weight:800; font-size:0.92rem; color:#171922;">Active Delivery Order</strong>
+                    <span class="sticky-live-tag">LIVE</span>
+                </div>
+                <div class="sticky-ongoing-status">
+                    #<?php echo htmlspecialchars($ongoing_order_number); ?> &bull; <span style="color:#b3261e; font-weight:700;"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $ongoing_order_status))); ?></span>
+                </div>
+            </div>
+            <div class="sticky-ongoing-btn">
+                Track <i class="fas fa-arrow-right"></i>
+            </div>
+        </a>
     </div>
     <?php endif; ?>
     

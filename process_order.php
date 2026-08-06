@@ -630,10 +630,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $payment_amount = ($payment_type === 'downpayment') ? $downpayment_amount : $total_amount;
 
         // Initialize PayMongo
-        $paymongo = new PayMongoIntegration(
-            'sk_test_YOUR_PAYMONGO_SECRET_KEY_HERE',
-            'pk_test_YOUR_PAYMONGO_PUBLIC_KEY_HERE'
-        );
+        $paymongo_secret = appConfigValue('PAYMONGO_SECRET_KEY');
+        $paymongo_public = appConfigValue('PAYMONGO_PUBLIC_KEY');
+        $paymongo = new PayMongoIntegration($paymongo_secret, $paymongo_public);
 
         // Prepare checkout session data
         $checkoutData = [

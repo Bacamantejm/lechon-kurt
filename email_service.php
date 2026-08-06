@@ -306,7 +306,107 @@ class EmailService {
         }
     }
 
+    public function sendRegistrationOtpEmail(string $email, string $full_name, string $otp_code): bool {
+        try {
+            $this->resetMessage();
+            $safe_email = trim($email);
+            if ($safe_email === '') {
+                return false;
+            }
+
+            $safe_name = htmlspecialchars(trim($full_name) !== '' ? $full_name : 'there');
+            $safe_otp  = htmlspecialchars(trim($otp_code));
+
+            $html = "<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='UTF-8'>
+<meta name='viewport' content='width=device-width,initial-scale=1.0'>
+<title>Your Verification Code</title>
+</head>
+<body style='margin:0;padding:0;background-color:#fff8ef;font-family:Arial,Helvetica,sans-serif;'>
+  <table width='100%' cellpadding='0' cellspacing='0' style='background-color:#fff8ef;padding:40px 16px;'>
+    <tr>
+      <td align='center'>
+        <table width='100%' cellpadding='0' cellspacing='0' style='max-width:580px;background:#ffffff;border:1px solid #efddcd;border-radius:20px;overflow:hidden;box-shadow:0 8px 32px rgba(74,32,20,0.10);'>
+
+          <!-- Header -->
+          <tr>
+            <td style='background:linear-gradient(135deg,#b3261e 0%,#ef6b2e 100%);padding:34px 40px 30px;text-align:center;'>
+              <p style='margin:0 0 8px;font-size:12px;color:rgba(255,255,255,0.78);letter-spacing:1.5px;text-transform:uppercase;font-weight:600;'>Lechon Delights Security</p>
+              <h1 style='margin:0;font-size:24px;color:#ffffff;font-weight:700;'>Verify Account Registration</h1>
+              <p style='margin:8px 0 0;font-size:14px;color:rgba(255,255,255,0.88);'>Use the 6-digit code below to confirm your account creation.</p>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style='padding:36px 40px;'>
+              <p style='margin:0 0 16px;font-size:16px;color:#2a211d;'>Hi <strong>{$safe_name}</strong>,</p>
+              <p style='margin:0 0 24px;font-size:15px;color:#7b6d64;line-height:1.6;'>
+                Thank you for creating an account with <strong>Lechon Delights</strong>. Enter this One-Time PIN (OTP) code on the verification page to complete your registration:
+              </p>
+
+              <!-- OTP Code Display Box -->
+              <table width='100%' cellpadding='0' cellspacing='0' style='margin-bottom:28px;'>
+                <tr>
+                  <td align='center'>
+                    <div style='background:#fff5ea;border:2px dashed #ef6b2e;border-radius:14px;padding:20px 30px;display:inline-block;'>
+                      <span style='font-size:36px;font-weight:800;letter-spacing:12px;color:#b3261e;font-family:Courier,monospace;'>{$safe_otp}</span>
+                    </div>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Notice -->
+              <table width='100%' cellpadding='0' cellspacing='0' style='margin-bottom:24px;'>
+                <tr>
+                  <td style='background:#fffaf3;border:1px solid #efddcd;border-radius:10px;padding:14px 16px;'>
+                    <p style='margin:0;font-size:13px;color:#7b6d64;line-height:1.5;'>
+                      ⏱️ This verification code will expire in <strong style='color:#2a211d;'>15 minutes</strong>. Do not share this code with anyone.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <p style='margin:0;font-size:13px;color:#7b6d64;line-height:1.6;'>
+                If you did not create a Lechon Delights account, you can safely ignore this email.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style='background:#fff8ef;border-top:1px solid #efddcd;padding:18px 40px;text-align:center;'>
+              <p style='margin:0;font-size:12px;color:#7b6d64;'>
+                &copy; " . date('Y') . " Lechon Delights &nbsp;&bull;&nbsp; Automated Security System
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>";
+
+            $alt_body = "Hi {$full_name},\n\nYour 6-digit Lechon Delights registration verification code (OTP) is: {$otp_code}\n\nThis code expires in 15 minutes. Please do not share it with anyone.\n\n-- Lechon Delights";
+
+            $this->mail->addAddress($safe_email);
+            $this->mail->Subject = "{$otp_code} is your Lechon Delights verification code";
+            $this->mail->Body    = $html;
+            $this->mail->AltBody = $alt_body;
+            return $this->mail->send();
+        } catch (Exception $e) {
+            $this->recordFailure("Registration OTP email failed: " . $e->getMessage(), $e);
+            error_log("PHPMailer error info: " . $this->mail->ErrorInfo);
+            return false;
+        }
+    }
+
     public function sendPasswordResetEmail(string $email, string $full_name, string $reset_link): bool {
+
         try {
             $this->resetMessage();
             $safe_email = trim($email);

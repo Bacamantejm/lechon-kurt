@@ -2247,8 +2247,8 @@ class PlatformMonetizationService
 
     private function getPayMongoCredentials(): array
     {
-        $secret = trim((string)(getenv('PAYMONGO_SECRET_KEY') ?: ''));
-        $public = trim((string)(getenv('PAYMONGO_PUBLIC_KEY') ?: ''));
+        $secret = trim(appConfigValue('PAYMONGO_SECRET_KEY'));
+        $public = trim(appConfigValue('PAYMONGO_PUBLIC_KEY'));
 
         if ($secret === '') {
             $secret = 'sk_test_YOUR_PAYMONGO_SECRET_KEY_HERE';
