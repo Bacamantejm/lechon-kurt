@@ -187,13 +187,37 @@ include 'includes/header.php';
 
 // Get store locations and delivery quote context from session
 $stores = $_SESSION['store_locations'] ?? [];
+if (empty($stores) && isset($conn) && $conn instanceof mysqli) {
+    $store_query = "SELECT store_id AS id, store_id, owner_user_id, store_name AS name, store_name, address, city, province, phone, opening_hours AS hours, opening_hours, latitude, longitude FROM store_locations WHERE is_active = 1 ORDER BY store_name ASC";
+    $store_res = mysqli_query($conn, $store_query);
+    if ($store_res) {
+        $stores = mysqli_fetch_all($store_res, MYSQLI_ASSOC);
+        $_SESSION['store_locations'] = $stores;
+    }
+}
+
+// Auto-align seller store ID for pickup pre-selection if storefront_seller_id is set
+if (!empty($_SESSION['storefront_seller_id']) && !empty($stores)) {
+    $preferred_seller_id = (int)$_SESSION['storefront_seller_id'];
+    foreach ($stores as $s) {
+        if ((int)($s['owner_user_id'] ?? 0) === $preferred_seller_id || (int)($s['id'] ?? 0) === $preferred_seller_id) {
+            if (!isset($_SESSION['pickup_location']) || $_SESSION['pickup_location'] <= 0) {
+                $_SESSION['pickup_location'] = (int)($s['id'] ?? $s['store_id'] ?? 1);
+            }
+            break;
+        }
+    }
+}
+
 $current_delivery_quote = is_array($_SESSION['current_delivery_quote'] ?? null) ? $_SESSION['current_delivery_quote'] : [];
 $deliveryPricingConfig = dpGetDeliveryPricingConfig();
 
 // Default delivery option
 if (!isset($_SESSION['delivery_option'])) {
     $_SESSION['delivery_option'] = 'pickup';
-    $_SESSION['pickup_location'] = 1; // Default to first store
+    if (!isset($_SESSION['pickup_location']) && !empty($stores)) {
+        $_SESSION['pickup_location'] = (int)($stores[0]['id'] ?? 1);
+    }
 }
 $current_checkout_delivery_option = in_array((string)($_SESSION['delivery_option'] ?? ''), ['pickup', 'delivery'], true)
     ? (string)$_SESSION['delivery_option']
@@ -219,6 +243,8 @@ $average_speed_kmh = (float)($deliveryPricingConfig['average_speed_kmh'] ?? 25);
 // Get delivery fee
 $delivery_fee = 0;
 $delivery_details = '';
+$estimated_delivery_text = '';
+$selected_store_address = '';
 $selected_store = null;
 
 if ($current_checkout_delivery_option === 'pickup') {
@@ -230,10 +256,13 @@ if ($current_checkout_delivery_option === 'pickup') {
         }
     }
     $delivery_details = "Pickup from: " . ($selected_store['name'] ?? ($selected_store['store_name'] ?? 'Main Store'));
+    $selected_store_address = $selected_store['address'] ?? '';
 } else {
     if (!empty($current_delivery_quote['success'])) {
         $delivery_fee = (float)($current_delivery_quote['fee'] ?? 0);
         $delivery_details = (string)($current_delivery_quote['delivery_details'] ?? 'Delivery fee calculated from the nearest store.');
+        $estimated_delivery_text = (string)($current_delivery_quote['estimated_delivery_text'] ?? '');
+        $selected_store_address = (string)($current_delivery_quote['nearest_store_address'] ?? '');
     } else {
         $delivery_details = 'Pin your exact location to calculate the delivery fee from the nearest store.';
     }
@@ -299,7 +328,7 @@ $remaining = $total - $downpayment;
                             <p>Quantity: <?php echo $item['quantity']; ?></p>
                         </div>
                         <div class="item-price">
-                            PHP <?php echo number_format($item['price'] * $item['quantity'], 2); ?>
+                            ₱<?php echo number_format($item['price'] * $item['quantity'], 2); ?>
                         </div>
                     </div>
                     <?php endforeach; ?>
@@ -308,51 +337,59 @@ $remaining = $total - $downpayment;
                 <div class="summary-totals">
                     <div class="total-row">
                         <span>Subtotal</span>
-                        <span id="summarySubtotal">PHP <?php echo number_format($subtotal, 2); ?></span>
+                        <span id="summarySubtotal">₱<?php echo number_format($subtotal, 2); ?></span>
                     </div>
                     <div class="total-row">
                         <span>Delivery Fee</span>
-                        <span id="summaryDeliveryFee">PHP <?php echo number_format($delivery_fee, 2); ?></span>
+                        <span id="summaryDeliveryFee">₱<?php echo number_format($delivery_fee, 2); ?></span>
                     </div>
                     <div class="total-row">
                         <span>VAT (12%)</span>
-                        <span id="summaryVat">PHP <?php echo number_format($vat_amount, 2); ?></span>
+                        <span id="summaryVat">₱<?php echo number_format($vat_amount, 2); ?></span>
                     </div>
                     <div class="total-row voucher-row" id="voucherSummaryRow" style="<?php echo $voucher_discount > 0 ? '' : 'display:none;'; ?>">
                         <span>Voucher <small id="summaryVoucherCode"><?php echo $applied_voucher_code !== '' ? '(' . htmlspecialchars($applied_voucher_code) . ')' : ''; ?></small></span>
-                        <span id="summaryVoucherDiscount">- PHP <?php echo number_format($voucher_discount, 2); ?></span>
+                        <span id="summaryVoucherDiscount">- ₱<?php echo number_format($voucher_discount, 2); ?></span>
                     </div>
                     <div class="total-row grand-total">
                         <span>Total Amount</span>
-                        <span id="summaryTotal">PHP <?php echo number_format($total, 2); ?></span>
+                        <span id="summaryTotal">₱<?php echo number_format($total, 2); ?></span>
                     </div>
                     
                     <!-- Payment Breakdown -->
-                    <div class="payment-breakdown">
-                        <div class="breakdown-row">
-                            <span>Downpayment (30%):</span>
-                            <span class="downpayment-amount">PHP <?php echo number_format($downpayment, 2); ?></span>
+                    <div class="payment-breakdown" style="background: #fffdfb; border: 1px solid #efddcd; border-radius: 14px; padding: 16px; margin-top: 18px;">
+                        <h4 style="font-family: 'Outfit', sans-serif; font-size: 0.95rem; font-weight: 800; color: #171922; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+                            <span><i class="fas fa-wallet" style="color: #ef6b2e; margin-right: 6px;"></i> Payment Schedule</span>
+                            <span style="font-size: 0.72rem; background: #fff8ef; color: #ef6b2e; border: 1px solid #efddcd; padding: 2px 8px; border-radius: 999px; font-weight: 700;">30% Deposit</span>
+                        </h4>
+                        <div class="breakdown-row d-flex justify-content-between align-items-center mb-2" style="font-size: 0.88rem;">
+                            <span style="color: #667085; font-weight: 600;">Downpayment (30%):</span>
+                            <strong class="downpayment-amount" style="color: #ef6b2e; font-size: 1rem; font-weight: 800;">₱<?php echo number_format($downpayment, 2); ?></strong>
                         </div>
-                        <div class="breakdown-row">
-                            <span>Remaining Balance:</span>
-                            <span class="remaining-amount">PHP <?php echo number_format($remaining, 2); ?></span>
+                        <div class="breakdown-row d-flex justify-content-between align-items-center mb-2" style="font-size: 0.88rem;">
+                            <span style="color: #667085; font-weight: 600;">Remaining Balance (70%):</span>
+                            <span class="remaining-amount" style="color: #2a211d; font-weight: 700;">₱<?php echo number_format($remaining, 2); ?></span>
                         </div>
-                        <div class="breakdown-row">
-                            <span>Full Payment:</span>
-                            <span class="full-amount">PHP <?php echo number_format($total, 2); ?></span>
+                        <div class="breakdown-row d-flex justify-content-between align-items-center pt-2" style="font-size: 0.88rem; border-top: 1px dashed #efddcd;">
+                            <span style="color: #171922; font-weight: 700;">Full Payment (100%):</span>
+                            <span class="full-amount" style="color: #b3261e; font-weight: 800;">₱<?php echo number_format($total, 2); ?></span>
                         </div>
                     </div>
                 </div>
                 
-                <div class="delivery-info">
-                    <h4>Delivery Information</h4>
-                    <p id="summaryDeliveryDetails"><?php echo htmlspecialchars($delivery_details); ?></p>
-                    <p id="summaryDeliveryTime" style="font-weight: bold; color: #28a745; margin-top: 5px;">
-                        <!-- ETA will be populated by JS -->
+                <div class="delivery-info" style="background: #ffffff; border: 1px solid #efddcd; border-radius: 14px; padding: 18px; margin-top: 18px; box-shadow: 0 4px 14px rgba(42, 33, 29, 0.04);">
+                    <h4 style="font-family: 'Outfit', sans-serif; font-size: 0.98rem; font-weight: 800; color: #171922; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-truck-fast" style="color: #b3261e;"></i> Delivery Information
+                    </h4>
+                    <p id="summaryDeliveryDetails" style="margin-bottom: 6px; font-weight: 700; color: #171922; font-size: 0.9rem;">
+                        <i class="fas fa-store" style="color: #ef6b2e; margin-right: 6px;"></i><?php echo htmlspecialchars($delivery_details); ?>
                     </p>
-                    <?php if ($selected_store): ?>
-                        <p><small><?php echo htmlspecialchars($selected_store['address']); ?></small></p>
-                    <?php endif; ?>
+                    <p id="summaryDeliveryTime" style="font-weight: 700; color: #15803d; margin-bottom: 6px; font-size: 0.88rem; display: <?php echo !empty($estimated_delivery_text) ? 'inline-flex' : 'none'; ?>; align-items: center; gap: 6px; background: #f0fdf4; padding: 4px 10px; border-radius: 999px; border: 1px solid #bbf7d0;">
+                        <i class="fas fa-clock"></i> <?php echo htmlspecialchars($estimated_delivery_text); ?>
+                    </p>
+                    <p id="summaryStoreAddress" style="margin: 6px 0 0 0; font-size: 0.84rem; color: #667085; display: <?php echo !empty($selected_store_address) ? 'block' : 'none'; ?>;">
+                        <i class="fas fa-location-dot" style="color: #b3261e; margin-right: 4px;"></i><?php echo htmlspecialchars($selected_store_address); ?>
+                    </p>
                 </div>
             </div>
             
@@ -2165,11 +2202,24 @@ body {
     border-radius: 8px !important;
     font-weight: 700 !important;
     transition: all 0.2s ease !important;
+    padding: 8px 16px !important;
 }
-.checkout-mode-btn.is-active {
+.checkout-mode-btn:hover {
+    background-color: #fff8ef !important;
+    border-color: #efddcd !important;
+    color: #171922 !important;
+}
+#modePickupBtn.is-active, .sticky-mode-btn[data-mode="pickup"].is-active {
+    background-color: #ef6b2e !important;
+    border-color: #ef6b2e !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 12px rgba(239, 107, 46, 0.25) !important;
+}
+#modeDeliveryBtn.is-active, .sticky-mode-btn[data-mode="delivery"].is-active {
     background-color: #b3261e !important;
     border-color: #b3261e !important;
     color: #ffffff !important;
+    box-shadow: 0 4px 12px rgba(179, 38, 30, 0.25) !important;
 }
 .checkout-mode-card {
     border-color: #efddcd !important;
@@ -4631,13 +4681,31 @@ async function updateDeliveryOption() {
 function updateSummaryUI(data) {
     const deliveryFee = parseFloat(data.delivery_fee || 0);
     currentDeliveryFee = deliveryFee;
-    document.getElementById('summaryDeliveryDetails').textContent = data.delivery_details || '...';
+    
+    const detailsEl = document.getElementById('summaryDeliveryDetails');
+    if (detailsEl) {
+        detailsEl.innerHTML = `<i class="fas fa-store" style="color: #ef6b2e; margin-right: 6px;"></i>${data.delivery_details || '...'}`;
+    }
+    
     const summaryDeliveryTime = document.getElementById('summaryDeliveryTime');
     if (summaryDeliveryTime) {
         if (data.estimated_delivery_text) {
+            summaryDeliveryTime.style.display = 'inline-flex';
             summaryDeliveryTime.innerHTML = `<i class="fas fa-clock"></i> ${data.estimated_delivery_text}`;
-        } else if ((data.delivery_option || '').toLowerCase() === 'pickup') {
+        } else {
+            summaryDeliveryTime.style.display = 'none';
             summaryDeliveryTime.innerHTML = '';
+        }
+    }
+
+    const summaryStoreAddress = document.getElementById('summaryStoreAddress');
+    if (summaryStoreAddress) {
+        if (data.nearest_store_address) {
+            summaryStoreAddress.style.display = 'block';
+            summaryStoreAddress.innerHTML = `<i class="fas fa-location-dot" style="color: #b3261e; margin-right: 4px;"></i>${data.nearest_store_address}`;
+        } else {
+            summaryStoreAddress.style.display = 'none';
+            summaryStoreAddress.innerHTML = '';
         }
     }
 
@@ -4664,6 +4732,7 @@ if (activeCheckoutDeliveryOption === 'delivery' && initialDeliveryQuote && initi
         delivery_option: 'delivery',
         delivery_fee: initialDeliveryQuote.fee || 0,
         delivery_details: initialDeliveryQuote.delivery_details || '',
+        nearest_store_address: initialDeliveryQuote.nearest_store_address || '',
         distance_km: initialDeliveryQuote.distance_km || '',
         estimated_delivery_text: initialDeliveryQuote.estimated_delivery_text || ''
     });

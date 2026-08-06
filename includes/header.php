@@ -15,7 +15,9 @@ $google_geocoding_enabled = function_exists('shouldUseGoogleGeocoding') ? should
 $normalized_user_type = strtolower(trim((string)($_SESSION['user_type'] ?? '')));
 $is_logged_in_user = !empty($_SESSION['user_id']);
 $is_customer_user = $is_logged_in_user && ($normalized_user_type === '' || $normalized_user_type === 'customer' || $normalized_user_type === 'user');
-$market_header_excluded_pages = ['reset_password'];
+$auth_pages = ['login', 'register', 'reset_password', 'reset_password_request'];
+$is_auth_page = in_array($current_page, $auth_pages, true);
+$market_header_excluded_pages = ['login', 'register', 'reset_password', 'reset_password_request'];
 $is_market_home_header = ($script_parent !== 'admin') && !in_array($current_page, $market_header_excluded_pages, true);
 $show_market_header_bottom = in_array($current_page, ['home', 'index', 'shops'], true);
 $cart_count = isset($_SESSION['cart']) && is_array($_SESSION['cart']) ? count($_SESSION['cart']) : 0;
@@ -813,6 +815,7 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
             <span class="logo-icon"><img src="<?php echo $path_prefix; ?>assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block;"></span>
             <span class="logo-copy"><span class="logo-title">Lechon Delights</span><span class="logo-sub">Marketplace</span></span>
         </a>
+        <?php if (!$is_auth_page): ?>
         <nav class="main-nav">
             <a href="<?php echo $path_prefix; ?>index.php" class="nav-link <?php echo $current_page === 'home' ? 'active' : ''; ?>"><i class="fas fa-house"></i> Home</a>
             <a href="<?php echo $path_prefix; ?>menu.php" class="nav-link <?php echo $current_page === 'menu' ? 'active' : ''; ?>"><i class="fas fa-utensils"></i> Menu</a>
@@ -872,6 +875,7 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
             <button class="icon-btn cart-btn" id="cartToggle" onclick="location.href='<?php echo $path_prefix; ?>cart.php'"><i class="fas fa-shopping-cart"></i><span class="badge" id="cartBadge"><?php echo (int)$cart_count; ?></span></button>
             <button class="icon-btn mobile-toggle" id="mobileToggle"><i class="fas fa-bars"></i></button>
         </div>
+        <?php endif; ?>
     </div>
 </header>
 <?php endif; ?>

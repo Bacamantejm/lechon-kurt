@@ -442,7 +442,7 @@ if ($product_result) {
 
 arsort($categories);
 usort($products, static function ($a, $b) { return [$b['sold'], $b['reviews'], $b['rating']] <=> [$a['sold'], $a['reviews'], $a['rating']]; });
-$featured_products = array_slice($products, 0, 8);
+$featured_products = array_slice($products, 0, 12);
 $global_rating = $global_rating_count > 0 ? $global_rating_sum / $global_rating_count : 0;
 $branch_tags = array_slice(array_keys($categories), 0, 3);
 $branch_items = array_slice(array_column($featured_products, 'name'), 0, 3);
@@ -2502,6 +2502,14 @@ body {
     background: #f1f5f9 !important;
     color: #171922 !important;
 }
+.bestseller-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 28px rgba(179, 38, 30, 0.12) !important;
+    border-color: #b3261e !important;
+}
+.bestseller-card:hover .market-store-row-thumb {
+    transform: scale(1.06);
+}
 <?php endif; ?>
 </style>
 
@@ -2719,6 +2727,80 @@ body {
                     </section>
                     <?php endif; ?>
 
+                    <?php if (!empty($featured_products)): ?>
+                    <!-- Prominent Best Sellers & Top Rated Dishes Section -->
+                    <section class="bestsellers-section" style="margin-bottom: 32px; padding: 24px; background: linear-gradient(135deg, #fff9f2 0%, #ffffff 100%); border: 1px solid #efddcd; border-radius: 20px; box-shadow: 0 8px 24px rgba(42,33,29,0.04);">
+                        <div class="market-head" style="margin-bottom: 18px; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 12px;">
+                            <div>
+                                <div style="display:inline-flex; align-items:center; gap:6px; padding:4px 12px; background:#fff1f2; border:1px solid #ffe4e6; border-radius:999px; color:#b3261e; font-size:0.78rem; font-weight:800; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:6px;">
+                                    <i class="fas fa-fire" style="color:#ef6b2e;"></i> Top Customer Choices
+                                </div>
+                                <h2 style="font-family:'Outfit',sans-serif; font-size:1.55rem; font-weight:800; color:#171922; margin:0 0 4px 0;">Best Sellers & Top Rated Dishes</h2>
+                                <p style="font-size:0.88rem; color:#7b6d64; margin:0;">Hand-picked customer favorites with high sales volume and top customer ratings across Cavite.</p>
+                            </div>
+                            <a href="menu.php" class="btn-outline btn-sm" style="border-radius:999px; font-weight:700; text-decoration:none; padding:8px 18px; font-size:0.85rem;">
+                                Explore Full Menu <i class="fas fa-arrow-right" style="margin-left:4px;"></i>
+                            </a>
+                        </div>
+
+                        <div class="bestsellers-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px;">
+                            <?php foreach ($featured_products as $idx => $product): ?>
+                                <?php
+                                $prod_id_val = (string)($product['id'] ?? '');
+                                $is_prod_fav = !empty($favorite_store_keys['product_' . $prod_id_val]);
+                                $rank_num = $idx + 1;
+                                ?>
+                                <a href="<?php echo htmlspecialchars($product['menu_link'] ?? 'menu.php'); ?>" class="bestseller-card panda-card-link" style="background:#ffffff; border:1px solid #efddcd; border-radius:16px; overflow:hidden; display:flex; flex-direction:column; transition:transform 0.25s ease, box-shadow 0.25s ease; text-decoration:none; position:relative;">
+                                    <div class="store-card-image-wrap" style="height: 145px; position:relative; overflow:hidden;">
+                                        <div class="market-store-row-thumb" style="background-image: url('<?php echo htmlspecialchars($product['image']); ?>'); width:100%; height:100%; background-size:cover; background-position:center; transition:transform 0.4s ease;"></div>
+                                        <span class="bestseller-rank-badge" style="position:absolute; top:10px; left:10px; background:linear-gradient(135deg, #b3261e, #ef6b2e); color:#ffffff; font-weight:800; font-size:0.75rem; padding:4px 10px; border-radius:999px; box-shadow:0 4px 10px rgba(179,38,30,0.3); display:inline-flex; align-items:center; gap:4px; z-index:2;">
+                                            <i class="fas fa-fire"></i> #<?php echo $rank_num; ?> Best Seller
+                                        </span>
+                                        <button
+                                            type="button"
+                                            class="market-store-favorite-btn<?php echo $is_prod_fav ? ' is-active' : ''; ?>"
+                                            data-favorite-toggle="1"
+                                            data-favorite-type="product"
+                                            data-favorite-product-id="<?php echo htmlspecialchars($prod_id_val); ?>"
+                                            data-favorite-active="<?php echo $is_prod_fav ? '1' : '0'; ?>"
+                                            aria-pressed="<?php echo $is_prod_fav ? 'true' : 'false'; ?>"
+                                            title="<?php echo $is_prod_fav ? 'Remove from favorites' : 'Save to favorites'; ?>"
+                                            onclick="event.preventDefault(); event.stopPropagation();"
+                                            style="position:absolute; top:10px; right:10px; z-index:2;">
+                                            <i class="<?php echo $is_prod_fav ? 'fas' : 'far'; ?> fa-heart"></i>
+                                        </button>
+                                    </div>
+
+                                    <div class="store-card-details" style="padding: 14px; display:flex; flex-direction:column; flex:1;">
+                                        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:4px;">
+                                            <h3 style="font-family:'Outfit',sans-serif; font-size:1rem; font-weight:800; color:#171922; margin:0; line-height:1.35; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; flex:1;"><?php echo htmlspecialchars($product['name']); ?></h3>
+                                            <?php if ($product['rating'] > 0): ?>
+                                            <span style="font-size:0.82rem; font-weight:800; color:#171922; display:inline-flex; align-items:center; gap:3px; white-space:nowrap;">
+                                                <i class="fas fa-star" style="color:#ef6b2e;"></i><?php echo number_format((float)$product['rating'], 1); ?>
+                                            </span>
+                                            <?php endif; ?>
+                                        </div>
+                                        
+                                        <div style="font-size:0.8rem; color:#7b6d64; margin-bottom:12px; display:flex; align-items:center; gap:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                                            <i class="fas fa-store" style="color:#ef6b2e;"></i> <span><?php echo htmlspecialchars($product['store']); ?></span>
+                                        </div>
+
+                                        <div style="margin-top:auto; padding-top:10px; border-top:1px dashed #efddcd; display:flex; justify-content:space-between; align-items:center;">
+                                            <div>
+                                                <strong style="font-size:1.05rem; color:#b3261e; font-weight:800; display:block;">PHP <?php echo number_format((float)$product['price'], 2); ?></strong>
+                                                <span style="font-size:0.75rem; color:#7b6d64; font-weight:600;"><?php echo number_format((int)$product['sold']); ?> sold</span>
+                                            </div>
+                                            <span class="btn-primary btn-sm" style="padding:6px 12px; font-size:0.78rem; border-radius:8px; pointer-events:none; background:linear-gradient(135deg, #b3261e, #ef6b2e); color:#fff; font-weight:700;">
+                                                Order Now <i class="fas fa-arrow-right" style="font-size:0.75rem;"></i>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </a>
+                            <?php endforeach; ?>
+                        </div>
+                    </section>
+                    <?php endif; ?>
+
                     <section class="market-mini-section">
                         <div class="panda-store-header-bar">
                             <div class="panda-store-header-title">
@@ -2803,68 +2885,6 @@ body {
                             <button type="button" class="market-btn-soft" id="marketLoadMoreBtn">Show more stores</button>
                         </div>
                     </section>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <?php if (!empty($featured_products)): ?>
-    <section class="market-section" style="padding-top: 10px;">
-        <div class="container">
-            <div class="panda-store-header-bar" style="margin-bottom: 20px;">
-                <div class="panda-store-header-title">
-                    <h2 class="panda-main-heading">Popular picks right now</h2>
-                    <p style="margin: 4px 0 0 0; font-size: 0.88rem; color: #667085;">These featured dishes are pulled from your live catalog and surfaced using product activity, reviews, and ratings.</p>
-                </div>
-            </div>
-            <div class="market-store-list store-list-grid" style="grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)) !important;">
-                <?php foreach ($featured_products as $product): ?>
-                    <?php
-                    $prod_id_val = (string)($product['id'] ?? '');
-                    $is_prod_fav = !empty($favorite_store_keys['product_' . $prod_id_val]);
-                    ?>
-                    <a href="<?php echo htmlspecialchars($product['menu_link'] ?? 'menu.php'); ?>" class="market-product-card panda-card-link">
-                        <div class="store-card-image-wrap" style="height: 140px;">
-                            <div class="market-store-row-thumb" style="background-image: url('<?php echo htmlspecialchars($product['image']); ?>');"></div>
-                            <span class="market-type-pill" style="background: rgba(179,38,30,0.88);"><?php echo htmlspecialchars($product['category']); ?></span>
-                            <button
-                                type="button"
-                                class="market-store-favorite-btn<?php echo $is_prod_fav ? ' is-active' : ''; ?>"
-                                data-favorite-toggle="1"
-                                data-favorite-type="product"
-                                data-favorite-product-id="<?php echo htmlspecialchars($prod_id_val); ?>"
-                                data-favorite-active="<?php echo $is_prod_fav ? '1' : '0'; ?>"
-                                aria-pressed="<?php echo $is_prod_fav ? 'true' : 'false'; ?>"
-                                title="<?php echo $is_prod_fav ? 'Remove from favorites' : 'Save to favorites'; ?>"
-                                onclick="event.preventDefault(); event.stopPropagation();">
-                                <i class="<?php echo $is_prod_fav ? 'fas' : 'far'; ?> fa-heart"></i>
-                            </button>
-                        </div>
-                        <div class="store-card-details">
-                            <div class="store-card-row-head">
-                                <h3><?php echo htmlspecialchars($product['name']); ?></h3>
-                                <?php if ($product['rating'] > 0): ?>
-                                <span class="store-card-rating">
-                                    <i class="fas fa-star" style="color: #ef6b2e; margin-right: 3px;"></i><?php echo number_format((float)$product['rating'], 1); ?>
-                                </span>
-                                <?php endif; ?>
-                            </div>
-                            
-                            <div class="store-card-summary" style="height: auto; font-size: 0.8rem; color: #64748b; margin-bottom: 8px;">
-                                <i class="fas fa-shop" style="color: #ef6b2e; margin-right: 4px;"></i><?php echo htmlspecialchars($product['store']); ?>
-                            </div>
-                            
-                            <div class="panda-card-footer-line">
-                                <strong class="panda-card-price-text">PHP <?php echo number_format((float)$product['price'], 2); ?></strong>
-                                <span style="font-size: 0.76rem; color: #64748b; font-weight: 600;"><?php echo number_format((int)$product['sold']); ?> sold</span>
-                            </div>
-                        </div>
-                    </a>
-                <?php endforeach; ?>
-            </div>
-        </div>
-    </section>
-    <?php endif; ?>
 
 </div>
 
