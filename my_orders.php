@@ -480,9 +480,11 @@ $query = "
         oi.quantity,
         oi.size,
         oi.addons,
-        oi.total as item_total
+        oi.total as item_total,
+        p.image as product_image
     FROM orders o
     LEFT JOIN order_items oi ON o.id = oi.order_id
+    LEFT JOIN products p ON oi.product_id = p.id
     WHERE o.user_id = ? AND (o.is_archived IS NULL OR o.is_archived = 0)
     ORDER BY o.created_at DESC
     LIMIT ? OFFSET ?
@@ -533,7 +535,8 @@ while ($row = mysqli_fetch_assoc($result)) {
             'quantity' => $row['quantity'],
             'size' => $row['size'],
             'addons' => $row['addons'],
-            'item_total' => $row['item_total']
+            'item_total' => $row['item_total'],
+            'product_image' => $row['product_image'] ?? ''
         ];
     }
 }
@@ -585,41 +588,15 @@ unset($order);
         <!-- REGULAR ORDERS TAB -->
         <?php if ($current_tab === 'orders'): ?>
 
-        <div class="orders-overview">
-            <div class="overview-card">
-                <div class="overview-icon">
+        <!-- TOTAL ORDERS HERO STAT CARD -->
+        <div class="total-orders-wrapper" style="display: flex; justify-content: center; margin-bottom: 28px;">
+            <div class="total-orders-hero-card">
+                <div class="total-orders-icon-wrap">
                     <i class="fas fa-receipt"></i>
                 </div>
-                <div class="overview-content">
-                    <span class="overview-label">Total Orders</span>
-                    <strong class="overview-value"><?php echo number_format($orders_stats['total_orders']); ?></strong>
-                </div>
-            </div>
-            <div class="overview-card">
-                <div class="overview-icon overview-active">
-                    <i class="fas fa-spinner"></i>
-                </div>
-                <div class="overview-content">
-                    <span class="overview-label">In Progress</span>
-                    <strong class="overview-value"><?php echo number_format($orders_stats['active_orders']); ?></strong>
-                </div>
-            </div>
-            <div class="overview-card">
-                <div class="overview-icon overview-complete">
-                    <i class="fas fa-check-circle"></i>
-                </div>
-                <div class="overview-content">
-                    <span class="overview-label">Fulfilled</span>
-                    <strong class="overview-value"><?php echo number_format($orders_stats['fulfilled_orders']); ?></strong>
-                </div>
-            </div>
-            <div class="overview-card">
-                <div class="overview-icon overview-spent">
-                    <i class="fas fa-wallet"></i>
-                </div>
-                <div class="overview-content">
-                    <span class="overview-label">Total Spent</span>
-                    <strong class="overview-value">₱<?php echo number_format($orders_stats['lifetime_spent'], 2); ?></strong>
+                <div class="total-orders-meta">
+                    <span class="total-orders-label">Total Orders</span>
+                    <strong class="total-orders-value animated-counter" data-target="<?php echo (int)($orders_stats['total_orders'] ?? 0); ?>">0</strong>
                 </div>
             </div>
         </div>
@@ -650,241 +627,231 @@ unset($order);
                     ];
                     $order_progress = $progress_map[$status_key] ?? 1;
                     $delivery_label = ucfirst((string)($order['delivery_option'] ?? 'delivery'));
+                    
+                    $status_display_map = [
+                        'pending' => 'Pending',
+                        'confirmed' => 'Confirmed',
+                        'preparing' => 'In Preparation',
+                        'assigned' => 'In - Transit',
+                        'on_the_way' => 'In - Transit',
+                        'arriving' => 'Arriving Soon',
+                        'delivered' => 'Delivered',
+                        'completed' => 'Delivered',
+                        'cancelled' => 'Cancelled'
+                    ];
+                    $status_display_text = $status_display_map[$status_key] ?? ucfirst($order['status']);
                     ?>
-                    <div class="order-card" data-status="<?php echo htmlspecialchars($status_key); ?>">
-                        <div class="order-header">
-                            <div class="order-info">
-                                <h3>Order #<?php echo htmlspecialchars($order['order_number']); ?></h3>
-                                <p class="order-date">
-                                    <i class="far fa-calendar"></i> 
-                                    <?php echo date('F j, Y, g:i A', strtotime($order['created_at'])); ?>
-                                </p>
-                                <p class="order-method">
-                                    <i class="fas fa-truck"></i> 
-                                    <?php echo $delivery_label; ?>
-                                    <?php if ($order['delivery_option'] === 'pickup' && $order['pickup_location']): ?>
-                                        (Pickup)
-                                    <?php elseif ($order['delivery_option'] === 'delivery' && $order['delivery_location']): ?>
-                                        (Delivery: <?php echo ucfirst(str_replace('_', ' ', $order['delivery_location'])); ?>)
-                                    <?php endif; ?>
-                                </p>
-                                <div class="order-meta-line">
-                                    <span class="meta-pill">
-                                        <i class="fas fa-credit-card"></i>
-                                        <?php echo ucfirst(str_replace('_', ' ', (string)$order['payment_method'])); ?>
-                                    </span>
-                                    <span class="meta-pill">
-                                        <i class="fas fa-box-open"></i>
-                                        <?php echo count($order['items']); ?> item<?php echo count($order['items']) !== 1 ? 's' : ''; ?>
-                                    </span>
-                                    <?php if ((float)($order['voucher_discount'] ?? 0) > 0): ?>
-                                        <span class="meta-pill">
-                                            <i class="fas fa-ticket-alt"></i>
-                                            Voucher <?php echo htmlspecialchars((string)($order['voucher_code'] ?? '')); ?>
-                                        </span>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-                            <div class="order-status">
-                                <span class="status-badge status-<?php echo strtolower($order['status']); ?>">
-                                    <?php echo ucfirst($order['status']); ?>
+                    <div class="clean-order-card" data-status="<?php echo htmlspecialchars($status_key); ?>">
+                        <!-- Header Section -->
+                        <div class="clean-card-header">
+                            <div class="clean-header-left">
+                                <span class="clean-order-badge">
+                                    Order <span class="clean-order-num">#<?php echo htmlspecialchars($order['order_number']); ?></span>
                                 </span>
-                                <p class="order-total">₱<?php echo number_format($order['total_amount'], 2); ?></p>
+                                <span class="clean-order-date">
+                                    Order Placed: <?php echo date('D, jS M Y', strtotime($order['created_at'])); ?>
+                                </span>
+                            </div>
+                            <div class="clean-header-right">
+                                <?php if (($order['delivery_option'] ?? 'delivery') !== 'pickup'): ?>
+                                    <a href="track_order.php?order_id=<?php echo (int)$order['id']; ?>" class="clean-btn-track">
+                                        <i class="fas fa-crosshairs"></i> TRACK ORDER
+                                    </a>
+                                <?php else: ?>
+                                    <a href="track_order.php?order_id=<?php echo (int)$order['id']; ?>" class="clean-btn-track" style="background: linear-gradient(135deg, #2a211d, #7b6d64);">
+                                        <i class="fas fa-store"></i> VIEW PICKUP
+                                    </a>
+                                <?php endif; ?>
                             </div>
                         </div>
 
-                        <?php if ($status_key === 'cancelled'): ?>
-                            <div class="order-progress cancelled">
-                                <i class="fas fa-ban"></i> This order was cancelled.
-                            </div>
-                        <?php else: ?>
-                            <div class="order-progress">
-                                <div class="progress-step <?php echo $order_progress >= 1 ? 'done' : ''; ?>">
-                                    <span class="progress-dot"></span>
-                                    <span class="progress-label">Placed</span>
+                        <!-- Items List Section -->
+                        <div class="clean-items-body">
+                            <?php foreach ($order['items'] as $item): ?>
+                                <?php
+                                $item_img = !empty($item['product_image']) ? $item['product_image'] : 'assets/images/promo_lechon.jpg';
+                                if (!file_exists($item_img) && file_exists('uploads/products/' . basename($item_img))) {
+                                    $item_img = 'uploads/products/' . basename($item_img);
+                                }
+                                ?>
+                                <div class="clean-item-row">
+                                    <div class="clean-item-thumb-col">
+                                        <img src="<?php echo htmlspecialchars($item_img); ?>" alt="<?php echo htmlspecialchars($item['product_name']); ?>" class="clean-item-img" onError="this.onerror=null;this.src='assets/images/promo_lechon.jpg';">
+                                    </div>
+                                    <div class="clean-item-info-col">
+                                        <h4 class="clean-item-title"><?php echo htmlspecialchars($item['product_name']); ?></h4>
+                                        <span class="clean-item-seller">By: Lechon Delights</span>
+                                        <div class="clean-item-meta">
+                                            <?php if (!empty($item['size'])): ?>Size: <strong><?php echo htmlspecialchars($item['size']); ?></strong> &bull; <?php endif; ?>
+                                            Qty: <strong><?php echo (int)$item['quantity']; ?></strong>
+                                            <span class="clean-item-price">&bull; ₱<?php echo number_format($item['price'], 2); ?></span>
+                                        </div>
+                                    </div>
+                                    <div class="clean-item-status-col">
+                                        <span class="clean-col-label">Status</span>
+                                        <strong class="clean-status-val status-<?php echo htmlspecialchars($status_key); ?>">
+                                            <?php echo htmlspecialchars($status_display_text); ?>
+                                        </strong>
+                                    </div>
+                                    <div class="clean-item-delivery-col">
+                                        <span class="clean-col-label">Delivery Expected by:</span>
+                                        <strong class="clean-delivery-val"><?php echo date('j F Y', strtotime($order['delivery_date'])); ?></strong>
+                                    </div>
                                 </div>
-                                <div class="progress-step <?php echo $order_progress >= 2 ? 'done' : ''; ?>">
-                                    <span class="progress-dot"></span>
-                                    <span class="progress-label">Confirmed</span>
-                                </div>
-                                <div class="progress-step <?php echo $order_progress >= 3 ? 'done' : ''; ?>">
-                                    <span class="progress-dot"></span>
-                                    <span class="progress-label">Preparing</span>
-                                </div>
-                                <div class="progress-step <?php echo $order_progress >= 4 ? 'done current' : ''; ?>">
-                                    <span class="progress-dot"></span>
-                                    <span class="progress-label">Delivered</span>
-                                </div>
-                            </div>
-                        <?php endif; ?>
-                        
-                        <div class="order-details">
-                            <div class="detail-row">
-                                <div class="detail-item">
-                                    <span class="detail-label">Customer:</span>
-                                    <span class="detail-value"><?php echo htmlspecialchars($order['customer_name']); ?></span>
-                                </div>
-                                <div class="detail-item">
-                                    <span class="detail-label">Phone:</span>
-                                    <span class="detail-value"><?php echo htmlspecialchars($order['customer_phone']); ?></span>
-                                </div>
-                            </div>
-                            
-                            <div class="detail-row">
-                                <div class="detail-item">
-                                    <span class="detail-label">Delivery/Pickup Date:</span>
-                                    <span class="detail-value"><?php echo date('F j, Y', strtotime($order['delivery_date'])); ?></span>
-                                </div>
-                                <div class="detail-item">
-                                    <span class="detail-label">Time:</span>
-                                    <span class="detail-value"><?php echo htmlspecialchars($order['delivery_time']); ?></span>
-                                </div>
-                            </div>
-                            
-                            <div class="detail-row">
-                                <div class="detail-item">
-                                    <span class="detail-label">Payment Method:</span>
-                                    <span class="detail-value"><?php echo ucfirst(str_replace('_', ' ', $order['payment_method'])); ?></span>
-                                </div>
-                                <div class="detail-item">
-                                    <span class="detail-label">Address/Location:</span>
-                                    <span class="detail-value"><?php echo htmlspecialchars($order['delivery_address']); ?></span>
-                                </div>
-                            </div>
-                            
-                            <?php if (!empty($order['special_instructions'])): ?>
-                                <div class="special-instructions">
-                                    <span class="detail-label">Special Instructions:</span>
-                                    <p><?php echo htmlspecialchars($order['special_instructions']); ?></p>
-                                </div>
-                            <?php endif; ?>
-
-                            <div class="order-policy-box">
-                                <div class="policy-row">
-                                    <strong><i class="fas fa-file-contract"></i> Store Cancellation Terms:</strong>
-                                    <span><?php echo htmlspecialchars((string)($order['partner_policy']['cancellation_terms'] ?? '')); ?></span>
-                                </div>
-                                <div class="policy-row">
-                                    <strong><i class="fas fa-shield-alt"></i> Refund Terms:</strong>
-                                    <span>
-                                        <?php echo htmlspecialchars((string)($order['refund_terms'] ?? '')); ?>
-                                        <?php if (!empty($order['refund_photo_required'])): ?>
-                                            Photo proof is required for damaged or broken product claims.
-                                        <?php endif; ?>
-                                    </span>
-                                </div>
-                            </div>
-                            
-                            <?php if (!empty($order['items'])): ?>
-                                <div class="order-items">
-                                    <h4>Order Items</h4>
-                                    <table class="items-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Item</th>
-                                                <th>Qty</th>
-                                                <th>Price</th>
-                                                <th>Subtotal</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <?php foreach ($order['items'] as $item): ?>
-                                                <tr>
-                                                    <td>
-                                                        <div class="item-name"><?php echo htmlspecialchars($item['product_name']); ?></div>
-                                                        <?php if ($item['size']): ?>
-                                                            <div class="item-size">Size: <?php echo htmlspecialchars($item['size']); ?></div>
-                                                        <?php endif; ?>
-                                                        <?php if ($item['addons'] && $item['addons'] != '[]'): ?>
-                                                            <div class="item-addons">Add-ons: <?php echo htmlspecialchars($item['addons']); ?></div>
-                                                        <?php endif; ?>
-                                                    </td>
-                                                    <td><?php echo $item['quantity']; ?></td>
-                                                    <td>₱<?php echo number_format($item['price'], 2); ?></td>
-                                                    <td>₱<?php echo number_format($item['item_total'], 2); ?></td>
-                                                </tr>
-                                            <?php endforeach; ?>
-                                            <tr class="summary-row">
-                                                <td colspan="3" class="text-right"><strong>Subtotal:</strong></td>
-                                                <td><strong>₱<?php echo number_format($order['subtotal'], 2); ?></strong></td>
-                                            </tr>
-                                            <?php if ($order['delivery_fee'] > 0): ?>
-                                            <tr class="summary-row">
-                                                <td colspan="3" class="text-right"><strong>Delivery Fee:</strong></td>
-                                                <td><strong>₱<?php echo number_format($order['delivery_fee'], 2); ?></strong></td>
-                                            </tr>
-                                            <?php endif; ?>
-                                            <?php if ((float)($order['voucher_discount'] ?? 0) > 0): ?>
-                                            <tr class="summary-row">
-                                                <td colspan="3" class="text-right">
-                                                    <strong>Voucher Discount<?php echo !empty($order['voucher_code']) ? ' (' . htmlspecialchars((string)$order['voucher_code']) . ')' : ''; ?>:</strong>
-                                                </td>
-                                                <td><strong>-&#8369;<?php echo number_format((float)$order['voucher_discount'], 2); ?></strong></td>
-                                            </tr>
-                                            <?php endif; ?>
-                                            <tr class="total-row">
-                                                <td colspan="3" class="text-right"><strong>Total:</strong></td>
-                                                <td><strong class="total-amount">₱<?php echo number_format($order['total_amount'], 2); ?></strong></td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            <?php endif; ?>
+                            <?php endforeach; ?>
                         </div>
-                        
-                        <div class="order-actions">
-                            <?php 
-                            $trackable_statuses = ['assigned', 'on_the_way', 'arriving', 'confirmed', 'preparing'];
-                            if ($order['delivery_option'] === 'delivery' && in_array(strtolower($order['status']), $trackable_statuses)): 
-                            ?>
-                                <a href="track_order.php?order_id=<?php echo $order['id']; ?>" class="btn-track">
-                                    <i class="fas fa-map-marker-alt"></i> Track Order
+
+                        <!-- Card Footer -->
+                        <div class="clean-card-footer">
+                            <div class="clean-footer-left">
+                                <?php if (in_array(strtolower($order['status']), ['pending', 'confirmed', 'preparing', 'processing'], true) && !empty($order['can_customer_cancel'])): ?>
+                                    <button type="button" class="clean-btn-cancel-action" onclick="cancelOrder(<?php echo $order['id']; ?>, <?php echo json_encode((string)$order['cancellation_policy_message']); ?>)">
+                                        &times; CANCEL ORDER
+                                    </button>
+                                <?php endif; ?>
+                                <button type="button" class="clean-btn-toggle" onclick="toggleOrderDetails(<?php echo $order['id']; ?>)">
+                                    <i class="fas fa-chevron-down" id="toggleIcon_<?php echo $order['id']; ?>"></i>
+                                    <span id="toggleText_<?php echo $order['id']; ?>">View Details & Actions</span>
+                                </button>
+                            </div>
+                            <div class="clean-footer-middle">
+                                <span class="clean-payment-info">
+                                    Paid using <?php echo ucfirst(str_replace('_', ' ', (string)$order['payment_method'])); ?>
+                                </span>
+                            </div>
+                            <div class="clean-footer-right">
+                                <div class="clean-total-box">
+                                    <span class="clean-total-label">Total:</span>
+                                    <strong class="clean-total-amount">₱<?php echo number_format($order['total_amount'], 2); ?></strong>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Collapsible Order Details & Actions Drawer -->
+                        <div class="clean-details-drawer" id="orderDetails_<?php echo $order['id']; ?>" style="display: none; padding: 24px; background: #ffffff; border-top: 1px dashed #efddcd;">
+                            <?php if ($status_key === 'cancelled'): ?>
+                                <div class="order-progress cancelled">
+                                    <i class="fas fa-ban"></i> This order was cancelled.
+                                </div>
+                            <?php else: ?>
+                                <div class="order-progress">
+                                    <div class="progress-step <?php echo $order_progress >= 1 ? 'done' : ''; ?>">
+                                        <span class="progress-dot"></span>
+                                        <span class="progress-label">Placed</span>
+                                    </div>
+                                    <div class="progress-step <?php echo $order_progress >= 2 ? 'done' : ''; ?>">
+                                        <span class="progress-dot"></span>
+                                        <span class="progress-label">Confirmed</span>
+                                    </div>
+                                    <div class="progress-step <?php echo $order_progress >= 3 ? 'done' : ''; ?>">
+                                        <span class="progress-dot"></span>
+                                        <span class="progress-label">Preparing</span>
+                                    </div>
+                                    <div class="progress-step <?php echo $order_progress >= 4 ? 'done current' : ''; ?>">
+                                        <span class="progress-dot"></span>
+                                        <span class="progress-label">Delivered</span>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
+                            
+                            <div class="order-details">
+                                <div class="detail-row">
+                                    <div class="detail-item">
+                                        <span class="detail-label">Customer:</span>
+                                        <span class="detail-value"><?php echo htmlspecialchars($order['customer_name']); ?></span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Phone:</span>
+                                        <span class="detail-value"><?php echo htmlspecialchars($order['customer_phone']); ?></span>
+                                    </div>
+                                </div>
+                                
+                                <div class="detail-row">
+                                    <div class="detail-item">
+                                        <span class="detail-label">Delivery/Pickup Date:</span>
+                                        <span class="detail-value"><?php echo date('F j, Y', strtotime($order['delivery_date'])); ?></span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Time:</span>
+                                        <span class="detail-value"><?php echo htmlspecialchars($order['delivery_time']); ?></span>
+                                    </div>
+                                </div>
+                                
+                                <div class="detail-row">
+                                    <div class="detail-item">
+                                        <span class="detail-label">Payment Method:</span>
+                                        <span class="detail-value"><?php echo ucfirst(str_replace('_', ' ', $order['payment_method'])); ?></span>
+                                    </div>
+                                    <div class="detail-item">
+                                        <span class="detail-label">Address/Location:</span>
+                                        <span class="detail-value"><?php echo htmlspecialchars($order['delivery_address']); ?></span>
+                                    </div>
+                                </div>
+                                
+                                <?php if (!empty($order['special_instructions'])): ?>
+                                    <div class="special-instructions">
+                                        <span class="detail-label">Special Instructions:</span>
+                                        <p><?php echo htmlspecialchars($order['special_instructions']); ?></p>
+                                    </div>
+                                <?php endif; ?>
+
+                                <div class="order-policy-box">
+                                    <div class="policy-row">
+                                        <strong><i class="fas fa-file-contract"></i> Store Cancellation Terms:</strong>
+                                        <span><?php echo htmlspecialchars((string)($order['partner_policy']['cancellation_terms'] ?? '')); ?></span>
+                                    </div>
+                                    <div class="policy-row">
+                                        <strong><i class="fas fa-shield-alt"></i> Refund Terms:</strong>
+                                        <span>
+                                            <?php echo htmlspecialchars((string)($order['refund_terms'] ?? '')); ?>
+                                            <?php if (!empty($order['refund_photo_required'])): ?>
+                                                Photo proof is required for damaged or broken product claims.
+                                            <?php endif; ?>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="order-actions" style="margin-top: 20px; display: flex; flex-wrap: wrap; gap: 10px;">
+                                <?php
+                                $can_leave_review = in_array($order['id'], $orders_with_unreviewed_items);
+                                if (($order['status'] == 'delivered' || $order['status'] == 'completed') && $can_leave_review):
+                                ?>
+                                    <a href="leave_review.php?order_id=<?php echo $order['id']; ?>" class="btn-primary" style="background: #ef6b2e; border: none; color: #fff;">
+                                        <i class="fas fa-star"></i> Leave a Review
+                                    </a>
+                                <?php elseif (($order['status'] == 'delivered' || $order['status'] == 'completed') && !$can_leave_review): ?>
+                                    <button type="button" class="btn-secondary" disabled><i class="fas fa-check-circle"></i> All Items Reviewed</button>
+                                <?php endif; ?>
+
+                                <?php if (in_array(strtolower($order['status']), ['delivered', 'completed'])): ?>
+                                    <button type="button" class="btn-cancel" style="border-color: #ff9800; color: #ff9800;" onclick="requestRefund(<?php echo $order['id']; ?>, <?php echo !empty($order['refund_photo_required']) ? 'true' : 'false'; ?>, <?php echo json_encode((string)$order['refund_terms']); ?>)">
+                                        <i class="fas fa-undo"></i> Request Refund
+                                    </button>
+                                <?php endif; ?>
+
+                                <?php if (in_array(strtolower($order['status']), ['delivered', 'completed', 'cancelled'])): ?>
+                                    <form method="POST" action="my_orders.php" style="display: inline-block;">
+                                        <input type="hidden" name="reorder_items" value="1">
+                                        <input type="hidden" name="order_id" value="<?php echo (int)$order['id']; ?>">
+                                        <button type="submit" class="btn-reorder">
+                                            <i class="fas fa-redo"></i> Re-order Items
+                                        </button>
+                                    </form>
+                                <?php endif; ?>
+
+                                <a href="help_center.php?category=order&order_id=<?php echo $order['id']; ?>" class="btn-details">
+                                    <i class="fas fa-life-ring"></i> Report Issue
                                 </a>
-                            <?php endif; ?>
-                            <?php
-                            $can_leave_review = in_array($order['id'], $orders_with_unreviewed_items); // Check if the order has unreviewed items
-                            if (($order['status'] == 'delivered' || $order['status'] == 'completed') && $can_leave_review):
-                            ?>
-                                <a href="leave_review.php?order_id=<?php echo $order['id']; ?>" class="btn-primary" style="background: #ffc107; border: none; color: #333;">
-                                    <i class="fas fa-star"></i> Leave a Review
+                                
+                                <button type="button" class="btn-archive" onclick="archiveOrder(<?php echo $order['id']; ?>)">
+                                    <i class="fas fa-archive"></i> Archive
+                                </button>
+                                
+                                <a href="receipt.php?order_id=<?php echo $order['id']; ?>" class="btn-details" target="_blank">
+                                    <i class="fas fa-receipt"></i> View Receipt
                                 </a>
-                            <?php elseif (($order['status'] == 'delivered' || $order['status'] == 'completed') && !$can_leave_review): ?>
-                                <button type="button" class="btn-secondary" disabled><i class="fas fa-check-circle"></i> All Items Reviewed</button>
-                            <?php endif; ?>
-
-                            <?php if (in_array(strtolower($order['status']), ['pending', 'confirmed', 'preparing', 'processing'], true) && !empty($order['can_customer_cancel'])): ?>
-                                <button type="button" class="btn-cancel" onclick="cancelOrder(<?php echo $order['id']; ?>, <?php echo json_encode((string)$order['cancellation_policy_message']); ?>)">
-                                    <i class="fas fa-times"></i> Cancel Order
-                                </button>
-                            <?php elseif (in_array(strtolower($order['status']), ['pending', 'confirmed', 'preparing', 'processing'], true)): ?>
-                                <button type="button" class="btn-secondary" disabled title="<?php echo htmlspecialchars((string)$order['cancellation_policy_message']); ?>">
-                                    <i class="fas fa-lock"></i> Cancellation Locked
-                                </button>
-                            <?php endif; ?>
-                            
-                            <?php if (in_array(strtolower($order['status']), ['delivered', 'completed'])): ?>
-                                <button type="button" class="btn-cancel" style="border-color: #ff9800; color: #ff9800;" onclick="requestRefund(<?php echo $order['id']; ?>, <?php echo !empty($order['refund_photo_required']) ? 'true' : 'false'; ?>, <?php echo json_encode((string)$order['refund_terms']); ?>)">
-                                    <i class="fas fa-undo"></i> Request Refund
-                                </button>
-                            <?php endif; ?>
-
-                            <?php if (in_array(strtolower($order['status']), ['delivered', 'completed', 'cancelled'])): ?>
-                                <button type="button" class="btn-reorder" onclick="reorderOrder(<?php echo $order['id']; ?>)">
-                                    <i class="fas fa-redo"></i> Re-order
-                                </button>
-                            <?php endif; ?>
-
-                            <a href="help_center.php?category=order&order_id=<?php echo $order['id']; ?>" class="btn-details">
-                                <i class="fas fa-life-ring"></i> Report Issue
-                            </a>
-                            
-                            <button type="button" class="btn-archive" onclick="archiveOrder(<?php echo $order['id']; ?>)">
-                                <i class="fas fa-archive"></i> Archive
-                            </button>
-                            
-                            <a href="receipt.php?order_id=<?php echo $order['id']; ?>" class="btn-details" target="_blank">
-                                <i class="fas fa-receipt"></i> View Receipt
-                            </a>
+                            </div>
                         </div>
                     </div>
                 <?php endforeach; ?>
@@ -928,6 +895,272 @@ unset($order);
 <!-- cancellation.js is included globally via footer -->
 
 <style>
+/* Total Orders Hero Stat Card */
+.total-orders-hero-card {
+    background: #ffffff;
+    border: 1px solid #efddcd;
+    border-radius: 20px;
+    padding: 16px 28px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+    display: inline-flex;
+    align-items: center;
+    gap: 18px;
+    min-width: 230px;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s ease, border-color 0.25s ease;
+}
+.total-orders-hero-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(179, 38, 30, 0.08);
+    border-color: #e8d4c3;
+}
+.total-orders-icon-wrap {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #fff0eb, #fff9f2);
+    border: 1px solid #efddcd;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #b3261e;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(179, 38, 30, 0.08);
+}
+.total-orders-meta {
+    display: flex;
+    flex-direction: column;
+}
+.total-orders-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: #7b6d64;
+    margin-bottom: 3px;
+}
+.total-orders-value {
+    font-size: 1.85rem;
+    font-weight: 800;
+    color: #171922;
+    line-height: 1;
+}
+
+/* Clean Minimalist E-Commerce Order Card Styles */
+.clean-order-card {
+    background: #ffffff;
+    border: 1px solid #efddcd;
+    border-radius: 16px;
+    margin-bottom: 24px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+    overflow: hidden;
+    transition: box-shadow 0.25s ease, border-color 0.25s ease;
+}
+.clean-order-card:hover {
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.06);
+    border-color: #e8d4c3;
+}
+
+.clean-card-header {
+    background: #ffffff;
+    border-bottom: 1px solid #f3e8de;
+    padding: 18px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.clean-header-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+.clean-order-badge {
+    background: #f4f5f7;
+    border: 1px solid #e2e8f0;
+    color: #171922;
+    padding: 6px 16px;
+    border-radius: 30px;
+    font-size: 0.88rem;
+    font-weight: 600;
+}
+.clean-order-num {
+    color: #b3261e;
+    font-weight: 800;
+    font-family: monospace;
+}
+.clean-order-date {
+    color: #7b6d64;
+    font-size: 0.88rem;
+    font-weight: 500;
+}
+.clean-btn-track {
+    background: linear-gradient(135deg, #ef6b2e, #b3261e);
+    color: #ffffff !important;
+    border: 0;
+    padding: 9px 22px;
+    border-radius: 30px;
+    font-weight: 700;
+    font-size: 0.82rem;
+    letter-spacing: 0.5px;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 14px rgba(239, 107, 46, 0.25);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.clean-btn-track:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(239, 107, 46, 0.35);
+}
+
+.clean-items-body {
+    padding: 8px 24px;
+}
+.clean-item-row {
+    display: grid;
+    grid-template-columns: 80px 1fr 150px 180px;
+    gap: 20px;
+    align-items: center;
+    padding: 18px 0;
+    border-bottom: 1px solid #f8f1eb;
+}
+.clean-item-row:last-child {
+    border-bottom: 0;
+}
+.clean-item-img {
+    width: 80px;
+    height: 85px;
+    object-fit: cover;
+    border-radius: 10px;
+    border: 1px solid #efddcd;
+    background: #fffaf5;
+}
+.clean-item-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #171922;
+    margin: 0 0 4px 0;
+}
+.clean-item-seller {
+    font-size: 0.85rem;
+    color: #7b6d64;
+    display: block;
+    margin-bottom: 6px;
+}
+.clean-item-meta {
+    font-size: 0.88rem;
+    color: #667085;
+}
+.clean-item-price {
+    font-weight: 700;
+    color: #171922;
+}
+
+.clean-col-label {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: #7b6d64;
+    display: block;
+    margin-bottom: 4px;
+}
+.clean-status-val {
+    font-size: 0.98rem;
+    font-weight: 800;
+}
+.clean-status-val.status-pending { color: #f57c00; }
+.clean-status-val.status-confirmed { color: #b3261e; }
+.clean-status-val.status-preparing { color: #ef6b2e; }
+.clean-status-val.status-assigned, .clean-status-val.status-on_the_way { color: #ef6b2e; }
+.clean-status-val.status-delivered, .clean-status-val.status-completed { color: #2e7d32; }
+.clean-status-val.status-cancelled { color: #d32f2f; }
+
+.clean-delivery-val {
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: #171922;
+}
+
+.clean-card-footer {
+    background: #faf8f5;
+    border-top: 1px solid #f3e8de;
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+.clean-footer-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+.clean-btn-toggle {
+    background: transparent;
+    border: 0;
+    color: #7b6d64;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0;
+}
+.clean-btn-toggle:hover {
+    color: #b3261e;
+}
+.clean-btn-cancel-action {
+    background: transparent;
+    border: 0;
+    color: #b3261e;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.clean-btn-cancel-action:hover {
+    text-decoration: underline;
+}
+.clean-payment-info {
+    font-size: 0.88rem;
+    color: #7b6d64;
+}
+.clean-total-box {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+.clean-total-label {
+    font-size: 0.9rem;
+    color: #7b6d64;
+}
+.clean-total-amount {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: #171922;
+}
+
+@media (max-width: 768px) {
+    .clean-item-row {
+        grid-template-columns: 70px 1fr;
+        gap: 14px;
+    }
+    .clean-item-status-col, .clean-item-delivery-col {
+        grid-column: 2 / -1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+}
+
 /* Modern Orders Page Styles */
 :root {
     --primary-color: #c62828;
@@ -1962,8 +2195,48 @@ function requestRefund(orderId, proofRequired = false, refundTerms = '') {
     });
 }
 
-// Handle page load notifications
+function toggleOrderDetails(orderId) {
+    const drawer = document.getElementById('orderDetails_' + orderId);
+    const icon = document.getElementById('toggleIcon_' + orderId);
+    const text = document.getElementById('toggleText_' + orderId);
+    
+    if (drawer) {
+        if (drawer.style.display === 'none' || drawer.style.display === '') {
+            drawer.style.display = 'block';
+            if (icon) icon.className = 'fas fa-chevron-up';
+            if (text) text.textContent = 'Hide Details';
+        } else {
+            drawer.style.display = 'none';
+            if (icon) icon.className = 'fas fa-chevron-down';
+            if (text) text.textContent = 'View Details & Actions';
+        }
+    }
+}
+
+// Handle page load notifications & counter animations
 document.addEventListener('DOMContentLoaded', function() {
+    // Count-up animation for Total Orders
+    const counterEl = document.querySelector('.animated-counter');
+    if (counterEl) {
+        const target = parseInt(counterEl.getAttribute('data-target'), 10) || 0;
+        const duration = 900;
+        const startTime = performance.now();
+        
+        function updateCounter(currentTime) {
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const easeProgress = 1 - Math.pow(1 - progress, 3);
+            const currentVal = Math.floor(easeProgress * target);
+            counterEl.textContent = currentVal.toLocaleString();
+            
+            if (progress < 1) {
+                requestAnimationFrame(updateCounter);
+            } else {
+                counterEl.textContent = target.toLocaleString();
+            }
+        }
+        requestAnimationFrame(updateCounter);
+    }
     <?php if (isset($_SESSION['success_msg'])): ?>
         Swal.fire({
             title: 'Success!',
