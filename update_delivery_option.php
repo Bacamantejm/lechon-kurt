@@ -48,6 +48,7 @@ if ($delivery_option === 'pickup') {
 
     $response['pickup_location'] = $pickup_location_id;
     $response['delivery_details'] = 'Pickup from: ' . ($selected_store['name'] ?? 'Main Store');
+    $response['nearest_store_address'] = (string)($selected_store['address'] ?? '');
 
     echo json_encode($response);
     exit;
@@ -67,6 +68,7 @@ if ($latitude !== null && $longitude !== null) {
         $response['distance_km'] = (float)($quote['distance_km'] ?? 0);
         $response['nearest_store_id'] = (int)($quote['nearest_store_id'] ?? 0);
         $response['nearest_store_name'] = (string)($quote['nearest_store_name'] ?? '');
+        $response['nearest_store_address'] = (string)($quote['nearest_store_address'] ?? '');
         $response['estimated_delivery_text'] = (string)($quote['estimated_delivery_text'] ?? '');
     } else {
         unset($_SESSION['current_delivery_quote']);

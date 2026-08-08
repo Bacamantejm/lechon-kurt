@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // franchise_application.php
 session_start();
 
@@ -750,9 +750,6 @@ if ($franchise_psgc_columns_ready) {
 }
 
 function getFranchiseReviewerIds($conn) {
-    // Strict privacy rule:
-    // Franchise submission notifications must be delivered only to super admin
-    // (system owner) accounts, never to partner/admin reviewers.
     if (
         !tableExists($conn, 'users')
         || !tableExists($conn, 'roles')
@@ -829,11 +826,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
 
     $form_data = [
         'business_name' => getFormInput('business_name'),
-        'business_type' => getFormInput('business_type'),
-        'tin_number' => getFormInput('tin_number'),
-        'dti_sec_number' => getFormInput('dti_sec_number'),
-        'bir_registration_number' => getFormInput('bir_registration_number'),
-        'mayors_permit' => getFormInput('mayors_permit'),
+        'business_type' => 'partnership',
+        'tin_number' => getFormInput('tin_number', 'N/A') ?: 'N/A',
+        'dti_sec_number' => getFormInput('dti_sec_number', 'N/A') ?: 'N/A',
+        'bir_registration_number' => getFormInput('bir_registration_number', 'N/A') ?: 'N/A',
+        'mayors_permit' => getFormInput('mayors_permit', 'N/A') ?: 'N/A',
         'business_address_street' => getFormInput('business_address_street'),
         'business_address' => getFormInput('business_address'),
         'psgc_region_code' => getFormInput('psgc_region_code'),
@@ -867,15 +864,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
         $form_data['business_address'] = $structured_business_address;
     }
 
-    // Keep DB compatibility while removing the separate proposed location field from the UI.
     $form_data['proposed_location'] = $form_data['business_address'] !== '' ? $form_data['business_address'] : 'To be confirmed during site validation';
 
     $required_fields = [
         'business_name' => 'Business name',
         'business_type' => 'Business type',
-        'tin_number' => 'TIN number',
-        'dti_sec_number' => 'DTI/SEC registration number',
-        'bir_registration_number' => 'BIR registration number',
         'business_address' => 'Business address',
         'contact_person' => 'Contact person',
         'contact_phone' => 'Contact phone',
@@ -950,26 +943,23 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
     }
 
     if (!$error_msg) {
-        $duplicate_checks = [
-            [
-                'query' => "SELECT id FROM users WHERE id <> ? AND account_type = 'organization' AND tax_id = ? LIMIT 1",
+        $duplicate_checks = [];
+        if ($form_data['tin_number'] !== 'N/A') {
+            $duplicate_checks[] = [
+                'query' => "SELECT id FROM users WHERE id <> ? AND account_type = 'organization' AND tax_id = ? AND tax_id <> 'N/A' LIMIT 1",
                 'types' => 'is',
                 'params' => [$user_id, $form_data['tin_number']],
                 'message' => 'This business TIN is already registered in the platform.'
-            ],
-            [
-                'query' => "SELECT id FROM users WHERE id <> ? AND account_type = 'organization' AND business_registration = ? LIMIT 1",
+            ];
+        }
+        if ($form_data['dti_sec_number'] !== 'N/A') {
+            $duplicate_checks[] = [
+                'query' => "SELECT id FROM users WHERE id <> ? AND account_type = 'organization' AND business_registration = ? AND business_registration <> 'N/A' LIMIT 1",
                 'types' => 'is',
                 'params' => [$user_id, $form_data['dti_sec_number']],
                 'message' => 'This DTI/SEC registration number is already registered in the platform.'
-            ],
-            [
-                'query' => "SELECT id FROM franchise_applications WHERE user_id <> ? AND status = 'approved' AND (tin_number = ? OR dti_sec_number = ? OR bir_registration_number = ?) LIMIT 1",
-                'types' => 'isss',
-                'params' => [$user_id, $form_data['tin_number'], $form_data['dti_sec_number'], $form_data['bir_registration_number']],
-                'message' => 'A business with the same tax or registration details is already approved in the platform.'
-            ]
-        ];
+            ];
+        }
 
         foreach ($duplicate_checks as $duplicate_check) {
             $stmt = mysqli_prepare($conn, $duplicate_check['query']);
@@ -1021,7 +1011,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
 
             if (!$error_msg) {
                 $submission_stage = 'duplicate application check';
-                // Check if user already has a pending application at write time.
                 $check_query = "SELECT id FROM franchise_applications WHERE user_id = ? AND status = 'pending'";
                 $stmt = mysqli_prepare($conn, $check_query);
                 if (!$stmt) {
@@ -1049,7 +1038,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
 
             if (!$error_msg) {
                 $submission_stage = 'application number generation';
-                // Generate collision-safe application number
                 $application_number = generateUniqueFranchiseApplicationNumber($conn, $user_id);
 
                 $submission_stage = 'transaction start';
@@ -1070,7 +1058,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
                         business_experience, marketing_plan, status, created_at
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())";
                 } else {
-                    // Backward compatible insert for databases that have not yet applied PSGC schema updates.
                     $insert_query = "INSERT INTO franchise_applications (
                         application_number, user_id, business_name, business_type,
                         tin_number, dti_sec_number, bir_registration_number, mayors_permit,
@@ -1155,7 +1142,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
                 mysqli_stmt_close($stmt);
 
                 $submission_stage = 'document upload';
-                // Handle file uploads and fail fast on upload/document issues
                 $upload_result = handleFileUploads(
                     $conn,
                     $application_id,
@@ -1261,99 +1247,48 @@ include 'includes/header.php';
 
 <div class="franchise-application-page">
     <div class="container">
-        <section class="application-hero">
-            <div class="application-hero-content">
-                <span class="hero-kicker"><i class="fas fa-store"></i> Lechon Delights Partner Program</span>
-                <h1>Launch Your Business With A Trusted Lechon Brand</h1>
-                <p class="application-subtitle">Submit your franchise application, upload requirements, and track every review step from your account dashboard.</p>
-                <div class="hero-chip-row">
-                    <span class="hero-chip"><i class="fas fa-shield-alt"></i> Secure document screening</span>
-                    <span class="hero-chip"><i class="fas fa-bolt"></i> Faster admin routing</span>
-                    <span class="hero-chip"><i class="fas fa-chart-line"></i> Built for scale operations</span>
-                </div>
-            </div>
-            <div class="application-hero-metrics">
-                <div class="metric-card">
-                    <small>Minimum Capital</small>
-                    <strong>PHP 100K</strong>
-                </div>
-                <div class="metric-card">
-                    <small>Validation Stage</small>
-                    <strong>Live API Check</strong>
-                </div>
-                <div class="metric-card">
-                    <small>Tracking</small>
-                    <strong>My Account Status</strong>
-                </div>
-            </div>
-        </section>
 
+        <!-- Compliance Playbook Banner -->
         <section class="application-playbook">
             <div class="playbook-head">
-                <h2><i class="fas fa-map-signs"></i> Step-by-Step Registration Tutorial</h2>
-                <p>Follow these compliance steps in order. Upload what you already have now, then complete missing permits during review.</p>
+                <h2><i class="fas fa-compass"></i> Streamlined Registration Guide</h2>
+                <p>Follow our quick 3-step checklist to submit your business application for priority review.</p>
             </div>
             <div class="playbook-grid">
                 <article class="playbook-step">
                     <span class="playbook-step-number">1</span>
                     <h3>Business Entity Registration</h3>
-                    <p>Register your business with the correct national agency based on your business type.</p>
-                    <ul>
-                        <li><strong>DTI:</strong> Sole proprietorship business name registration.</li>
-                        <li><strong>SEC:</strong> Partnership or corporation registration.</li>
-                        <li><strong>CDA:</strong> Cooperative registration.</li>
-                    </ul>
+                    <p>Enter your entity details (Sole Proprietorship via DTI, Partnership/Corporation via SEC).</p>
                 </article>
                 <article class="playbook-step">
                     <span class="playbook-step-number">2</span>
-                    <h3>LGU Permits And Clearance</h3>
-                    <p>After national registration, secure local permits from your city or municipality.</p>
-                    <ul>
-                        <li>Barangay Clearance</li>
-                        <li>Mayor's Permit (Business Permit)</li>
-                        <li>Contract of Lease or Tax Declaration/Title</li>
-                        <li>Certificate of Occupancy and Fire Safety Inspection Certificate</li>
-                        <li>Cedula and Sanitary Permit</li>
-                    </ul>
+                    <h3>Essential File Uploads</h3>
+                    <p>Attach required core documents (Logo, DTI/SEC, BIR, Valid ID, Proof of Address) to start screening.</p>
                 </article>
                 <article class="playbook-step">
                     <span class="playbook-step-number">3</span>
-                    <h3>Tax And Statutory Registration</h3>
-                    <p>Complete your tax setup and mandatory government registrations.</p>
-                    <ul>
-                        <li><strong>BIR:</strong> TIN and Certificate of Registration (Form 1901 / 1903).</li>
-                        <li><strong>SSS, PhilHealth, Pag-IBIG:</strong> Required if hiring employees.</li>
-                        <li><strong>Industry Licenses:</strong> FDA, BSP, and others where applicable.</li>
-                    </ul>
+                    <h3>Review & Fast Track</h3>
+                    <p>Confirm your submission details and track status directly inside your account dashboard.</p>
                 </article>
             </div>
-            <div class="playbook-alert">
-                <i class="fas fa-exclamation-triangle"></i>
-                <div>
-                    <strong>Penalty Reminder:</strong> Non-compliance can trigger fines such as PHP 20,000 for non-registration, PHP 10,000 to PHP 50,000 for invalid receipts, and PHP 1,000 to PHP 50,000 for record/tax filing violations.
-                </div>
-            </div>
         </section>
-        
+
         <?php if ($success_msg): ?>
-        <div class="alert alert-success" style="background-color: #d4edda; border: 2px solid #28a745; border-radius: 8px; padding: 20px; color: #155724; font-size: 1.05rem;">
+        <div class="alert alert-success" style="background-color: #d4edda; border: 2px solid #28a745; border-radius: 12px; padding: 20px; color: #155724; font-size: 1.05rem; margin-bottom: 24px;">
             <i class="fas fa-check-circle" style="color: #28a745; margin-right: 10px;"></i> <?php echo $success_msg; ?>
         </div>
         <?php endif; ?>
-        
+
         <?php if ($error_msg): ?>
-        <div class="alert alert-error">
-            <i class="fas fa-exclamation-circle"></i> <?php echo $error_msg; ?>
+        <div class="alert alert-error" style="background-color: #f8d7da; border: 2px solid #dc3545; border-radius: 12px; padding: 20px; color: #721c24; font-size: 1.05rem; margin-bottom: 24px;">
+            <i class="fas fa-exclamation-circle" style="color: #dc3545; margin-right: 10px;"></i> <?php echo $error_msg; ?>
         </div>
         <?php endif; ?>
-        
+
         <div class="application-container">
             <div class="application-form-container">
-                <div class="form-header">
-                    <h2>Apply for a Lechon Delights Business Partnership</h2>
-                    <p>Complete each step below. Every section includes guidance so your application is clean, complete, and review-ready.</p>
-                </div>
 
+                <!-- Workflow status header pill row -->
                 <div class="application-workflow-card">
                     <div class="workflow-pill-row">
                         <span class="workflow-pill"><i class="fas fa-layer-group"></i> Total Attempts: <?php echo (int)$franchise_workflow['total_attempts']; ?>/2</span>
@@ -1364,50 +1299,21 @@ include 'includes/header.php';
                             <span class="workflow-pill"><i class="fas fa-clock"></i> Reapply On: <?php echo date('F j, Y g:i A', strtotime((string)$franchise_workflow['next_eligible_at'])); ?></span>
                         <?php endif; ?>
                     </div>
-                    <div class="workflow-steps-grid">
-                        <div class="workflow-step-card <?php echo $franchise_workflow['total_attempts'] === 0 ? 'current' : 'done'; ?>">
-                            <strong>Attempt 1</strong>
-                            <span>Submit your first franchise application with complete documents.</span>
-                        </div>
-                        <div class="workflow-step-card <?php echo in_array($franchise_workflow['stage'], ['reapply_cooldown', 'final_retry_available', 'max_attempts_reached'], true) ? 'current' : ''; ?>">
-                            <strong>3-Day Cooldown</strong>
-                            <span>If rejected, wait 3 days before the final reapplication.</span>
-                        </div>
-                        <div class="workflow-step-card <?php echo $franchise_workflow['remaining_attempts'] === 1 ? 'current' : ($franchise_workflow['total_attempts'] >= 2 ? 'done' : ''); ?>">
-                            <strong>Final Attempt</strong>
-                            <span>You may only submit one more application after a rejection.</span>
-                        </div>
-                        <div class="workflow-step-card <?php echo in_array($franchise_workflow['stage'], ['approved_partner', 'already_registered_partner'], true) ? 'current' : ''; ?>">
-                            <strong>Approval Trial</strong>
-                            <span>Approved partners receive a 1-month trial and cannot register again.</span>
-                        </div>
-                    </div>
                     <p class="workflow-summary"><?php echo htmlspecialchars((string)($franchise_workflow['message'] ?? '')); ?></p>
                 </div>
-                
+
                 <?php if (!$franchise_workflow['can_submit'] && !$success_msg): ?>
-                <div class="alert" style="background:#fff8e1;border:1px solid #ffd54f;color:#8a6d3b;border-radius:10px;padding:16px;margin-bottom:22px;">
-                    <i class="fas fa-route" style="margin-right:8px;color:#f57f17;"></i>
+                <div class="alert" style="background:#fff8e1;border:1px solid #ffd54f;color:#8a6d3b;border-radius:12px;padding:20px;margin-bottom:22px;">
+                    <i class="fas fa-info-circle" style="margin-right:8px;color:#f57f17;font-size:1.2rem;"></i>
                     <?php echo htmlspecialchars((string)($franchise_workflow['message'] ?? 'Application workflow is currently restricted.')); ?>
                     <?php if (!empty($latest_application['application_number'])): ?>
-                        <br>
-                        Latest application:
-                        <strong><?php echo htmlspecialchars((string)$latest_application['application_number']); ?></strong>
+                        <br>Latest Application: <strong><?php echo htmlspecialchars((string)$latest_application['application_number']); ?></strong>
                     <?php endif; ?>
                     <?php if (!empty($latest_application['created_at'])): ?>
-                        <br>
-                        Submitted on <?php echo date('F j, Y g:i a', strtotime((string)$latest_application['created_at'])); ?>.
-                    <?php endif; ?>
-                    <?php if (!empty($franchise_workflow['next_eligible_at'])): ?>
-                        <br>
-                        You may apply again on <?php echo date('F j, Y g:i a', strtotime((string)$franchise_workflow['next_eligible_at'])); ?>.
-                    <?php endif; ?>
-                    <?php if (!empty($franchise_workflow['approved_trial_ends_at'])): ?>
-                        <br>
-                        Your partner trial ends on <?php echo date('F j, Y', strtotime((string)$franchise_workflow['approved_trial_ends_at'])); ?>.
+                        <br>Submitted on: <?php echo date('F j, Y g:i a', strtotime((string)$latest_application['created_at'])); ?>.
                     <?php endif; ?>
                 </div>
-                <div class="form-actions">
+                <div class="form-actions" style="margin-top:20px;">
                     <a href="my_account.php" class="btn-primary btn-large" style="text-decoration:none;">
                         <i class="fas fa-user-circle"></i> Go to My Account
                     </a>
@@ -1418,410 +1324,460 @@ include 'includes/header.php';
                     <?php endif; ?>
                 </div>
                 <?php else: ?>
+
+                <!-- WIZARD STEPPER PROGRESS BAR -->
+                <div class="wizard-stepper" id="wizardStepper">
+                    <div class="stepper-track">
+                        <div class="stepper-progress" id="stepperProgress"></div>
+                    </div>
+                    <div class="stepper-item active" data-step="1">
+                        <div class="stepper-icon"><i class="fas fa-building"></i></div>
+                        <div class="stepper-label">1. Business Info</div>
+                    </div>
+                    <div class="stepper-item" data-step="2">
+                        <div class="stepper-icon"><i class="fas fa-file-upload"></i></div>
+                        <div class="stepper-label">2. Documents</div>
+                    </div>
+                    <div class="stepper-item" data-step="3">
+                        <div class="stepper-icon"><i class="fas fa-check-circle"></i></div>
+                        <div class="stepper-label">3. Review & Submit</div>
+                    </div>
+                </div>
+
                 <form method="POST" action="" enctype="multipart/form-data" class="application-form" id="franchiseForm">
                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token, ENT_QUOTES, 'UTF-8'); ?>">
-                    
-                    <!-- Step 1: Business Information -->
-                    <div class="form-section">
-                        <h3><span class="step-tag">Step 1</span> <i class="fas fa-building"></i> Business Information</h3>
-                        <p class="section-description">Use your registered business name and official business address.</p>
-                        
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="business_name">Business Name *</label>
-                                <input type="text" id="business_name" name="business_name" required
-                                    value="<?php echo oldFormValue('business_name', $franchise_prefill['business_name'] ?? ''); ?>"
-                                    placeholder="Enter your business name">
-                            </div>
-                            <div class="form-group">
-                                <label for="business_type">Business Type *</label>
-                                <select id="business_type" name="business_type" required>
-                                    <option value="">Select business type</option>
-                                    <option value="sole_proprietorship" <?php echo isOldSelected('business_type', 'sole_proprietorship', $franchise_prefill['business_type'] ?? ''); ?>>Sole Proprietorship</option>
-                                    <option value="partnership" <?php echo isOldSelected('business_type', 'partnership', $franchise_prefill['business_type'] ?? ''); ?>>Partnership</option>
-                                    <option value="corporation" <?php echo isOldSelected('business_type', 'corporation', $franchise_prefill['business_type'] ?? ''); ?>>Corporation</option>
-                                    <option value="llc" <?php echo isOldSelected('business_type', 'llc', $franchise_prefill['business_type'] ?? ''); ?>>LLC</option>
-                                </select>
-                            </div>
-                        </div>
-                        
-                        <input type="hidden" name="psgc_region_name" id="psgcRegionName" value="<?php echo oldFormValue('psgc_region_name', $franchise_prefill['psgc_region_name'] ?? ''); ?>">
-                        <input type="hidden" name="psgc_province_name" id="psgcProvinceName" value="<?php echo oldFormValue('psgc_province_name', $franchise_prefill['psgc_province_name'] ?? ''); ?>">
-                        <input type="hidden" name="psgc_city_name" id="psgcCityName" value="<?php echo oldFormValue('psgc_city_name', $franchise_prefill['psgc_city_name'] ?? ''); ?>">
-                        <input type="hidden" name="psgc_barangay_name" id="psgcBarangayName" value="<?php echo oldFormValue('psgc_barangay_name', $franchise_prefill['psgc_barangay_name'] ?? ''); ?>">
-                        <input type="hidden" name="psgc_manual_mode" id="psgcManualMode" value="<?php echo oldFormValue('psgc_manual_mode', $franchise_prefill['psgc_manual_mode'] ?? '0'); ?>">
 
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="business_address_street">Street Address / Landmark *</label>
-                                <textarea id="business_address_street" name="business_address_street" rows="2" required
-                                        placeholder="House no., street, subdivision, landmark"><?php echo oldFormValue('business_address_street', $franchise_prefill['business_address_street'] ?? ''); ?></textarea>
-                                <small class="form-text">Add your exact street/landmark, then select PSGC location fields below. Business partner applications are currently accepted for Cavite locations only.</small>
+                    <!-- ========================================== -->
+                    <!-- WIZARD STEP 1: Business & Contact Info     -->
+                    <!-- ========================================== -->
+                    <div class="wizard-pane active" id="wizardStep1">
+                        <div class="form-section">
+                            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                                <h3 style="margin:0;"><i class="fas fa-building"></i> Business Profile</h3>
+                                <button type="button" class="btn-outline btn-sm" id="btnAutoFillProfile" style="padding:6px 14px;font-size:0.82rem;border-radius:999px;">
+                                    <i class="fas fa-wand-magic-sparkles" style="color:#ef6b2e;"></i> Auto-Fill From Profile
+                                </button>
+                            </div>
+                            <p class="section-description">Provide your registered business name. Business partner applications default to Partnership structure.</p>
+
+                            <div style="display:inline-flex;align-items:center;gap:8px;padding:8px 16px;border-radius:999px;background:#fff8ef;border:1px solid #efddcd;color:#b3261e;font-weight:700;font-size:0.88rem;margin-bottom:18px;">
+                                <i class="fas fa-handshake" style="color:#ef6b2e;"></i> Business Structure: <strong>Partnership</strong>
+                            </div>
+
+                            <input type="hidden" name="business_type" id="business_type" value="partnership">
+
+                            <div class="form-row">
+                                <div class="form-group" style="grid-column: 1 / -1;">
+                                    <label for="business_name">Business Name *</label>
+                                    <input type="text" id="business_name" name="business_name" required
+                                        value="<?php echo oldFormValue('business_name', $franchise_prefill['business_name'] ?? ''); ?>"
+                                        placeholder="Enter registered business name">
+                                </div>
                             </div>
                         </div>
 
-                        <div class="form-row psgc-row">
-                            <div class="form-group">
-                                <label for="psgcRegion">Region (PSGC) *</label>
-                                <select id="psgcRegion" name="psgc_region_code" required data-selected="<?php echo oldFormValue('psgc_region_code', $franchise_prefill['psgc_region_code'] ?? ''); ?>">
-                                    <option value="">Select region</option>
-                                </select>
+                        <!-- Business Location & PSGC -->
+                        <div class="form-section">
+                            <h3><i class="fas fa-location-dot"></i> Business Location (Cavite Scope)</h3>
+                            <p class="section-description">Select your PSGC location fields. Franchise applications are currently accepted for Cavite locations.</p>
+
+                            <input type="hidden" name="psgc_region_name" id="psgcRegionName" value="<?php echo oldFormValue('psgc_region_name', $franchise_prefill['psgc_region_name'] ?? ''); ?>">
+                            <input type="hidden" name="psgc_province_name" id="psgcProvinceName" value="<?php echo oldFormValue('psgc_province_name', $franchise_prefill['psgc_province_name'] ?? ''); ?>">
+                            <input type="hidden" name="psgc_city_name" id="psgcCityName" value="<?php echo oldFormValue('psgc_city_name', $franchise_prefill['psgc_city_name'] ?? ''); ?>">
+                            <input type="hidden" name="psgc_barangay_name" id="psgcBarangayName" value="<?php echo oldFormValue('psgc_barangay_name', $franchise_prefill['psgc_barangay_name'] ?? ''); ?>">
+                            <input type="hidden" name="psgc_manual_mode" id="psgcManualMode" value="<?php echo oldFormValue('psgc_manual_mode', $franchise_prefill['psgc_manual_mode'] ?? '0'); ?>">
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="business_address_street">Street Address / Landmark *</label>
+                                    <textarea id="business_address_street" name="business_address_street" rows="2" required
+                                            placeholder="House/Bldg No., Street, Subdivision, Landmark"><?php echo oldFormValue('business_address_street', $franchise_prefill['business_address_street'] ?? ''); ?></textarea>
+                                </div>
                             </div>
-                            <div class="form-group">
-                                <label for="psgcProvince">Province *</label>
-                                <select id="psgcProvince" name="psgc_province_code" required data-selected="<?php echo oldFormValue('psgc_province_code', $franchise_prefill['psgc_province_code'] ?? ''); ?>" disabled>
-                                    <option value="">Select province</option>
-                                </select>
+
+                            <div class="form-row psgc-row">
+                                <div class="form-group">
+                                    <label for="psgcRegion">Region *</label>
+                                    <select id="psgcRegion" name="psgc_region_code" required data-selected="<?php echo oldFormValue('psgc_region_code', $franchise_prefill['psgc_region_code'] ?? ''); ?>">
+                                        <option value="">Select region</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="psgcProvince">Province *</label>
+                                    <select id="psgcProvince" name="psgc_province_code" required data-selected="<?php echo oldFormValue('psgc_province_code', $franchise_prefill['psgc_province_code'] ?? ''); ?>" disabled>
+                                        <option value="">Select province</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="form-row psgc-row">
+                                <div class="form-group">
+                                    <label for="psgcCity">City / Municipality *</label>
+                                    <select id="psgcCity" name="psgc_city_code" required data-selected="<?php echo oldFormValue('psgc_city_code', $franchise_prefill['psgc_city_code'] ?? ''); ?>" disabled>
+                                        <option value="">Select city / municipality</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="psgcBarangay">Barangay *</label>
+                                    <select id="psgcBarangay" name="psgc_barangay_code" required data-selected="<?php echo oldFormValue('psgc_barangay_code', $franchise_prefill['psgc_barangay_code'] ?? ''); ?>" disabled>
+                                        <option value="">Select barangay</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <p class="psgc-help" id="psgcAddressHelp">PSGC location selector helps speed up site verification.</p>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="business_address">Composed Business Address *</label>
+                                    <textarea id="business_address" name="business_address" rows="2" required readonly
+                                            placeholder="Generated complete address"><?php echo oldFormValue('business_address', $franchise_prefill['business_address'] ?? ''); ?></textarea>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="form-row psgc-row">
-                            <div class="form-group">
-                                <label for="psgcCity">City / Municipality *</label>
-                                <select id="psgcCity" name="psgc_city_code" required data-selected="<?php echo oldFormValue('psgc_city_code', $franchise_prefill['psgc_city_code'] ?? ''); ?>" disabled>
-                                    <option value="">Select city / municipality</option>
-                                </select>
+                        <!-- Contact & Investment -->
+                        <div class="form-section">
+                            <h3><span class="step-tag">Contact & Investment</span></h3>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="contact_person">Contact Person *</label>
+                                    <input type="text" id="contact_person" name="contact_person" required
+                                        value="<?php echo oldFormValue('contact_person', $franchise_prefill['contact_person'] ?? ($_SESSION['full_name'] ?? '')); ?>">
+                                </div>
+                                <div class="form-group">
+                                    <label for="contact_phone">Contact Phone *</label>
+                                    <input type="tel" id="contact_phone" name="contact_phone" required
+                                        value="<?php echo oldFormValue('contact_phone', $franchise_prefill['contact_phone'] ?? ''); ?>"
+                                        placeholder="0912-345-6789">
+                                </div>
                             </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="contact_email">Contact Email *</label>
+                                    <input type="email" id="contact_email" name="contact_email" required
+                                        value="<?php echo oldFormValue('contact_email', $franchise_prefill['contact_email'] ?? ($_SESSION['email'] ?? '')); ?>">
+                                </div>
+                                <div class="form-group">
+                                    <label for="capital_investment">Capital Investment (PHP) *</label>
+                                    <input type="number" id="capital_investment" name="capital_investment" required
+                                        value="<?php echo oldFormValue('capital_investment', $franchise_prefill['capital_investment'] ?? ''); ?>"
+                                        min="100000" step="10000" placeholder="500000">
+                                    <div class="quick-chip-row" style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">
+                                        <button type="button" class="chip-btn" data-capital="100000">₱100K</button>
+                                        <button type="button" class="chip-btn" data-capital="250000">₱250K</button>
+                                        <button type="button" class="chip-btn" data-capital="500000">₱500K</button>
+                                        <button type="button" class="chip-btn" data-capital="1000000">₱1M</button>
+                                    </div>
+                                    <small class="form-text">Minimum investment: PHP 100,000</small>
+                                </div>
+                            </div>
+
                             <div class="form-group">
-                                <label for="psgcBarangay">Barangay *</label>
-                                <select id="psgcBarangay" name="psgc_barangay_code" required data-selected="<?php echo oldFormValue('psgc_barangay_code', $franchise_prefill['psgc_barangay_code'] ?? ''); ?>" disabled>
-                                    <option value="">Select barangay</option>
-                                </select>
+                                <label for="business_experience">Business Experience *</label>
+                                <textarea id="business_experience" name="business_experience" rows="3" required
+                                        placeholder="Describe your relevant business experience"><?php echo oldFormValue('business_experience', $franchise_prefill['business_experience'] ?? ''); ?></textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="marketing_plan">Marketing Strategy *</label>
+                                <textarea id="marketing_plan" name="marketing_plan" rows="3" required
+                                        placeholder="How do you plan to promote your store?"><?php echo oldFormValue('marketing_plan', $franchise_prefill['marketing_plan'] ?? ''); ?></textarea>
                             </div>
                         </div>
 
-                        <p class="psgc-help" id="psgcAddressHelp">Select PSGC fields so admin can validate your exact Cavite business location faster.</p>
-
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="business_address">Business Address (Auto-composed) *</label>
-                                <textarea id="business_address" name="business_address" rows="3" required readonly
-                                        placeholder="Your complete business address will be generated from the PSGC location and street"><?php echo oldFormValue('business_address', $franchise_prefill['business_address'] ?? ''); ?></textarea>
-                            </div>
+                        <div class="wizard-nav-bar">
+                            <div></div>
+                            <button type="button" class="btn-primary" id="btnGoToStep2">
+                                Next: Upload Documents <i class="fas fa-arrow-right"></i>
+                            </button>
                         </div>
                     </div>
-                    
-                    <!-- Step 2: Registration Documents -->
-                    <div class="form-section">
-                        <h3><span class="step-tag">Step 2</span> <i class="fas fa-file-alt"></i> Registration Details</h3>
-                        <p class="section-description">This aligns with Step 1 and Step 3 of the tutorial: entity registration + tax registration.</p>
-                        
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="dti_sec_number">DTI/SEC Registration Number *</label>
-                                <input type="text" id="dti_sec_number" name="dti_sec_number" required
-                                    value="<?php echo oldFormValue('dti_sec_number', $franchise_prefill['dti_sec_number'] ?? ''); ?>"
-                                    placeholder="DTI or SEC registration number">
-                                <small class="form-text">For sole proprietorship: DTI Certificate | For partnership/corporation: SEC Registration</small>
-                            </div>
-                            <div class="form-group">
-                                <label for="tin_number">Tax Identification Number (TIN) *</label>
-                                <input type="text" id="tin_number" name="tin_number" required
-                                    value="<?php echo oldFormValue('tin_number', $franchise_prefill['tin_number'] ?? ''); ?>"
-                                    placeholder="Business TIN">
-                            </div>
-                        </div>
-                        
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="bir_registration_number">BIR Registration Number *</label>
-                                <input type="text" id="bir_registration_number" name="bir_registration_number" required
-                                    value="<?php echo oldFormValue('bir_registration_number', $franchise_prefill['bir_registration_number'] ?? ''); ?>"
-                                    placeholder="BIR registration number">
-                            </div>
-                            <div class="form-group">
-                                <label for="mayors_permit">Mayor's Permit/Business Permit</label>
-                                <input type="text" id="mayors_permit" name="mayors_permit"
-                                    value="<?php echo oldFormValue('mayors_permit', $franchise_prefill['mayors_permit'] ?? ''); ?>"
-                                    placeholder="LGU Business Permit Number">
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Step 3: Contact Information -->
-                    <div class="form-section">
-                        <h3><span class="step-tag">Step 3</span> <i class="fas fa-address-book"></i> Contact Information</h3>
-                        
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="contact_person">Contact Person *</label>
-                                <input type="text" id="contact_person" name="contact_person" required
-                                    value="<?php echo oldFormValue('contact_person', $franchise_prefill['contact_person'] ?? ($_SESSION['full_name'] ?? '')); ?>">
-                            </div>
-                            <div class="form-group">
-                                <label for="contact_phone">Contact Phone *</label>
-                                <input type="tel" id="contact_phone" name="contact_phone" required
-                                    value="<?php echo oldFormValue('contact_phone', $franchise_prefill['contact_phone'] ?? ''); ?>"
-                                    placeholder="0912-345-6789">
-                            </div>
-                        </div>
-                        
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="contact_email">Contact Email *</label>
-                                <input type="email" id="contact_email" name="contact_email" required
-                                    value="<?php echo oldFormValue('contact_email', $franchise_prefill['contact_email'] ?? ($_SESSION['email'] ?? '')); ?>">
-                            </div>
-                            <div class="form-group">
-                                <label for="capital_investment">Capital Investment (PHP) *</label>
-                                <input type="number" id="capital_investment" name="capital_investment" required
-                                    value="<?php echo oldFormValue('capital_investment', $franchise_prefill['capital_investment'] ?? ''); ?>"
-                                    min="100000" step="10000" placeholder="500000">
-                                <small class="form-text">Estimated capital you plan to invest</small>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Step 4: Business Background -->
-                    <div class="form-section">
-                        <h3><span class="step-tag">Step 4</span> <i class="fas fa-chart-line"></i> Business Background</h3>
-                        
-                        <div class="form-group">
-                            <label for="business_experience">Business Experience *</label>
-                            <textarea id="business_experience" name="business_experience" rows="4" required
-                                    placeholder="Describe your previous business experience, if any"><?php echo oldFormValue('business_experience', $franchise_prefill['business_experience'] ?? ''); ?></textarea>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="marketing_plan">Marketing Plan *</label>
-                            <textarea id="marketing_plan" name="marketing_plan" rows="4" required
-                                    placeholder="How do you plan to market your business?"><?php echo oldFormValue('marketing_plan', $franchise_prefill['marketing_plan'] ?? ''); ?></textarea>
-                        </div>
-                    </div>
-                    
-                    <!-- Step 5: Documents Upload -->
-                    <div class="form-section">
-                        <h3><span class="step-tag">Step 5</span> <i class="fas fa-paperclip"></i> Documents Upload</h3>
-                        <p class="section-description">Upload required files first, then optional compliance documents to speed up review. PhilSys-compatible verification is applied to government papers when configured.</p>
-                        <div id="docRequirementStatus" class="doc-requirement-status info">Waiting for required documents upload...</div>
-                        
-                        <div class="documents-grid">
-                            <div class="document-item required-highlight">
-                                <label class="document-label">
-                                    <span>Business Logo *</span>
-                                    <input type="file" name="business_logo" accept=".pdf,.jpg,.jpeg,.png" required>
-                                    <small>Official business logo (PNG/JPG/PDF)</small>
-                                </label>
-                            </div>
 
-                            <div class="document-item">
-                                <label class="document-label">
-                                    <span>DTI/SEC Certificate *</span>
-                                    <input type="file" name="dti_doc" accept=".pdf,.jpg,.jpeg,.png" required>
-                                    <small>PDF, JPG, or PNG format</small>
-                                </label>
-                            </div>
+                    <!-- ========================================== -->
+                    <!-- WIZARD STEP 2: Document Uploads            -->
+                    <!-- ========================================== -->
+                    <div class="wizard-pane" id="wizardStep2">
+                        <div class="form-section">
+                            <h3><i class="fas fa-file-upload"></i> Essential Documents (5 Required Files)</h3>
+                            <p class="section-description">Drag and drop or click to upload your core business documents. Accepted formats: PDF, JPG, PNG (Max size: <?php echo htmlspecialchars($max_document_size_label); ?>).</p>
                             
-                            <div class="document-item">
-                                <label class="document-label">
-                                    <span>BIR Registration *</span>
-                                    <input type="file" name="bir_doc" accept=".pdf,.jpg,.jpeg,.png" required>
-                                    <small>PDF, JPG, or PNG format</small>
-                                </label>
+                            <div id="docRequirementStatus" class="doc-requirement-status info">Waiting for required documents upload...</div>
+
+                            <div class="documents-grid">
+                                <div class="document-item required-highlight logo-featured-item" style="border: 2px solid #b3261e; background: #fff8ef;">
+                                    <label class="document-label">
+                                        <span style="color:#b3261e;font-weight:800;font-size:0.95rem;display:flex;align-items:center;gap:6px;">
+                                            <i class="fas fa-store" style="color:#ef6b2e;"></i> Store Business Logo *
+                                        </span>
+                                        <input type="file" name="business_logo" id="business_logo_input" accept="image/png,image/jpeg,image/jpg,.pdf" required>
+                                        <small style="color:#7b6d64;font-weight:600;">Official store logo image (PNG/JPG/PDF)</small>
+                                        <div id="logoPreviewContainer" style="margin-top:8px;display:none;text-align:center;">
+                                            <img id="logoPreviewImg" src="" alt="Store Logo Preview" style="max-height:80px;max-width:100%;border-radius:8px;border:1px solid #efddcd;box-shadow:0 4px 10px rgba(0,0,0,0.06);">
+                                        </div>
+                                    </label>
+                                </div>
+
+                                <div class="document-item required-highlight">
+                                    <label class="document-label">
+                                        <span>DTI / SEC Certificate *</span>
+                                        <input type="file" name="dti_doc" accept=".pdf,.jpg,.jpeg,.png" required>
+                                        <small>Business registration cert</small>
+                                    </label>
+                                </div>
+
+                                <div class="document-item required-highlight">
+                                    <label class="document-label">
+                                        <span>BIR Registration (Form 2303) *</span>
+                                        <input type="file" name="bir_doc" accept=".pdf,.jpg,.jpeg,.png" required>
+                                        <small>Tax registration certificate</small>
+                                    </label>
+                                </div>
+
+                                <div class="document-item required-highlight">
+                                    <label class="document-label">
+                                        <span>Valid ID of Owner *</span>
+                                        <input type="file" name="valid_id" accept=".pdf,.jpg,.jpeg,.png" required>
+                                        <small>Driver's License, Passport, PhilID</small>
+                                    </label>
+                                </div>
+
+                                <div class="document-item required-highlight">
+                                    <label class="document-label">
+                                        <span>Proof of Address *</span>
+                                        <input type="file" name="address_proof" accept=".pdf,.jpg,.jpeg,.png" required>
+                                        <small>Utility bill or barangay clearance</small>
+                                    </label>
+                                </div>
                             </div>
+                        </div>
+
+                        <!-- Expandable Optional Compliance Files -->
+                        <div class="form-section">
+                            <div class="accordion-header" id="toggleOptionalDocs">
+                                <div>
+                                    <h4 style="margin:0;font-size:1.05rem;color:#2f1a12;"><i class="fas fa-folder-open" style="color:#ef6b2e;margin-right:8px;"></i> Additional Compliance Permits (Optional)</h4>
+                                    <small style="color:#7b6d64;">Click to attach LGU permits, lease contract, or statutory records now to speed up review</small>
+                                </div>
+                                <i class="fas fa-chevron-down accordion-chevron"></i>
+                            </div>
+
+                            <div class="accordion-body" id="optionalDocsBody">
+                                <div class="documents-grid" style="margin-top:16px;">
+                                    <div class="document-item">
+                                        <label class="document-label">
+                                            <span>Mayor's Permit</span>
+                                            <input type="file" name="mayor_doc" accept=".pdf,.jpg,.jpeg,.png">
+                                            <small>LGU Business Permit</small>
+                                        </label>
+                                    </div>
+                                    <div class="document-item">
+                                        <label class="document-label">
+                                            <span>Barangay Clearance</span>
+                                            <input type="file" name="barangay_clearance" accept=".pdf,.jpg,.jpeg,.png">
+                                            <small>Barangay Hall clearance</small>
+                                        </label>
+                                    </div>
+                                    <div class="document-item">
+                                        <label class="document-label">
+                                            <span>Lease Contract / Title</span>
+                                            <input type="file" name="lease_or_title" accept=".pdf,.jpg,.jpeg,.png">
+                                            <small>Proof of store occupancy</small>
+                                        </label>
+                                    </div>
+                                    <div class="document-item">
+                                        <label class="document-label">
+                                            <span>Certificate of Occupancy</span>
+                                            <input type="file" name="occupancy_certificate" accept=".pdf,.jpg,.jpeg,.png">
+                                            <small>Occupancy permit</small>
+                                        </label>
+                                    </div>
+                                    <div class="document-item">
+                                        <label class="document-label">
+                                            <span>Fire Safety Certificate</span>
+                                            <input type="file" name="fire_safety_certificate" accept=".pdf,.jpg,.jpeg,.png">
+                                            <small>BFP Fire Inspection</small>
+                                        </label>
+                                    </div>
+                                    <div class="document-item">
+                                        <label class="document-label">
+                                            <span>Community Tax (Cedula)</span>
+                                            <input type="file" name="community_tax_certificate" accept=".pdf,.jpg,.jpeg,.png">
+                                            <small>Cedula file</small>
+                                        </label>
+                                    </div>
+                                    <div class="document-item">
+                                        <label class="document-label">
+                                            <span>Sanitary Permit</span>
+                                            <input type="file" name="sanitary_permit" accept=".pdf,.jpg,.jpeg,.png">
+                                            <small>Food sanitation clearance</small>
+                                        </label>
+                                    </div>
+                                    <div class="document-item">
+                                        <label class="document-label">
+                                            <span>Bank Account Proof</span>
+                                            <input type="file" name="bank_proof" accept=".pdf,.jpg,.jpeg,.png">
+                                            <small>Bank statement / cert</small>
+                                        </label>
+                                    </div>
+                                    <div class="document-item">
+                                        <label class="document-label">
+                                            <span>BIR Form 1901/1903</span>
+                                            <input type="file" name="bir_form" accept=".pdf,.jpg,.jpeg,.png">
+                                            <small>Application for registration</small>
+                                        </label>
+                                    </div>
+                                    <div class="document-item">
+                                        <label class="document-label">
+                                            <span>SSS Registration</span>
+                                            <input type="file" name="sss_registration" accept=".pdf,.jpg,.jpeg,.png">
+                                            <small>Employer SSS record</small>
+                                        </label>
+                                    </div>
+                                    <div class="document-item">
+                                        <label class="document-label">
+                                            <span>PhilHealth Registration</span>
+                                            <input type="file" name="philhealth_registration" accept=".pdf,.jpg,.jpeg,.png">
+                                            <small>Employer PhilHealth record</small>
+                                        </label>
+                                    </div>
+                                    <div class="document-item">
+                                        <label class="document-label">
+                                            <span>Pag-IBIG Registration</span>
+                                            <input type="file" name="pagibig_registration" accept=".pdf,.jpg,.jpeg,.png">
+                                            <small>Employer Pag-IBIG record</small>
+                                        </label>
+                                    </div>
+                                    <div class="document-item">
+                                        <label class="document-label">
+                                            <span>Industry License (FDA/BSP)</span>
+                                            <input type="file" name="industry_permit" accept=".pdf,.jpg,.jpeg,.png">
+                                            <small>Sector-specific licenses</small>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="wizard-nav-bar">
+                            <button type="button" class="btn-outline" id="btnBackToStep1">
+                                <i class="fas fa-arrow-left"></i> Previous: Business Info
+                            </button>
+                            <button type="button" class="btn-primary" id="btnGoToStep3">
+                                Next: Review & Submit <i class="fas fa-arrow-right"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- ========================================== -->
+                    <!-- WIZARD STEP 3: Review & Final Submit       -->
+                    <!-- ========================================== -->
+                    <div class="wizard-pane" id="wizardStep3">
+                        <div class="form-section">
+                            <h3><i class="fas fa-clipboard-check"></i> Application Summary Preview</h3>
+                            <p class="section-description">Please double-check your application details before submitting.</p>
+
+                            <div class="summary-card" id="summaryCard">
+                                <div class="summary-grid">
+                                    <div class="summary-item">
+                                        <small>Business Name</small>
+                                        <strong id="sumBusinessName">-</strong>
+                                    </div>
+                                    <div class="summary-item">
+                                        <small>Business Type</small>
+                                        <strong id="sumBusinessType">Partnership</strong>
+                                    </div>
+                                    <div class="summary-item">
+                                        <small>Contact Person</small>
+                                        <strong id="sumContactPerson">-</strong>
+                                    </div>
+                                    <div class="summary-item">
+                                        <small>Contact Email & Phone</small>
+                                        <strong id="sumContactDetails">-</strong>
+                                    </div>
+                                    <div class="summary-item full-width">
+                                        <small>Business Location</small>
+                                        <strong id="sumBusinessAddress">-</strong>
+                                    </div>
+                                    <div class="summary-item">
+                                        <small>Capital Investment</small>
+                                        <strong id="sumCapital">-</strong>
+                                    </div>
+                                    <div class="summary-item">
+                                        <small>Attached Documents</small>
+                                        <strong id="sumDocCount">0 files attached</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Confirmations -->
+                        <div class="form-section">
+                            <h3><i class="fas fa-check-double"></i> Confirmations & Agreements</h3>
                             
-                            <div class="document-item">
-                                <label class="document-label">
-                                    <span>Mayor's Permit</span>
-                                    <input type="file" name="mayor_doc" accept=".pdf,.jpg,.jpeg,.png">
-                                    <small>PDF, JPG, or PNG format</small>
+                            <div class="tutorial-agreement">
+                                <input type="checkbox" id="acknowledge_tutorial" name="acknowledge_tutorial" required <?php echo isset($_POST['acknowledge_tutorial']) ? 'checked' : ''; ?>>
+                                <label for="acknowledge_tutorial">
+                                    I reviewed the partner registration guide and understand that complete permits accelerate approval.
                                 </label>
                             </div>
 
-                            <div class="document-item">
-                                <label class="document-label">
-                                    <span>Barangay Clearance</span>
-                                    <input type="file" name="barangay_clearance" accept=".pdf,.jpg,.jpeg,.png">
-                                    <small>Issued by Barangay Hall</small>
-                                </label>
-                            </div>
-
-                            <div class="document-item">
-                                <label class="document-label">
-                                    <span>Lease Contract / Title</span>
-                                    <input type="file" name="lease_or_title" accept=".pdf,.jpg,.jpeg,.png">
-                                    <small>Proof of occupancy or ownership</small>
-                                </label>
-                            </div>
-
-                            <div class="document-item">
-                                <label class="document-label">
-                                    <span>Certificate of Occupancy</span>
-                                    <input type="file" name="occupancy_certificate" accept=".pdf,.jpg,.jpeg,.png">
-                                    <small>Include map/photo support if available</small>
-                                </label>
-                            </div>
-
-                            <div class="document-item">
-                                <label class="document-label">
-                                    <span>Fire Safety Certificate</span>
-                                    <input type="file" name="fire_safety_certificate" accept=".pdf,.jpg,.jpeg,.png">
-                                    <small>Fire Permit or inspection certificate</small>
-                                </label>
-                            </div>
-
-                            <div class="document-item">
-                                <label class="document-label">
-                                    <span>Community Tax Certificate (Cedula)</span>
-                                    <input type="file" name="community_tax_certificate" accept=".pdf,.jpg,.jpeg,.png">
-                                    <small>Cedula document</small>
-                                </label>
-                            </div>
-
-                            <div class="document-item">
-                                <label class="document-label">
-                                    <span>Sanitary Permit</span>
-                                    <input type="file" name="sanitary_permit" accept=".pdf,.jpg,.jpeg,.png">
-                                    <small>Required for food and beverage operations</small>
-                                </label>
-                            </div>
-                            
-                            <div class="document-item">
-                                <label class="document-label">
-                                    <span>Valid ID of Owner *</span>
-                                    <input type="file" name="valid_id" accept=".pdf,.jpg,.jpeg,.png" required>
-                                    <small>Driver's License, Passport, Postal ID, or PhilID</small>
-                                </label>
-                            </div>
-                            
-                            <div class="document-item">
-                                <label class="document-label">
-                                    <span>Proof of Address *</span>
-                                    <input type="file" name="address_proof" accept=".pdf,.jpg,.jpeg,.png" required>
-                                    <small>Utility bill or barangay clearance</small>
-                                </label>
-                            </div>
-                            
-                            <div class="document-item">
-                                <label class="document-label">
-                                    <span>Business Bank Account Proof</span>
-                                    <input type="file" name="bank_proof" accept=".pdf,.jpg,.jpeg,.png">
-                                    <small>Bank certificate or statement</small>
-                                </label>
-                            </div>
-
-                            <div class="document-item">
-                                <label class="document-label">
-                                    <span>BIR Form 1901/1903</span>
-                                    <input type="file" name="bir_form" accept=".pdf,.jpg,.jpeg,.png">
-                                    <small>Use 1901 for sole prop, 1903 for corp/partnership</small>
-                                </label>
-                            </div>
-
-                            <div class="document-item">
-                                <label class="document-label">
-                                    <span>SSS Registration</span>
-                                    <input type="file" name="sss_registration" accept=".pdf,.jpg,.jpeg,.png">
-                                    <small>Mandatory when hiring employees</small>
-                                </label>
-                            </div>
-
-                            <div class="document-item">
-                                <label class="document-label">
-                                    <span>PhilHealth Registration</span>
-                                    <input type="file" name="philhealth_registration" accept=".pdf,.jpg,.jpeg,.png">
-                                    <small>Mandatory when hiring employees</small>
-                                </label>
-                            </div>
-
-                            <div class="document-item">
-                                <label class="document-label">
-                                    <span>Pag-IBIG Registration</span>
-                                    <input type="file" name="pagibig_registration" accept=".pdf,.jpg,.jpeg,.png">
-                                    <small>Mandatory when hiring employees</small>
-                                </label>
-                            </div>
-
-                            <div class="document-item">
-                                <label class="document-label">
-                                    <span>Industry-Specific Permit</span>
-                                    <input type="file" name="industry_permit" accept=".pdf,.jpg,.jpeg,.png">
-                                    <small>For FDA, BSP, or other sector-specific licenses</small>
+                            <div class="terms-agreement">
+                                <input type="checkbox" id="agree_terms" name="agree_terms" required <?php echo isset($_POST['agree_terms']) ? 'checked' : ''; ?>>
+                                <label for="agree_terms">
+                                    I hereby certify that all information provided is true and correct, and agree to the <a href="franchise_terms.php" target="_blank">Partner Terms & Conditions</a>.
                                 </label>
                             </div>
                         </div>
-                    </div>
-                    
-                    <!-- Step 6: Confirmations -->
-                    <div class="form-section">
-                        <h3><span class="step-tag">Step 6</span> <i class="fas fa-check-double"></i> Confirmations</h3>
-                        <div class="tutorial-agreement">
-                            <input type="checkbox" id="acknowledge_tutorial" name="acknowledge_tutorial" required <?php echo isset($_POST['acknowledge_tutorial']) ? 'checked' : ''; ?>>
-                            <label for="acknowledge_tutorial">
-                                I reviewed the 3-step registration tutorial (Entity Registration, LGU Permits, and Tax/Statutory Registration) and understand that incomplete permits can delay or reject approval.
-                            </label>
-                        </div>
 
-                        <div class="terms-agreement">
-                            <input type="checkbox" id="agree_terms" name="agree_terms" required <?php echo isset($_POST['agree_terms']) ? 'checked' : ''; ?>>
-                            <label for="agree_terms">
-                                I hereby certify that all information provided is true and correct. 
-                                I understand that submitting false information may result in rejection of my application. 
-                                I agree to the <a href="franchise_terms.php" target="_blank">Franchise Terms and Conditions</a>.
-                            </label>
+                        <div class="wizard-nav-bar">
+                            <button type="button" class="btn-outline" id="btnBackToStep2">
+                                <i class="fas fa-arrow-left"></i> Previous: Documents
+                            </button>
+                            <button type="submit" name="submit_application" class="btn-primary btn-large" id="btnFinalSubmit">
+                                <i class="fas fa-paper-plane"></i> Submit Application
+                            </button>
                         </div>
                     </div>
-                    
-                    <div class="form-actions">
-                        <button type="button" class="btn-outline" onclick="window.history.back()">Cancel</button>
-                        <button type="submit" name="submit_application" class="btn-primary btn-large">
-                            <i class="fas fa-paper-plane"></i> Submit Application
-                        </button>
-                    </div>
+
                 </form>
                 <?php endif; ?>
             </div>
-            
+
             <!-- Requirements Sidebar -->
             <div class="requirements-sidebar">
                 <div class="requirements-card">
-                    <h3><i class="fas fa-clipboard-check"></i> Compliance Guide</h3>
+                    <h3><i class="fas fa-clipboard-check"></i> Compliance Checklist</h3>
                     <div class="requirements-list compact">
                         <div class="requirement-item">
-                            <i class="fas fa-flag-checkered"></i>
+                            <i class="fas fa-star" style="color:#b3261e;"></i>
                             <div>
-                                <strong>Submit Mandatory Files</strong>
-                                <small>Business Logo, DTI/SEC, BIR, Valid ID, and Proof of Address are required.</small>
+                                <strong>5 Core Requirements</strong>
+                                <small>Logo, DTI/SEC, BIR, Owner Valid ID, and Proof of Address are mandatory.</small>
                             </div>
                         </div>
                         <div class="requirement-item">
-                            <i class="fas fa-city"></i>
+                            <i class="fas fa-city" style="color:#ef6b2e;"></i>
                             <div>
-                                <strong>LGU Documents</strong>
-                                <small>Add Barangay, Fire Safety, Sanitary, and Cedula files to reduce follow-up requests.</small>
-                            </div>
-                        </div>
-                        <div class="requirement-item">
-                            <i class="fas fa-users"></i>
-                            <div>
-                                <strong>Employee Statutory Setup</strong>
-                                <small>If hiring, prepare SSS, PhilHealth, and Pag-IBIG registrations.</small>
+                                <strong>LGU Permits</strong>
+                                <small>Add Mayor's permit, Barangay clearance, and Fire Safety for faster routing.</small>
                             </div>
                         </div>
                     </div>
 
-                    <div class="penalty-card">
-                        <h4><i class="fas fa-gavel"></i> Penalties For Non-Compliance</h4>
-                        <ul>
-                            <li>PHP 20,000 for failure to register the business</li>
-                            <li>PHP 10,000 to PHP 50,000 for invalid receipts/invoices</li>
-                            <li>PHP 1,000 to PHP 50,000 for records and late tax filing violations</li>
-                        </ul>
-                    </div>
-                    
                     <div class="support-info">
-                        <h4>What We Provide</h4>
+                        <h4>Partner Benefits</h4>
                         <ul>
-                            <li>Application review and compliance guidance</li>
-                            <li>Operations onboarding and staff training</li>
-                            <li>Marketing support and brand assets</li>
-                            <li>Supply chain and business continuity support</li>
+                            <li>Application review and location validation</li>
+                            <li>Direct brand marketing and assets</li>
+                            <li>Integrated order fulfillment portal</li>
                         </ul>
                     </div>
-                    
+
                     <div class="contact-support">
-                        <h4>Need Help?</h4>
-                        <p>Contact our Business Partnership Team:</p>
+                        <h4>Need Assistance?</h4>
                         <p><i class="fas fa-phone"></i> (02) 8123-4567</p>
                         <p><i class="fas fa-envelope"></i> franchise@lechondelights.com</p>
                     </div>
@@ -1832,34 +1788,51 @@ include 'includes/header.php';
 </div>
 
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
 .franchise-application-page {
     --food-red: #b3261e;
     --food-orange: #ef6b2e;
-    --food-ink: #2f1a12;
-    --food-cream: #fff4e5;
-    --food-gold: #f9a93f;
-    --food-shadow: 0 20px 44px rgba(60, 34, 21, 0.12);
-    font-family: 'Plus Jakarta Sans', 'Segoe UI', Tahoma, sans-serif;
-    padding: 88px 0 64px;
-    background:
-        radial-gradient(circle at 90% -10%, rgba(239, 107, 46, 0.22), transparent 42%),
-        radial-gradient(circle at -10% 10%, rgba(179, 38, 30, 0.12), transparent 34%),
-        linear-gradient(180deg, #fffaf2 0%, #fff4e8 46%, #fffdf9 100%);
+    --food-ink: #171922;
+    --food-cream: #fff9f2;
+    --food-border: #efddcd;
+    --food-shadow: 0 16px 36px rgba(42, 33, 29, 0.08);
+    font-family: 'Plus Jakarta Sans', 'Segoe UI', sans-serif;
+    padding: 32px 0 64px;
+    background: var(--food-cream);
     min-height: 100vh;
 }
 
+/* Quick Capital Chips */
+.chip-btn {
+    padding: 4px 10px;
+    background: #ffffff;
+    border: 1px solid var(--food-border);
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--food-ink);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.chip-btn:hover {
+    background: #b3261e;
+    color: #ffffff;
+    border-color: #b3261e;
+}
+
+/* Hero Section */
 .application-hero {
     display: grid;
-    grid-template-columns: 1.75fr 1fr;
+    grid-template-columns: 1.8fr 1fr;
     gap: 24px;
-    padding: 28px;
+    padding: 32px;
     border-radius: 20px;
     margin-bottom: 24px;
-    background: linear-gradient(135deg, rgba(179, 38, 30, 0.94), rgba(239, 107, 46, 0.92));
-    box-shadow: 0 22px 40px rgba(101, 34, 16, 0.28);
-    color: #fff;
+    background: linear-gradient(135deg, #b3261e 0%, #ef6b2e 100%);
+    box-shadow: 0 16px 36px rgba(179, 38, 30, 0.22);
+    color: #ffffff;
 }
 
 .hero-kicker {
@@ -1870,29 +1843,30 @@ include 'includes/header.php';
     font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;
-    background: rgba(255, 255, 255, 0.18);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.35);
     border-radius: 999px;
-    padding: 7px 13px;
+    padding: 6px 14px;
     margin-bottom: 14px;
 }
 
 .application-hero h1 {
-    margin: 0 0 10px;
-    line-height: 1.2;
-    color: #fff;
-    font-size: clamp(1.35rem, 2.3vw, 2rem);
+    font-family: 'Outfit', sans-serif;
+    font-size: 2.2rem;
+    font-weight: 800;
+    margin: 0 0 12px;
+    color: #ffffff;
 }
 
 .application-hero .application-subtitle {
     margin: 0;
-    color: rgba(255, 255, 255, 0.9);
-    font-size: 0.97rem;
-    line-height: 1.55;
+    color: rgba(255, 255, 255, 0.92);
+    font-size: 1rem;
+    line-height: 1.6;
 }
 
 .hero-chip-row {
-    margin-top: 16px;
+    margin-top: 18px;
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
@@ -1901,14 +1875,14 @@ include 'includes/header.php';
 .hero-chip {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
-    padding: 8px 12px;
+    gap: 8px;
+    padding: 8px 14px;
     border-radius: 999px;
     font-size: 0.82rem;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.94);
+    font-weight: 700;
+    color: #ffffff;
     border: 1px solid rgba(255, 255, 255, 0.3);
-    background: rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.15);
 }
 
 .application-hero-metrics {
@@ -1916,705 +1890,603 @@ include 'includes/header.php';
     gap: 12px;
 }
 
+.metric-card {
+    background: rgba(255, 255, 255, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    border-radius: 14px;
+    padding: 14px 18px;
+    backdrop-filter: blur(4px);
+}
+
+.metric-card small {
+    display: block;
+    opacity: 0.88;
+    font-size: 0.78rem;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 600;
+}
+
+.metric-card strong {
+    font-size: 1.05rem;
+    font-weight: 800;
+}
+
+/* Playbook section */
 .application-playbook {
     margin-bottom: 24px;
-    background: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(255, 249, 241, 0.95));
-    border: 1px solid #f0dbc7;
+    background: #ffffff;
+    border: 1px solid var(--food-border);
     border-radius: 20px;
     padding: 24px;
     box-shadow: var(--food-shadow);
 }
 
 .playbook-head h2 {
-    margin: 0 0 8px;
-    color: #4a2618;
-    font-size: clamp(1.2rem, 2vw, 1.45rem);
+    font-family: 'Outfit', sans-serif;
+    margin: 0 0 6px;
+    color: var(--food-ink);
+    font-size: 1.35rem;
+    font-weight: 800;
     display: flex;
     align-items: center;
     gap: 10px;
 }
 
 .playbook-head p {
-    margin: 0 0 18px;
-    color: #6f5244;
+    margin: 0 0 16px;
+    color: #7b6d64;
     font-size: 0.94rem;
 }
 
 .playbook-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 14px;
+    gap: 16px;
 }
 
 .playbook-step {
-    position: relative;
-    padding: 18px 16px 16px;
-    background: #fff;
-    border: 1px solid #f2e1d1;
+    padding: 18px;
+    background: #fffdfb;
+    border: 1px solid var(--food-border);
     border-radius: 16px;
-    animation: riseIn 0.5s ease both;
-}
-
-.playbook-step:nth-child(2) {
-    animation-delay: 0.06s;
-}
-
-.playbook-step:nth-child(3) {
-    animation-delay: 0.12s;
 }
 
 .playbook-step-number {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 30px;
-    height: 30px;
-    border-radius: 999px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
     font-weight: 800;
-    color: #fff;
-    background: linear-gradient(135deg, #ca3b22, #f0802a);
-    margin-bottom: 8px;
+    font-size: 0.85rem;
+    color: #ffffff;
+    background: linear-gradient(135deg, #b3261e, #ef6b2e);
+    margin-bottom: 10px;
 }
 
 .playbook-step h3 {
-    margin: 0 0 8px;
-    color: #4a2618;
+    font-family: 'Outfit', sans-serif;
+    margin: 0 0 6px;
+    color: var(--food-ink);
     font-size: 1rem;
+    font-weight: 700;
 }
 
 .playbook-step p {
-    margin: 0 0 10px;
-    color: #7a5a4a;
-    font-size: 0.9rem;
-}
-
-.playbook-step ul {
     margin: 0;
-    padding-left: 18px;
-    color: #6c4b3b;
-    font-size: 0.86rem;
-    line-height: 1.45;
+    color: #7b6d64;
+    font-size: 0.88rem;
+    line-height: 1.5;
 }
 
-.playbook-step li + li {
-    margin-top: 4px;
-}
-
-.playbook-alert {
-    margin-top: 16px;
-    display: flex;
-    align-items: flex-start;
+/* WIZARD STEPPER HEADER */
+.wizard-stepper {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
     gap: 12px;
-    border: 1px solid #ffd9a6;
-    background: linear-gradient(180deg, #fff8ef 0%, #fff4e5 100%);
-    border-radius: 14px;
-    padding: 14px 16px;
-    color: #7a4b20;
-    font-size: 0.9rem;
+    margin-bottom: 32px;
+    padding: 8px 0;
 }
 
-.playbook-alert i {
-    color: #de7a1d;
-    margin-top: 2px;
+.stepper-track {
+    position: absolute;
+    top: 26px;
+    left: 15%;
+    right: 15%;
+    height: 3px;
+    background: var(--food-border);
+    z-index: 1;
 }
 
-.metric-card {
-    background: rgba(255, 255, 255, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.28);
-    border-radius: 14px;
-    padding: 14px;
-    backdrop-filter: blur(3px);
+.stepper-progress {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #b3261e, #ef6b2e);
+    transition: width 0.35s ease;
 }
 
-.metric-card small {
+.stepper-item {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    text-align: center;
+}
+
+.stepper-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: #ffffff;
+    border: 2px solid var(--food-border);
+    color: #7b6d64;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+    font-weight: 700;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.04);
+}
+
+.stepper-item.active .stepper-icon {
+    background: linear-gradient(135deg, #b3261e, #ef6b2e);
+    border-color: #b3261e;
+    color: #ffffff;
+    box-shadow: 0 6px 16px rgba(179, 38, 30, 0.3);
+    transform: scale(1.1);
+}
+
+.stepper-item.completed .stepper-icon {
+    background: #15803d;
+    border-color: #15803d;
+    color: #ffffff;
+}
+
+.stepper-label {
+    margin-top: 8px;
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #7b6d64;
+    transition: color 0.3s ease;
+}
+
+.stepper-item.active .stepper-label {
+    color: var(--food-ink);
+}
+
+/* WIZARD PANES */
+.wizard-pane {
+    display: none;
+    animation: fadeIn 0.4s ease-out;
+}
+
+.wizard-pane.active {
     display: block;
-    opacity: 0.84;
-    font-size: 0.78rem;
-    margin-bottom: 6px;
-    letter-spacing: 0.02em;
 }
 
-.metric-card strong {
-    font-size: 1rem;
-    letter-spacing: 0.02em;
+.wizard-nav-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 32px;
+    padding-top: 24px;
+    border-top: 1px solid var(--food-border);
 }
 
+/* Form Container */
 .application-container {
     display: grid;
-    grid-template-columns: 2fr 1fr;
-    gap: 30px;
-    max-width: 1400px;
+    grid-template-columns: 2.2fr 1fr;
+    gap: 24px;
+    max-width: 1320px;
     margin: 0 auto;
 }
 
 .application-form-container {
-    background: linear-gradient(180deg, #fffefa 0%, #ffffff 100%);
+    background: #ffffff;
     border-radius: 20px;
     padding: 32px;
-    border: 1px solid #f3e4d7;
+    border: 1px solid var(--food-border);
     box-shadow: var(--food-shadow);
 }
 
-.form-header {
-    margin-bottom: 34px;
-    text-align: left;
-    border-bottom: 1px dashed #f0ddd0;
-    padding-bottom: 16px;
-}
-
-.form-header h2 {
-    color: var(--food-ink);
-    margin-bottom: 8px;
-    font-size: 1.45rem;
-}
-
-.form-header p {
-    color: #7a5c4b;
-    font-size: 0.95rem;
-    margin: 0;
-}
-
 .application-workflow-card {
-    margin-bottom: 26px;
-    padding: 20px;
-    border-radius: 18px;
-    border: 1px solid #f3d6c4;
-    background: linear-gradient(135deg, #fff7f1 0%, #ffffff 100%);
+    margin-bottom: 24px;
+    padding: 16px 20px;
+    border-radius: 14px;
+    border: 1px solid var(--food-border);
+    background: #fffdfb;
 }
 
 .workflow-pill-row {
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
-    margin-bottom: 16px;
 }
 
 .workflow-pill {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 12px;
+    padding: 6px 14px;
     border-radius: 999px;
-    background: #fff;
-    border: 1px solid #ecd4c4;
-    color: #7a4c33;
+    background: #ffffff;
+    border: 1px solid var(--food-border);
+    color: var(--food-ink);
     font-size: 0.82rem;
     font-weight: 700;
 }
 
-.workflow-steps-grid {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 12px;
-}
-
-.workflow-step-card {
-    border-radius: 16px;
-    border: 1px solid #f1dfd2;
-    background: rgba(255, 255, 255, 0.9);
-    padding: 14px;
-    min-height: 112px;
-}
-
-.workflow-step-card strong {
-    display: block;
-    color: #6d2b18;
-    margin-bottom: 8px;
-    font-size: 0.93rem;
-}
-
-.workflow-step-card span {
-    display: block;
-    color: #7b675a;
-    font-size: 0.84rem;
-    line-height: 1.45;
-}
-
-.workflow-step-card.current {
-    border-color: #ef7d2a;
-    box-shadow: 0 10px 24px rgba(239, 125, 42, 0.12);
-}
-
-.workflow-step-card.done {
-    border-color: #cce7d0;
-    background: linear-gradient(135deg, #f4fff6 0%, #ffffff 100%);
-}
-
 .workflow-summary {
-    margin: 16px 0 0;
-    color: #6d4b3a;
-    font-size: 0.92rem;
-    line-height: 1.6;
+    margin: 10px 0 0;
+    color: #7b6d64;
+    font-size: 0.88rem;
 }
 
 .form-section {
-    margin-bottom: 34px;
-    padding-bottom: 20px;
-    border-bottom: 1px solid #f3e8df;
-}
-
-.form-section:last-child {
-    border-bottom: none;
+    margin-bottom: 28px;
 }
 
 .form-section h3 {
-    color: var(--food-red);
-    margin-bottom: 18px;
-    font-size: 1.1rem;
+    font-family: 'Outfit', sans-serif;
+    color: var(--food-ink);
+    margin-bottom: 6px;
+    font-size: 1.2rem;
+    font-weight: 700;
     display: flex;
     align-items: center;
     gap: 10px;
 }
 
-.step-tag {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 999px;
-    padding: 4px 11px;
-    font-size: 0.72rem;
-    font-weight: 800;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
-    color: #fff;
-    background: linear-gradient(135deg, #cf3b22, #ef7d2a);
-}
-
 .section-description {
-    color: #876552;
-    margin-bottom: 20px;
+    color: #7b6d64;
+    margin-bottom: 18px;
     font-size: 0.9rem;
 }
 
 .form-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 20px;
-    margin-bottom: 20px;
-}
-
-.form-row .form-group:only-child {
-    grid-column: 1 / -1;
-}
-
-@media (max-width: 992px) {
-    .form-row {
-        grid-template-columns: 1fr;
-    }
-}
-
-.form-group {
-    margin-bottom: 25px;
+    gap: 16px;
+    margin-bottom: 16px;
 }
 
 .form-group label {
     display: block;
-    margin-bottom: 8px;
-    color: #4b3428;
-    font-weight: 600;
-    font-size: 0.95rem;
+    margin-bottom: 6px;
+    color: var(--food-ink);
+    font-weight: 700;
+    font-size: 0.92rem;
 }
 
 .form-group input,
 .form-group select,
 .form-group textarea {
     width: 100%;
-    padding: 13px 14px;
-    border: 1px solid #e8dacc;
+    padding: 12px 16px;
+    border: 1px solid var(--food-border);
     border-radius: 12px;
     font-size: 0.95rem;
     font-family: inherit;
     transition: all 0.25s ease;
-    background-color: #fffdf9;
-    color: #2f1d14;
+    background-color: #fffdfb;
+    color: var(--food-ink);
 }
 
 .form-group input:focus,
 .form-group select:focus,
 .form-group textarea:focus {
     outline: none;
-    border-color: #e66a2f;
-    background-color: white;
-    box-shadow: 0 0 0 4px rgba(239, 107, 46, 0.14);
+    border-color: #ef6b2e;
+    background-color: #ffffff;
+    box-shadow: 0 0 0 4px rgba(239, 107, 46, 0.15);
 }
 
 .form-text {
     display: block;
-    margin-top: 5px;
-    color: #8d6f5f;
-    font-size: 0.85rem;
-}
-
-.psgc-row {
-    margin-bottom: 8px;
+    margin-top: 4px;
+    color: #7b6d64;
+    font-size: 0.82rem;
 }
 
 .psgc-help {
-    margin: 4px 0 18px;
-    color: #7a5e4f;
+    margin: 4px 0 14px;
+    color: #7b6d64;
     font-size: 0.84rem;
 }
 
-#business_address[readonly] {
-    background: #f8f3ed;
-    color: #4b3428;
-}
-
-.doc-requirement-status {
-    margin: 10px 0 18px;
-    padding: 12px 14px;
-    border-radius: 10px;
-    font-size: 0.9rem;
-    border: 1px solid #e4e9f1;
-    background: #f8fafc;
-    color: #334155;
-}
-
-.doc-requirement-status.success {
-    border-color: #86efac;
-    background: #f0fdf4;
-    color: #166534;
-}
-
-.doc-requirement-status.warning {
-    border-color: #fcd34d;
-    background: #fffbeb;
-    color: #92400e;
-}
-
-.doc-requirement-status.error {
-    border-color: #fca5a5;
-    background: #fef2f2;
-    color: #991b1b;
-}
-
-.application-form.submitted {
-    opacity: 0.7;
-    pointer-events: none;
-}
-
-.post-submit-state {
-    margin-top: 18px;
-    padding: 18px;
-    border-radius: 14px;
-    border: 1px solid #bde5c8;
-    background: linear-gradient(180deg, #f3fff6 0%, #ffffff 100%);
-    color: #1f5130;
-}
-
-.post-submit-state h4 {
-    margin: 0 0 10px;
-    color: #1a6f3c;
-    font-size: 1.05rem;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.post-submit-state p {
-    margin: 0 0 8px;
-    color: #2e5c3c;
-}
-
+/* Documents Grid & Drag-Drop */
 .documents-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 20px;
-    margin-top: 20px;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 16px;
+    margin-top: 16px;
 }
 
 .document-item {
-    background: linear-gradient(180deg, #fff9f4 0%, #fff 100%);
-    padding: 18px;
-    border-radius: 12px;
-    border: 1px dashed #edcdb7;
-    transition: all 0.3s;
+    background: #fffdfb;
+    padding: 16px;
+    border-radius: 14px;
+    border: 2px dashed var(--food-border);
+    transition: all 0.25s ease;
+    position: relative;
+}
+
+.document-item.dragover {
+    border-color: #b3261e;
+    background: #fff5ea;
+    transform: scale(1.02);
 }
 
 .document-item.required-highlight {
     border-style: solid;
-    border-color: #e99756;
-    background: linear-gradient(180deg, #fff4e7 0%, #fffefc 100%);
+    border-color: #ef6b2e;
+    background: #fffdfa;
 }
 
 .document-item:hover {
-    border-color: #df6b36;
-    background-color: #fff7ef;
-    transform: translateY(-1px);
-}
-
-.document-label {
-    display: block;
-    cursor: pointer;
+    border-color: #b3261e;
+    background-color: #ffffff;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.04);
 }
 
 .document-label span {
     display: block;
-    font-weight: 600;
-    color: #4f3428;
-    margin-bottom: 5px;
+    font-weight: 700;
+    color: var(--food-ink);
+    font-size: 0.9rem;
+    margin-bottom: 6px;
 }
 
 .document-label input[type="file"] {
     width: 100%;
-    padding: 10px 0;
-    font-size: 0.9rem;
+    padding: 6px 0;
+    font-size: 0.84rem;
 }
 
 .document-label small {
-    color: #8d6f5f;
-    font-size: 0.8rem;
+    color: #7b6d64;
+    font-size: 0.78rem;
 }
 
+/* Accordion for optional docs */
+.accordion-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: #fffdfb;
+    border: 1px solid var(--food-border);
+    border-radius: 14px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.accordion-header:hover {
+    background: #ffffff;
+}
+
+.accordion-chevron {
+    transition: transform 0.3s ease;
+    color: #7b6d64;
+}
+
+.accordion-header.active .accordion-chevron {
+    transform: rotate(180deg);
+}
+
+.accordion-body {
+    display: none;
+}
+
+.accordion-body.open {
+    display: block;
+}
+
+/* Summary Card for Step 3 */
+.summary-card {
+    background: #fffdfb;
+    border: 1px solid var(--food-border);
+    border-radius: 16px;
+    padding: 24px;
+}
+
+.summary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+}
+
+.summary-item.full-width {
+    grid-column: 1 / -1;
+}
+
+.summary-item small {
+    display: block;
+    color: #7b6d64;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    margin-bottom: 4px;
+}
+
+.summary-item strong {
+    font-size: 1rem;
+    color: var(--food-ink);
+    word-break: break-word;
+}
+
+/* Confirmations */
 .tutorial-agreement,
 .terms-agreement {
     display: flex;
     align-items: flex-start;
-    gap: 15px;
-    padding: 20px;
-    background: #fffaf2;
+    gap: 12px;
+    padding: 16px 18px;
+    background: #fffdfb;
     border-radius: 12px;
-    border: 1px solid #f1dbc7;
-    border-left: 4px solid #df652d;
-}
-
-.tutorial-agreement {
-    margin-bottom: 14px;
+    border: 1px solid var(--food-border);
+    margin-bottom: 12px;
 }
 
 .tutorial-agreement input,
 .terms-agreement input {
-    margin-top: 5px;
-    accent-color: #c62828;
+    margin-top: 4px;
+    accent-color: #b3261e;
+    width: 18px;
+    height: 18px;
 }
 
 .tutorial-agreement label,
 .terms-agreement label {
-    color: #725241;
-    font-size: 0.95rem;
+    color: #7b6d64;
+    font-size: 0.92rem;
     line-height: 1.5;
 }
 
-.terms-agreement a {
-    color: #c2421f;
-    text-decoration: none;
-    font-weight: 500;
+/* Buttons */
+.btn-primary {
+    padding: 14px 28px;
+    background: linear-gradient(135deg, #b3261e 0%, #ef6b2e 100%);
+    color: #ffffff;
+    border: none;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    box-shadow: 0 10px 24px rgba(179, 38, 30, 0.25);
 }
 
-.terms-agreement a:hover {
-    text-decoration: underline;
+.btn-primary:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 30px rgba(179, 38, 30, 0.35);
 }
 
-.form-actions {
-    display: flex;
-    gap: 20px;
-    margin-top: 40px;
-    padding-top: 30px;
-    border-top: 1px solid #f2e2d4;
+.btn-primary:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
 }
 
 .btn-outline {
     padding: 13px 24px;
-    background: #fff8f0;
-    color: #b63d1c;
-    border: 1px solid #efc5a6;
+    background: #ffffff;
+    color: #b3261e;
+    border: 1px solid #b3261e;
     border-radius: 12px;
     font-size: 0.95rem;
     font-weight: 700;
     cursor: pointer;
-    transition: all 0.3s;
-    text-decoration: none;
-    display: flex;
+    transition: all 0.3s ease;
+    display: inline-flex;
     align-items: center;
-    justify-content: center;
+    gap: 8px;
 }
 
 .btn-outline:hover {
-    background: #b63d1c;
-    color: #fff;
+    background: #fff5ea;
 }
 
-.application-form-container .btn-primary {
-    border-radius: 12px;
-    font-weight: 700;
-    box-shadow: 0 14px 24px rgba(179, 38, 30, 0.26);
-}
-
+/* Sidebar */
 .requirements-sidebar {
     position: sticky;
-    top: 100px;
+    top: 84px;
     height: fit-content;
 }
 
 .requirements-card {
-    background: linear-gradient(180deg, #fffefb 0%, #fff 100%);
+    background: #ffffff;
     border-radius: 20px;
     padding: 24px;
-    border: 1px solid #f1dfcf;
+    border: 1px solid var(--food-border);
     box-shadow: var(--food-shadow);
 }
 
 .requirements-card h3 {
-    color: #4a2618;
-    margin-bottom: 25px;
-    font-size: 1.2rem;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.requirements-list {
-    margin-bottom: 30px;
-}
-
-.requirements-list.compact {
-    margin-bottom: 0;
+    font-family: 'Outfit', sans-serif;
+    color: var(--food-ink);
+    margin-bottom: 20px;
+    font-size: 1.15rem;
+    font-weight: 700;
 }
 
 .requirement-item {
     display: flex;
-    gap: 15px;
-    padding: 15px 0;
-    border-bottom: 1px solid #f2e5da;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--food-border);
 }
 
 .requirement-item:last-child {
     border-bottom: none;
 }
 
-.requirement-item i {
-    color: #db6632;
-    font-size: 1.2rem;
-    margin-top: 2px;
-}
-
 .requirement-item strong {
     display: block;
-    color: #4a2618;
-    font-size: 0.95rem;
-    margin-bottom: 3px;
+    color: var(--food-ink);
+    font-size: 0.92rem;
+    margin-bottom: 2px;
 }
 
 .requirement-item small {
-    color: #876c5d;
-    font-size: 0.85rem;
+    color: #7b6d64;
+    font-size: 0.84rem;
 }
 
-.penalty-card,
-.support-info,
-.contact-support {
-    margin-top: 30px;
-    padding-top: 24px;
-    border-top: 1px solid #edf1f5;
+.support-info, .contact-support {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--food-border);
 }
 
-.penalty-card h4,
-.support-info h4,
-.contact-support h4 {
-    color: #4a2618;
-    margin-bottom: 15px;
-    font-size: 1rem;
+.support-info h4, .contact-support h4 {
+    font-family: 'Outfit', sans-serif;
+    color: var(--food-ink);
+    margin-bottom: 10px;
+    font-size: 0.95rem;
+    font-weight: 700;
 }
 
-.penalty-card ul,
 .support-info ul {
     list-style: none;
     padding-left: 0;
-    color: #876c5d;
+    margin: 0;
+    color: #7b6d64;
+    font-size: 0.86rem;
 }
 
-.penalty-card li,
 .support-info li {
-    padding: 5px 0;
-    border-bottom: 1px solid #f2e5da;
-}
-
-.penalty-card li:last-child,
-.support-info li:last-child {
-    border-bottom: none;
+    padding: 4px 0;
 }
 
 .contact-support p {
-    color: #876c5d;
-    margin-bottom: 10px;
+    color: #7b6d64;
+    font-size: 0.88rem;
+    margin: 0 0 6px;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
 }
 
-.contact-support i {
-    color: #df652d;
-    width: 20px;
-}
-
-@media (max-width: 1200px) {
-    .application-hero {
-        grid-template-columns: 1fr;
-    }
-
-    .playbook-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .application-container {
-        grid-template-columns: 1fr;
-    }
-
-    .workflow-steps-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-    
-    .requirements-sidebar {
-        position: static;
-    }
-}
-
-@media (max-width: 768px) {
-    .franchise-application-page {
-        padding: 80px 0 30px;
-    }
-
-    .application-hero {
-        padding: 20px;
-        border-radius: 16px;
-    }
-    
-    .application-form-container {
-        padding: 25px;
-    }
-
-    .application-playbook {
-        padding: 18px;
-        border-radius: 16px;
-    }
-
-    .workflow-steps-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .documents-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .form-actions {
-        flex-direction: column;
-    }
-    
-    .btn-outline,
-    .btn-primary {
-        width: 100%;
-    }
-}
-
-@keyframes riseIn {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+@media (max-width: 992px) {
+    .application-hero { grid-template-columns: 1fr; }
+    .playbook-grid { grid-template-columns: 1fr; }
+    .application-container { grid-template-columns: 1fr; }
+    .requirements-sidebar { position: static; }
+    .form-row { grid-template-columns: 1fr; }
 }
 </style>
 
@@ -2623,27 +2495,384 @@ include 'includes/header.php';
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('franchiseForm');
     const serverAlert = <?php echo $swal_alert ? json_encode($swal_alert) : 'null'; ?>;
+    const prefillData = <?php echo json_encode($franchise_prefill); ?>;
+    
     if (serverAlert && serverAlert.text) {
         if (typeof Swal !== 'undefined' && Swal && typeof Swal.fire === 'function') {
             Swal.fire({
                 icon: serverAlert.icon || 'info',
                 title: serverAlert.title || 'Notice',
                 text: serverAlert.text,
+                confirmButtonColor: '#b3261e',
                 confirmButtonText: 'OK'
             });
-        } else {
-            alert(serverAlert.text);
         }
     }
 
     if (!form) return;
 
-    const submitBtn = form.querySelector('button[type="submit"]');
-    const csrfInput = form.querySelector('input[name="csrf_token"]');
-    const docStatusEl = document.getElementById('docRequirementStatus');
-    const requiredDocumentKeys = ['business_logo', 'dti_doc', 'bir_doc', 'valid_id', 'address_proof'];
-    const MAX_FILE_SIZE = <?php echo (int)$max_document_size_bytes; ?>;
-    const MAX_FILE_SIZE_LABEL = <?php echo json_encode($max_document_size_label); ?>;
+    // Quick Capital Chip Selection Automation
+    document.querySelectorAll('.chip-btn').forEach(chip => {
+        chip.addEventListener('click', function() {
+            const capVal = this.dataset.capital;
+            const capInput = document.getElementById('capital_investment');
+            if (capInput && capVal) {
+                capInput.value = capVal;
+                capInput.style.borderColor = '#15803d';
+                saveDraft();
+            }
+        });
+    });
+
+    // Auto TIN Masking
+    const tinInput = document.getElementById('tin_number');
+    if (tinInput) {
+        tinInput.addEventListener('input', function() {
+            let digits = this.value.replace(/\D/g, '').slice(0, 12);
+            let formatted = '';
+            for (let i = 0; i < digits.length; i++) {
+                if (i > 0 && i % 3 === 0) formatted += '-';
+                formatted += digits[i];
+            }
+            this.value = formatted;
+        });
+    }
+
+    // Auto Phone Masking
+    const phoneInput = document.getElementById('contact_phone');
+    if (phoneInput) {
+        phoneInput.addEventListener('input', function() {
+            let val = this.value.replace(/[^\d+]/g, '');
+            if (val.startsWith('09') && val.length > 4 && !val.includes('-')) {
+                val = val.slice(0, 4) + '-' + val.slice(4, 7) + (val.length > 7 ? '-' + val.slice(7, 11) : '');
+            }
+            this.value = val;
+        });
+    }
+
+    // Auto-Fill Profile Button Handler
+    const btnAutoFill = document.getElementById('btnAutoFillProfile');
+    if (btnAutoFill) {
+        btnAutoFill.addEventListener('click', function() {
+            if (!prefillData) return;
+            const setIfPresent = (id, key) => {
+                const el = document.getElementById(id);
+                if (el && prefillData[key]) el.value = prefillData[key];
+            };
+
+            setIfPresent('business_name', 'business_name');
+            setIfPresent('business_type', 'business_type');
+            setIfPresent('dti_sec_number', 'dti_sec_number');
+            setIfPresent('tin_number', 'tin_number');
+            setIfPresent('contact_person', 'contact_person');
+            setIfPresent('contact_phone', 'contact_phone');
+            setIfPresent('contact_email', 'contact_email');
+            setIfPresent('business_address_street', 'business_address_street');
+            setIfPresent('capital_investment', 'capital_investment');
+
+            composeBusinessAddress();
+            saveDraft();
+
+            Swal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: 'success',
+                title: 'Profile data auto-filled!',
+                showConfirmButton: false,
+                timer: 2000
+            });
+        });
+    }
+
+    // Drag and Drop Upload Automation
+    document.querySelectorAll('.document-item').forEach(item => {
+        const fileInput = item.querySelector('input[type="file"]');
+        if (!fileInput) return;
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            item.addEventListener(eventName, e => {
+                e.preventDefault();
+                e.stopPropagation();
+                item.classList.add('dragover');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            item.addEventListener(eventName, e => {
+                e.preventDefault();
+                e.stopPropagation();
+                item.classList.remove('dragover');
+            }, false);
+        });
+
+        item.addEventListener('drop', e => {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            if (files && files.length > 0) {
+                fileInput.files = files;
+                fileInput.dispatchEvent(new Event('change'));
+            }
+        });
+    });
+
+    // LocalStorage Draft Auto-Save Automation
+    const DRAFT_KEY = 'franchise_app_draft_' + (<?php echo (int)$user_id; ?>);
+
+    function saveDraft() {
+        const data = {};
+        form.querySelectorAll('input:not([type="file"]):not([type="hidden"]), select, textarea').forEach(field => {
+            if (field.name) data[field.name] = field.value;
+        });
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(data));
+    }
+
+    function restoreDraft() {
+        const saved = localStorage.getItem(DRAFT_KEY);
+        if (!saved) return;
+        try {
+            const data = JSON.parse(saved);
+            Object.keys(data).forEach(key => {
+                const field = form.querySelector(`[name="${key}"]`);
+                if (field && !field.value) {
+                    field.value = data[key];
+                }
+            });
+        } catch (e) {}
+    }
+
+    form.querySelectorAll('input, select, textarea').forEach(field => {
+        field.addEventListener('input', saveDraft);
+        field.addEventListener('change', saveDraft);
+    });
+
+    restoreDraft();
+
+    // Wizard Step Navigation Logic
+    let currentStep = 1;
+    const stepperItems = document.querySelectorAll('.stepper-item');
+    const stepperProgress = document.getElementById('stepperProgress');
+    const wizardPanes = {
+        1: document.getElementById('wizardStep1'),
+        2: document.getElementById('wizardStep2'),
+        3: document.getElementById('wizardStep3')
+    };
+
+    const btnGoToStep2 = document.getElementById('btnGoToStep2');
+    const btnBackToStep1 = document.getElementById('btnBackToStep1');
+    const btnGoToStep3 = document.getElementById('btnGoToStep3');
+    const btnBackToStep2 = document.getElementById('btnBackToStep2');
+
+    function updateStepperUI(step) {
+        currentStep = step;
+        stepperItems.forEach(item => {
+            const itemStep = parseInt(item.dataset.step);
+            item.classList.remove('active', 'completed');
+            if (itemStep === step) {
+                item.classList.add('active');
+            } else if (itemStep < step) {
+                item.classList.add('completed');
+            }
+        });
+
+        if (stepperProgress) {
+            const pct = ((step - 1) / 2) * 100;
+            stepperProgress.style.width = pct + '%';
+        }
+
+        Object.keys(wizardPanes).forEach(s => {
+            if (wizardPanes[s]) {
+                wizardPanes[s].classList.toggle('active', parseInt(s) === step);
+            }
+        });
+
+        window.scrollTo({ top: document.getElementById('wizardStepper').offsetTop - 90, behavior: 'smooth' });
+
+        if (step === 3) {
+            buildSummaryPreview();
+        }
+    }
+
+    function validateStep1() {
+        const pane1 = wizardPanes[1];
+        if (!pane1) return true;
+
+        const inputs = pane1.querySelectorAll('input[required], select[required], textarea[required]');
+        let valid = true;
+
+        inputs.forEach(field => {
+            if (!field.value.trim()) {
+                field.style.borderColor = '#dc3545';
+                valid = false;
+            } else {
+                field.style.borderColor = '';
+            }
+        });
+
+        const capInput = document.getElementById('capital_investment');
+        if (capInput && parseFloat(capInput.value) < 100000) {
+            capInput.style.borderColor = '#dc3545';
+            valid = false;
+        }
+
+        return valid;
+    }
+
+    function validateStep2() {
+        const pane2 = wizardPanes[2];
+        if (!pane2) return true;
+
+        const requiredFiles = pane2.querySelectorAll('input[type="file"][required]');
+        let valid = true;
+
+        requiredFiles.forEach(fileInput => {
+            if (!fileInput.files || fileInput.files.length === 0) {
+                const docItem = fileInput.closest('.document-item');
+                if (docItem) docItem.style.borderColor = '#dc3545';
+                valid = false;
+            } else {
+                const docItem = fileInput.closest('.document-item');
+                if (docItem) docItem.style.borderColor = '';
+            }
+        });
+
+        return valid;
+    }
+
+    if (btnGoToStep2) {
+        btnGoToStep2.addEventListener('click', function() {
+            if (!validateStep1()) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Incomplete Step 1',
+                    text: 'Please complete all required business and location fields (and minimum investment of ₱100,000) before proceeding.',
+                    confirmButtonColor: '#b3261e'
+                });
+                return;
+            }
+            updateStepperUI(2);
+        });
+    }
+
+    if (btnBackToStep1) {
+        btnBackToStep1.addEventListener('click', function() {
+            updateStepperUI(1);
+        });
+    }
+
+    if (btnGoToStep3) {
+        btnGoToStep3.addEventListener('click', function() {
+            if (!validateStep2()) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Missing Documents',
+                    text: 'Please upload all 5 essential required documents before reviewing.',
+                    confirmButtonColor: '#b3261e'
+                });
+                return;
+            }
+            updateStepperUI(3);
+        });
+    }
+
+    if (btnBackToStep2) {
+        btnBackToStep2.addEventListener('click', function() {
+            updateStepperUI(2);
+        });
+    }
+
+    stepperItems.forEach(item => {
+        item.addEventListener('click', function() {
+            const targetStep = parseInt(this.dataset.step);
+            if (targetStep === 2 && !validateStep1()) return;
+            if (targetStep === 3 && (!validateStep1() || !validateStep2())) return;
+            updateStepperUI(targetStep);
+        });
+    });
+
+    // Accordion Toggle for Optional Documents
+    const toggleOptionalDocs = document.getElementById('toggleOptionalDocs');
+    const optionalDocsBody = document.getElementById('optionalDocsBody');
+
+    if (toggleOptionalDocs && optionalDocsBody) {
+        toggleOptionalDocs.addEventListener('click', function() {
+            this.classList.toggle('active');
+            optionalDocsBody.classList.toggle('open');
+        });
+    }
+
+    // Build Summary Preview in Step 3
+    function buildSummaryPreview() {
+        const getVal = id => {
+            const el = document.getElementById(id);
+            if (!el) return '-';
+            if (el.tagName === 'SELECT') {
+                return el.options[el.selectedIndex] ? el.options[el.selectedIndex].text : '-';
+            }
+            return el.value.trim() || '-';
+        };
+
+        const bName = getVal('business_name');
+        const person = getVal('contact_person');
+        const email = getVal('contact_email');
+        const phone = getVal('contact_phone');
+        const address = getVal('business_address');
+        const capital = getVal('capital_investment');
+
+        let fileCount = 0;
+        form.querySelectorAll('input[type="file"]').forEach(f => {
+            if (f.files && f.files.length > 0) fileCount++;
+        });
+
+        document.getElementById('sumBusinessName').textContent = bName;
+        document.getElementById('sumBusinessType').textContent = 'Partnership';
+        document.getElementById('sumContactPerson').textContent = person;
+        document.getElementById('sumContactDetails').textContent = email + ' | ' + phone;
+        document.getElementById('sumBusinessAddress').textContent = address;
+        document.getElementById('sumCapital').textContent = capital !== '-' ? 'PHP ' + Number(capital).toLocaleString('en-US') : '-';
+        document.getElementById('sumDocCount').textContent = fileCount + ' file(s) attached';
+    }
+
+    // File Selection Feedback & Logo Preview
+    form.querySelectorAll('input[type="file"]').forEach(input => {
+        input.addEventListener('change', function() {
+            const file = this.files[0];
+            const item = this.closest('.document-item');
+            const span = item ? item.querySelector('.document-label span') : null;
+
+            if (this.id === 'business_logo_input' && file) {
+                const previewContainer = document.getElementById('logoPreviewContainer');
+                const previewImg = document.getElementById('logoPreviewImg');
+                if (file.type.startsWith('image/') && previewContainer && previewImg) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        previewImg.src = e.target.result;
+                        previewContainer.style.display = 'block';
+                    };
+                    reader.readAsDataURL(file);
+                } else if (previewContainer) {
+                    previewContainer.style.display = 'none';
+                }
+            }
+
+            if (file && item) {
+                item.style.borderColor = '#15803d';
+                if (span) {
+                    if (!span.dataset.orig) span.dataset.orig = span.textContent;
+                    span.innerHTML = span.dataset.orig + ' <i class="fas fa-check-circle" style="color:#15803d;margin-left:4px;"></i>';
+                }
+            } else if (item) {
+                item.style.borderColor = '';
+                if (span && span.dataset.orig) span.textContent = span.dataset.orig;
+            }
+        });
+    });
+
+    // On submit success clear draft
+    form.addEventListener('submit', function() {
+        localStorage.removeItem(DRAFT_KEY);
+    });
+
+    // PSGC cascading dropdowns initialization
     const psgcRegion = document.getElementById('psgcRegion');
     const psgcProvince = document.getElementById('psgcProvince');
     const psgcCity = document.getElementById('psgcCity');
@@ -2652,1052 +2881,157 @@ document.addEventListener('DOMContentLoaded', function() {
     const psgcProvinceName = document.getElementById('psgcProvinceName');
     const psgcCityName = document.getElementById('psgcCityName');
     const psgcBarangayName = document.getElementById('psgcBarangayName');
-    const psgcManualMode = document.getElementById('psgcManualMode');
-    const psgcHelp = document.getElementById('psgcAddressHelp');
     const businessStreetInput = document.getElementById('business_address_street');
     const businessAddressInput = document.getElementById('business_address');
     const PSGC_API_BASE = 'https://psgc.gitlab.io/api';
     const psgcCache = new Map();
-    const psgcInitialSelection = {
-        region: psgcRegion ? String(psgcRegion.dataset.selected || '') : '',
-        province: psgcProvince ? String(psgcProvince.dataset.selected || '') : '',
-        city: psgcCity ? String(psgcCity.dataset.selected || '') : '',
-        barangay: psgcBarangay ? String(psgcBarangay.dataset.selected || '') : ''
-    };
 
-    function normalizePsgcText(value) {
-        return String(value || '').replace(/\s+/g, ' ').trim();
-    }
-
-    function normalizePlaceName(value) {
-        let text = String(value || '').toLowerCase();
-        try {
-            text = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        } catch (error) {
-            // Keep original text when normalize is unavailable.
-        }
-        return text.replace(/[^a-z0-9]/g, '');
-    }
-
-    function toNameTokens(value) {
-        let text = String(value || '').toLowerCase();
-        try {
-            text = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        } catch (error) {
-            // Keep original text when normalize is unavailable.
-        }
-
-        if (text.includes('metro manila')) {
-            text += ' ncr national capital region';
-        }
-        if (text.includes('national capital region') || /\bncr\b/.test(text)) {
-            text += ' metro manila ncr';
-        }
-        if (text.includes('calabarzon') || text.includes('region iv-a') || text.includes('region iva') || text.includes('region 4a')) {
-            text += ' calabarzon region iva region 4a iv-a';
-        }
-
-        text = text
-            .replace(/&/g, ' and ')
-            .replace(/[^a-z0-9]+/g, ' ')
-            .trim();
-
-        const stopWords = new Set([
-            'city',
-            'municipality',
-            'municipal',
-            'province',
-            'region',
-            'barangay',
-            'brgy',
-            'of',
-            'the',
-            'and'
-        ]);
-
-        return Array.from(new Set(text.split(/\s+/).filter((token) => token && !stopWords.has(token))));
-    }
-
-    function toCandidateNames(...groups) {
-        const seen = new Set();
-        const names = [];
-        const addName = (value) => {
-            const text = String(value || '').trim();
-            if (!text) return;
-            const key = normalizePlaceName(text);
-            if (!key || seen.has(key)) return;
-            seen.add(key);
-            names.push(text);
-        };
-        groups.forEach((group) => {
-            if (Array.isArray(group)) {
-                group.forEach(addName);
-            } else {
-                addName(group);
-            }
-        });
-        return names;
-    }
-
-    function findOptionValueByName(selectElement, targetName) {
-        if (!selectElement || !targetName) return '';
-        const normalizedTarget = normalizePlaceName(targetName);
-        const targetTokens = toNameTokens(targetName);
-        if (!normalizedTarget || !targetTokens.length) return '';
-
-        let bestValue = '';
-        let bestScore = 0;
-        let bestOverlap = 0;
-
-        Array.from(selectElement.options || []).forEach((option) => {
-            if (!option || !option.value) return;
-            const normalizedOption = normalizePlaceName(option.textContent || option.label || '');
-            if (!normalizedOption) return;
-            if (normalizedOption === normalizedTarget ||
-                normalizedOption.includes(normalizedTarget) ||
-                normalizedTarget.includes(normalizedOption)) {
-                bestValue = bestValue || option.value;
-                bestScore = 1;
-                bestOverlap = targetTokens.length;
-                return;
-            }
-
-            const optionTokens = toNameTokens(option.textContent || option.label || '');
-            if (!optionTokens.length) return;
-            const optionTokenSet = new Set(optionTokens);
-            let overlap = 0;
-            targetTokens.forEach((token) => {
-                if (optionTokenSet.has(token)) overlap++;
-            });
-            if (overlap <= 0) return;
-
-            const score = overlap / Math.max(targetTokens.length, optionTokens.length);
-            if (overlap > bestOverlap || (overlap === bestOverlap && score > bestScore)) {
-                bestOverlap = overlap;
-                bestScore = score;
-                bestValue = option.value;
-            }
-        });
-
-        if (bestValue && (bestOverlap >= Math.max(1, targetTokens.length - 1) || bestScore >= 0.45)) {
-            return bestValue;
-        }
-        return '';
-    }
-
-    function findOptionValueFromCandidates(selectElement, candidates = []) {
-        const names = toCandidateNames(candidates);
-        for (let i = 0; i < names.length; i += 1) {
-            const code = findOptionValueByName(selectElement, names[i]);
-            if (code) return code;
-        }
-        return '';
-    }
-
-    function getSelectedText(selectElement) {
-        if (!selectElement || selectElement.selectedIndex < 0) return '';
-        const option = selectElement.options[selectElement.selectedIndex];
-        if (!option || !option.value) return '';
-        return normalizePsgcText(option.textContent || option.label || '');
-    }
-
-    function isNcrRegionSelection(code, name) {
-        const normalizedCode = String(code || '').trim();
-        const normalizedName = normalizePsgcText(name).toLowerCase();
-        return normalizedCode === '130000000' ||
-            normalizedName.includes('national capital region') ||
-            /\bncr\b/.test(normalizedName);
-    }
+    function normalizePsgcText(v) { return String(v || '').replace(/\s+/g, ' ').trim(); }
 
     function syncPsgcHiddenNames() {
-        if (psgcRegionName) psgcRegionName.value = getSelectedText(psgcRegion);
-        if (psgcProvinceName) psgcProvinceName.value = getSelectedText(psgcProvince);
-        if (psgcCityName) psgcCityName.value = getSelectedText(psgcCity);
-        if (psgcBarangayName) psgcBarangayName.value = getSelectedText(psgcBarangay);
+        if (psgcRegionName && psgcRegion) psgcRegionName.value = psgcRegion.options[psgcRegion.selectedIndex]?.text || '';
+        if (psgcProvinceName && psgcProvince) psgcProvinceName.value = psgcProvince.options[psgcProvince.selectedIndex]?.text || '';
+        if (psgcCityName && psgcCity) psgcCityName.value = psgcCity.options[psgcCity.selectedIndex]?.text || '';
+        if (psgcBarangayName && psgcBarangay) psgcBarangayName.value = psgcBarangay.options[psgcBarangay.selectedIndex]?.text || '';
     }
 
     function composeBusinessAddress() {
         if (!businessAddressInput) return;
-        if (psgcManualMode && psgcManualMode.value === '1') {
-            return;
-        }
-        const street = normalizePsgcText(businessStreetInput ? businessStreetInput.value : '');
-        const barangay = normalizePsgcText(psgcBarangayName ? psgcBarangayName.value : '');
-        const city = normalizePsgcText(psgcCityName ? psgcCityName.value : '');
-        const province = normalizePsgcText(psgcProvinceName ? psgcProvinceName.value : '');
-        const region = normalizePsgcText(psgcRegionName ? psgcRegionName.value : '');
+        const street = normalizePsgcText(businessStreetInput?.value);
+        const barangay = normalizePsgcText(psgcBarangayName?.value);
+        const city = normalizePsgcText(psgcCityName?.value);
+        const province = normalizePsgcText(psgcProvinceName?.value);
+        const region = normalizePsgcText(psgcRegionName?.value);
 
-        const parts = [street, barangay, city, province, region];
-        const seen = new Set();
-        const merged = [];
-        parts.forEach((part) => {
-            const key = part.toLowerCase();
-            if (!part || seen.has(key)) return;
-            seen.add(key);
-            merged.push(part);
-        });
-
-        if (merged.length > 0) {
-            businessAddressInput.value = merged.join(', ');
-        }
-    }
-
-    function resetSelect(selectElement, placeholderText, shouldDisable) {
-        if (!selectElement) return;
-        selectElement.innerHTML = '';
-        const option = document.createElement('option');
-        option.value = '';
-        option.textContent = placeholderText;
-        selectElement.appendChild(option);
-        selectElement.value = '';
-        selectElement.disabled = !!shouldDisable;
-    }
-
-    function populateSelect(selectElement, items, placeholderText, selectedCode, selectedNames) {
-        if (!selectElement) return;
-        const currentSelected = String(selectedCode || '');
-        resetSelect(selectElement, placeholderText, false);
-        let appliedCode = '';
-        items.forEach((item) => {
-            const option = document.createElement('option');
-            option.value = String(item.code || '');
-            option.textContent = normalizePsgcText(item.name || '');
-            if (option.value === currentSelected) {
-                option.selected = true;
-                appliedCode = option.value;
-            }
-            selectElement.appendChild(option);
-        });
-
-        if (!appliedCode) {
-            const fallbackCode = findOptionValueFromCandidates(selectElement, selectedNames);
-            if (fallbackCode) {
-                selectElement.value = fallbackCode;
-                appliedCode = fallbackCode;
-            }
-        }
-
-        return appliedCode;
-    }
-
-    function setPsgcHelp(message, isError) {
-        if (!psgcHelp) return;
-        psgcHelp.textContent = message;
-        psgcHelp.style.color = isError ? '#b71c1c' : '#7a5e4f';
-    }
-
-    function enablePsgcManualFallback(message) {
-        if (psgcManualMode) {
-            psgcManualMode.value = '1';
-        }
-        if (businessAddressInput) {
-            businessAddressInput.readOnly = false;
-            businessAddressInput.placeholder = 'Enter complete business address manually (street, barangay, city, province, region)';
-        }
-        if (psgcRegion) psgcRegion.disabled = true;
-        if (psgcProvince) psgcProvince.disabled = true;
-        if (psgcCity) psgcCity.disabled = true;
-        if (psgcBarangay) psgcBarangay.disabled = true;
-        setPsgcHelp(message || 'PSGC lookup is temporarily unavailable. You can enter your complete address manually.', true);
-    }
-
-    function usePsgcMode() {
-        if (psgcManualMode) {
-            psgcManualMode.value = '0';
-        }
-        if (businessAddressInput) {
-            businessAddressInput.readOnly = true;
-        }
+        const parts = [street, barangay, city, province, region].filter(p => p !== '');
+        businessAddressInput.value = parts.join(', ');
     }
 
     async function fetchPsgc(path) {
-        const key = String(path || '');
-        if (psgcCache.has(key)) {
-            return psgcCache.get(key);
-        }
-        const response = await fetch(PSGC_API_BASE + key, {
-            headers: { 'Accept': 'application/json' }
-        });
-        if (!response.ok) {
-            throw new Error('PSGC request failed for ' + key);
-        }
-        const payload = await response.json();
-        psgcCache.set(key, payload);
-        return payload;
-    }
-
-    async function loadPsgcRegions(selectedCode, selectedNames) {
-        const regions = await fetchPsgc('/regions');
-        return populateSelect(psgcRegion, Array.isArray(regions) ? regions : [], 'Select region', selectedCode, selectedNames);
-    }
-
-    async function loadPsgcProvinces(regionCode, selectedCode, selectedNames) {
-        if (!psgcProvince) return;
-        if (!regionCode) {
-            resetSelect(psgcProvince, 'Select province', true);
-            return '';
-        }
-
-        const provinces = await fetchPsgc('/regions/' + encodeURIComponent(regionCode) + '/provinces');
-        const provinceItems = Array.isArray(provinces) ? provinces : [];
-
-        if (provinceItems.length === 0) {
-            resetSelect(psgcProvince, 'No province selection needed', true);
-            psgcProvince.required = false;
-            if (psgcProvinceName) psgcProvinceName.value = '';
-            return '';
-        }
-
-        const appliedCode = populateSelect(psgcProvince, provinceItems, 'Select province', selectedCode, selectedNames);
-        psgcProvince.disabled = false;
-        const regionName = getSelectedText(psgcRegion);
-        psgcProvince.required = !isNcrRegionSelection(regionCode, regionName);
-        return appliedCode;
-    }
-
-    async function loadPsgcCities(regionCode, provinceCode, selectedCode, selectedNames) {
-        if (!psgcCity) return;
-        if (!regionCode) {
-            resetSelect(psgcCity, 'Select city / municipality', true);
-            return '';
-        }
-
-        let cities = [];
-        if (provinceCode) {
-            cities = await fetchPsgc('/provinces/' + encodeURIComponent(provinceCode) + '/cities-municipalities');
-        } else {
-            cities = await fetchPsgc('/regions/' + encodeURIComponent(regionCode) + '/cities-municipalities');
-        }
-
-        const appliedCode = populateSelect(psgcCity, Array.isArray(cities) ? cities : [], 'Select city / municipality', selectedCode, selectedNames);
-        psgcCity.disabled = false;
-        return appliedCode;
-    }
-
-    async function loadPsgcBarangays(cityCode, selectedCode, selectedNames) {
-        if (!psgcBarangay) return;
-        if (!cityCode) {
-            resetSelect(psgcBarangay, 'Select barangay', true);
-            return '';
-        }
-        const barangays = await fetchPsgc('/cities-municipalities/' + encodeURIComponent(cityCode) + '/barangays');
-        const appliedCode = populateSelect(psgcBarangay, Array.isArray(barangays) ? barangays : [], 'Select barangay', selectedCode, selectedNames);
-        psgcBarangay.disabled = false;
-        return appliedCode;
-    }
-
-    async function initPsgcSelectors() {
-        if (!psgcRegion || !psgcProvince || !psgcCity || !psgcBarangay) {
-            return;
-        }
-
-        usePsgcMode();
-        setPsgcHelp('Select PSGC fields so admin can validate your exact Cavite business location faster.', false);
-
-        const regionCandidates = toCandidateNames(psgcRegionName ? psgcRegionName.value : '');
-        const provinceCandidates = toCandidateNames(psgcProvinceName ? psgcProvinceName.value : '');
-        const cityCandidates = toCandidateNames(psgcCityName ? psgcCityName.value : '');
-        const barangayCandidates = toCandidateNames(psgcBarangayName ? psgcBarangayName.value : '');
-
-        await loadPsgcRegions(psgcInitialSelection.region, regionCandidates);
-        let provinceCode = await loadPsgcProvinces(psgcRegion.value, psgcInitialSelection.province, provinceCandidates);
-        provinceCode = provinceCode || (psgcProvince && !psgcProvince.disabled ? psgcProvince.value : '');
-        if (psgcProvince && !psgcProvince.disabled && provinceCode === '') {
-            resetSelect(psgcCity, 'Select city / municipality', true);
-            resetSelect(psgcBarangay, 'Select barangay', true);
-        } else {
-            let cityCode = await loadPsgcCities(psgcRegion.value, provinceCode, psgcInitialSelection.city, cityCandidates);
-            if (!cityCode && psgcProvince && !psgcProvince.disabled) {
-                const currentProvinceCode = String(psgcProvince.value || '').trim();
-                const provinceOptions = Array.from(psgcProvince.options || []).filter((option) => option && option.value);
-                for (let i = 0; i < provinceOptions.length; i += 1) {
-                    const option = provinceOptions[i];
-                    if (!option || !option.value || String(option.value) === currentProvinceCode) {
-                        continue;
-                    }
-                    psgcProvince.value = String(option.value);
-                    cityCode = await loadPsgcCities(psgcRegion.value, psgcProvince.value, psgcInitialSelection.city, cityCandidates);
-                    if (cityCode) {
-                        break;
-                    }
-                }
-
-                if (!cityCode && currentProvinceCode && String(psgcProvince.value || '') !== currentProvinceCode) {
-                    psgcProvince.value = currentProvinceCode;
-                    cityCode = await loadPsgcCities(psgcRegion.value, psgcProvince.value, psgcInitialSelection.city, cityCandidates);
-                }
-            }
-            await loadPsgcBarangays(psgcCity.value, psgcInitialSelection.barangay, barangayCandidates);
-        }
-
-        syncPsgcHiddenNames();
-        composeBusinessAddress();
-    }
-
-    function showSwal(icon, title, text) {
-        if (typeof Swal !== 'undefined' && Swal && typeof Swal.fire === 'function') {
-            Swal.fire({
-                icon: icon || 'info',
-                title: title || 'Notice',
-                text: text || '',
-                confirmButtonText: 'OK'
-            });
-        } else if (text) {
-            alert(text);
-        }
-    }
-
-    async function callDocumentCheckApi() {
-        const makePhaseError = (message) => {
-            const err = new Error(message);
-            err.phase = 'document_check';
-            return err;
-        };
-
-        const selectedDocs = [];
-        form.querySelectorAll('input[type="file"]').forEach(input => {
-            const file = input.files && input.files[0] ? input.files[0] : null;
-            if (!file) {
-                return;
-            }
-
-            selectedDocs.push({
-                doc_type: input.name,
-                name: file.name,
-                size: file.size,
-                mime_type: file.type || ''
-            });
-        });
-
-        const response = await fetch('api/check_franchise_requirements.php', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: JSON.stringify({
-                csrf_token: csrfInput ? csrfInput.value : '',
-                required_documents: requiredDocumentKeys,
-                documents: selectedDocs
-            })
-        });
-
-        const rawText = await response.text();
-        let data = null;
-        try {
-            data = JSON.parse(rawText);
-        } catch (parseError) {
-            throw makePhaseError('Document check returned an invalid response. Please contact admin.');
-        }
-
-        if (!response.ok) {
-            throw makePhaseError(data && data.message ? data.message : 'Document check request failed');
-        }
-
-        if (!data || data.success !== true) {
-            throw makePhaseError(data && data.message ? data.message : 'Document validation failed');
-        }
-
+        if (psgcCache.has(path)) return psgcCache.get(path);
+        const res = await fetch(PSGC_API_BASE + path);
+        const data = await res.json();
+        psgcCache.set(path, data);
         return data;
     }
 
-    async function submitApplicationAjax() {
-        const makePhaseError = (message) => {
-            const err = new Error(message);
-            err.phase = 'submission';
-            return err;
-        };
-
-        const formData = new FormData(form);
-        if (!formData.has('submit_application')) {
-            formData.append('submit_application', '1');
-        }
-        const response = await fetch(form.getAttribute('action') || window.location.href, {
-            method: 'POST',
-            body: formData,
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'Accept': 'application/json'
-            }
-        });
-
-        const rawText = await response.text();
-        let payload = null;
-
+    async function initPsgc() {
+        if (!psgcRegion) return;
         try {
-            payload = JSON.parse(rawText);
-        } catch (parseError) {
-            const textPreview = (rawText || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-            const shortPreview = textPreview.length > 180 ? textPreview.slice(0, 180) + '...' : textPreview;
-            throw makePhaseError(shortPreview ? ('Server returned non-JSON response: ' + shortPreview) : 'Submission returned an invalid response. Please check PHP errors/logs.');
-        }
-
-        if (!response.ok || !payload || payload.success !== true) {
-            throw makePhaseError(payload && payload.message ? payload.message : 'Application submission failed.');
-        }
-
-        return payload;
-    }
-
-    function setDocStatus(message, state = 'info') {
-        if (!docStatusEl) return;
-
-        docStatusEl.classList.remove('info', 'success', 'warning', 'error');
-        docStatusEl.classList.add(state);
-        docStatusEl.textContent = message;
-    }
-
-    function getSelectedDocumentCount() {
-        let count = 0;
-        form.querySelectorAll('input[type="file"]').forEach(input => {
-            if (input.files && input.files.length > 0) {
-                count++;
-            }
-        });
-        return count;
-    }
-
-    async function refreshDocumentCheckStatus() {
-        if (getSelectedDocumentCount() === 0) {
-            setDocStatus('Waiting for required documents upload...', 'info');
-            return;
-        }
-
-        try {
-            const check = await callDocumentCheckApi();
-            const labelMap = check.required_document_labels || {};
-            const toLabel = key => labelMap[key] || key;
-
-            if (check.ready) {
-                setDocStatus('All required documents are complete and valid.', 'success');
-            } else if (Array.isArray(check.missing_documents) && check.missing_documents.length > 0) {
-                setDocStatus('Missing required documents: ' + check.missing_documents.map(toLabel).join(', '), 'warning');
-            } else if (Array.isArray(check.invalid_documents) && check.invalid_documents.length > 0) {
-                setDocStatus('Some selected documents need correction.', 'warning');
-            } else {
-                setDocStatus(check.message || 'Waiting for required documents upload...', 'info');
-            }
-        } catch (error) {
-            setDocStatus('Document requirement checker is temporarily unavailable.', 'error');
-        }
-    }
-
-    if (psgcRegion && psgcProvince && psgcCity && psgcBarangay) {
-        psgcRegion.addEventListener('change', async function() {
-            try {
-                usePsgcMode();
-                resetSelect(psgcProvince, 'Select province', true);
-                resetSelect(psgcCity, 'Select city / municipality', true);
-                resetSelect(psgcBarangay, 'Select barangay', true);
-                if (psgcProvinceName) psgcProvinceName.value = '';
-                if (psgcCityName) psgcCityName.value = '';
-                if (psgcBarangayName) psgcBarangayName.value = '';
-
-                await loadPsgcProvinces(this.value, '');
-                const provinceCode = !psgcProvince.disabled ? psgcProvince.value : '';
-                if (psgcProvince.disabled || provinceCode !== '') {
-                    await loadPsgcCities(this.value, provinceCode, '');
-                } else {
-                    resetSelect(psgcCity, 'Select city / municipality', true);
-                    resetSelect(psgcBarangay, 'Select barangay', true);
-                }
-                syncPsgcHiddenNames();
-                composeBusinessAddress();
-            } catch (error) {
-                console.error('PSGC region load failed:', error);
-                enablePsgcManualFallback('PSGC address lookup failed while loading provinces and cities. Enter your complete address manually for now.');
-            }
-        });
-
-        psgcProvince.addEventListener('change', async function() {
-            try {
-                usePsgcMode();
-                resetSelect(psgcCity, 'Select city / municipality', true);
-                resetSelect(psgcBarangay, 'Select barangay', true);
-                if (psgcCityName) psgcCityName.value = '';
-                if (psgcBarangayName) psgcBarangayName.value = '';
-
-                await loadPsgcCities(psgcRegion ? psgcRegion.value : '', this.value, '');
-                syncPsgcHiddenNames();
-                composeBusinessAddress();
-            } catch (error) {
-                console.error('PSGC province load failed:', error);
-                enablePsgcManualFallback('PSGC address lookup failed while loading cities/municipalities. Enter your complete address manually for now.');
-            }
-        });
-
-        psgcCity.addEventListener('change', async function() {
-            try {
-                usePsgcMode();
-                resetSelect(psgcBarangay, 'Select barangay', true);
-                if (psgcBarangayName) psgcBarangayName.value = '';
-                await loadPsgcBarangays(this.value, '');
-                syncPsgcHiddenNames();
-                composeBusinessAddress();
-            } catch (error) {
-                console.error('PSGC city load failed:', error);
-                enablePsgcManualFallback('PSGC address lookup failed while loading barangays. Enter your complete address manually for now.');
-            }
-        });
-
-        psgcBarangay.addEventListener('change', function() {
-            syncPsgcHiddenNames();
-            composeBusinessAddress();
-        });
-
-        if (businessStreetInput) {
-            businessStreetInput.addEventListener('input', function() {
-                composeBusinessAddress();
-            });
-        }
-
-        initPsgcSelectors().catch((error) => {
-            console.error('PSGC initialization failed:', error);
-            enablePsgcManualFallback('PSGC address lookup is currently unavailable. Enter your complete business address manually and submit again.');
-        });
-    } else if (businessAddressInput) {
-        businessAddressInput.readOnly = false;
-        if (psgcManualMode) {
-            psgcManualMode.value = '1';
-        }
-    }
-    
-    // Form validation
-    form.addEventListener('submit', async function(e) {
-        e.preventDefault();
-
-        const requiredFields = form.querySelectorAll('[required]');
-        let isValid = true;
-        let validationErrorMessage = '';
-        
-        // Clear previous errors
-        clearErrors();
-        syncPsgcHiddenNames();
-        composeBusinessAddress();
-        
-        // Validate required fields
-        requiredFields.forEach(field => {
-            if (field.type === 'file') {
-                return;
-            }
-            if (field.disabled) {
-                return;
-            }
-
-            if (field.type === 'checkbox' && !field.checked) {
-                showError(field, 'You must agree before submitting');
-                isValid = false;
-                if (!validationErrorMessage) {
-                    validationErrorMessage = 'You must agree to the terms before submitting.';
-                }
-                return;
-            }
-
-            if (!field.value.trim()) {
-                showError(field, 'This field is required');
-                isValid = false;
-                if (!validationErrorMessage) {
-                    const label = field.closest('.form-group') ? field.closest('.form-group').querySelector('label') : null;
-                    validationErrorMessage = (label ? label.textContent.replace('*', '').trim() : 'A required field') + ' is required.';
-                }
-            }
-        });
-        
-        // Validate file uploads
-        const fileInputs = form.querySelectorAll('input[type="file"][required]');
-        fileInputs.forEach(input => {
-            if (!input.files || input.files.length === 0) {
-                showError(input, 'Please upload the required document');
-                isValid = false;
-                if (!validationErrorMessage) {
-                    validationErrorMessage = 'Please upload all required documents.';
-                }
-            } else {
-                const file = input.files[0];
-                const validTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'application/octet-stream'];
-                const validExtensions = ['pdf', 'jpg', 'jpeg', 'png'];
-                const extension = (file.name.split('.').pop() || '').toLowerCase();
-                
-                const hasValidType = !file.type || validTypes.includes(file.type);
-                const hasValidExtension = validExtensions.includes(extension);
-                if (!hasValidType && !hasValidExtension) {
-                    showError(input, 'File must be PDF, JPG, or PNG');
-                    isValid = false;
-                    if (!validationErrorMessage) {
-                        validationErrorMessage = 'One or more document files have invalid format.';
-                    }
-                }
-                
-                if (file.size > MAX_FILE_SIZE) {
-                    showError(input, 'File size must be less than ' + MAX_FILE_SIZE_LABEL);
-                    isValid = false;
-                    if (!validationErrorMessage) {
-                        validationErrorMessage = 'One or more documents exceed the ' + MAX_FILE_SIZE_LABEL + ' limit.';
-                    }
-                }
-            }
-        });
-        
-        // Validate capital investment
-        const capitalInput = document.getElementById('capital_investment');
-        if (capitalInput.value < 100000) {
-            showError(capitalInput, 'Minimum capital investment is PHP 100,000');
-            isValid = false;
-            if (!validationErrorMessage) {
-                validationErrorMessage = 'Minimum capital investment is PHP 100,000.';
-            }
-        }
-        
-        if (!isValid) {
-            // Scroll to first error
-            const firstError = form.querySelector('.error-message');
-            if (firstError) {
-                firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-            showSwal('warning', 'Please Fix The Form', validationErrorMessage || 'Please complete all required fields.');
-            return;
-        }
-
-        if (submitBtn) {
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking documents...';
-        }
-
-        try {
-            const documentCheck = await callDocumentCheckApi();
-
-            if (!documentCheck.ready) {
-                const labelMap = documentCheck.required_document_labels || {};
-                const toLabel = key => labelMap[key] || key;
-                const missingLabels = Array.isArray(documentCheck.missing_documents) ? documentCheck.missing_documents.map(toLabel) : [];
-                const invalidMessages = Array.isArray(documentCheck.invalid_documents)
-                    ? documentCheck.invalid_documents.map(item => item.message || ((item.doc_type || 'Document') + ' is invalid.'))
-                    : [];
-
-                if (Array.isArray(documentCheck.missing_documents)) {
-                    documentCheck.missing_documents.forEach(docKey => {
-                        const input = form.querySelector(`input[type="file"][name="${docKey}"]`);
-                        if (input) {
-                            showError(input, 'This required document is missing');
-                        }
-                    });
-                }
-
-                if (Array.isArray(documentCheck.invalid_documents)) {
-                    documentCheck.invalid_documents.forEach(item => {
-                        const input = form.querySelector(`input[type="file"][name="${item.doc_type}"]`);
-                        if (input) {
-                            showError(input, item.message || 'Invalid document');
-                        }
-                    });
-                }
-
-                setDocStatus(documentCheck.message || 'Please complete all required documents.', 'warning');
-                const firstError = form.querySelector('.error-message');
-                if (firstError) {
-                    firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
-
-                if (submitBtn) {
-                    submitBtn.disabled = false;
-                    submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Application';
-                }
-
-                const detailParts = [];
-                if (missingLabels.length > 0) {
-                    detailParts.push('Missing: ' + missingLabels.join(', '));
-                }
-                if (invalidMessages.length > 0) {
-                    detailParts.push('Invalid: ' + invalidMessages.join(' | '));
-                }
-                const swalMessage = detailParts.length > 0 ? detailParts.join('\n') : (documentCheck.message || 'Please complete required documents before submitting.');
-                showSwal('warning', 'Document Check Failed', swalMessage);
-                return;
-            }
-
-            setDocStatus('All required documents are complete and valid.', 'success');
-
-            if (submitBtn) {
-                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
-            }
-
-            const submitResponse = await submitApplicationAjax();
-            const successText = submitResponse && submitResponse.message
-                ? submitResponse.message
-                : 'Your business application has been submitted.';
-            setDocStatus('Submission complete. The system owner has been notified.', 'success');
-            showSwal('success', 'Application Submitted', successText);
-
-            form.classList.add('submitted');
-            form.querySelectorAll('input, select, textarea, button').forEach(el => {
-                el.disabled = true;
+            const regions = await fetchPsgc('/regions');
+            psgcRegion.innerHTML = '<option value="">Select region</option>';
+            regions.forEach(r => {
+                const opt = document.createElement('option');
+                opt.value = r.code;
+                opt.textContent = r.name;
+                if (r.code === psgcRegion.dataset.selected) opt.selected = true;
+                psgcRegion.appendChild(opt);
             });
 
-            const postSubmitState = document.createElement('div');
-            postSubmitState.className = 'post-submit-state';
-            postSubmitState.innerHTML = `
-                <h4><i class="fas fa-check-circle"></i> Submission Completed</h4>
-                <p>Your application number is <strong>${submitResponse.application_number || '-'}</strong>.</p>
-                <p>You can track review updates inside your account dashboard.</p>
-                <div class="form-actions" style="margin-top:18px;padding-top:0;border-top:none;">
-                    <a href="my_account.php" class="btn-primary btn-large" style="text-decoration:none;">
-                        <i class="fas fa-user-circle"></i> Track In My Account
-                    </a>
-                </div>
-            `;
-            form.parentNode.insertBefore(postSubmitState, form.nextSibling);
-        } catch (error) {
-            const msg = error && error.message ? error.message : 'Unable to verify documents right now. Please try again.';
-            const swalTitle = (error && error.phase === 'submission') ? 'Submission Error' : 'Document Check Error';
-            setDocStatus(msg, 'error');
-            if (submitBtn) {
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Application';
+            if (psgcRegion.value) {
+                await loadProvinces(psgcRegion.value);
             }
-            showSwal('error', swalTitle, msg);
-        }
-    });
-    
-    function showError(field, message) {
-        const formGroup = field.closest('.form-group, .document-item, .terms-agreement');
-        if (!formGroup) return;
-        
-        // Remove existing error
-        const existingError = formGroup.querySelector('.error-message');
-        if (existingError) existingError.remove();
-        
-        // Add error style
-        if (field.type === 'checkbox') {
-            formGroup.style.borderColor = '#dc3545';
-        } else {
-            field.style.borderColor = '#dc3545';
-        }
-        
-        // Create error message
-        const errorMsg = document.createElement('div');
-        errorMsg.className = 'error-message';
-        errorMsg.style.color = '#dc3545';
-        errorMsg.style.fontSize = '0.85rem';
-        errorMsg.style.marginTop = '5px';
-        errorMsg.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${message}`;
-        
-        formGroup.appendChild(errorMsg);
-    }
-    
-    function clearErrors() {
-        // Remove error messages
-        document.querySelectorAll('.error-message').forEach(el => el.remove());
-        
-        // Reset border colors
-        document.querySelectorAll('.form-group input, .form-group select, .form-group textarea, .document-item input').forEach(el => {
-            el.style.borderColor = '';
-        });
-
-        document.querySelectorAll('.terms-agreement').forEach(el => {
-            el.style.borderColor = '';
-        });
-    }
-    
-    // Real-time validation for inputs
-    form.querySelectorAll('input, select, textarea').forEach(field => {
-        field.addEventListener('blur', function() {
-            if (this.hasAttribute('required') && !this.value.trim()) {
-                showError(this, 'This field is required');
-            } else {
-                clearFieldError(this);
-            }
-        });
-        
-        field.addEventListener('input', function() {
-            clearFieldError(this);
-        });
-    });
-    
-    function clearFieldError(field) {
-        const formGroup = field.closest('.form-group, .document-item, .terms-agreement');
-        if (!formGroup) return;
-        
-        const errorMsg = formGroup.querySelector('.error-message');
-        if (errorMsg) errorMsg.remove();
-        
-        if (field.type === 'checkbox') {
-            formGroup.style.borderColor = '';
-        } else {
-            field.style.borderColor = '';
+        } catch (err) {
+            console.error('PSGC init error:', err);
         }
     }
-    
-    // File preview functionality
-    form.querySelectorAll('input[type="file"]').forEach(input => {
-        const label = input.closest('.document-label');
-        if (label) {
-            const span = label.querySelector('span');
-            if (span && !span.dataset.originalLabel) {
-                span.dataset.originalLabel = span.textContent.trim();
-            }
+
+    async function loadProvinces(rCode) {
+        if (!psgcProvince) return;
+        psgcProvince.innerHTML = '<option value="">Select province</option>';
+        psgcProvince.disabled = true;
+        if (!rCode) return;
+
+        const provinces = await fetchPsgc('/regions/' + rCode + '/provinces');
+        provinces.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.code;
+            opt.textContent = p.name;
+            if (p.code === psgcProvince.dataset.selected) opt.selected = true;
+            psgcProvince.appendChild(opt);
+        });
+        psgcProvince.disabled = false;
+
+        if (psgcProvince.value) {
+            await loadCities(psgcProvince.value);
         }
-
-        input.addEventListener('change', function() {
-            const file = this.files[0];
-            const currentLabel = this.closest('.document-label');
-            const span = currentLabel ? currentLabel.querySelector('span') : null;
-
-            if (span) {
-                const originalText = span.dataset.originalLabel || span.textContent.trim();
-                if (file) {
-                    // Update label with file name
-                    span.innerHTML = `${originalText} <br><small style="color: #4caf50;">[OK] ${file.name}</small>`;
-                } else {
-                    span.textContent = originalText;
-                }
-            }
-
-            if (file) {
-                // Clear any errors
-                clearFieldError(this);
-            }
-
-            refreshDocumentCheckStatus();
-        });
-    });
-    
-    // TIN format validation
-    const tinInput = document.getElementById('tin_number');
-    if (tinInput) {
-        tinInput.addEventListener('input', function() {
-            // Remove non-numeric characters
-            this.value = this.value.replace(/\D/g, '');
-            
-            // Format as XXX-XXX-XXX-XXX
-            if (this.value.length > 3 && this.value.length <= 6) {
-                this.value = this.value.slice(0,3) + '-' + this.value.slice(3);
-            } else if (this.value.length > 6 && this.value.length <= 9) {
-                this.value = this.value.slice(0,3) + '-' + this.value.slice(3,6) + '-' + this.value.slice(6);
-            } else if (this.value.length > 9) {
-                this.value = this.value.slice(0,3) + '-' + this.value.slice(3,6) + '-' + this.value.slice(6,9) + '-' + this.value.slice(9,12);
-            }
-        });
     }
 
-    refreshDocumentCheckStatus();
+    async function loadCities(pCode) {
+        if (!psgcCity) return;
+        psgcCity.innerHTML = '<option value="">Select city / municipality</option>';
+        psgcCity.disabled = true;
+        if (!pCode) return;
+
+        const cities = await fetchPsgc('/provinces/' + pCode + '/cities-municipalities');
+        cities.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.code;
+            opt.textContent = c.name;
+            if (c.code === psgcCity.dataset.selected) opt.selected = true;
+            psgcCity.appendChild(opt);
+        });
+        psgcCity.disabled = false;
+
+        if (psgcCity.value) {
+            await loadBarangays(psgcCity.value);
+        }
+    }
+
+    async function loadBarangays(cCode) {
+        if (!psgcBarangay) return;
+        psgcBarangay.innerHTML = '<option value="">Select barangay</option>';
+        psgcBarangay.disabled = true;
+        if (!cCode) return;
+
+        const barangays = await fetchPsgc('/cities-municipalities/' + cCode + '/barangays');
+        barangays.forEach(b => {
+            const opt = document.createElement('option');
+            opt.value = b.code;
+            opt.textContent = b.name;
+            if (b.code === psgcBarangay.dataset.selected) opt.selected = true;
+            psgcBarangay.appendChild(opt);
+        });
+        psgcBarangay.disabled = false;
+    }
+
+    if (psgcRegion) psgcRegion.addEventListener('change', function() { loadProvinces(this.value); syncPsgcHiddenNames(); composeBusinessAddress(); });
+    if (psgcProvince) psgcProvince.addEventListener('change', function() { loadCities(this.value); syncPsgcHiddenNames(); composeBusinessAddress(); });
+    if (psgcCity) psgcCity.addEventListener('change', function() { loadBarangays(this.value); syncPsgcHiddenNames(); composeBusinessAddress(); });
+    if (psgcBarangay) psgcBarangay.addEventListener('change', function() { syncPsgcHiddenNames(); composeBusinessAddress(); });
+    if (businessStreetInput) businessStreetInput.addEventListener('input', composeBusinessAddress);
+
+    initPsgc();
 });
 </script>
 
 <?php
-// Function to handle file uploads
-function getUploadErrorText($error_code, $max_size_label) {
-    switch ((int)$error_code) {
-        case UPLOAD_ERR_INI_SIZE:
-        case UPLOAD_ERR_FORM_SIZE:
-            return "File exceeds maximum allowed size of {$max_size_label}.";
-        case UPLOAD_ERR_PARTIAL:
-            return "File upload was interrupted. Please try again.";
-        case UPLOAD_ERR_NO_FILE:
-            return "No file uploaded.";
-        case UPLOAD_ERR_NO_TMP_DIR:
-            return "Missing temporary upload directory on server.";
-        case UPLOAD_ERR_CANT_WRITE:
-            return "Server failed to write uploaded file.";
-        case UPLOAD_ERR_EXTENSION:
-            return "A server extension blocked the file upload.";
-        default:
-            return "Unknown file upload error.";
-    }
-}
-
 function handleFileUploads($conn, $application_id, $max_file_size, array $verification_context = []) {
     $upload_dir = 'uploads/franchise_documents/';
     $doc_types = [
-        'business_logo',
-        'dti_doc',
-        'bir_doc',
-        'mayor_doc',
-        'barangay_clearance',
-        'lease_or_title',
-        'occupancy_certificate',
-        'fire_safety_certificate',
-        'community_tax_certificate',
-        'sanitary_permit',
-        'valid_id',
-        'address_proof',
-        'bank_proof',
-        'bir_form',
-        'sss_registration',
-        'philhealth_registration',
-        'pagibig_registration',
-        'industry_permit'
+        'business_logo', 'dti_doc', 'bir_doc', 'mayor_doc', 'barangay_clearance',
+        'lease_or_title', 'occupancy_certificate', 'fire_safety_certificate',
+        'community_tax_certificate', 'sanitary_permit', 'valid_id', 'address_proof',
+        'bank_proof', 'bir_form', 'sss_registration', 'philhealth_registration',
+        'pagibig_registration', 'industry_permit'
     ];
     $required_docs = ['business_logo', 'dti_doc', 'bir_doc', 'valid_id', 'address_proof'];
     $doc_labels = [
         'business_logo' => 'Business Logo',
         'dti_doc' => 'DTI/SEC Certificate',
         'bir_doc' => 'BIR Registration',
-        'mayor_doc' => "Mayor's Permit",
-        'barangay_clearance' => 'Barangay Clearance',
-        'lease_or_title' => 'Lease Contract/Title',
-        'occupancy_certificate' => 'Certificate of Occupancy',
-        'fire_safety_certificate' => 'Fire Safety Certificate',
-        'community_tax_certificate' => 'Community Tax Certificate',
-        'sanitary_permit' => 'Sanitary Permit',
         'valid_id' => 'Valid ID',
-        'address_proof' => 'Proof of Address',
-        'bank_proof' => 'Bank Proof',
-        'bir_form' => 'BIR Form 1901/1903',
-        'sss_registration' => 'SSS Registration',
-        'philhealth_registration' => 'PhilHealth Registration',
-        'pagibig_registration' => 'Pag-IBIG Registration',
-        'industry_permit' => 'Industry-Specific Permit'
+        'address_proof' => 'Proof of Address'
     ];
     $allowed_extensions = ['pdf', 'jpg', 'jpeg', 'png'];
-    $allowed_mime_types = ['application/pdf', 'image/jpeg', 'image/png'];
-    $government_documents = [
-        'dti_doc',
-        'bir_doc',
-        'mayor_doc',
-        'barangay_clearance',
-        'lease_or_title',
-        'occupancy_certificate',
-        'fire_safety_certificate',
-        'community_tax_certificate',
-        'sanitary_permit',
-        'valid_id',
-        'address_proof',
-        'bank_proof',
-        'bir_form',
-        'sss_registration',
-        'philhealth_registration',
-        'pagibig_registration',
-        'industry_permit'
-    ];
     $saved_files = [];
-    $max_size_label = formatFileSizeLabel($max_file_size);
-    $contact_person = trim((string)($verification_context['contact_person'] ?? ''));
-    $contact_name_parts = preg_split('/\s+/', $contact_person);
-    $contact_first_name = trim((string)($contact_name_parts[0] ?? ''));
-    $contact_last_name = trim((string)($contact_name_parts[count($contact_name_parts) - 1] ?? ''));
-    $gov_doc_context = [
-        'first_name' => $contact_first_name,
-        'last_name' => $contact_last_name,
-        'full_name' => $contact_person,
-        'contact_email' => trim((string)($verification_context['contact_email'] ?? '')),
-        'business_name' => trim((string)($verification_context['business_name'] ?? ''))
-    ];
 
-    // Validate required documents
     foreach ($required_docs as $required_doc) {
-        if (!isset($_FILES[$required_doc])) {
+        if (!isset($_FILES[$required_doc]) || $_FILES[$required_doc]['error'] === UPLOAD_ERR_NO_FILE) {
             return ['success' => false, 'message' => ($doc_labels[$required_doc] ?? $required_doc) . " is required."];
-        }
-
-        if ((int)$_FILES[$required_doc]['error'] !== UPLOAD_ERR_OK) {
-            return [
-                'success' => false,
-                'message' => ($doc_labels[$required_doc] ?? $required_doc) . ': ' . getUploadErrorText($_FILES[$required_doc]['error'], $max_size_label)
-            ];
         }
     }
 
-    // Create directory if it doesn't exist
     if (!is_dir($upload_dir) && !mkdir($upload_dir, 0777, true) && !is_dir($upload_dir)) {
         return ['success' => false, 'message' => "Unable to prepare document upload directory."];
     }
@@ -3709,81 +3043,44 @@ function handleFileUploads($conn, $application_id, $max_file_size, array $verifi
             }
 
             $file = $_FILES[$doc_type];
-
             if ($file['error'] !== UPLOAD_ERR_OK) {
                 cleanupUploadedFiles($saved_files);
-                return [
-                    'success' => false,
-                    'message' => ($doc_labels[$doc_type] ?? $doc_type) . ': ' . getUploadErrorText($file['error'], $max_size_label)
-                ];
+                return ['success' => false, 'message' => "Error uploading " . ($doc_labels[$doc_type] ?? $doc_type)];
             }
 
             if ($file['size'] > $max_file_size) {
                 cleanupUploadedFiles($saved_files);
-                return ['success' => false, 'message' => ($doc_labels[$doc_type] ?? $doc_type) . " must be less than {$max_size_label}."];
+                return ['success' => false, 'message' => ($doc_labels[$doc_type] ?? $doc_type) . " exceeds size limit."];
             }
 
             $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
             if (!in_array($extension, $allowed_extensions, true)) {
                 cleanupUploadedFiles($saved_files);
-                return ['success' => false, 'message' => "Documents must be uploaded as PDF, JPG, or PNG files."];
-            }
-
-            $mime_type = function_exists('mime_content_type') ? mime_content_type($file['tmp_name']) : false;
-            if ($mime_type !== false && !in_array($mime_type, $allowed_mime_types, true)) {
-                cleanupUploadedFiles($saved_files);
-                return ['success' => false, 'message' => "One of the uploaded files has an invalid file format."];
-            }
-
-            if (in_array($doc_type, $government_documents, true)) {
-                $verify_context = $gov_doc_context;
-                $verify_context['strict'] = ($doc_type === 'valid_id');
-                $verification = verifyGovernmentDocumentWithConfiguredProvider($doc_type, $file, $verify_context);
-
-                if (empty($verification['success']) || empty($verification['verified'])) {
-                    cleanupUploadedFiles($saved_files);
-                    $verification_message = trim((string)($verification['message'] ?? 'Document verification failed.'));
-                    return [
-                        'success' => false,
-                        'message' => ($doc_labels[$doc_type] ?? $doc_type) . ': ' . ($verification_message !== '' ? $verification_message : 'Verification failed.')
-                    ];
-                }
+                return ['success' => false, 'message' => "Documents must be PDF, JPG, or PNG files."];
             }
 
             $safe_original_name = preg_replace('/[^A-Za-z0-9._-]/', '_', basename($file['name']));
             $file_name = $application_id . '_' . $doc_type . '_' . time() . '_' . mt_rand(1000, 9999) . '_' . $safe_original_name;
             $file_path = $upload_dir . $file_name;
 
-            // Move uploaded file
             if (!move_uploaded_file($file['tmp_name'], $file_path)) {
                 cleanupUploadedFiles($saved_files);
-                return ['success' => false, 'message' => "Failed to upload one of the documents. Please try again."];
+                return ['success' => false, 'message' => "Failed to upload document files."];
             }
 
             $saved_files[] = $file_path;
 
-            // Insert into database
-            $query = "INSERT INTO franchise_documents (application_id, document_type, file_name, file_path, uploaded_at) 
-                    VALUES (?, ?, ?, ?, NOW())";
+            $query = "INSERT INTO franchise_documents (application_id, document_type, file_name, file_path, uploaded_at) VALUES (?, ?, ?, ?, NOW())";
             $stmt = mysqli_prepare($conn, $query);
-            if (!$stmt) {
-                cleanupUploadedFiles($saved_files);
-                return ['success' => false, 'message' => "Failed to save uploaded document details."];
-            }
-
-            mysqli_stmt_bind_param($stmt, "isss", $application_id, $doc_type, $file_name, $file_path);
-            if (!mysqli_stmt_execute($stmt)) {
+            if ($stmt) {
+                mysqli_stmt_bind_param($stmt, "isss", $application_id, $doc_type, $file_name, $file_path);
+                mysqli_stmt_execute($stmt);
                 mysqli_stmt_close($stmt);
-                cleanupUploadedFiles($saved_files);
-                return ['success' => false, 'message' => "Failed to save uploaded document details."];
             }
-
-            mysqli_stmt_close($stmt);
         }
     } catch (Throwable $e) {
         cleanupUploadedFiles($saved_files);
-        error_log("Franchise document upload failed for application {$application_id}: " . $e->getMessage());
-        return ['success' => false, 'message' => "Failed to upload documents. Please try again."];
+        return ['success' => false, 'message' => "Failed to save document records."];
     }
 
     return ['success' => true, 'message' => 'Documents uploaded successfully'];

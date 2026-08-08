@@ -130,8 +130,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-
-
 /**
  * Send password reset email using the dedicated branded mailer method.
  */
@@ -153,33 +151,40 @@ function sendPasswordResetEmail($conn, $email, $full_name, $token) {
     return $sent;
 }
 
-
 $page_title = "Reset Password | Lechon Delights";
 include 'includes/header.php';
 ?>
 
-<!-- Add SweetAlert2 CSS -->
+<!-- SweetAlert2 CSS -->
 <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
 
 <style>
+/* Main Layout Styles */
 .login-page-container {
-    min-height: calc(100vh - 70px);
+    background: #ffffff !important;
     display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 40px 20px;
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    align-items: stretch;
+    justify-content: stretch;
+    height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    overflow: hidden !important;
+    padding: 0 !important;
 }
 
 .login-wrapper {
-    background-color: white;
-    border-radius: 16px;
-    box-shadow: 0 15px 50px rgba(0, 0, 0, 0.1);
-    overflow: hidden;
-    max-width: 500px;
+    max-width: 100% !important;
     width: 100%;
-    min-height: 500px;
+    height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    background-color: white;
+    border-radius: 0 !important;
+    border: none;
+    box-shadow: none !important;
+    display: flex;
+    flex-direction: row;
+    margin: 0 !important;
     animation: fadeIn 0.6s ease-out;
+    overflow: hidden;
 }
 
 @keyframes fadeIn {
@@ -187,53 +192,107 @@ include 'includes/header.php';
     to { opacity: 1; transform: translateY(0); }
 }
 
+/* Left Side - Brand/Info */
+.login-left {
+    width: 50%;
+    background: linear-gradient(135deg, #fff2eb 0%, #ffd9ce 100%) !important;
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px !important;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
+}
+
+.brand-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 3.8rem;
+    font-weight: 900;
+    letter-spacing: -1.5px;
+    margin: 0;
+    color: #b3261e !important;
+    text-shadow: 0 4px 12px rgba(179,38,30,0.15);
+}
+
+.brand-subtitle {
+    font-size: 1.25rem;
+    color: #7b6d64 !important;
+    margin-top: 15px;
+    max-width: 340px;
+    font-weight: 600;
+    line-height: 1.6;
+}
+
+.floating-pigs-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.floating-pig {
+    position: absolute;
+    font-size: 3.5rem;
+    opacity: 0.16;
+    animation: floatPig 8s ease-in-out infinite alternate;
+}
+
+.pig-1 { top: 10%; left: 15%; animation-duration: 9s; font-size: 4rem; }
+.pig-2 { top: 25%; right: 15%; animation-duration: 11s; animation-delay: 1s; font-size: 3.5rem; }
+.pig-3 { bottom: 20%; left: 20%; animation-duration: 10s; animation-delay: 2s; font-size: 4.5rem; }
+.pig-4 { bottom: 15%; right: 25%; animation-duration: 8s; animation-delay: 0.5s; font-size: 3rem; }
+.pig-5 { top: 50%; left: 40%; animation-duration: 12s; animation-delay: 1.5s; font-size: 3.8rem; }
+
+@keyframes floatPig {
+    0% { transform: translateY(0) rotate(0deg) scale(1); }
+    50% { transform: translateY(-20px) rotate(8deg) scale(1.05); }
+    100% { transform: translateY(10px) rotate(-8deg) scale(0.95); }
+}
+
+/* Right Side - Forms */
 .login-right {
-    padding: 50px 40px;
+    width: 50%;
+    background: #ffffff;
     display: flex;
     flex-direction: column;
-    justify-content: center;
-}
-
-.back-link {
-    display: flex;
     align-items: center;
-    gap: 10px;
-    color: #c62828;
-    text-decoration: none;
-    font-weight: 600;
-    margin-bottom: 20px;
-    transition: all 0.3s;
-    padding: 8px 12px;
-    border-radius: 8px;
-    width: fit-content;
-}
-
-.back-link:hover {
-    color: #8B0000;
-    background-color: rgba(198, 40, 40, 0.05);
+    justify-content: flex-start;
+    padding: 44px 24px 36px !important;
+    height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    overflow-y: auto !important;
+    box-sizing: border-box;
 }
 
 .login-header {
-    margin-bottom: 30px;
+    margin-bottom: 24px;
     text-align: center;
 }
 
 .login-header h2 {
-    color: #333;
+    color: #171922;
     font-size: 1.8rem;
     margin-bottom: 10px;
     font-weight: 700;
 }
 
 .login-header p {
-    color: #666;
+    color: #7b6d64;
     font-size: 1rem;
     line-height: 1.5;
 }
 
+/* Alert Messages */
 .alert {
     padding: 15px 20px;
-    border-radius: 8px;
+    border-radius: 12px;
     margin-bottom: 20px;
     animation: slideDown 0.3s ease;
     display: flex;
@@ -249,7 +308,7 @@ include 'includes/header.php';
 .alert-error {
     background-color: #FFEBEE;
     border-left: 4px solid #F44336;
-    color: #C62828;
+    color: #b3261e;
 }
 
 .alert-success {
@@ -264,6 +323,7 @@ include 'includes/header.php';
     flex-shrink: 0;
 }
 
+/* Form Styles */
 .login-form {
     animation: slideUp 0.5s ease;
 }
@@ -280,27 +340,27 @@ include 'includes/header.php';
 .form-group label {
     display: block;
     margin-bottom: 8px;
-    color: #333;
-    font-weight: 600;
+    color: #2a211d;
+    font-weight: 700;
     font-size: 0.95rem;
 }
 
 .form-control {
     width: 100%;
     padding: 15px 18px;
-    border: 2px solid #e0e0e0;
+    border: 1px solid #e8d4c3;
     border-radius: 10px;
     font-size: 1rem;
     transition: all 0.3s;
     font-family: inherit;
-    background-color: #fafafa;
+    background-color: #fffdfb;
 }
 
 .form-control:focus {
     outline: none;
-    border-color: #c62828;
+    border-color: #ef6b2e;
     background-color: white;
-    box-shadow: 0 0 0 4px rgba(198, 40, 40, 0.1);
+    box-shadow: 0 0 0 4px rgba(239, 107, 46, 0.15);
 }
 
 .input-with-icon {
@@ -320,10 +380,11 @@ include 'includes/header.php';
     padding-left: 50px;
 }
 
+/* Button Styles */
 .btn-primary {
     width: 100%;
     padding: 16px;
-    background: linear-gradient(135deg, #c62828 0%, #8B0000 100%);
+    background: linear-gradient(135deg, #b3261e 0%, #ef6b2e 100%);
     color: white;
     border: none;
     border-radius: 10px;
@@ -339,11 +400,12 @@ include 'includes/header.php';
     overflow: hidden;
     letter-spacing: 0.5px;
     margin-top: 10px;
+    box-shadow: 0 12px 28px rgba(179, 38, 30, 0.26);
 }
 
 .btn-primary:hover:not(:disabled) {
     transform: translateY(-3px);
-    box-shadow: 0 10px 30px rgba(198, 40, 40, 0.3);
+    box-shadow: 0 15px 34px rgba(179, 38, 30, 0.34);
 }
 
 .btn-primary:active:not(:disabled) {
@@ -376,166 +438,114 @@ include 'includes/header.php';
     to { transform: rotate(360deg); }
 }
 
+/* Auth Link */
 .auth-link {
     text-align: center;
     margin-top: 25px;
-    color: #666;
+    color: #7b6d64;
     font-size: 0.95rem;
     padding-top: 20px;
-    border-top: 1px solid #eee;
+    border-top: 1px solid #efddcd;
 }
 
 .auth-link a {
-    color: #c62828;
-    text-decoration: none;
-    font-weight: 600;
-    margin-left: 5px;
+    color: #b3261e !important;
+    text-decoration: none !important;
+    font-weight: 700 !important;
     transition: all 0.3s;
 }
 
 .auth-link a:hover {
-    color: #8B0000;
-    text-decoration: underline;
+    color: #8f261a !important;
+    text-decoration: underline !important;
 }
 
-@media (max-width: 576px) {
-    .login-page-container {
-        padding: 20px;
-    }
-    
+/* Responsive Design */
+@media (max-width: 850px) {
     .login-wrapper {
-        min-height: auto;
+        flex-direction: column;
     }
-    
     .login-right {
-        padding: 40px 25px;
+        width: 100%;
+        height: auto;
+        min-height: calc(100vh - 64px);
+        padding: 40px 20px !important;
     }
-    
-    .login-header h2 {
-        font-size: 1.5rem;
+    .login-left {
+        display: none !important;
     }
-}
-
-/* Modern Food Reset Refresh */
-:root {
-    --reset-red: #b3261e;
-    --reset-orange: #ef6b2e;
-    --reset-cream: #fff8ef;
-    --reset-ink: #2a211d;
-    --reset-muted: #7b6d64;
-    --reset-border: #efddcc;
-}
-
-body {
-    background:
-        radial-gradient(circle at 0% 0%, rgba(239, 107, 46, 0.12), transparent 34%),
-        radial-gradient(circle at 100% 12%, rgba(179, 38, 30, 0.1), transparent 30%),
-        var(--reset-cream);
-}
-
-.login-page-container {
-    background: transparent;
-}
-
-.login-wrapper {
-    border: 1px solid var(--reset-border);
-    border-radius: 22px;
-    box-shadow: 0 20px 40px rgba(74, 32, 20, 0.14);
-}
-
-.login-right {
-    background: linear-gradient(180deg, #fffaf4 0%, #fff 100%);
-}
-
-.back-link {
-    border: 1px solid #e9d2bf;
-    background: #fff5ea;
-}
-
-.login-header h2,
-.form-group label {
-    color: var(--reset-ink);
-}
-
-.login-header p,
-.auth-link,
-.auth-link a {
-    color: var(--reset-muted);
-}
-
-.form-control {
-    border: 1px solid #e8d4c3;
-    background: #fffefc;
-}
-
-.form-control:focus {
-    border-color: #d06d44;
-    box-shadow: 0 0 0 3px rgba(239, 107, 46, 0.15);
-}
-
-.btn-primary {
-    background: linear-gradient(135deg, var(--reset-red), var(--reset-orange));
-    box-shadow: 0 12px 28px rgba(179, 38, 30, 0.26);
-}
-
-.btn-primary:hover:not(:disabled) {
-    box-shadow: 0 15px 34px rgba(179, 38, 30, 0.34);
+    input, select, textarea, .form-control {
+        font-size: 16px !important;
+    }
 }
 </style>
 
 <div class="login-page-container">
     <div class="login-wrapper">
+        <!-- Left Side: Branding Panel with Floating Mascot Pigs -->
+        <div class="login-left">
+            <div class="floating-pigs-container">
+                <div class="floating-pig pig-1">🐷</div>
+                <div class="floating-pig pig-2">🐷</div>
+                <div class="floating-pig pig-3">🐷</div>
+                <div class="floating-pig pig-4">🐷</div>
+                <div class="floating-pig pig-5">🐷</div>
+            </div>
+            <div class="brand-content" style="position: relative; z-index: 10;">
+                <h1 class="brand-title">Lechon Delights</h1>
+                <p class="brand-subtitle">Cavite's Finest Lechon at Your Doorsteps</p>
+            </div>
+        </div>
+
+        <!-- Reset Request Form Section -->
         <div class="login-right">
-            <a href="login.php" class="back-link">
-                <i class="fas fa-arrow-left"></i>
-                <span>Back to login</span>
-            </a>
-            
-            <div class="login-header">
-                <h2>Reset Your Password</h2>
-                <p>Enter your email address and we'll send you a link to reset your password.</p>
-            </div>
-            
-            <?php if ($error): ?>
-            <div class="alert alert-error" id="errorAlert">
-                <i class="fas fa-exclamation-circle"></i>
-                <div><?php echo htmlspecialchars($error); ?></div>
-            </div>
-            <?php endif; ?>
-            
-            <?php if ($success): ?>
-            <div class="alert alert-success" id="successAlert">
-                <i class="fas fa-check-circle"></i>
-                <div><?php echo htmlspecialchars($success); ?></div>
-            </div>
-            <?php endif; ?>
-            
-            <form method="POST" action="" class="login-form" id="resetRequestForm">
-                <div class="form-group">
-                    <label for="email">Email Address</label>
-                    <div class="input-with-icon">
-                        <i class="fas fa-envelope"></i>
-                        <input type="email" id="email" name="email" class="form-control" required 
-                            placeholder="Enter your registered email address"
-                            autocomplete="email"
-                            value="<?php echo htmlspecialchars($_POST['email'] ?? ''); ?>">
+            <div style="max-width: 440px; width: 100%; margin: auto 0; display: flex; flex-direction: column;">
+                <div class="login-header">
+                    <div style="display: inline-flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 12px;">
+                        <img src="assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 48px; height: 48px; object-fit: cover; border-radius: 12px; display: block; border: 1px solid #efddcd; box-shadow: 0 4px 12px rgba(0,0,0,0.06);">
+                        <span style="font-size: 1.6rem; font-weight: 800; color: #171922; font-family: 'Outfit', sans-serif;">Lechon Delights</span>
                     </div>
-                </div>
-                
-                <button type="submit" name="reset_request" class="btn-primary" id="submitBtn">
-                    <i class="fas fa-paper-plane"></i>
-                    <span>Send Reset Link</span>
-                </button>
-                
-                <div class="auth-link">
-                    Remember your password? 
-                    <a href="login.php">Sign in here</a>
+                    <h2>Reset Your Password</h2>
+                    <p>Enter your email address and we'll send you a link to reset your password.</p>
                 </div>
 
-                <div class="auth-link" style="margin-top: 12px;">
-                    <a href="smtp_test.php">Test SMTP settings</a>
+                <?php if ($error): ?>
+                <div class="alert alert-error" id="errorAlert">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <div><?php echo htmlspecialchars($error); ?></div>
                 </div>
-            </form>
+                <?php endif; ?>
+
+                <?php if ($success): ?>
+                <div class="alert alert-success" id="successAlert">
+                    <i class="fas fa-check-circle"></i>
+                    <div><?php echo htmlspecialchars($success); ?></div>
+                </div>
+                <?php endif; ?>
+
+                <form method="POST" action="" class="login-form" id="resetRequestForm">
+                    <div class="form-group">
+                        <label for="email">Email Address</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-envelope"></i>
+                            <input type="email" id="email" name="email" class="form-control" required 
+                                placeholder="Enter your registered email address"
+                                autocomplete="email"
+                                value="<?php echo htmlspecialchars($_POST['email'] ?? ''); ?>">
+                        </div>
+                    </div>
+
+                    <button type="submit" name="reset_request" class="btn-primary" id="submitBtn">
+                        <i class="fas fa-paper-plane"></i>
+                        <span>Send Reset Link</span>
+                    </button>
+
+                    <div class="auth-link" style="text-align: center;">
+                        Remember your password? 
+                        <a href="login.php">Sign in here</a>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
 </div>
@@ -558,7 +568,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     icon: 'info',
                     title: 'Email Required',
                     text: 'Please enter your email address to continue.',
-                    confirmButtonColor: '#c62828'
+                    confirmButtonColor: '#b3261e'
                 });
                 return false;
             }
@@ -568,7 +578,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     icon: 'warning',
                     title: 'Invalid Email',
                     text: 'Please enter a valid email address (e.g., user@example.com).',
-                    confirmButtonColor: '#c62828'
+                    confirmButtonColor: '#b3261e'
                 });
                 return false;
             }
@@ -635,13 +645,12 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     <?php endif; ?>
 
-    
     <?php if ($success): ?>
     Swal.fire({
         icon: 'success',
         title: 'Success!',
         html: '<p><?php echo addslashes($success); ?></p><p style="font-size: 0.85rem; color: #666; margin-top: 10px;">Check your inbox and spam folder for the reset link.</p>',
-        confirmButtonColor: '#c62828',
+        confirmButtonColor: '#b3261e',
         confirmButtonText: 'Done',
         backdrop: 'rgba(0, 0, 0, 0.4)',
         didOpen: function() {
