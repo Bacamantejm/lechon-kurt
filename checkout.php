@@ -164,6 +164,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['address_action'])) {
         exit;
     }
 
+    if ($address_action === 'delete') {
+        $address_id = (int)($_POST['address_id'] ?? 0);
+        $delete_result = caDeleteUserSavedAddress($conn, $user_id, $address_id);
+        $fresh_addresses = caFetchUserSavedAddresses($conn, $user_id);
+        echo json_encode([
+            'success' => !empty($delete_result['success']),
+            'message' => (string)($delete_result['message'] ?? 'Address removed.'),
+            'addresses' => checkoutSavedAddressRowsForClient($fresh_addresses)
+        ]);
+        exit;
+    }
+
     echo json_encode([
         'success' => false,
         'message' => 'Invalid address action.'
@@ -535,138 +547,64 @@ $remaining = $total - $downpayment;
                     <!-- Step 2: Delivery Details -->
                     <div class="step-content" id="stepContent2">
                         <div id="deliveryAddressSection" style="<?php echo ($current_checkout_delivery_option === 'delivery') ? '' : 'display: none;'; ?>">
-                            <p class="checkout-section-label"><i class="fas fa-map-marked-alt"></i> Delivery Details</p>
-                            <div class="delivery-address-shell">
-                                <div class="delivery-address-head">
+                            <div class="co-address-card" id="mainDeliveryAddressCard" style="background: #fff; border: 1px solid #efddcd; border-radius: 16px; padding: 24px; margin-bottom: 24px; box-shadow: 0 4px 16px rgba(0,0,0,0.03); cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                                    <h3 style="font-size: 22px; font-weight: 800; color: #2a211d; margin: 0; font-family: inherit;">Delivery address</h3>
+                                    <button type="button" id="openChangeAddressModalBtn" style="background: none; border: none; color: #2a211d; font-weight: 700; font-size: 15px; cursor: pointer; text-decoration: underline; padding: 4px 8px;">
+                                        Change
+                                    </button>
+                                </div>
+
+                                <div style="display: flex; gap: 12px; align-items: flex-start; margin-bottom: 20px;">
+                                    <i class="fas fa-location-dot" style="font-size: 22px; color: #2a211d; margin-top: 2px; flex-shrink: 0;"></i>
                                     <div>
-                                        <h4>Delivery Address</h4>
-                                        <p>Use your saved addresses or pin your location for accurate fee and ETA.</p>
-                                    </div>
-                                    <a href="my_account.php#addresses" class="btn-secondary address-manage-link">
-                                        <i class="fas fa-address-book"></i> Manage Address Book
-                                    </a>
-                                </div>
-                                <div class="form-group saved-address-group">
-                                    <label for="saved_address_select">Saved Addresses</label>
-                                    <div class="saved-address-row">
-                                        <select id="saved_address_select" class="saved-address-select">
-                                            <option value="">-- Select saved address --</option>
-                                            <?php foreach ($saved_addresses as $saved_address): ?>
-                                                <?php
-                                                $address_option_label = trim((string)($saved_address['label'] ?? 'Saved Address'));
-                                                $address_option_text = $address_option_label . ' - ' . trim((string)($saved_address['full_address'] ?? ''));
-                                                ?>
-                                                <option value="<?php echo (int)$saved_address['id']; ?>"
-                                                    <?php echo ((int)$saved_address['id'] === (int)$default_saved_address_id) ? 'selected' : ''; ?>>
-                                                    <?php echo htmlspecialchars($address_option_text); ?>
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                        <button type="button" id="applySavedAddressBtn" class="btn-search">
-                                            <i class="fas fa-check-circle"></i> Apply
-                                        </button>
-                                        <button type="button" id="saveCurrentAddressBtn" class="btn-secondary save-address-btn">
-                                            <i class="fas fa-bookmark"></i> Save Current
-                                        </button>
-                                    </div>
-                                    <p class="help-text">
-                                        <i class="fas fa-info-circle"></i>
-                                        Pick a saved address or save your current map-selected address for faster next checkout.
-                                    </p>
-                                </div>
-
-                                <div class="form-row address-fields-row" style="display: none;">
-                                    <div class="form-group">
-                                        <label for="street_address">Street Address *</label>
-                                        <input type="text" id="street_address" name="street_address"
-                                               placeholder="House no., Street name, Building"
-                                               value="<?php echo htmlspecialchars($user['address'] ?? ''); ?>">
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="postal_code">Postal Code *</label>
-                                        <input type="text" id="postal_code" name="postal_code"
-                                               placeholder="e.g. 4026"
-                                               inputmode="numeric"
-                                               maxlength="10">
+                                        <div id="displayStreetAddress" style="font-size: 15px; font-weight: 700; color: #2a211d; line-height: 1.4;">
+                                            Loading address...
+                                        </div>
+                                        <div id="displayCityAddress" style="font-size: 14px; color: #7b6d64; margin-top: 4px;">
+                                            
+                                        </div>
                                     </div>
                                 </div>
 
-                                <div class="form-row address-fields-row" style="display: none;">
-                                    <div class="form-group">
-                                        <label for="checkout_region">Region (PSGC) *</label>
-                                        <select id="checkout_region">
-                                            <option value="">-- Select Region --</option>
-                                        </select>
-                                    </div>
-
-                                    <div class="form-group">
-                                        <label for="checkout_province">Province (Optional for NCR)</label>
-                                        <select id="checkout_province">
-                                            <option value="">-- Select Province --</option>
-                                        </select>
-                                    </div>
-                                </div>
-
-                                <div class="form-row address-fields-row" style="display: none;">
-                                    <div class="form-group">
-                                        <label for="checkout_city">City / Municipality *</label>
-                                        <select id="checkout_city">
-                                            <option value="">-- Select City/Municipality --</option>
-                                        </select>
-                                    </div>
-
-                                    <div class="form-group">
-                                        <label for="checkout_barangay">Barangay *</label>
-                                        <select id="checkout_barangay">
-                                            <option value="">-- Select Barangay --</option>
-                                        </select>
-                                    </div>
-                                </div>
-
-                                <input type="hidden" id="delivery_address" name="delivery_address" value="">
-                                <input type="hidden" id="delivery_region_name" name="delivery_region_name" value="">
-                                <input type="hidden" id="delivery_region_code" name="delivery_region_code" value="">
-                                <input type="hidden" id="delivery_province_name" name="delivery_province_name" value="">
-                                <input type="hidden" id="delivery_province_code" name="delivery_province_code" value="">
-                                <input type="hidden" id="delivery_city_name" name="delivery_city_name" value="">
-                                <input type="hidden" id="delivery_city_code" name="delivery_city_code" value="">
-                                <input type="hidden" id="delivery_barangay_name" name="delivery_barangay_name" value="">
-                                <input type="hidden" id="delivery_barangay_code" name="delivery_barangay_code" value="">
-                                <input type="hidden" id="delivery_postal_code" name="delivery_postal_code" value="">
-                                <input type="hidden" id="saved_address_id" name="saved_address_id" value="<?php echo (int)$default_saved_address_id; ?>">
-                            
-                                <!-- Google Maps Integration -->
-                                <div class="form-group">
-                                    <label for="address_search">Map Pinpoint (Recommended)</label>
-                                    <div class="address-search-container">
-                                        <input type="text" id="address_search" 
-                                               placeholder="Type your address to search on map" 
-                                               class="address-search">
-                                        <button type="button" id="searchAddress" class="btn-search">
-                                            <i class="fas fa-search"></i> Search
-                                        </button>
-                                        <button type="button" id="useMyLocation" class="btn-location" title="Use Current Location">
-                                            <i class="fas fa-crosshairs"></i>
-                                        </button>
-                                    </div>
-                                    <div id="map" style="height: 300px; margin-top: 10px; border-radius: 8px; display: none;"></div>
-                                    <input type="hidden" id="latitude" name="latitude">
-                                    <input type="hidden" id="longitude" name="longitude">
-                                    <input type="hidden" id="distance_km" name="distance_km">
-                                    <input type="hidden" id="calculated_delivery_fee" name="calculated_delivery_fee">
-                                    <p class="help-text">
-                                        <i class="fas fa-info-circle"></i> 
-                                        Pin your exact location to auto-compute delivery fee and improve ETA accuracy.
-                                    </p>
-                                </div>
-
-                                <div class="form-group">
-                                    <label for="delivery_instructions">Delivery Instructions (Optional)</label>
-                                    <textarea id="delivery_instructions" name="delivery_instructions" rows="2" 
-                                              placeholder="e.g., Leave at guard house, Call before delivery, etc."></textarea>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <input type="text" id="delivery_instructions" name="delivery_instructions" 
+                                           placeholder="Note to rider - e.g. building, landmark" 
+                                           style="width: 100%; border: 1px solid #efddcd; border-radius: 12px; padding: 14px 16px; font-size: 14px; color: #2a211d; background: #fff9f2; outline: none; box-sizing: border-box;">
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Hidden Address & PSGC Form Fields -->
+                        <input type="hidden" id="street_address" name="street_address" value="<?php echo htmlspecialchars($user['address'] ?? ''); ?>">
+                        <input type="hidden" id="postal_code" name="postal_code" value="">
+                        <input type="hidden" id="delivery_address" name="delivery_address" value="">
+                        <input type="hidden" id="delivery_region_name" name="delivery_region_name" value="">
+                        <input type="hidden" id="delivery_region_code" name="delivery_region_code" value="">
+                        <input type="hidden" id="delivery_province_name" name="delivery_province_name" value="">
+                        <input type="hidden" id="delivery_province_code" name="delivery_province_code" value="">
+                        <input type="hidden" id="delivery_city_name" name="delivery_city_name" value="">
+                        <input type="hidden" id="delivery_city_code" name="delivery_city_code" value="">
+                        <input type="hidden" id="delivery_barangay_name" name="delivery_barangay_name" value="">
+                        <input type="hidden" id="delivery_barangay_code" name="delivery_barangay_code" value="">
+                        <input type="hidden" id="delivery_postal_code" name="delivery_postal_code" value="">
+                        <input type="hidden" id="saved_address_id" name="saved_address_id" value="<?php echo (int)$default_saved_address_id; ?>">
+                        <input type="hidden" id="latitude" name="latitude">
+                        <input type="hidden" id="longitude" name="longitude">
+                        <input type="hidden" id="distance_km" name="distance_km">
+                        <input type="hidden" id="calculated_delivery_fee" name="calculated_delivery_fee">
+
+                        <!-- Hidden select elements kept for PSGC JS compatibility -->
+                        <select id="checkout_region" style="display:none;"><option value="">--</option></select>
+                        <select id="checkout_province" style="display:none;"><option value="">--</option></select>
+                        <select id="checkout_city" style="display:none;"><option value="">--</option></select>
+                        <select id="checkout_barangay" style="display:none;"><option value="">--</option></select>
+                        <select id="saved_address_select" style="display:none;">
+                            <option value="">--</option>
+                            <?php foreach ($saved_addresses as $saved_address): ?>
+                            <option value="<?php echo (int)$saved_address['id']; ?>"><?php echo htmlspecialchars($saved_address['full_address'] ?? ''); ?></option>
+                            <?php endforeach; ?>
+                        </select>
                         
                         <!-- Delivery Date & Time (Auto-set to Today/ASAP) -->
                         <input type="hidden" name="delivery_date" value="<?php echo date('Y-m-d'); ?>">
@@ -2829,28 +2767,17 @@ document.addEventListener('DOMContentLoaded', function() {
             const isDelivery = document.getElementById('delivery_option_hidden').value === 'delivery';
             if (isDelivery) {
                 const street = document.getElementById('street_address');
-                const region = document.getElementById('checkout_region');
-                const city = document.getElementById('checkout_city');
-                const barangay = document.getElementById('checkout_barangay');
-                
-                if (!street.value.trim()) {
-                    Swal.fire({ icon: 'error', title: 'Validation Error', text: 'Please enter your street address.', confirmButtonColor: '#b3261e' });
-                    street.focus();
-                    return false;
-                }
-                if (!region.value) {
-                    Swal.fire({ icon: 'error', title: 'Validation Error', text: 'Please select a region.', confirmButtonColor: '#b3261e' });
-                    region.focus();
-                    return false;
-                }
-                if (!city.value) {
-                    Swal.fire({ icon: 'error', title: 'Validation Error', text: 'Please select a city.', confirmButtonColor: '#b3261e' });
-                    city.focus();
-                    return false;
-                }
-                if (!barangay.value) {
-                    Swal.fire({ icon: 'error', title: 'Validation Error', text: 'Please select a barangay.', confirmButtonColor: '#b3261e' });
-                    barangay.focus();
+                const deliveryAddress = document.getElementById('delivery_address');
+                const displayStreet = document.getElementById('displayStreetAddress');
+                const hasAddress = !!(
+                    (street && street.value.trim()) ||
+                    (deliveryAddress && deliveryAddress.value.trim()) ||
+                    (displayStreet && displayStreet.textContent.trim() && displayStreet.textContent.trim() !== 'No address selected')
+                );
+
+                if (!hasAddress) {
+                    Swal.fire({ icon: 'error', title: 'Validation Error', text: 'Please enter or select a delivery address.', confirmButtonColor: '#b3261e' });
+                    if (street) street.focus();
                     return false;
                 }
             }
@@ -4771,6 +4698,400 @@ if (activeCheckoutDeliveryOption === 'delivery' && initialDeliveryQuote && initi
         });
     }
 })();
+});
+</script>
+
+<style>
+.swal2-container {
+    z-index: 99999999 !important;
+}
+.market-address-wrap, #marketAddressWrap {
+    display: none !important;
+}
+</style>
+
+<!-- Select Delivery Address Modal (Screenshot 1) -->
+<div id="changeAddressModal" style="display:none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 10050; align-items: center; justify-content: center; padding: 20px;">
+    <div style="background: #fff; border-radius: 20px; width: 100%; max-width: 540px; padding: 28px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); max-height: 90vh; overflow-y: auto; position: relative;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #efddcd; padding-bottom: 14px;">
+            <h3 style="font-size: 20px; font-weight: 800; color: #2a211d; margin: 0;"><i class="fas fa-location-dot" style="color: #b3261e;"></i> Select Delivery Address</h3>
+            <button type="button" id="closeChangeAddressModalBtn" style="background: none; border: none; font-size: 20px; color: #7b6d64; cursor: pointer;"><i class="fas fa-times"></i></button>
+        </div>
+
+        <!-- Saved Addresses Section -->
+        <div style="margin-bottom: 20px;">
+            <label style="font-weight: 700; color: #2a211d; margin-bottom: 12px; display: block; font-size: 15px;">Saved Addresses</label>
+            <div id="modalSavedAddressesList" style="display: flex; flex-direction: column; gap: 12px;">
+                <?php foreach ($saved_addresses as $index => $saved_addr): ?>
+                <?php
+                $is_addr_default = !empty($saved_addr['is_default']) || $index === 0;
+                $addr_notes = !empty($saved_addr['notes']) ? htmlspecialchars($saved_addr['notes']) : 'none';
+                ?>
+                <div class="modal-saved-addr-card <?php echo $is_addr_default ? 'is-selected' : ''; ?>" 
+                     data-address-id="<?php echo (int)$saved_addr['id']; ?>" 
+                     data-street="<?php echo htmlspecialchars($saved_addr['street_address'] ?? ($saved_addr['full_address'] ?? '')); ?>"
+                     data-city="<?php echo htmlspecialchars($saved_addr['city_name'] ?? ($saved_addr['full_address'] ?? '')); ?>"
+                     style="border: 1px solid <?php echo $is_addr_default ? '#2a211d' : '#e8d4c3'; ?>; border-radius: 14px; padding: 16px 18px; cursor: pointer; transition: all 0.2s; background: #fff; display: flex; align-items: flex-start; justify-content: space-between; gap: 14px;">
+                    <div style="display: flex; gap: 12px; align-items: flex-start; flex: 1;">
+                        <!-- Radio Icon -->
+                        <div class="addr-radio-btn" style="width: 20px; height: 20px; border-radius: 50%; border: 2px solid <?php echo $is_addr_default ? '#2a211d' : '#7b6d64'; ?>; display: flex; align-items: center; justify-content: center; margin-top: 2px; flex-shrink: 0; background: #fff;">
+                            <div class="addr-radio-inner" style="width: 10px; height: 10px; border-radius: 50%; background: <?php echo $is_addr_default ? '#2a211d' : 'transparent'; ?>;"></div>
+                        </div>
+                        <!-- Details -->
+                        <div style="flex: 1;">
+                            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 2px;">
+                                <i class="fas fa-location-dot" style="color: #2a211d; font-size: 14px;"></i>
+                                <span class="addr-street-line" style="font-size: 14px; font-weight: 700; color: #2a211d; line-height: 1.4;">
+                                    <?php echo htmlspecialchars($saved_addr['street_address'] ?? ($saved_addr['full_address'] ?? '')); ?>
+                                </span>
+                            </div>
+                            <div class="addr-city-line" style="font-size: 13px; color: #667085; padding-left: 20px;">
+                                <?php echo htmlspecialchars($saved_addr['city_name'] ?? ($saved_addr['full_address'] ?? '')); ?>
+                            </div>
+                            <div class="addr-rider-note" style="font-size: 12px; color: #7b6d64; padding-left: 20px; margin-top: 4px;">
+                                Note to rider: <?php echo $addr_notes; ?>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Actions (Edit & Delete) -->
+                    <div style="display: flex; align-items: center; gap: 12px; flex-shrink: 0;" onclick="event.stopPropagation();">
+                        <button type="button" class="btn-edit-saved-addr" data-address-id="<?php echo (int)$saved_addr['id']; ?>" style="background: none; border: none; color: #2a211d; font-size: 16px; cursor: pointer; padding: 4px;" title="Edit address">
+                            <i class="fas fa-pencil-alt"></i>
+                        </button>
+                        <button type="button" class="btn-delete-saved-addr" data-address-id="<?php echo (int)$saved_addr['id']; ?>" style="background: none; border: none; color: #2a211d; font-size: 16px; cursor: pointer; padding: 4px;" title="Delete address">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+                <?php if (empty($saved_addresses)): ?>
+                <p style="font-size: 13px; color: #7b6d64; font-style: italic;">No saved addresses found in your account.</p>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- + Add Address Button -->
+        <div style="border-top: 1px solid #efddcd; padding-top: 16px;">
+            <button type="button" id="openAddAddressModalBtn" style="background: none; border: none; color: #2a211d; font-size: 15px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; padding: 4px 0;">
+                <i class="fas fa-plus" style="font-size: 14px;"></i> Add address
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- What's Your Exact Location? Map Modal (Screenshot 2) -->
+<div id="exactLocationModal" style="display:none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 10060; align-items: center; justify-content: center; padding: 16px;">
+    <div style="background: #fff; border-radius: 20px; width: 100%; max-width: 580px; padding: 26px; box-shadow: 0 10px 40px rgba(0,0,0,0.25); max-height: 92vh; display: flex; flex-direction: column; position: relative;">
+        <!-- Header -->
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px;">
+            <div>
+                <h3 style="font-size: 20px; font-weight: 800; color: #2a211d; margin: 0; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-location-dot" style="color: #b3261e;"></i> What’s your exact location?
+                </h3>
+                <p style="font-size: 13px; color: #667085; margin: 4px 0 0 0; line-height: 1.4;">
+                    Providing your location enables more accurate search and delivery ETA, seamless order tracking and personalised recommendations.
+                </p>
+            </div>
+            <button type="button" id="closeExactLocationModalBtn" style="background: none; border: none; font-size: 20px; color: #667085; cursor: pointer; padding: 4px;"><i class="fas fa-times"></i></button>
+        </div>
+
+        <!-- Address Search Input Box -->
+        <div style="position: relative; margin-bottom: 16px;">
+            <label style="font-size: 11px; font-weight: 700; color: #667085; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; display: block;">Enter your address</label>
+            <div style="display: flex; align-items: center; border: 1px solid #efddcd; border-radius: 12px; padding: 4px 12px; background: #fff;">
+                <input type="text" id="exactLocationInput" placeholder="Street, House No., Building, City" style="width: 100%; border: none; outline: none; padding: 10px 4px; font-size: 14px; color: #2a211d; background: transparent;">
+                <button type="button" id="clearExactLocationInputBtn" style="background: none; border: none; color: #667085; cursor: pointer; font-size: 16px; padding: 4px;"><i class="fas fa-times-circle"></i></button>
+            </div>
+        </div>
+
+        <!-- Interactive Map Canvas Container -->
+        <div id="exactLocationMapShell" style="height: 280px; width: 100%; border-radius: 14px; overflow: hidden; position: relative; margin-bottom: 16px; background: #f3f4f6; border: 1px solid #efddcd;">
+            <div id="exactLocationMapCanvas" style="width: 100%; height: 100%;"></div>
+        </div>
+
+        <!-- Footer SUBMIT Button -->
+        <div style="display: flex; justify-content: flex-end; margin-top: auto; padding-top: 8px;">
+            <button type="button" id="submitExactLocationBtn" style="background: #d92632; color: #fff; font-weight: 800; font-size: 14px; letter-spacing: 0.8px; text-transform: uppercase; border: none; border-radius: 10px; padding: 14px 38px; cursor: pointer; transition: background 0.2s, transform 0.1s; box-shadow: 0 4px 12px rgba(217,38,50,0.25);">
+                SUBMIT
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    function updateDisplayAddressText(streetText, cityText) {
+        const streetEl = document.getElementById('displayStreetAddress');
+        const cityEl = document.getElementById('displayCityAddress');
+        if (streetEl) {
+            streetEl.textContent = streetText || 'No address selected';
+        }
+        if (cityEl) {
+            cityEl.textContent = cityText || '';
+        }
+    }
+
+    const mainCard = document.getElementById('mainDeliveryAddressCard');
+    const openModalBtn = document.getElementById('openChangeAddressModalBtn');
+    const closeModalBtn = document.getElementById('closeChangeAddressModalBtn');
+    const changeModal = document.getElementById('changeAddressModal');
+    const openAddAddrBtn = document.getElementById('openAddAddressModalBtn');
+
+    const exactModal = document.getElementById('exactLocationModal');
+    const closeExactModalBtn = document.getElementById('closeExactLocationModalBtn');
+    const exactInput = document.getElementById('exactLocationInput');
+    const clearExactInputBtn = document.getElementById('clearExactLocationInputBtn');
+    const submitExactBtn = document.getElementById('submitExactLocationBtn');
+
+    let exactMap = null;
+    let exactMarker = null;
+
+    if (mainCard && changeModal) {
+        mainCard.addEventListener('click', function(e) {
+            if (e.target.id !== 'delivery_instructions') {
+                changeModal.style.display = 'flex';
+            }
+        });
+    }
+    if (openModalBtn && changeModal) {
+        openModalBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            changeModal.style.display = 'flex';
+        });
+    }
+    if (closeModalBtn && changeModal) {
+        closeModalBtn.addEventListener('click', function() {
+            changeModal.style.display = 'none';
+        });
+    }
+
+    // Open Exact Location Map Modal (Screenshot 2)
+    async function openExactMapModal(initialText = '', latVal = null, lngVal = null) {
+        if (changeModal) changeModal.style.display = 'none';
+        if (!exactModal) return;
+
+        exactModal.style.display = 'flex';
+        const navPayload = readMarketAddressPayloadFromStorage();
+        const startText = initialText || (navPayload ? (navPayload.full_address || navPayload.street_address) : '');
+        if (exactInput) exactInput.value = startText;
+
+        let initLat = Number(latVal) || (navPayload ? Number(navPayload.latitude) : 0) || 14.3294;
+        let initLng = Number(lngVal) || (navPayload ? Number(navPayload.longitude) : 0) || 120.9367;
+
+        if (startText && (!latVal || !lngVal)) {
+            const geocoded = await forwardGeocodeFromNominatim(startText);
+            if (geocoded) {
+                initLat = geocoded.lat;
+                initLng = geocoded.lng;
+            }
+        }
+
+        setTimeout(function() {
+            if (!exactMap && window.L && document.getElementById('exactLocationMapCanvas')) {
+                exactMap = L.map('exactLocationMapCanvas').setView([initLat, initLng], 16);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(exactMap);
+
+                exactMarker = L.marker([initLat, initLng], { draggable: true }).addTo(exactMap);
+
+                function reverseGeocodeExactPin(lat, lng) {
+                    fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`)
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data && data.display_name && exactInput) {
+                                exactInput.value = data.display_name;
+                            }
+                        })
+                        .catch(err => console.error('Nominatim reverse error:', err));
+                }
+
+                exactMarker.on('dragend', function() {
+                    const pos = exactMarker.getLatLng();
+                    if (exactMap) exactMap.panTo(pos);
+                    reverseGeocodeExactPin(pos.lat, pos.lng);
+                });
+
+                exactMap.on('moveend', function() {
+                    if (exactMarker && exactMap) {
+                        const center = exactMap.getCenter();
+                        exactMarker.setLatLng(center);
+                        reverseGeocodeExactPin(center.lat, center.lng);
+                    }
+                });
+            } else if (exactMap) {
+                exactMap.invalidateSize();
+                exactMap.setView([initLat, initLng], 16);
+                if (exactMarker) exactMarker.setLatLng([initLat, initLng]);
+            }
+        }, 100);
+    }
+
+    if (openAddAddrBtn) {
+        openAddAddrBtn.addEventListener('click', function() {
+            openExactMapModal();
+        });
+    }
+    if (closeExactModalBtn && exactModal) {
+        closeExactModalBtn.addEventListener('click', function() {
+            exactModal.style.display = 'none';
+        });
+    }
+    if (clearExactInputBtn && exactInput) {
+        clearExactInputBtn.addEventListener('click', function() {
+            exactInput.value = '';
+            exactInput.focus();
+        });
+    }
+
+    // Modal Saved Address Card Click (Select Address)
+    document.querySelectorAll('.modal-saved-addr-card').forEach(card => {
+        card.addEventListener('click', async function() {
+            document.querySelectorAll('.modal-saved-addr-card').forEach(c => {
+                c.style.borderColor = '#e8d4c3';
+                c.classList.remove('is-selected');
+                const radioInner = c.querySelector('.addr-radio-inner');
+                if (radioInner) radioInner.style.background = 'transparent';
+                const radioBtn = c.querySelector('.addr-radio-btn');
+                if (radioBtn) radioBtn.style.borderColor = '#7b6d64';
+            });
+
+            this.style.borderColor = '#2a211d';
+            this.classList.add('is-selected');
+            const selInner = this.querySelector('.addr-radio-inner');
+            if (selInner) selInner.style.background = '#2a211d';
+            const selRadio = this.querySelector('.addr-radio-btn');
+            if (selRadio) selRadio.style.borderColor = '#2a211d';
+
+            const addrId = this.getAttribute('data-address-id');
+            const savedRow = findSavedAddressById(addrId);
+            if (savedRow) {
+                await applySavedAddressToForm(savedRow);
+                const streetText = savedRow.street_address || (savedRow.full_address ? savedRow.full_address.split(',')[0] : '');
+                const cityText = savedRow.city_name || savedRow.full_address || '';
+                updateDisplayAddressText(streetText, cityText);
+            }
+            if (changeModal) changeModal.style.display = 'none';
+        });
+    });
+
+    // Edit Saved Address (Pencil Icon)
+    document.querySelectorAll('.btn-edit-saved-addr').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const addrId = this.getAttribute('data-address-id');
+            const savedRow = findSavedAddressById(addrId);
+            const streetText = savedRow ? (savedRow.full_address || savedRow.street_address) : '';
+            const latVal = savedRow ? savedRow.latitude : null;
+            const lngVal = savedRow ? savedRow.longitude : null;
+            openExactMapModal(streetText, latVal, lngVal);
+        });
+    });
+
+    // Delete Saved Address (Trash Icon)
+    document.querySelectorAll('.btn-delete-saved-addr').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const card = this.closest('.modal-saved-addr-card');
+            const addrId = this.getAttribute('data-address-id');
+
+            Swal.fire({
+                title: 'Delete Address?',
+                text: 'Are you sure you want to remove this saved address?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#b3261e',
+                cancelButtonColor: '#667085',
+                confirmButtonText: 'Yes, delete'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    if (card) card.remove();
+
+                    // Send AJAX delete request to database
+                    const delBody = new URLSearchParams();
+                    delBody.append('address_action', 'delete');
+                    delBody.append('address_id', String(addrId));
+                    fetch('checkout.php', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: delBody })
+                        .catch(err => console.error('Delete address AJAX error:', err));
+
+                    Swal.fire({ icon: 'success', title: 'Address Removed', timer: 1200, showConfirmButton: false });
+                }
+            });
+        });
+    });
+
+    // SUBMIT Exact Location Map Modal (Screenshot 2)
+    if (submitExactBtn) {
+        submitExactBtn.addEventListener('click', async function() {
+            const queryText = (exactInput?.value || '').trim();
+            let lat = 14.3294, lng = 120.9367;
+            if (exactMap) {
+                const center = exactMap.getCenter();
+                lat = center.lat;
+                lng = center.lng;
+            }
+
+            if (queryText) {
+                const streetInput = document.getElementById('street_address');
+                if (streetInput) streetInput.value = queryText;
+
+                const parts = queryText.split(',');
+                const streetPart = parts[0].trim();
+                const cityPart = parts.slice(1).join(',').trim() || 'Dasmariñas';
+                updateDisplayAddressText(streetPart, cityPart);
+                syncDeliveryAddressField();
+
+                const fallback = await forwardGeocodeFromNominatim(queryText);
+                if (fallback) {
+                    lat = fallback.lat;
+                    lng = fallback.lng;
+                }
+
+                // Automatically save address to database for future orders
+                const saveBody = new URLSearchParams();
+                saveBody.append('address_action', 'save');
+                saveBody.append('label', 'Saved Address');
+                saveBody.append('street_address', streetPart);
+                saveBody.append('city_name', cityPart);
+                saveBody.append('full_address', queryText);
+                saveBody.append('latitude', String(lat));
+                saveBody.append('longitude', String(lng));
+                saveBody.append('is_default', '1');
+
+                fetch('checkout.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: saveBody
+                }).then(r => r.json()).then(data => {
+                    if (data.success && Array.isArray(data.addresses)) {
+                        savedAddressesData = data.addresses;
+                    }
+                }).catch(err => console.error('Auto-save address error:', err));
+
+                await calculateDeliveryFee(lat, lng);
+            }
+
+            if (exactModal) exactModal.style.display = 'none';
+            if (changeModal) changeModal.style.display = 'none';
+        });
+    }
+
+    // Update display address on initial load
+    setTimeout(function() {
+        const streetInput = document.getElementById('street_address');
+        const hiddenAddr = document.getElementById('delivery_address');
+        const navPayload = readMarketAddressPayloadFromStorage();
+        if (streetInput && streetInput.value.trim()) {
+            const parts = streetInput.value.split(',');
+            updateDisplayAddressText(parts[0].trim(), parts.slice(1).join(',').trim());
+        } else if (navPayload) {
+            updateDisplayAddressText(navPayload.street_address || navPayload.full_address, navPayload.city || '');
+        } else if (hiddenAddr && hiddenAddr.value.trim()) {
+            const parts = hiddenAddr.value.split(',');
+            updateDisplayAddressText(parts[0].trim(), parts.slice(1).join(',').trim());
+        }
+    }, 400);
 });
 </script>
 

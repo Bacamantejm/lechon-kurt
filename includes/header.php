@@ -614,7 +614,7 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
             <span class="logo-copy"><span class="logo-title">Lechon Delights</span><span class="logo-sub">Marketplace</span></span>
         </a>
 
-        <?php if ($current_page !== 'register' && $current_page !== 'login'): ?>
+        <?php if ($current_page !== 'register' && $current_page !== 'login' && $current_page !== 'checkout'): ?>
         <div class="market-address-wrap" id="marketAddressWrap">
             <button type="button" class="market-address-trigger" id="marketAddressToggle">
                 <i class="fas fa-location-dot"></i><span class="address-text" id="marketAddressDisplay"><?php echo htmlspecialchars($market_header_address_display); ?></span><i class="fas fa-chevron-down"></i>
@@ -645,7 +645,10 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
                 <!-- Header Location Pinning Map -->
                 <div style="padding: 0 16px 14px 16px;">
                     <div id="headerMap" style="height: 180px; width: 100%; border-radius: 8px; border: 1px solid #efddcd; z-index: 1;"></div>
-                    <p style="font-size: 0.72rem; color: #7b6d64; margin: 4px 0 0 0; text-align: left; font-weight: 500;">Drag the pin or click on the map to set your location.</p>
+                    <p style="font-size: 0.72rem; color: #7b6d64; margin: 4px 0 10px 0; text-align: left; font-weight: 500;">Drag the pin or click on the map to set your location.</p>
+                    <button type="button" id="headerSaveLocationBtn" style="width: 100%; background: #b3261e; color: #fff; font-weight: 800; font-size: 14px; border: none; border-radius: 10px; padding: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 12px rgba(179,38,30,0.25);">
+                        <i class="fas fa-check-circle"></i> Save Location
+                    </button>
                 </div>
             </div>
         </div>
@@ -802,7 +805,7 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
             </div>
             <div class="map-modal-foot">
                 <button type="button" class="map-modal-btn secondary" id="marketMapUseCurrent"><i class="fas fa-crosshairs"></i> Use current</button>
-                <button type="button" class="map-modal-btn primary" id="marketMapApplyBtn">Find food</button>
+                <button type="button" class="map-modal-btn primary" id="marketMapApplyBtn"><i class="fas fa-check"></i> Save Location</button>
             </div>
         </div>
     </div>
@@ -1624,6 +1627,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }, 70);
         });
     };
+    window.openHeaderMapModal = openMapModal;
 
     const closeMapModal = function () {
         if (!marketMapModal) return;
@@ -1818,11 +1822,31 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    const saveMarketLocationToUserDatabase = function(payload) {
+        if (!payload || (!payload.street_address && !payload.full_address)) return;
+        const bodyData = new URLSearchParams();
+        bodyData.append('address_action', 'save');
+        bodyData.append('label', 'Saved Location');
+        bodyData.append('street_address', payload.street_address || payload.full_address);
+        bodyData.append('city_name', payload.city || 'Cavite');
+        bodyData.append('full_address', payload.full_address || payload.street_address);
+        bodyData.append('latitude', String(payload.latitude || ''));
+        bodyData.append('longitude', String(payload.longitude || ''));
+        bodyData.append('is_default', '1');
+
+        fetch('checkout.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: bodyData
+        }).catch(err => console.error('Header save location error:', err));
+    };
+
     const applyQuickAddressSelection = function (street, city) {
         const payload = buildMarketAddressPayload(street || '', city || 'Cavite', '');
         fillMarketAddressInputs(payload, { includeMapFields: true });
         const stored = persistMarketAddressPayload(payload);
         renderMarketAddressDisplay(stored);
+        saveMarketLocationToUserDatabase(stored);
         closeAddressPopover();
     };
 
@@ -1843,6 +1867,34 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
             applyQuickAddressSelection(rawVal, 'Cavite');
+        });
+    }
+
+    const headerSaveBtn = document.getElementById('headerSaveLocationBtn');
+    if (headerSaveBtn) {
+        headerSaveBtn.addEventListener('click', function () {
+            const rawVal = marketQuickStreetInput ? marketQuickStreetInput.value.trim() : '';
+            let lat = '', lng = '';
+            if (headerMarker) {
+                const pos = headerMarker.getLatLng();
+                lat = pos.lat;
+                lng = pos.lng;
+            }
+            const streetText = rawVal || (lat ? 'Pinned Location' : '');
+            if (!streetText) {
+                showSwalError('Please select or pin a location first.', 'Location Required');
+                return;
+            }
+            const payload = buildMarketAddressPayload(streetText, 'Cavite', '', lat, lng);
+            fillMarketAddressInputs(payload, { includeMapFields: true });
+            const stored = persistMarketAddressPayload(payload);
+            renderMarketAddressDisplay(stored);
+            saveMarketLocationToUserDatabase(stored);
+            closeAddressPopover();
+
+            if (typeof window.dispatchEvent === 'function') {
+                window.dispatchEvent(new CustomEvent('marketAddressUpdated', { detail: stored }));
+            }
         });
     }
 
