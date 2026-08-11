@@ -729,223 +729,254 @@ include 'includes/header.php';
 .account-page {
     --acc-red: #b3261e;
     --acc-orange: #ef6b2e;
+    --acc-cream: #fff8ef;
     --acc-ink: #171922;
     --acc-muted: #667085;
     --acc-border: #efddcd;
-    --acc-shadow: 0 14px 34px rgba(23, 25, 34, 0.06);
-    padding: 40px 0 80px;
+    --acc-shadow: 0 10px 30px rgba(42, 33, 29, 0.05);
+    padding: 32px 0 80px;
     min-height: 85vh;
     font-family: 'Plus Jakarta Sans', sans-serif;
     background:
-        radial-gradient(circle at 95% -5%, rgba(239, 107, 46, 0.15), transparent 40%),
-        radial-gradient(circle at 0% 20%, rgba(179, 38, 30, 0.08), transparent 38%),
-        linear-gradient(180deg, #fff9f2 0%, #fff4e8 100%);
+        radial-gradient(circle at 95% -5%, rgba(239, 107, 46, 0.08), transparent 40%),
+        radial-gradient(circle at 0% 20%, rgba(179, 38, 30, 0.05), transparent 38%),
+        linear-gradient(180deg, #fff9f2 0%, #ffffff 100%);
 }
 
 .account-page .container {
     max-width: 1240px;
     margin: 0 auto;
-    padding: 0 16px;
+    padding: 0 20px;
 }
 
-.account-hero {
-    background: linear-gradient(135deg, #fff0f3 0%, #ffe5ea 40%, #fff8f0 100%) !important;
-    color: #171922;
-    border-radius: 24px;
-    padding: 32px 36px;
-    box-shadow: 0 10px 28px rgba(74, 32, 20, 0.06);
-    border: 1px solid #ffd0d8;
+/* Page Top Header */
+.account-header-title {
     margin-bottom: 24px;
+}
+
+.account-header-title h1 {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.85rem;
+    font-weight: 800;
+    color: var(--acc-ink);
+    margin: 0 0 4px;
+    letter-spacing: -0.02em;
+}
+
+.account-header-title p {
+    font-size: 0.92rem;
+    color: var(--acc-muted);
+    margin: 0;
+}
+
+/* 2-Column Dashboard Grid Layout */
+.account-dashboard-layout {
+    display: grid;
+    grid-template-columns: 310px 1fr;
+    gap: 24px;
+    align-items: start;
+}
+
+/* Left Sidebar Panel */
+.account-sidebar-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    position: sticky;
+    top: 90px;
+}
+
+/* User Profile Card */
+.user-profile-card {
+    background: linear-gradient(135deg, #ffffff 0%, #fffbf7 100%);
+    border: 1px solid var(--acc-border);
+    border-radius: 22px;
+    padding: 24px;
+    box-shadow: var(--acc-shadow);
+    text-align: center;
     position: relative;
     overflow: hidden;
 }
 
-.account-hero-arch {
+.user-profile-card::before {
+    content: '';
     position: absolute;
-    right: -20px;
-    top: -30px;
-    bottom: -30px;
-    width: 280px;
-    background: rgba(255, 255, 255, 0.65);
-    border-radius: 50% 0 0 50%;
-    pointer-events: none;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: linear-gradient(135deg, rgba(179, 38, 30, 0.12), rgba(239, 107, 46, 0.12));
+    z-index: 0;
+}
+
+.user-avatar-wrap {
+    position: relative;
     z-index: 1;
-    transition: transform 0.3s ease;
+    margin: 10px auto 14px;
+    width: 84px;
+    height: 84px;
 }
 
-.account-hero:hover .account-hero-arch {
-    transform: scale(1.05);
-}
-
-.hero-main {
+.user-avatar-badge {
+    width: 84px;
+    height: 84px;
+    border-radius: 24px;
+    background: linear-gradient(135deg, var(--acc-red), var(--acc-orange));
+    color: #ffffff;
     display: flex;
     align-items: center;
-    gap: 22px;
-    position: relative;
-    z-index: 2;
-}
-
-.avatar-pill {
-    width: 76px;
-    height: 76px;
-    border-radius: 22px;
-    display: inline-flex;
-    align-items: center;
     justify-content: center;
-    font-weight: 800;
-    font-size: 1.6rem;
     font-family: 'Outfit', sans-serif;
-    background: linear-gradient(135deg, #b3261e 0%, #ef6b2e 100%);
-    color: #ffffff;
+    font-size: 1.8rem;
+    font-weight: 800;
     border: 3px solid #ffffff;
-    box-shadow: 0 8px 20px rgba(179, 38, 30, 0.22);
-    flex-shrink: 0;
+    box-shadow: 0 8px 20px rgba(179, 38, 30, 0.2);
+    overflow: hidden;
 }
 
-.avatar-pill.has-image {
+.user-avatar-badge.has-image {
     padding: 0;
-    overflow: hidden;
     background: #ffffff;
 }
 
-.avatar-pill-image {
+.user-avatar-badge img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     display: block;
 }
 
-.market-kicker {
+.user-name-display {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--acc-ink);
+    margin: 0 0 2px;
+    position: relative;
+    z-index: 1;
+}
+
+.user-email-display {
+    font-size: 0.82rem;
+    color: var(--acc-muted);
+    margin: 0 0 14px;
+    position: relative;
+    z-index: 1;
+    word-break: break-all;
+}
+
+.user-role-tag {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 5px 12px;
+    gap: 5px;
+    padding: 5px 14px;
     border-radius: 999px;
     background: #ffe8d2;
-    color: #b3261e;
-    font-size: 0.75rem;
+    color: var(--acc-red);
+    font-size: 0.74rem;
     font-weight: 800;
-    letter-spacing: 0.06em;
     text-transform: uppercase;
-    margin-bottom: 6px;
+    letter-spacing: 0.04em;
 }
 
-.account-page h1 {
-    margin: 0 0 6px;
-    color: #171922;
-    letter-spacing: -0.03em;
-    font-family: 'Outfit', sans-serif;
-    font-size: clamp(1.6rem, 2.6vw, 2.2rem);
-    font-weight: 800;
-    line-height: 1.15;
-}
-
-.account-subtitle {
-    margin: 0;
-    color: #667085;
-    font-size: 0.94rem;
-    line-height: 1.5;
-    max-width: 780px;
-}
-
-.hero-badges {
-    margin-top: 18px;
+/* Sidebar Vertical Navigation Menu */
+.sidebar-nav-menu {
+    background: #ffffff;
+    border: 1px solid var(--acc-border);
+    border-radius: 22px;
+    padding: 10px;
+    box-shadow: var(--acc-shadow);
     display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    position: relative;
-    z-index: 2;
+    flex-direction: column;
+    gap: 4px;
 }
 
-.hero-badge {
-    display: inline-flex;
+.sidebar-nav-btn {
+    display: flex;
     align-items: center;
-    gap: 7px;
-    border-radius: 999px;
-    padding: 6px 14px;
-    background: #ffffff;
-    border: 1px solid #efddcd;
-    font-size: 0.82rem;
-    font-weight: 700;
-    color: #171922;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
-}
-
-.hero-actions {
-    margin-top: 18px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    position: relative;
-    z-index: 2;
-}
-
-.hero-action-btn {
-    border: 1px solid #efddcd;
-    background: #ffffff;
-    color: #171922;
+    gap: 12px;
+    padding: 12px 16px;
+    border: none;
+    background: transparent;
     border-radius: 14px;
-    padding: 9px 18px;
-    font-size: 0.86rem;
+    font-size: 0.9rem;
     font-weight: 700;
+    color: var(--acc-muted);
     cursor: pointer;
     transition: all 0.2s ease;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    box-shadow: 0 4px 12px rgba(42, 33, 29, 0.04);
+    text-align: left;
+    width: 100%;
 }
 
-.hero-action-btn:hover {
-    background: #fff8ef;
-    border-color: #b3261e;
-    color: #b3261e;
-    transform: translateY(-2px);
-    box-shadow: 0 8px 18px rgba(179, 38, 30, 0.12);
+.sidebar-nav-btn i {
+    font-size: 1.05rem;
+    width: 22px;
+    text-align: center;
+    color: #94a3b8;
+    transition: color 0.2s ease;
 }
 
-.metrics-grid {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 16px;
-    margin-bottom: 24px;
+.sidebar-nav-btn:hover {
+    background: var(--acc-cream);
+    color: var(--acc-red);
 }
 
-.metric-card {
+.sidebar-nav-btn:hover i {
+    color: var(--acc-red);
+}
+
+.sidebar-nav-btn.active {
+    background: linear-gradient(135deg, var(--acc-red) 0%, var(--acc-orange) 100%);
+    color: #ffffff !important;
+    box-shadow: 0 6px 18px rgba(179, 38, 30, 0.22);
+}
+
+.sidebar-nav-btn.active i {
+    color: #ffffff !important;
+}
+
+/* Sidebar Quick Metrics Block */
+.sidebar-metrics-card {
     background: #ffffff;
-    border: 1px solid #efddcd;
-    border-radius: 20px;
-    padding: 18px 20px;
-    box-shadow: 0 8px 24px rgba(42, 33, 29, 0.04);
-    transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
-    position: relative;
-    overflow: hidden;
+    border: 1px solid var(--acc-border);
+    border-radius: 22px;
+    padding: 18px;
+    box-shadow: var(--acc-shadow);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
 }
 
-.metric-card:hover {
-    transform: translateY(-3px);
-    border-color: #e8d4c3;
-    box-shadow: 0 12px 28px rgba(179, 38, 30, 0.1);
+.sidebar-metric-item {
+    text-align: center;
+    padding: 10px 8px;
+    background: #fffdfb;
+    border-radius: 14px;
+    border: 1px solid #f5e7db;
 }
 
-.metric-card small {
+.sidebar-metric-item small {
     display: block;
-    color: #7b6d64;
-    font-size: 0.76rem;
+    font-size: 0.68rem;
+    color: var(--acc-muted);
+    font-weight: 800;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
-    font-weight: 800;
-    margin-bottom: 6px;
+    margin-bottom: 2px;
 }
 
-.metric-card strong {
-    color: #171922;
+.sidebar-metric-item strong {
     font-family: 'Outfit', sans-serif;
-    font-size: 1.45rem;
+    font-size: 1.15rem;
     font-weight: 800;
-    letter-spacing: -0.02em;
+    color: var(--acc-ink);
 }
 
+/* Main Workspace Panel */
+.account-workspace-panel {
+    min-width: 0;
+}
+
+/* Alert Notifications */
 .alert {
     padding: 16px 20px;
     border-radius: 16px;
@@ -968,49 +999,7 @@ include 'includes/header.php';
     background-color: #ffebee;
     color: #c62828;
     border: 1px solid #ffcdd2;
-    border-left: 5px solid #b3261e;
-}
-
-.account-tabs {
-    display: flex;
-    gap: 8px;
-    background-color: #ffffff;
-    border-radius: 20px;
-    padding: 8px;
-    margin-bottom: 24px;
-    flex-wrap: wrap;
-    border: 1px solid #efddcd;
-    box-shadow: 0 8px 24px rgba(42, 33, 29, 0.04);
-}
-
-.tab-btn {
-    flex: 1;
-    min-width: 140px;
-    padding: 12px 18px;
-    background: none;
-    border: none;
-    border-radius: 14px;
-    font-size: 0.92rem;
-    font-weight: 700;
-    color: #7b6d64;
-    cursor: pointer;
-    transition: all 0.22s ease;
-    text-align: center;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-}
-
-.tab-btn:hover {
-    color: #b3261e;
-    background-color: #fff8ef;
-}
-
-.tab-btn.active {
-    background: linear-gradient(135deg, #b3261e 0%, #ef6b2e 100%);
-    color: #ffffff;
-    box-shadow: 0 8px 20px rgba(179, 38, 30, 0.25);
+    border-left: 5px solid var(--acc-red);
 }
 
 .tab-pane {
@@ -1022,27 +1011,12 @@ include 'includes/header.php';
     animation: fadeIn 0.3s ease;
 }
 
-.address-book-pane {
-    background: #ffffff;
-    border: 1px solid #efddcd;
-    border-radius: 24px;
-    box-shadow: 0 10px 28px rgba(74, 32, 20, 0.06);
-    overflow: hidden;
-}
-
-.address-book-frame {
-    width: 100%;
-    min-height: 860px;
-    border: none;
-    display: block;
-    background: transparent;
-}
-
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(6px); }
     to { opacity: 1; transform: translateY(0); }
 }
 
+/* Feature Cards & Content Panes */
 .profile-card,
 .orders-card,
 .franchise-card,
@@ -1050,22 +1024,22 @@ include 'includes/header.php';
     background-color: #ffffff;
     padding: 32px;
     border-radius: 24px;
-    border: 1px solid #efddcd;
-    box-shadow: 0 10px 28px rgba(74, 32, 20, 0.06);
-    margin-bottom: 30px;
+    border: 1px solid var(--acc-border);
+    box-shadow: var(--acc-shadow);
+    margin-bottom: 24px;
 }
 
 .card-head {
     margin-bottom: 22px;
     border-bottom: 1px solid #f3e8de;
-    padding-bottom: 18px;
+    padding-bottom: 16px;
 }
 
 .profile-card h2,
 .orders-card h2,
 .franchise-card h2,
 .password-card h2 {
-    color: #171922;
+    color: var(--acc-ink);
     margin: 0 0 4px;
     font-family: 'Outfit', sans-serif;
     font-size: 1.45rem;
@@ -1075,19 +1049,19 @@ include 'includes/header.php';
 
 .card-head p {
     margin: 0;
-    color: #667085;
-    font-size: 0.92rem;
+    color: var(--acc-muted);
+    font-size: 0.9rem;
 }
 
 .info-callout {
     background: #fff6ed;
-    border: 1px solid #efddcd;
-    border-left: 4px solid #ef6b2e;
+    border: 1px solid var(--acc-border);
+    border-left: 4px solid var(--acc-orange);
     padding: 14px 18px;
     border-radius: 16px;
     margin-bottom: 24px;
-    font-size: 0.9rem;
-    color: #171922;
+    font-size: 0.88rem;
+    color: var(--acc-ink);
     display: flex;
     align-items: center;
     gap: 12px;
@@ -1095,12 +1069,12 @@ include 'includes/header.php';
 
 .info-callout i {
     font-size: 1.15rem;
-    color: #ef6b2e;
+    color: var(--acc-orange);
     flex-shrink: 0;
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, #b3261e 0%, #ef6b2e 100%);
+    background: linear-gradient(135deg, var(--acc-red) 0%, var(--acc-orange) 100%);
     color: #ffffff;
     border: 0;
     padding: 12px 24px;
@@ -1124,8 +1098,8 @@ include 'includes/header.php';
 
 .btn-outline {
     background: #ffffff;
-    color: #171922;
-    border: 1px solid #efddcd;
+    color: var(--acc-ink);
+    border: 1px solid var(--acc-border);
     padding: 10px 18px;
     border-radius: 14px;
     font-weight: 700;
@@ -1139,49 +1113,49 @@ include 'includes/header.php';
 }
 
 .btn-outline:hover {
-    background: #fff8ef;
-    border-color: #b3261e;
-    color: #b3261e;
+    background: var(--acc-cream);
+    border-color: var(--acc-red);
+    color: var(--acc-red);
     transform: translateY(-1px);
 }
 
 .form-row {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 20px;
-    margin-bottom: 20px;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 18px;
+    margin-bottom: 18px;
 }
 
 .form-group {
-    margin-bottom: 22px;
+    margin-bottom: 20px;
 }
 
 .form-group label {
     display: block;
     margin-bottom: 8px;
-    color: #171922;
+    color: var(--acc-ink);
     font-weight: 700;
-    font-size: 0.92rem;
+    font-size: 0.9rem;
 }
 
 .form-group input,
 .form-group textarea,
 .form-group select {
     width: 100%;
-    padding: 13px 16px;
-    border: 1px solid #efddcd;
+    padding: 12px 16px;
+    border: 1px solid var(--acc-border);
     border-radius: 14px;
-    font-size: 0.95rem;
+    font-size: 0.92rem;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
     background: #fff8f0;
-    color: #171922;
+    color: var(--acc-ink);
 }
 
 .form-group input:focus,
 .form-group textarea:focus,
 .form-group select:focus {
     outline: none;
-    border-color: #b3261e;
+    border-color: var(--acc-red);
     box-shadow: 0 0 0 4px rgba(239, 107, 46, 0.12);
     background: #ffffff;
 }
@@ -1189,7 +1163,7 @@ include 'includes/header.php';
 .form-group input:disabled {
     background-color: #f8fafc;
     cursor: not-allowed;
-    color: #7b6d64;
+    color: var(--acc-muted);
 }
 
 .profile-upload-row {
@@ -1198,17 +1172,17 @@ include 'includes/header.php';
     gap: 18px;
     flex-wrap: wrap;
     background: #fff8f0;
-    border: 1px solid #efddcd;
+    border: 1px solid var(--acc-border);
     border-radius: 18px;
     padding: 18px;
 }
 
 .profile-upload-preview {
-    width: 84px;
-    height: 84px;
+    width: 80px;
+    height: 80px;
     border-radius: 20px;
     border: 2px solid #ffffff;
-    background: linear-gradient(135deg, #b3261e 0%, #ef6b2e 100%);
+    background: linear-gradient(135deg, var(--acc-red) 0%, var(--acc-orange) 100%);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1229,13 +1203,13 @@ include 'includes/header.php';
 
 .profile-upload-fields {
     flex: 1;
-    min-width: min(100%, 260px);
+    min-width: min(100%, 240px);
 }
 
 .upload-note {
     margin: 6px 0 0;
-    color: #7b6d64;
-    font-size: 0.83rem;
+    color: var(--acc-muted);
+    font-size: 0.82rem;
     line-height: 1.4;
 }
 
@@ -1244,8 +1218,8 @@ include 'includes/header.php';
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    color: #171922;
-    font-size: 0.88rem;
+    color: var(--acc-ink);
+    font-size: 0.86rem;
     font-weight: 700;
     cursor: pointer;
 }
@@ -1253,6 +1227,22 @@ include 'includes/header.php';
 .checkbox-label input[type="checkbox"] {
     width: auto;
     margin: 0;
+}
+
+.address-book-pane {
+    background: #ffffff;
+    border: 1px solid var(--acc-border);
+    border-radius: 24px;
+    box-shadow: var(--acc-shadow);
+    overflow: hidden;
+}
+
+.address-book-frame {
+    width: 100%;
+    min-height: 860px;
+    border: none;
+    display: block;
+    background: transparent;
 }
 
 .orders-list {
@@ -1263,20 +1253,20 @@ include 'includes/header.php';
 
 .order-item {
     background-color: #ffffff;
-    padding: 22px;
-    border-radius: 20px;
-    border: 1px solid #efddcd;
-    border-left: 5px solid #b3261e;
-    box-shadow: 0 6px 18px rgba(42, 33, 29, 0.04);
+    padding: 20px;
+    border-radius: 18px;
+    border: 1px solid var(--acc-border);
+    border-left: 5px solid var(--acc-red);
+    box-shadow: 0 4px 14px rgba(42, 33, 29, 0.03);
     transition: transform 0.25s ease, box-shadow 0.25s ease;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
 }
 
 .order-item:hover {
     transform: translateY(-2px);
-    box-shadow: 0 12px 26px rgba(179, 38, 30, 0.08);
+    box-shadow: 0 10px 24px rgba(179, 38, 30, 0.08);
 }
 
 .order-header {
@@ -1290,13 +1280,13 @@ include 'includes/header.php';
 .order-number {
     font-weight: 800;
     font-family: 'Outfit', sans-serif;
-    color: #171922;
-    font-size: 1.1rem;
+    color: var(--acc-ink);
+    font-size: 1.05rem;
 }
 
 .order-date {
-    color: #667085;
-    font-size: 0.85rem;
+    color: var(--acc-muted);
+    font-size: 0.82rem;
     font-weight: 600;
 }
 
@@ -1307,9 +1297,9 @@ include 'includes/header.php';
 }
 
 .order-status {
-    padding: 6px 14px;
+    padding: 5px 12px;
     border-radius: 999px;
-    font-size: 0.82rem;
+    font-size: 0.78rem;
     font-weight: 800;
     display: inline-flex;
     align-items: center;
@@ -1318,84 +1308,93 @@ include 'includes/header.php';
 }
 
 .status-pending { background-color: #fff3e0; color: #f57c00; border: 1px solid #ffe0b2; }
-.status-assigned, .status-picked_up, .status-on_the_way, .status-arriving { background-color: #fff0eb; color: #b3261e; border: 1px solid #efddcd; }
+.status-assigned, .status-picked_up, .status-on_the_way, .status-arriving { background-color: #fff0eb; color: var(--acc-red); border: 1px solid var(--acc-border); }
 .status-delivered, .status-completed { background-color: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; }
 .status-cancelled, .status-rejected { background-color: #ffebee; color: #c62828; border: 1px solid #ffcdd2; }
 
 .order-total {
     font-weight: 800;
     font-family: 'Outfit', sans-serif;
-    color: #b3261e;
-    font-size: 1.2rem;
+    color: var(--acc-red);
+    font-size: 1.15rem;
 }
 
 .empty-state {
     text-align: center;
     padding: 48px 20px;
-    color: #7b6d64;
+    color: var(--acc-muted);
 }
 
 .empty-state i {
-    font-size: 3.2rem;
-    color: #ef6b2e;
+    font-size: 3rem;
+    color: var(--acc-orange);
     margin-bottom: 12px;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 992px) {
+    .account-dashboard-layout {
+        grid-template-columns: 1fr;
+    }
+    .account-sidebar-panel {
+        position: static;
+    }
+    .sidebar-nav-menu {
+        display: none;
+    }
+    .mobile-tab-bar {
+        display: flex !important;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(12px);
+        border-top: 1px solid var(--acc-border);
+        z-index: 1000;
+        padding: 8px 12px;
+        justify-content: space-around;
+        box-shadow: 0 -4px 20px rgba(0,0,0,0.06);
+    }
+    .mobile-tab-btn {
+        background: none;
+        border: none;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 3px;
+        color: var(--acc-muted);
+        font-size: 0.72rem;
+        font-weight: 700;
+        padding: 6px 10px;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    .mobile-tab-btn.active {
+        color: var(--acc-red);
+        background: var(--acc-cream);
+    }
+    .mobile-tab-btn i {
+        font-size: 1.1rem;
+    }
+}
+
+@media (min-width: 993px) {
+    .mobile-tab-bar {
+        display: none !important;
+    }
 }
 </style>
 
 
 <div class="account-page">
     <div class="container">
-        <section class="account-hero">
-            <div class="account-hero-arch"></div>
-            <div class="hero-main">
-                <div class="avatar-pill<?php echo $has_profile_image ? ' has-image' : ''; ?>">
-                    <?php if ($has_profile_image): ?>
-                    <img src="<?php echo htmlspecialchars($profile_image_relative_path); ?>" alt="Profile picture" class="avatar-pill-image">
-                    <?php else: ?>
-                    <?php echo htmlspecialchars($avatar_initials); ?>
-                    <?php endif; ?>
-                </div>
-                <div>
-                    <span class="market-kicker"><i class="fas fa-crown"></i> Customer Workspace</span>
-                    <h1><?php echo htmlspecialchars($user['full_name'] ?? 'My Account'); ?></h1>
-                    <p class="account-subtitle">Manage profile details, track orders, check franchise status, and secure your account from one clean dashboard.</p>
-                </div>
-            </div>
-            <div class="hero-badges">
-                <span class="hero-badge"><i class="fas fa-store"></i> Franchise: <?php echo htmlspecialchars($franchise_status_label); ?></span>
-                <?php if (!empty($user['email'])): ?>
-                <span class="hero-badge"><i class="fas fa-envelope"></i> <?php echo htmlspecialchars($user['email']); ?></span>
-                <?php endif; ?>
-            </div>
-            <div class="hero-actions">
-                <button type="button" class="hero-action-btn open-tab-trigger" data-target-tab="profile">
-                    <i class="fas fa-user-pen"></i> Edit Profile
-                </button>
-                <button type="button" class="hero-action-btn open-tab-trigger" data-target-tab="password">
-                    <i class="fas fa-key"></i> Security
-                </button>
-            </div>
-        </section>
+        <div class="account-header-title">
+            <h1>My Account Dashboard</h1>
+            <p>Manage your profile, saved addresses, live order tracking, and account security.</p>
+        </div>
 
-        <section class="metrics-grid">
-            <article class="metric-card">
-                <small><i class="fas fa-box" style="color: #ef6b2e; margin-right: 4px;"></i> Total Orders</small>
-                <strong><?php echo (int)$order_stats['total_orders']; ?></strong>
-            </article>
-            <article class="metric-card">
-                <small><i class="fas fa-motorcycle" style="color: #b3261e; margin-right: 4px;"></i> Active Orders</small>
-                <strong><?php echo (int)$order_stats['active_orders']; ?></strong>
-            </article>
-            <article class="metric-card">
-                <small><i class="fas fa-check-circle" style="color: #2e7d32; margin-right: 4px;"></i> Completed</small>
-                <strong><?php echo (int)$order_stats['completed_orders']; ?></strong>
-            </article>
-            <article class="metric-card">
-                <small><i class="fas fa-wallet" style="color: #d97706; margin-right: 4px;"></i> Total Spent</small>
-                <strong>&#8369;<?php echo number_format((float)$order_stats['total_spent'], 2); ?></strong>
-            </article>
-        </section>
-        
         <?php if ($success_msg): ?>
         <div class="alert alert-success">
             <i class="fas fa-check-circle"></i> <?php echo $success_msg; ?>
@@ -1407,347 +1406,399 @@ include 'includes/header.php';
             <i class="fas fa-exclamation-circle"></i> <?php echo $error_msg; ?>
         </div>
         <?php endif; ?>
-        
-        <div class="account-tabs">
-            <button class="tab-btn active" data-tab="profile"><i class="fas fa-id-badge"></i> Profile</button>
-            <button class="tab-btn" data-tab="addresses"><i class="fas fa-address-book"></i> Address Book</button>
-            <button class="tab-btn" data-tab="orders"><i class="fas fa-receipt"></i> Orders</button>
-            <button class="tab-btn" data-tab="franchise"><i class="fas fa-store"></i> Franchise</button>
-            <button class="tab-btn" data-tab="password"><i class="fas fa-lock"></i> Password</button>
-        </div>
-        
-        <div class="tab-content">
-            <!-- Profile Tab -->
-            <div class="tab-pane active" id="profile">
-                <div class="profile-card">
-                    <div class="card-head">
-                        <h2>Profile Information</h2>
-                        <p>Keep your contact details updated for smoother order coordination.</p>
+
+        <div class="account-dashboard-layout">
+            <!-- Left Sidebar Panel -->
+            <aside class="account-sidebar-panel">
+                <div class="user-profile-card">
+                    <div class="user-avatar-wrap">
+                        <div class="user-avatar-badge<?php echo $has_profile_image ? ' has-image' : ''; ?>">
+                            <?php if ($has_profile_image): ?>
+                            <img src="<?php echo htmlspecialchars($profile_image_relative_path); ?>" alt="Profile picture">
+                            <?php else: ?>
+                            <?php echo htmlspecialchars($avatar_initials); ?>
+                            <?php endif; ?>
+                        </div>
                     </div>
-                    <div class="info-callout">
-                        <i class="fas fa-circle-info"></i>
-                        <span>Your contact name and phone number are automatically used for delivery receipts and SMS order notifications.</span>
+                    <h3 class="user-name-display"><?php echo htmlspecialchars($user['full_name'] ?? 'My Account'); ?></h3>
+                    <p class="user-email-display"><?php echo htmlspecialchars($user['email'] ?? ''); ?></p>
+                    <span class="user-role-tag"><i class="fas fa-shield-check"></i> Customer Account</span>
+                </div>
+
+                <nav class="sidebar-nav-menu" aria-label="Account navigation">
+                    <button type="button" class="sidebar-nav-btn tab-btn active" data-tab="profile">
+                        <i class="fas fa-id-badge"></i> <span>Profile Information</span>
+                    </button>
+                    <button type="button" class="sidebar-nav-btn tab-btn" data-tab="addresses">
+                        <i class="fas fa-address-book"></i> <span>Address Book</span>
+                    </button>
+                    <button type="button" class="sidebar-nav-btn tab-btn" data-tab="orders">
+                        <i class="fas fa-receipt"></i> <span>My Orders</span>
+                    </button>
+                    <button type="button" class="sidebar-nav-btn tab-btn" data-tab="franchise">
+                        <i class="fas fa-store"></i> <span>Franchise Application</span>
+                    </button>
+                    <button type="button" class="sidebar-nav-btn tab-btn" data-tab="password">
+                        <i class="fas fa-lock"></i> <span>Security & Password</span>
+                    </button>
+                </nav>
+
+                <div class="sidebar-metrics-card">
+                    <div class="sidebar-metric-item">
+                        <small>Total Orders</small>
+                        <strong><?php echo (int)$order_stats['total_orders']; ?></strong>
                     </div>
-                    <form method="POST" action="" id="profileForm" enctype="multipart/form-data">
-                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($my_account_csrf); ?>">
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="full_name">Full Name</label>
-                                <input type="text" id="full_name" name="full_name" 
-                                    value="<?php echo htmlspecialchars($user['full_name'] ?? ''); ?>" required>
-                                <p class="upload-note">For security, full name updates are limited to once every 7 days.</p>
-                                <?php if ($name_change_hint !== ''): ?>
-                                <p class="upload-note"><?php echo htmlspecialchars($name_change_hint); ?></p>
+                    <div class="sidebar-metric-item">
+                        <small>Active</small>
+                        <strong><?php echo (int)$order_stats['active_orders']; ?></strong>
+                    </div>
+                    <div class="sidebar-metric-item">
+                        <small>Completed</small>
+                        <strong><?php echo (int)$order_stats['completed_orders']; ?></strong>
+                    </div>
+                    <div class="sidebar-metric-item">
+                        <small>Total Spent</small>
+                        <strong>&#8369;<?php echo number_format((float)$order_stats['total_spent'], 0); ?></strong>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Main Workspace Content Area -->
+            <main class="account-workspace-panel">
+                <div class="tab-content">
+                    <!-- Profile Tab -->
+                    <div class="tab-pane active" id="profile">
+                        <div class="profile-card">
+                            <div class="card-head">
+                                <h2>Profile Information</h2>
+                                <p>Keep your contact details updated for smoother order coordination.</p>
+                            </div>
+                            <div class="info-callout">
+                                <i class="fas fa-circle-info"></i>
+                                <span>Your contact name and phone number are automatically used for delivery receipts and SMS order notifications.</span>
+                            </div>
+                            <form method="POST" action="" id="profileForm" enctype="multipart/form-data">
+                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($my_account_csrf); ?>">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="full_name">Full Name</label>
+                                        <input type="text" id="full_name" name="full_name" 
+                                            value="<?php echo htmlspecialchars($user['full_name'] ?? ''); ?>" required>
+                                        <p class="upload-note">For security, full name updates are limited to once every 7 days.</p>
+                                        <?php if ($name_change_hint !== ''): ?>
+                                        <p class="upload-note"><?php echo htmlspecialchars($name_change_hint); ?></p>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="email">Email Address</label>
+                                        <input type="email" id="email" value="<?php echo htmlspecialchars($user['email'] ?? ''); ?>" disabled>
+                                        <p class="upload-note">Email is protected. Contact support or an administrator for email changes.</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="phone">Phone Number</label>
+                                        <input type="tel" id="phone" name="phone" 
+                                            value="<?php echo htmlspecialchars($user['phone'] ?? ''); ?>">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="created_at">Member Since</label>
+                                        <input type="text" id="created_at" value="<?php echo !empty($user['created_at']) ? htmlspecialchars(date('F j, Y', strtotime($user['created_at']))) : '-'; ?>" disabled>
+                                    </div>
+                                </div>
+
+                                <?php if ($is_organization_account): ?>
+                                <div class="form-row">
+                                    <?php if ($business_name_column_exists): ?>
+                                    <div class="form-group">
+                                        <label for="business_name">Business Name</label>
+                                        <input type="text" id="business_name" name="business_name" value="<?php echo htmlspecialchars((string)($user['business_name'] ?? '')); ?>" required>
+                                    </div>
+                                    <?php endif; ?>
+                                    <?php if ($business_type_column_exists): ?>
+                                    <div class="form-group">
+                                        <label for="business_type">Business Type</label>
+                                        <input type="text" id="business_type" name="business_type" value="<?php echo htmlspecialchars((string)($user['business_type'] ?? '')); ?>" placeholder="e.g. Restaurant">
+                                    </div>
+                                    <?php endif; ?>
+                                </div>
                                 <?php endif; ?>
-                            </div>
-                            <div class="form-group">
-                                <label for="email">Email Address</label>
-                                <input type="email" id="email" value="<?php echo htmlspecialchars($user['email'] ?? ''); ?>" disabled>
-                                <p class="upload-note">Email is protected. Contact support or an administrator for email changes.</p>
-                            </div>
-                        </div>
-                        
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="phone">Phone Number</label>
-                                <input type="tel" id="phone" name="phone" 
-                                    value="<?php echo htmlspecialchars($user['phone'] ?? ''); ?>">
-                            </div>
-                            <div class="form-group">
-                                <label for="created_at">Member Since</label>
-                                <input type="text" id="created_at" value="<?php echo !empty($user['created_at']) ? htmlspecialchars(date('F j, Y', strtotime($user['created_at']))) : '-'; ?>" disabled>
-                            </div>
-                        </div>
 
-                        <?php if ($is_organization_account): ?>
-                        <div class="form-row">
-                            <?php if ($business_name_column_exists): ?>
-                            <div class="form-group">
-                                <label for="business_name">Business Name</label>
-                                <input type="text" id="business_name" name="business_name" value="<?php echo htmlspecialchars((string)($user['business_name'] ?? '')); ?>" required>
-                            </div>
-                            <?php endif; ?>
-                            <?php if ($business_type_column_exists): ?>
-                            <div class="form-group">
-                                <label for="business_type">Business Type</label>
-                                <input type="text" id="business_type" name="business_type" value="<?php echo htmlspecialchars((string)($user['business_type'] ?? '')); ?>" placeholder="e.g. Restaurant">
-                            </div>
-                            <?php endif; ?>
-                        </div>
-                        <?php endif; ?>
-
-                        <div class="form-group">
-                            <label for="account_avatar"><?php echo htmlspecialchars($avatar_field_label); ?></label>
-                            <?php if ($avatar_column_exists_for_account): ?>
-                            <div class="profile-upload-row">
-                                <div class="profile-upload-preview" id="profileImagePreview">
-                                    <?php if ($has_profile_image): ?>
-                                    <img src="<?php echo htmlspecialchars($profile_image_relative_path); ?>" alt="Current avatar">
+                                <div class="form-group">
+                                    <label for="account_avatar"><?php echo htmlspecialchars($avatar_field_label); ?></label>
+                                    <?php if ($avatar_column_exists_for_account): ?>
+                                    <div class="profile-upload-row">
+                                        <div class="profile-upload-preview" id="profileImagePreview">
+                                            <?php if ($has_profile_image): ?>
+                                            <img src="<?php echo htmlspecialchars($profile_image_relative_path); ?>" alt="Current avatar">
+                                            <?php else: ?>
+                                            <span><?php echo htmlspecialchars($avatar_initials); ?></span>
+                                            <?php endif; ?>
+                                        </div>
+                                        <div class="profile-upload-fields">
+                                            <input type="file" id="account_avatar" name="account_avatar" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp">
+                                            <p class="upload-note">Accepted formats: JPG, PNG, WEBP. Maximum file size: 5MB.</p>
+                                            <?php if ($has_profile_image): ?>
+                                            <label class="checkbox-label" for="remove_account_avatar">
+                                                <input type="checkbox" name="remove_account_avatar" id="remove_account_avatar" value="1">
+                                                Remove current <?php echo htmlspecialchars(strtolower($avatar_field_label)); ?>
+                                            </label>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
                                     <?php else: ?>
-                                    <span><?php echo htmlspecialchars($avatar_initials); ?></span>
+                                    <p class="upload-note schema-note"><?php echo htmlspecialchars($avatar_field_label); ?> upload needs the latest schema. Run <code>database/schema_updates/run.php</code> once to enable this field.</p>
                                     <?php endif; ?>
                                 </div>
-                                <div class="profile-upload-fields">
-                                    <input type="file" id="account_avatar" name="account_avatar" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp">
-                                    <p class="upload-note">Accepted formats: JPG, PNG, WEBP. Maximum file size: 5MB.</p>
-                                    <?php if ($has_profile_image): ?>
-                                    <label class="checkbox-label" for="remove_account_avatar">
-                                        <input type="checkbox" name="remove_account_avatar" id="remove_account_avatar" value="1">
-                                        Remove current <?php echo htmlspecialchars(strtolower($avatar_field_label)); ?>
-                                    </label>
+                                
+                                <div class="form-group">
+                                    <label for="quick_address_select">Saved Addresses</label>
+                                    <select id="quick_address_select">
+                                        <option value="">Select a saved address...</option>
+                                        <?php if ($current_profile_address !== ''): ?>
+                                        <option value="profile_current" data-address="<?php echo htmlspecialchars($current_profile_address); ?>">
+                                            Current profile address
+                                        </option>
+                                        <?php endif; ?>
+                                        <?php foreach ($quick_saved_addresses as $saved_address): ?>
+                                        <?php
+                                            $saved_label = trim((string)($saved_address['label'] ?? 'Saved Address'));
+                                            if ($saved_label === '') {
+                                                $saved_label = 'Saved Address';
+                                            }
+                                            $saved_full_address = trim((string)($saved_address['full_address'] ?? ''));
+                                            $saved_option_value = 'saved_' . (int)($saved_address['id'] ?? 0);
+                                            $saved_default_tag = !empty($saved_address['is_default']) ? ' (Default)' : '';
+                                        ?>
+                                        <option value="<?php echo htmlspecialchars($saved_option_value); ?>" data-address="<?php echo htmlspecialchars($saved_full_address); ?>">
+                                            <?php echo htmlspecialchars($saved_label . $saved_default_tag . ': ' . $saved_full_address); ?>
+                                        </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <p class="upload-note">Pick a saved address to auto-fill the field below.</p>
+                                    <?php if (empty($quick_saved_addresses)): ?>
+                                    <p class="upload-note">No saved addresses yet. Add one in Address Book.</p>
                                     <?php endif; ?>
                                 </div>
+
+                                <div class="form-group">
+                                    <label for="address">Address</label>
+                                    <textarea id="address" name="address" rows="3"><?php echo htmlspecialchars($user['address'] ?? ''); ?></textarea>
+                                    <p class="inline-action">
+                                        <button type="button" class="btn-outline btn-inline open-tab-trigger" data-target-tab="addresses">
+                                            <i class="fas fa-address-book"></i> Manage Address Book
+                                        </button>
+                                    </p>
+                                </div>
+                                
+                                <!-- Leaflet Pin Location Map -->
+                                <div class="form-group">
+                                    <label>Pin Your Location</label>
+                                    <div id="profileMap" style="height: 300px; width: 100%; border-radius: 16px; border: 1px solid #efddcd; margin-bottom: 8px; z-index: 1;"></div>
+                                    <p class="upload-note">Click or drag on the map to pin your exact location. This helps delivery drivers find you easily.</p>
+                                    <input type="hidden" name="latitude" id="profile_latitude" value="<?php echo htmlspecialchars($user['latitude'] ?? ''); ?>">
+                                    <input type="hidden" name="longitude" id="profile_longitude" value="<?php echo htmlspecialchars($user['longitude'] ?? ''); ?>">
+                                </div>
+                                
+                                <button type="submit" name="update_profile" class="btn-primary">Update Profile</button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Address Book Tab -->
+                    <div class="tab-pane" id="addresses">
+                        <div class="address-book-pane">
+                            <iframe
+                                id="addressBookFrame"
+                                src="my_account_address_book.php?embedded=1"
+                                class="address-book-frame"
+                                title="My Address Book"
+                                loading="lazy"></iframe>
+                        </div>
+                    </div>
+                    
+                    <!-- Orders Tab -->
+                    <div class="tab-pane" id="orders">
+                        <div class="orders-card">
+                            <div class="card-head">
+                                <h2>My Orders</h2>
+                                <p>Review status, amount, and order history in one timeline.</p>
+                            </div>
+                            <div class="info-callout">
+                                <i class="fas fa-truck-fast"></i>
+                                <span>Active orders feature live rider tracking. Click <strong>Track Delivery</strong> to view your rider moving in real-time on the map.</span>
+                            </div>
+                            <?php
+                            // Get user orders
+                            $orders_query = "SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC";
+                            $stmt = mysqli_prepare($conn, $orders_query);
+                            mysqli_stmt_bind_param($stmt, "i", $user_id);
+                            mysqli_stmt_execute($stmt);
+                            $orders_result = mysqli_stmt_get_result($stmt);
+                            
+                            if (mysqli_num_rows($orders_result) > 0): ?>
+                            <div class="orders-list">
+                                <?php while ($order = mysqli_fetch_assoc($orders_result)): 
+                                    $status_clean = strtolower((string)$order['status']);
+                                    $is_active_order = in_array($status_clean, ['assigned', 'picked_up', 'on_the_way', 'arriving', 'pending', 'confirmed', 'preparing'], true);
+                                ?>
+                                <div class="order-item">
+                                    <div class="order-header">
+                                        <div class="order-number"><i class="fas fa-receipt" style="color:#ef6b2e; margin-right:6px;"></i> Order #<?php echo htmlspecialchars($order['order_number']); ?></div>
+                                        <div class="order-date"><i class="far fa-calendar-alt"></i> <?php echo date('M j, Y • g:i A', strtotime($order['created_at'])); ?></div>
+                                    </div>
+                                    <div class="order-details">
+                                        <div class="order-status status-<?php echo $status_clean; ?>">
+                                            <?php if ($is_active_order): ?>
+                                            <span style="display:inline-block; width:7px; height:7px; border-radius:50%; background:#b3261e; animation:blink 1.5s infinite; margin-right:6px;"></span>
+                                            <?php endif; ?>
+                                            <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $order['status']))); ?>
+                                        </div>
+                                        <div class="order-total">&#8369;<?php echo number_format((float)$order['total_amount'], 2); ?></div>
+                                    </div>
+                                    <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:6px;">
+                                        <?php if ($is_active_order): ?>
+                                        <a href="track_order.php?order_id=<?php echo $order['id']; ?>" class="btn-primary" style="padding: 8px 16px; font-size:0.85rem;"><i class="fas fa-motorcycle"></i> Track Delivery</a>
+                                        <?php else: ?>
+                                        <a href="track_order.php?order_id=<?php echo $order['id']; ?>" class="btn-outline" style="padding: 8px 16px; font-size:0.85rem;"><i class="fas fa-eye"></i> View Details</a>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                                <?php endwhile; ?>
                             </div>
                             <?php else: ?>
-                            <p class="upload-note schema-note"><?php echo htmlspecialchars($avatar_field_label); ?> upload needs the latest schema. Run <code>database/schema_updates/run.php</code> once to enable this field.</p>
+                            <div class="empty-state">
+                                <i class="fas fa-shopping-bag"></i>
+                                <p>You haven't placed any orders yet.</p>
+                                <a href="menu.php" class="btn-primary">Order Now</a>
+                            </div>
                             <?php endif; ?>
+                            <?php mysqli_stmt_close($stmt); ?>
                         </div>
-                        
-                        <div class="form-group">
-                            <label for="quick_address_select">Saved Addresses</label>
-                            <select id="quick_address_select">
-                                <option value="">Select a saved address...</option>
-                                <?php if ($current_profile_address !== ''): ?>
-                                <option value="profile_current" data-address="<?php echo htmlspecialchars($current_profile_address); ?>">
-                                    Current profile address
-                                </option>
-                                <?php endif; ?>
-                                <?php foreach ($quick_saved_addresses as $saved_address): ?>
-                                <?php
-                                    $saved_label = trim((string)($saved_address['label'] ?? 'Saved Address'));
-                                    if ($saved_label === '') {
-                                        $saved_label = 'Saved Address';
-                                    }
-                                    $saved_full_address = trim((string)($saved_address['full_address'] ?? ''));
-                                    $saved_option_value = 'saved_' . (int)($saved_address['id'] ?? 0);
-                                    $saved_default_tag = !empty($saved_address['is_default']) ? ' (Default)' : '';
-                                ?>
-                                <option value="<?php echo htmlspecialchars($saved_option_value); ?>" data-address="<?php echo htmlspecialchars($saved_full_address); ?>">
-                                    <?php echo htmlspecialchars($saved_label . $saved_default_tag . ': ' . $saved_full_address); ?>
-                                </option>
-                                <?php endforeach; ?>
-                            </select>
-                            <p class="upload-note">Pick a saved address to auto-fill the field below.</p>
-                            <?php if (empty($quick_saved_addresses)): ?>
-                            <p class="upload-note">No saved addresses yet. Add one in Address Book.</p>
-                            <?php endif; ?>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="address">Address</label>
-                            <textarea id="address" name="address" rows="3"><?php echo htmlspecialchars($user['address'] ?? ''); ?></textarea>
-                            <p class="inline-action">
-                                <button type="button" class="btn-outline btn-inline open-tab-trigger" data-target-tab="addresses">
-                                    <i class="fas fa-address-book"></i> Manage Address Book
-                                </button>
-                            </p>
-                        </div>
-                        
-                        <!-- Leaflet Pin Location Map -->
-                        <div class="form-group">
-                            <label>Pin Your Location</label>
-                            <div id="profileMap" style="height: 300px; width: 100%; border-radius: 8px; border: 1px solid #efddcd; margin-bottom: 8px; z-index: 1;"></div>
-                            <p class="upload-note">Click or drag on the map to pin your exact location. This helps delivery drivers find you easily.</p>
-                            <input type="hidden" name="latitude" id="profile_latitude" value="<?php echo htmlspecialchars($user['latitude'] ?? ''); ?>">
-                            <input type="hidden" name="longitude" id="profile_longitude" value="<?php echo htmlspecialchars($user['longitude'] ?? ''); ?>">
-                        </div>
-                        
-                        <button type="submit" name="update_profile" class="btn-primary">Update Profile</button>
-                    </form>
-                </div>
-            </div>
-
-            <!-- Address Book Tab -->
-            <div class="tab-pane" id="addresses">
-                <div class="address-book-pane">
-                    <iframe
-                        id="addressBookFrame"
-                        src="my_account_address_book.php?embedded=1"
-                        class="address-book-frame"
-                        title="My Address Book"
-                        loading="lazy"></iframe>
-                </div>
-            </div>
-            
-            <!-- Orders Tab -->
-            <div class="tab-pane" id="orders">
-                <div class="orders-card">
-                    <div class="card-head">
-                        <h2>My Orders</h2>
-                        <p>Review status, amount, and order history in one timeline.</p>
-                    </div>
-                    <div class="info-callout">
-                        <i class="fas fa-truck-fast"></i>
-                        <span>Active orders feature live rider tracking. Click <strong>Track Delivery</strong> to view your rider moving in real-time on the map.</span>
-                    </div>
-                    <?php
-                    // Get user orders
-                    $orders_query = "SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC";
-                    $stmt = mysqli_prepare($conn, $orders_query);
-                    mysqli_stmt_bind_param($stmt, "i", $user_id);
-                    mysqli_stmt_execute($stmt);
-                    $orders_result = mysqli_stmt_get_result($stmt);
-                    
-                    if (mysqli_num_rows($orders_result) > 0): ?>
-                    <div class="orders-list">
-                        <?php while ($order = mysqli_fetch_assoc($orders_result)): 
-                            $status_clean = strtolower((string)$order['status']);
-                            $is_active_order = in_array($status_clean, ['assigned', 'picked_up', 'on_the_way', 'arriving', 'pending', 'confirmed', 'preparing'], true);
-                        ?>
-                        <div class="order-item">
-                            <div class="order-header">
-                                <div class="order-number"><i class="fas fa-receipt" style="color:#ef6b2e; margin-right:6px;"></i> Order #<?php echo htmlspecialchars($order['order_number']); ?></div>
-                                <div class="order-date"><i class="far fa-calendar-alt"></i> <?php echo date('M j, Y • g:i A', strtotime($order['created_at'])); ?></div>
-                            </div>
-                            <div class="order-details">
-                                <div class="order-status status-<?php echo $status_clean; ?>">
-                                    <?php if ($is_active_order): ?>
-                                    <span style="display:inline-block; width:7px; height:7px; border-radius:50%; background:#b3261e; animation:blink 1.5s infinite; margin-right:6px;"></span>
-                                    <?php endif; ?>
-                                    <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $order['status']))); ?>
-                                </div>
-                                <div class="order-total">&#8369;<?php echo number_format((float)$order['total_amount'], 2); ?></div>
-                            </div>
-                            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:6px;">
-                                <?php if ($is_active_order): ?>
-                                <a href="track_order.php?order_id=<?php echo $order['id']; ?>" class="btn-primary" style="padding: 8px 16px; font-size:0.85rem;"><i class="fas fa-motorcycle"></i> Track Delivery</a>
-                                <?php else: ?>
-                                <a href="track_order.php?order_id=<?php echo $order['id']; ?>" class="btn-outline" style="padding: 8px 16px; font-size:0.85rem;"><i class="fas fa-eye"></i> View Details</a>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                        <?php endwhile; ?>
-                    </div>
-                    <?php else: ?>
-                    <div class="empty-state">
-                        <i class="fas fa-shopping-bag"></i>
-                        <p>You haven't placed any orders yet.</p>
-                        <a href="menu.php" class="btn-primary">Order Now</a>
-                    </div>
-                    <?php endif; ?>
-                    <?php mysqli_stmt_close($stmt); ?>
-                </div>
-            </div>
-            
-            <!-- Franchise Tab -->
-            <div class="tab-pane" id="franchise">
-                <div class="franchise-card">
-                    <div class="card-head">
-                        <h2>Franchise Application</h2>
-                        <p>Track your business application status and next available actions.</p>
                     </div>
                     
-                    <?php if ($franchise): ?>
-                    <div class="application-status">
-                        <h3>Application Status</h3>
-                        <div class="status-card status-<?php echo $franchise['status']; ?>">
-                            <div class="status-header">
-                                <h4>Application #<?php echo $franchise['application_number']; ?></h4>
-                                <span class="status-badge"><?php echo ucfirst($franchise['status']); ?></span>
+                    <!-- Franchise Tab -->
+                    <div class="tab-pane" id="franchise">
+                        <div class="franchise-card">
+                            <div class="card-head">
+                                <h2>Franchise Application</h2>
+                                <p>Track your business application status and next available actions.</p>
                             </div>
-                            <p>Submitted on: <?php echo date('F j, Y, g:i a', strtotime($franchise['created_at'])); ?></p>
                             
-                            <?php if ($franchise['status'] == 'approved'): ?>
-                            <div class="status-message success">
-                                <i class="fas fa-check-circle"></i>
-                                <p>Congratulations! Your franchise application has been approved.</p>
+                            <?php if ($franchise): ?>
+                            <div class="application-status">
+                                <h3>Application Status</h3>
+                                <div class="status-card status-<?php echo $franchise['status']; ?>">
+                                    <div class="status-header">
+                                        <h4>Application #<?php echo $franchise['application_number']; ?></h4>
+                                        <span class="status-badge"><?php echo ucfirst($franchise['status']); ?></span>
+                                    </div>
+                                    <p>Submitted on: <?php echo date('F j, Y, g:i a', strtotime($franchise['created_at'])); ?></p>
+                                    
+                                    <?php if ($franchise['status'] == 'approved'): ?>
+                                    <div class="status-message success">
+                                        <i class="fas fa-check-circle"></i>
+                                        <p>Congratulations! Your franchise application has been approved.</p>
+                                    </div>
+                                    <div class="status-actions">
+                                        <a href="seller_products.php" class="btn-primary">
+                                            <i class="fas fa-box"></i> Manage My Products
+                                        </a>
+                                        <a href="locations.php" class="btn-outline">
+                                            <i class="fas fa-map-marker-alt"></i> View Store In Locations
+                                        </a>
+                                    </div>
+                                    <?php elseif ($franchise['status'] == 'rejected'): ?>
+                                    <div class="status-message error">
+                                        <i class="fas fa-times-circle"></i>
+                                        <p>Your application has been rejected. Reason: <?php echo htmlspecialchars($franchise['admin_notes']); ?></p>
+                                    </div>
+                                    <?php elseif ($franchise['status'] == 'pending'): ?>
+                                    <div class="status-message info">
+                                        <i class="fas fa-clock"></i>
+                                        <p>Your application is under review. We'll notify you once it's processed.</p>
+                                    </div>
+                                    <?php endif; ?>
+                                </div>
+                                
+                                <?php if ($franchise['status'] != 'pending'): ?>
+                                <a href="franchise_application.php" class="btn-primary">Apply Again</a>
+                                <?php endif; ?>
                             </div>
-                            <div class="status-actions">
-                                <a href="seller_products.php" class="btn-primary">
-                                    <i class="fas fa-box"></i> Manage My Products
+                            <?php else: ?>
+                            <div class="application-guide">
+                                <h3>Apply for a Lechon Delights Franchise</h3>
+                                <p>Want to own and operate your own Lechon Delights store? Fill out our franchise application form.</p>
+                                
+                                <div class="requirements-list">
+                                    <h4>Requirements:</h4>
+                                    <ol>
+                                        <li>Business Registration (DTI/SEC)</li>
+                                        <li>Local Permits (Barangay Clearance & Mayor's Permit)</li>
+                                        <li>BIR Registration</li>
+                                        <li>Sanitary Permit</li>
+                                        <li>Business Bank Account</li>
+                                    </ol>
+                                </div>
+                                
+                                <a href="franchise_application.php" class="btn-primary btn-large">
+                                    <i class="fas fa-store"></i> Start Franchise Application
                                 </a>
-                                <a href="locations.php" class="btn-outline">
-                                    <i class="fas fa-map-marker-alt"></i> View Store In Locations
-                                </a>
-                            </div>
-                            <?php elseif ($franchise['status'] == 'rejected'): ?>
-                            <div class="status-message error">
-                                <i class="fas fa-times-circle"></i>
-                                <p>Your application has been rejected. Reason: <?php echo htmlspecialchars($franchise['admin_notes']); ?></p>
-                            </div>
-                            <?php elseif ($franchise['status'] == 'pending'): ?>
-                            <div class="status-message info">
-                                <i class="fas fa-clock"></i>
-                                <p>Your application is under review. We'll notify you once it's processed.</p>
                             </div>
                             <?php endif; ?>
                         </div>
-                        
-                        <?php if ($franchise['status'] != 'pending'): ?>
-                        <a href="franchise_application.php" class="btn-primary">Apply Again</a>
-                        <?php endif; ?>
                     </div>
-                    <?php else: ?>
-                    <div class="application-guide">
-                        <h3>Apply for a Lechon Delights Franchise</h3>
-                        <p>Want to own and operate your own Lechon Delights store? Fill out our franchise application form.</p>
-                        
-                        <div class="requirements-list">
-                            <h4>Requirements:</h4>
-                            <ol>
-                                <li>Business Registration (DTI/SEC)</li>
-                                <li>Local Permits (Barangay Clearance & Mayor's Permit)</li>
-                                <li>BIR Registration</li>
-                                <li>Sanitary Permit</li>
-                                <li>Business Bank Account</li>
-                            </ol>
-                        </div>
-                        
-                        <a href="franchise_application.php" class="btn-primary btn-large">
-                            <i class="fas fa-store"></i> Start Franchise Application
-                        </a>
-                    </div>
-                    <?php endif; ?>
-                </div>
-            </div>
-            
-            <!-- Password Tab -->
-            <div class="tab-pane" id="password">
-                <div class="password-card">
-                    <div class="card-head">
-                        <h2>Change Password</h2>
-                        <p>Use a strong password with uppercase, lowercase, number, and symbol.</p>
-                        <?php if ($password_change_hint !== ''): ?>
-                        <p class="upload-note"><?php echo htmlspecialchars($password_change_hint); ?></p>
-                        <?php endif; ?>
-                    </div>
-                    <div class="info-callout">
-                        <i class="fas fa-shield-halved"></i>
-                        <span>For account security, password updates require your current password and trigger a 7-day cooldown lock.</span>
-                    </div>
-                    <form method="POST" action="" id="passwordForm">
-                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($my_account_csrf); ?>">
-                        <div class="form-group">
-                            <label for="current_password">Current Password</label>
-                            <input type="password" id="current_password" name="current_password" required <?php echo $password_change_blocked ? 'disabled' : ''; ?>>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="new_password">New Password</label>
-                            <input type="password" id="new_password" name="new_password" required minlength="8" <?php echo $password_change_blocked ? 'disabled' : ''; ?>>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="confirm_password">Confirm New Password</label>
-                            <input type="password" id="confirm_password" name="confirm_password" required minlength="8" <?php echo $password_change_blocked ? 'disabled' : ''; ?>>
-                        </div>
-                        
-                        <div class="password-strength">
-                            <span>Password strength:</span>
-                            <div class="strength-bars">
-                                <div class="strength-bar" id="strengthBar1"></div>
-                                <div class="strength-bar" id="strengthBar2"></div>
-                                <div class="strength-bar" id="strengthBar3"></div>
-                                <div class="strength-bar" id="strengthBar4"></div>
+                    
+                    <!-- Password Tab -->
+                    <div class="tab-pane" id="password">
+                        <div class="password-card">
+                            <div class="card-head">
+                                <h2>Change Password</h2>
+                                <p>Use a strong password with uppercase, lowercase, number, and symbol.</p>
+                                <?php if ($password_change_hint !== ''): ?>
+                                <p class="upload-note"><?php echo htmlspecialchars($password_change_hint); ?></p>
+                                <?php endif; ?>
                             </div>
+                            <div class="info-callout">
+                                <i class="fas fa-shield-halved"></i>
+                                <span>For account security, password updates require your current password and trigger a 7-day cooldown lock.</span>
+                            </div>
+                            <form method="POST" action="" id="passwordForm">
+                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($my_account_csrf); ?>">
+                                <div class="form-group">
+                                    <label for="current_password">Current Password</label>
+                                    <input type="password" id="current_password" name="current_password" required <?php echo $password_change_blocked ? 'disabled' : ''; ?>>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="new_password">New Password</label>
+                                    <input type="password" id="new_password" name="new_password" required minlength="8" <?php echo $password_change_blocked ? 'disabled' : ''; ?>>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="confirm_password">Confirm New Password</label>
+                                    <input type="password" id="confirm_password" name="confirm_password" required minlength="8" <?php echo $password_change_blocked ? 'disabled' : ''; ?>>
+                                </div>
+                                
+                                <div class="password-strength">
+                                    <span>Password strength:</span>
+                                    <div class="strength-bars">
+                                        <div class="strength-bar" id="strengthBar1"></div>
+                                        <div class="strength-bar" id="strengthBar2"></div>
+                                        <div class="strength-bar" id="strengthBar3"></div>
+                                        <div class="strength-bar" id="strengthBar4"></div>
+                                    </div>
+                                </div>
+                                
+                                <button type="submit" name="change_password" class="btn-primary" <?php echo $password_change_blocked ? 'disabled' : ''; ?>>
+                                    <?php echo $password_change_blocked ? 'Password Cooldown Active' : 'Change Password'; ?>
+                                </button>
+                            </form>
                         </div>
-                        
-                        <button type="submit" name="change_password" class="btn-primary" <?php echo $password_change_blocked ? 'disabled' : ''; ?>>
-                            <?php echo $password_change_blocked ? 'Password Cooldown Active' : 'Change Password'; ?>
-                        </button>
-                    </form>
+                    </div>
                 </div>
-            </div>
+            </main>
         </div>
 
         <nav class="mobile-tab-bar" aria-label="Account sections">
