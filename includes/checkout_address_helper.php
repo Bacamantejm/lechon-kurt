@@ -292,3 +292,24 @@ if (!function_exists('caEnsureDefaultUserProfileAddress')) {
         );
     }
 }
+
+if (!function_exists('caDeleteUserSavedAddress')) {
+    function caDeleteUserSavedAddress($conn, $user_id, $address_id) {
+        $user_id = (int)$user_id;
+        $address_id = (int)$address_id;
+        if (!($conn instanceof mysqli) || $user_id <= 0 || $address_id <= 0) {
+            return ['success' => false, 'message' => 'Invalid parameters.'];
+        }
+        $stmt = mysqli_prepare($conn, "DELETE FROM user_saved_addresses WHERE id = ? AND user_id = ?");
+        if (!$stmt) {
+            return ['success' => false, 'message' => 'Failed to prepare delete query.'];
+        }
+        mysqli_stmt_bind_param($stmt, "ii", $address_id, $user_id);
+        $executed = mysqli_stmt_execute($stmt);
+        mysqli_stmt_close($stmt);
+        if ($executed) {
+            return ['success' => true, 'message' => 'Address removed successfully.'];
+        }
+        return ['success' => false, 'message' => 'Failed to remove address.'];
+    }
+}

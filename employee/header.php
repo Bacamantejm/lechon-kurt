@@ -23,87 +23,130 @@ if (isset($_SESSION['user_id']) && function_exists('hrIsLogisticsEmployeeByUserI
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Employee Dashboard</title>
+    <title>Employee Portal | Lechon Delights</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
-            --primary-color: #c62828;
-            --primary-dark: #b71c1c;
-            --secondary-color: #ff9800;
-            --dark-color: #333333;
-            --light-color: #f8f9fa;
-            --text-color: #555555;
-            --border-color: #e0e0e0;
-            --shadow: 0 5px 15px rgba(0,0,0,0.08);
-            --shadow-hover: 0 10px 30px rgba(0,0,0,0.12);
-            --transition: all 0.3s ease;
+            --food-red: #b3261e;
+            --food-red-dark: #8f1d17;
+            --food-orange: #ef6b2e;
+            --food-ink: #171922;
+            --food-cream: #fff9f2;
+            --food-border: #efddcd;
+            --food-muted: #7b6d64;
+            --food-shadow: 0 10px 28px rgba(42, 33, 29, 0.06);
+
+            --primary-color: #b3261e;
+            --primary-dark: #8f1d17;
+            --secondary-color: #ef6b2e;
+            --dark-color: #171922;
+            --light-color: #fff9f2;
+            --text-color: #2a211d;
+            --border-color: #efddcd;
+            --shadow: 0 8px 24px rgba(42, 33, 29, 0.06);
+            --shadow-hover: 0 14px 32px rgba(42, 33, 29, 0.12);
+            --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
             --sidebar-width: 260px;
-            --bg-color-dark: #1a1a1a;
-            --text-color-dark: #e0e0e0;
-            --card-bg-dark: #2d2d2d;
-            --border-color-dark: #404040;
+            --bg-color-dark: #121319;
+            --text-color-dark: #e2e8f0;
+            --card-bg-dark: #1e2029;
+            --border-color-dark: #2d303e;
         }
 
         body { 
-            font-family: 'Poppins', sans-serif;
-            background-color: #f3f4f6; 
+            font-family: 'Plus Jakarta Sans', 'Segoe UI', sans-serif;
+            background-color: #fcf8f4; 
             color: var(--text-color);
             overflow-x: hidden;
+            line-height: 1.5;
+        }
+
+        h1, h2, h3, h4, h5, h6, .font-heading {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 700;
         }
 
         .admin-container {
             display: flex;
         }
 
+        /* Sidebar Styling */
         .admin-sidebar {
             height: 100vh;
             position: fixed;
             top: 0;
             left: 0;
             width: var(--sidebar-width);
-            background: linear-gradient(180deg, #333 0%, #1a1a1a 100%);
-            color: #fff;
+            background: #171922;
+            color: #ffffff;
             transition: var(--transition);
             z-index: 1000;
-            box-shadow: 4px 0 10px rgba(0,0,0,0.1);
+            box-shadow: 4px 0 20px rgba(0,0,0,0.12);
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #2a2d3a;
         }
 
         .admin-sidebar h3 {
-            padding: 20px;
-            text-align: center;
-            font-weight: 700;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-            margin-bottom: 20px;
-            color: #fff;
-            font-size: 1.4rem;
+            padding: 24px 20px;
+            text-align: left;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 800;
+            margin-bottom: 10px;
+            color: #ffffff;
+            font-size: 1.35rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 1px solid #2a2d3a;
+        }
+
+        .admin-sidebar h3 i {
+            color: var(--food-orange);
+            font-size: 1.25rem;
+        }
+
+        .sidebar-nav-list {
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
         }
 
         .admin-sidebar a {
-            padding: 15px 25px;
+            padding: 12px 18px;
             text-decoration: none;
-            font-size: 1rem;
-            color: rgba(255,255,255,0.8);
-            display: block;
+            font-size: 0.92rem;
+            color: rgba(255,255,255,0.75);
+            display: flex;
+            align-items: center;
+            gap: 12px;
             transition: var(--transition);
-            border-left: 4px solid transparent;
-            font-weight: 500;
+            border-radius: 12px;
+            font-weight: 600;
         }
 
-        .admin-sidebar a:hover, .admin-sidebar a.active {
-            color: #fff;
-            background-color: rgba(255,255,255,0.1);
-            border-left-color: var(--primary-color);
-            padding-left: 30px;
+        .admin-sidebar a:hover {
+            color: #ffffff;
+            background-color: rgba(255,255,255,0.08);
+            transform: translateX(3px);
+        }
+
+        .admin-sidebar a.active {
+            color: #ffffff;
+            background: linear-gradient(135deg, #b3261e 0%, #ef6b2e 100%);
+            box-shadow: 0 6px 16px rgba(179, 38, 30, 0.35);
         }
 
         .admin-sidebar i {
-            width: 30px;
+            width: 22px;
             text-align: center;
-            margin-right: 10px;
+            font-size: 1rem;
         }
 
+        /* Content & Topbar */
         .admin-content {
             margin-left: var(--sidebar-width);
             transition: var(--transition);
@@ -111,12 +154,14 @@ if (isset($_SESSION['user_id']) && function_exists('hrIsLogisticsEmployeeByUserI
             display: flex;
             flex-direction: column;
             width: calc(100% - var(--sidebar-width));
+            background-color: #fcf8f4;
         }
 
         .admin-topbar {
-            background-color: #fff;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-            padding: 15px 30px;
+            background-color: #ffffff;
+            border-bottom: 1px solid var(--food-border);
+            box-shadow: 0 4px 16px rgba(42, 33, 29, 0.03);
+            padding: 14px 32px;
             position: sticky;
             top: 0;
             z-index: 999;
@@ -130,137 +175,156 @@ if (isset($_SESSION['user_id']) && function_exists('hrIsLogisticsEmployeeByUserI
         }
         
         .topbar-title h1 {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--dark-color);
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.45rem;
+            font-weight: 800;
+            color: var(--food-ink);
             margin: 0;
         }
 
         .topbar-right {
             display: flex;
             align-items: center;
-            gap: 15px;
+            gap: 16px;
         }
 
         .admin-profile {
             display: flex;
             align-items: center;
             gap: 10px;
-            font-weight: 500;
-            color: var(--dark-color);
+            font-weight: 700;
+            color: var(--food-ink);
+            font-size: 0.92rem;
+            background: #fff9f2;
+            padding: 6px 14px;
+            border-radius: 999px;
+            border: 1px solid var(--food-border);
         }
 
         .admin-profile i {
-            font-size: 1.8rem;
-            color: var(--dark-color);
+            font-size: 1.25rem;
+            color: var(--food-red);
         }
 
         .admin-main {
-            padding: 30px;
+            padding: 32px;
             flex-grow: 1;
-            animation: fadeIn 0.6s ease-in-out;
+            animation: fadeIn 0.4s ease-out;
         }
 
         .dashboard-header {
-            margin-bottom: 30px;
+            margin-bottom: 28px;
         }
 
         .dashboard-header h2 {
-            color: var(--dark-color);
-            font-weight: 700;
-            margin-bottom: 5px;
+            font-family: 'Outfit', sans-serif;
+            color: var(--food-ink);
+            font-weight: 800;
+            margin-bottom: 6px;
+            font-size: 1.75rem;
         }
         
         .dashboard-header p {
-            color: #666;
+            color: var(--food-muted);
+            margin: 0;
+            font-size: 0.95rem;
         }
 
+        /* Stat Cards */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
             gap: 20px;
-            margin-bottom: 30px;
+            margin-bottom: 32px;
         }
 
         .stat-card {
-            background: #fff;
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+            background: #ffffff;
+            border-radius: 18px;
+            padding: 22px;
+            border: 1px solid var(--food-border);
+            box-shadow: var(--food-shadow);
             transition: var(--transition);
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            position: relative; /* For pseudo-elements if needed */
+            position: relative;
             overflow: hidden;
             text-decoration: none !important;
             color: inherit;
-            border: none;
         }
 
         .stat-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-hover);
+            border-color: var(--food-red);
         }
 
         .stat-icon {
-            width: 60px;
-            height: 60px;
-            border-radius: 15px;
+            width: 52px;
+            height: 52px;
+            border-radius: 14px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.8rem;
-            margin-bottom: 20px;
+            font-size: 1.4rem;
+            margin-bottom: 16px;
         }
 
         .stat-content h3 {
-            font-size: 1.5rem;
-            font-weight: 700;
-            margin-bottom: 5px;
-            color: var(--dark-color);
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 800;
+            margin-bottom: 4px;
+            color: var(--food-ink);
         }
 
         .stat-content p {
-            color: #888;
+            color: var(--food-muted);
             margin: 0;
-            font-size: 1rem;
-            font-weight: 500;
+            font-size: 0.88rem;
+            font-weight: 600;
         }
 
         .stat-value {
-            margin-top: 15px;
-            font-weight: 600;
-            font-size: 0.95rem;
+            margin-top: 16px;
+            font-weight: 700;
+            font-size: 0.86rem;
             display: flex;
             align-items: center;
-            color: var(--primary-color);
+            gap: 6px;
+            color: var(--food-red);
         }
         
         .stat-value i {
-            margin-left: 5px;
             transition: var(--transition);
+            font-size: 0.8rem;
         }
         .stat-card:hover .stat-value i {
-            margin-left: 10px;
+            transform: translateX(4px);
         }
 
         /* Recent Section / Tables */
         .recent-section {
-            background-color: #fff;
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
-            margin-bottom: 30px;
+            background-color: #ffffff;
+            border-radius: 20px;
+            padding: 28px;
+            border: 1px solid var(--food-border);
+            box-shadow: var(--food-shadow);
+            margin-bottom: 32px;
         }
 
         .recent-section h3 {
-            font-size: 1.2rem;
-            font-weight: 700;
-            margin-bottom: 25px;
-            color: var(--primary-color);
-            border-bottom: 1px solid #eee;
-            padding-bottom: 15px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.25rem;
+            font-weight: 800;
+            margin-bottom: 20px;
+            color: var(--food-ink);
+            border-bottom: 1px solid var(--food-border);
+            padding-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
         .admin-table {
@@ -270,21 +334,24 @@ if (isset($_SESSION['user_id']) && function_exists('hrIsLogisticsEmployeeByUserI
         }
 
         .admin-table th {
-            background-color: #f8f9fc;
-            color: var(--dark-color);
-            font-weight: 600;
-            padding: 15px;
+            background-color: #fffdfb;
+            color: var(--food-ink);
+            font-family: 'Outfit', sans-serif;
+            font-weight: 700;
+            padding: 14px 16px;
             text-align: left;
-            border-bottom: 2px solid #e3e6f0;
+            border-bottom: 1px solid var(--food-border);
             text-transform: uppercase;
-            font-size: 0.85rem;
+            font-size: 0.78rem;
             letter-spacing: 0.05em;
         }
 
         .admin-table td {
-            padding: 15px;
-            border-bottom: 1px solid #e3e6f0;
+            padding: 14px 16px;
+            border-bottom: 1px solid #f3e8de;
             vertical-align: middle;
+            font-size: 0.92rem;
+            color: #2a211d;
         }
 
         .admin-table tr:last-child td {
@@ -292,124 +359,129 @@ if (isset($_SESSION['user_id']) && function_exists('hrIsLogisticsEmployeeByUserI
         }
         
         .admin-table tr:hover td {
-            background-color: #f8f9fc;
+            background-color: #fff9f2;
         }
 
         .status-badge {
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 999px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
         }
 
-        .badge-pending { background-color: #fff3cd; color: #856404; }
-        .badge-approved { background-color: #d4edda; color: #155724; }
-        .badge-rejected { background-color: #f8d7da; color: #721c24; }
-        .badge-info { background-color: #d1ecf1; color: #0c5460; }
+        .badge-pending { background-color: #fff8ef; color: #b45309; border: 1px solid #fef3c7; }
+        .badge-approved { background-color: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+        .badge-rejected { background-color: #fff1f2; color: #b3261e; border: 1px solid #fecdd3; }
+        .badge-info { background-color: #f0f9ff; color: #0369a1; border: 1px solid #bae6fd; }
         
         .theme-toggler {
-            background: none;
-            border: none;
-            color: #666;
-            font-size: 1.2rem;
+            background: #fff9f2;
+            border: 1px solid var(--food-border);
+            color: var(--food-ink);
+            font-size: 1rem;
             cursor: pointer;
-            margin: 0 15px;
-            padding: 5px;
-            transition: color 0.3s;
+            width: 38px;
+            height: 38px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+        }
+
+        .theme-toggler:hover {
+            background: var(--food-cream);
+            color: var(--food-red);
         }
 
         /* Notification styles */
         .notification-wrapper {
             position: relative;
-            margin-right: 10px;
         }
         #notificationBell {
             position: relative;
         }
         #notificationBell .badge {
             position: absolute;
-            top: 0px;
-            right: 0px;
-            padding: 2px 5px;
+            top: -3px;
+            right: -3px;
+            padding: 3px 6px;
             border-radius: 50%;
             font-size: 10px;
-            display: none; /* Hidden by default */
-            border: 1px solid white;
+            display: none;
+            border: 2px solid white;
+            background-color: var(--food-red) !important;
         }
         .notification-dropdown {
             position: absolute;
             top: 120%;
             right: 0;
             width: 350px;
-            background-color: #fff;
-            border-radius: 8px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            background-color: #ffffff;
+            border-radius: 16px;
+            border: 1px solid var(--food-border);
+            box-shadow: var(--shadow-hover);
             display: none;
             z-index: 1001;
             overflow: hidden;
         }
-        body.dark-mode .notification-dropdown { background-color: #2d2d2d; }
+        body.dark-mode .notification-dropdown { background-color: #1e2029; border-color: var(--border-color-dark); }
         .notification-header, .notification-footer {
-            padding: 10px 15px;
+            padding: 12px 18px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            background-color: #f8f9fa;
+            background-color: #fff9f2;
+            border-bottom: 1px solid var(--food-border);
         }
-        body.dark-mode .notification-header, body.dark-mode .notification-footer { background-color: #333; }
-        .notification-header span { font-weight: 600; }
-        .notification-header a, .notification-footer a { font-size: 12px; text-decoration: none; }
+        body.dark-mode .notification-header, body.dark-mode .notification-footer { background-color: #272a37; border-color: var(--border-color-dark); }
+        .notification-header span { font-weight: 700; font-size: 0.92rem; color: var(--food-ink); }
+        .notification-header a, .notification-footer a { font-size: 12px; text-decoration: none; color: var(--food-red); font-weight: 700; }
         .notification-list { max-height: 300px; overflow-y: auto; }
-        .notification-item { display: flex; padding: 15px; border-bottom: 1px solid #eee; cursor: pointer; transition: background-color 0.2s; }
-        body.dark-mode .notification-item { border-bottom-color: #444; }
-        .notification-item:hover { background-color: #f8f9fa; }
-        body.dark-mode .notification-item:hover { background-color: #333; }
-        .notification-item.unread { background-color: #e3f2fd; }
-        body.dark-mode .notification-item.unread { background-color: #3a4a5a; }
-        .notification-item .icon { font-size: 1.2rem; width: 40px; text-align: center; margin-right: 15px; }
-        .notification-item .content .title { font-weight: 600; font-size: 14px; margin-bottom: 3px; }
+        .notification-item { display: flex; padding: 15px; border-bottom: 1px solid #f3e8de; cursor: pointer; transition: background-color 0.2s; }
+        body.dark-mode .notification-item { border-bottom-color: #2d303e; }
+        .notification-item:hover { background-color: #fff9f2; }
+        body.dark-mode .notification-item:hover { background-color: #272a37; }
+        .notification-item.unread { background-color: #fff5ea; }
+        body.dark-mode .notification-item.unread { background-color: #2d303e; }
+        .notification-item .icon { font-size: 1.2rem; width: 40px; text-align: center; margin-right: 15px; color: var(--food-red); }
+        .notification-item .content .title { font-weight: 700; font-size: 14px; margin-bottom: 3px; color: var(--food-ink); }
         .notification-item .content .message {
             font-size: 13px;
-            color: #666;
+            color: var(--food-muted);
             line-height: 1.4;
             white-space: normal;
             word-wrap: break-word;
         }
-        body.dark-mode .notification-item .content .message { color: #ccc; }
+        body.dark-mode .notification-item .content .message { color: #cbd5e1; }
         .notification-item .content .time { font-size: 11px; color: #999; margin-top: 5px; }
 
-    </style>
-    <style>
         /* Dark Mode Styles */
         body.dark-mode { background-color: var(--bg-color-dark) !important; color: var(--text-color-dark) !important; }
         body.dark-mode .admin-content { background-color: var(--bg-color-dark) !important; }
-        body.dark-mode .admin-sidebar { background: linear-gradient(180deg, #2d2d2d 0%, #1a1a1a 100%); }
+        body.dark-mode .admin-sidebar { background: #121319; border-color: #272a37; }
         body.dark-mode .admin-topbar, body.dark-mode .stat-card, body.dark-mode .recent-section, body.dark-mode .card, body.dark-mode .card-body, body.dark-mode .card-header { background-color: var(--card-bg-dark) !important; color: var(--text-color-dark) !important; border-color: var(--border-color-dark) !important; }
         body.dark-mode h1, body.dark-mode h2, body.dark-mode h3, body.dark-mode h4, body.dark-mode .topbar-title h1, body.dark-mode .stat-content h3, body.dark-mode .admin-profile span { color: var(--text-color-dark) !important; }
-        body.dark-mode .admin-table th { background-color: #333; color: #fff; border-color: var(--border-color-dark); }
-        body.dark-mode .admin-table td { border-color: var(--border-color-dark); }
-        body.dark-mode .admin-table tr:hover td { background-color: #3d3d3d; }
-        body.dark-mode .theme-toggler { color: #ffc107; }
-        body.dark-mode .admin-profile i { color: #ffc107; }
-        body.dark-mode .text-muted { color: #b0b0b0 !important; }
-        body.dark-mode .form-control, body.dark-mode .form-select { background-color: #333; color: #fff; border-color: #555; }
-        body.dark-mode .form-control:focus, body.dark-mode .form-select:focus { background-color: #444; }
-        body.dark-mode .modal-content { background-color: var(--card-bg-dark); }
-        body.dark-mode .modal-header, body.dark-mode .modal-footer { border-color: var(--border-color-dark); }
-        body.dark-mode .btn-close { filter: invert(1); }
+        body.dark-mode .admin-profile { background: #272a37; border-color: #373a4b; color: #fff; }
+        body.dark-mode .admin-table th { background-color: #272a37; color: #fff; border-color: var(--border-color-dark); }
+        body.dark-mode .admin-table td { border-color: var(--border-color-dark); color: #e2e8f0; }
+        body.dark-mode .admin-table tr:hover td { background-color: #272a37; }
+        body.dark-mode .theme-toggler { background: #272a37; color: #ffc107; border-color: #373a4b; }
 
         /* Page Loader */
-        .page-loader { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #fff; z-index: 9999; display: flex; align-items: center; justify-content: center; transition: opacity 0.5s ease; }
+        .page-loader { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #ffffff; z-index: 9999; display: flex; align-items: center; justify-content: center; transition: opacity 0.5s ease; }
         body.dark-mode .page-loader { background: var(--bg-color-dark); }
-        .spinner { width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid var(--primary-color); border-radius: 50%; animation: spin 1s linear infinite; }
+        .spinner { width: 44px; height: 44px; border: 4px solid #f3e8de; border-top: 4px solid var(--food-red); border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
         /* Sidebar Toggler */
-        .sidebar-toggler { background: none; border: none; font-size: 1.2rem; color: #666; cursor: pointer; display: none; }
-        body.dark-mode .sidebar-toggler { color: #e0e0e0; }
+        .sidebar-toggler { background: #fff9f2; border: 1px solid var(--food-border); font-size: 1.1rem; color: var(--food-ink); cursor: pointer; display: none; width: 38px; height: 38px; border-radius: 12px; align-items: center; justify-content: center; margin-right: 12px; }
+        body.dark-mode .sidebar-toggler { background: #272a37; border-color: #373a4b; color: #e2e8f0; }
         @media (max-width: 992px) {
-            .sidebar-toggler { display: block; }
+            .sidebar-toggler { display: flex; }
             .admin-sidebar { left: -260px; }
             .admin-content { margin-left: 0; width: 100%; }
             .admin-container.sidebar-collapsed .admin-sidebar { left: 0; }
@@ -420,18 +492,20 @@ if (isset($_SESSION['user_id']) && function_exists('hrIsLogisticsEmployeeByUserI
 <div class="page-loader"><div class="spinner"></div></div>
 <div class="admin-container">
     <nav class="admin-sidebar" id="adminSidebar">
-        <h3>Lechon Delights</h3>
-        <a href="dashboard.php" class="<?php echo basename($_SERVER['PHP_SELF']) == 'dashboard.php' ? 'active' : ''; ?>"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
-        <a href="attendance.php" class="<?php echo basename($_SERVER['PHP_SELF']) == 'attendance.php' ? 'active' : ''; ?>"><i class="fas fa-calendar-check"></i> My Attendance</a>
-        <a href="payslips.php" class="<?php echo basename($_SERVER['PHP_SELF']) == 'payslips.php' ? 'active' : ''; ?>"><i class="fas fa-file-invoice-dollar"></i> My Payslips</a>
-        <a href="leave_request.php" class="<?php echo basename($_SERVER['PHP_SELF']) == 'leave_request.php' ? 'active' : ''; ?>"><i class="fas fa-envelope-open-text"></i> Request Leave</a>
-        <?php if ($is_driver): ?>
-            <a href="logistics.php" class="<?php echo basename($_SERVER['PHP_SELF']) == 'logistics.php' ? 'active' : ''; ?>"><i class="fas fa-truck"></i> My Deliveries</a>
-        <?php endif; ?>
-        <?php if ($can_back_to_admin): ?>
-            <a href="../employee/dashboard.php"><i class="fas fa-user-shield"></i> Back to Dashboard</a>
-        <?php endif; ?>
-        <a href="../logout.php" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Logout</a>
+        <h3><i class="fas fa-drumstick-bite"></i> Lechon Delights</h3>
+        <div class="sidebar-nav-list">
+            <a href="dashboard.php" class="<?php echo basename($_SERVER['PHP_SELF']) == 'dashboard.php' ? 'active' : ''; ?>"><i class="fas fa-gauge-high"></i> Dashboard</a>
+            <a href="attendance.php" class="<?php echo basename($_SERVER['PHP_SELF']) == 'attendance.php' ? 'active' : ''; ?>"><i class="fas fa-calendar-check"></i> My Attendance</a>
+            <a href="payslips.php" class="<?php echo basename($_SERVER['PHP_SELF']) == 'payslips.php' ? 'active' : ''; ?>"><i class="fas fa-file-invoice-dollar"></i> My Payslips</a>
+            <a href="leave_request.php" class="<?php echo basename($_SERVER['PHP_SELF']) == 'leave_request.php' ? 'active' : ''; ?>"><i class="fas fa-envelope-open-text"></i> Request Leave</a>
+            <?php if ($is_driver): ?>
+                <a href="logistics.php" class="<?php echo basename($_SERVER['PHP_SELF']) == 'logistics.php' ? 'active' : ''; ?>"><i class="fas fa-truck"></i> My Deliveries</a>
+            <?php endif; ?>
+            <?php if ($can_back_to_admin): ?>
+                <a href="../admin/index.php"><i class="fas fa-user-shield"></i> Back to Admin</a>
+            <?php endif; ?>
+            <a href="../logout.php" id="logoutBtn" style="margin-top:auto; color:#ef4444;"><i class="fas fa-right-from-bracket"></i> Logout</a>
+        </div>
     </nav>
 
     <div class="admin-content">

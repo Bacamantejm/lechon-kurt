@@ -20,12 +20,17 @@ if ($token === '') {
     }
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reset_password_submit'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $token            = trim((string)($_POST['token'] ?? $token));
     $new_password     = $_POST['new_password']     ?? '';
     $confirm_password = $_POST['confirm_password'] ?? '';
 
-    if (!$is_valid_token) {
+    // Re-verify token validity for POST processing
+    $user_id = validateResetToken($conn, $token);
+
+    if (!$user_id) {
         $error = 'Invalid or expired reset link. Please request a new password reset.';
+        $is_valid_token = false;
     } elseif (strlen($new_password) < 8) {
         $error = 'Password must be at least 8 characters long.';
     } elseif (!preg_match('/[A-Z]/', $new_password)) {
@@ -49,199 +54,237 @@ $page_title = 'Create New Password | Lechon Delights';
 include 'includes/header.php';
 ?>
 
+<!-- SweetAlert2 CSS -->
 <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
 
 <style>
-:root {
-    --rp-red:    #b3261e;
-    --rp-orange: #ef6b2e;
-    --rp-cream:  #fff8ef;
-    --rp-ink:    #2a211d;
-    --rp-muted:  #7b6d64;
-    --rp-border: #efddcd;
+/* Main Layout Styles */
+.login-page-container {
+    background: #ffffff !important;
+    display: flex;
+    align-items: stretch;
+    justify-content: stretch;
+    height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    overflow: hidden !important;
+    padding: 0 !important;
 }
 
-.rp-page {
-    min-height: calc(100vh - 70px);
+.login-wrapper {
+    max-width: 100% !important;
+    width: 100%;
+    height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    background-color: white;
+    border-radius: 0 !important;
+    border: none;
+    box-shadow: none !important;
     display: flex;
+    flex-direction: row;
+    margin: 0 !important;
+    animation: fadeIn 0.6s ease-out;
+    overflow: hidden;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(30px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Left Side - Brand/Info */
+.login-left {
+    width: 50%;
+    background: linear-gradient(135deg, #fff2eb 0%, #ffd9ce 100%) !important;
+    display: flex !important;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 40px 20px;
-    background:
-        radial-gradient(circle at 5% 5%,  rgba(239,107,46,.13), transparent 35%),
-        radial-gradient(circle at 95% 10%, rgba(179,38,30,.10), transparent 32%),
-        var(--rp-cream);
-}
-
-.rp-card {
-    background: #fff;
-    border: 1px solid var(--rp-border);
-    border-radius: 22px;
-    box-shadow: 0 20px 48px rgba(74,32,20,.13);
-    max-width: 500px;
-    width: 100%;
+    padding: 40px !important;
+    text-align: center;
+    position: relative;
     overflow: hidden;
-    animation: rpFadeUp .5s ease both;
+    height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
 }
 
-@keyframes rpFadeUp {
-    from { opacity:0; transform:translateY(24px); }
-    to   { opacity:1; transform:translateY(0);    }
+.brand-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 3.8rem;
+    font-weight: 900;
+    letter-spacing: -1.5px;
+    margin: 0;
+    color: #b3261e !important;
+    text-shadow: 0 4px 12px rgba(179,38,30,0.15);
 }
 
-/* ---- Card header bar ---- */
-.rp-header-bar {
-    background: linear-gradient(135deg, var(--rp-red), var(--rp-orange));
-    padding: 28px 36px 24px;
+.brand-subtitle {
+    font-size: 1.25rem;
+    color: #7b6d64 !important;
+    margin-top: 15px;
+    max-width: 340px;
+    font-weight: 600;
+    line-height: 1.6;
+}
+
+.floating-pigs-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.floating-pig {
+    position: absolute;
+    font-size: 3.5rem;
+    opacity: 0.16;
+    animation: floatPig 8s ease-in-out infinite alternate;
+}
+
+.pig-1 { top: 10%; left: 15%; animation-duration: 9s; font-size: 4rem; }
+.pig-2 { top: 25%; right: 15%; animation-duration: 11s; animation-delay: 1s; font-size: 3.5rem; }
+.pig-3 { bottom: 20%; left: 20%; animation-duration: 10s; animation-delay: 2s; font-size: 4.5rem; }
+.pig-4 { bottom: 15%; right: 25%; animation-duration: 8s; animation-delay: 0.5s; font-size: 3rem; }
+.pig-5 { top: 50%; left: 40%; animation-duration: 12s; animation-delay: 1.5s; font-size: 3.8rem; }
+
+@keyframes floatPig {
+    0% { transform: translateY(0) rotate(0deg) scale(1); }
+    50% { transform: translateY(-20px) rotate(8deg) scale(1.05); }
+    100% { transform: translateY(10px) rotate(-8deg) scale(0.95); }
+}
+
+/* Right Side - Forms */
+.login-right {
+    width: 50%;
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 44px 24px 36px !important;
+    height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    overflow-y: auto !important;
+    box-sizing: border-box;
+}
+
+.login-header {
+    margin-bottom: 24px;
     text-align: center;
 }
 
-.rp-header-bar .rp-icon-wrap {
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    background: rgba(255,255,255,.18);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto 14px;
-    border: 2px solid rgba(255,255,255,.30);
-}
-
-.rp-header-bar .rp-icon-wrap i {
-    font-size: 22px;
-    color: #fff;
-}
-
-.rp-header-bar h1 {
-    margin: 0 0 6px;
-    font-size: 1.45rem;
+.login-header h2 {
+    color: #171922;
+    font-size: 1.8rem;
+    margin-bottom: 10px;
     font-weight: 700;
-    color: #fff;
 }
 
-.rp-header-bar p {
-    margin: 0;
-    font-size: .875rem;
-    color: rgba(255,255,255,.85);
+.login-header p {
+    color: #7b6d64;
+    font-size: 1rem;
+    line-height: 1.5;
 }
 
-/* ---- Body ---- */
-.rp-body {
-    padding: 32px 36px 36px;
-    background: linear-gradient(180deg, #fffaf4 0%, #fff 100%);
+/* Form Styles */
+.login-form {
+    animation: slideUp 0.5s ease;
 }
 
-.rp-back {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    color: var(--rp-red);
-    font-size: .875rem;
-    font-weight: 600;
-    text-decoration: none;
-    margin-bottom: 22px;
-    padding: 6px 12px;
-    border-radius: 8px;
-    border: 1px solid #e9d2bf;
-    background: #fff5ea;
-    transition: background .2s, border-color .2s;
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
-.rp-back:hover {
-    background: #feecd8;
-    border-color: var(--rp-orange);
+.form-group {
+    margin-bottom: 20px;
 }
 
-/* Form groups */
-.rp-form-group {
-    margin-bottom: 18px;
-}
-
-.rp-form-group label {
+.form-group label {
     display: block;
-    margin-bottom: 7px;
-    font-size: .875rem;
-    font-weight: 600;
-    color: var(--rp-ink);
+    margin-bottom: 8px;
+    color: #2a211d;
+    font-weight: 700;
+    font-size: 0.95rem;
 }
 
-.rp-input-wrap {
+.form-control {
+    width: 100%;
+    padding: 15px 48px 15px 50px;
+    border: 1px solid #e8d4c3;
+    border-radius: 10px;
+    font-size: 1rem;
+    transition: all 0.3s;
+    font-family: inherit;
+    background-color: #fffdfb;
+    color: #171922;
+    box-sizing: border-box;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: #ef6b2e;
+    background-color: white;
+    box-shadow: 0 0 0 4px rgba(239, 107, 46, 0.15);
+}
+
+.form-control.is-error {
+    border-color: #b3261e;
+    box-shadow: 0 0 0 4px rgba(179, 38, 30, 0.15);
+}
+
+.input-with-icon {
     position: relative;
 }
 
-.rp-input-wrap .rp-input-icon {
+.input-with-icon .input-icon {
     position: absolute;
-    left: 14px;
+    left: 18px;
     top: 50%;
     transform: translateY(-50%);
-    color: #b0a098;
-    font-size: .95rem;
+    color: #999;
+    font-size: 1.1rem;
     pointer-events: none;
-    transition: color .2s;
+    transition: color 0.3s;
 }
 
-.rp-input-wrap input:focus ~ .rp-input-icon,
-.rp-input-wrap .rp-input-icon.focused {
-    color: var(--rp-orange);
-}
-
-.rp-toggle-pw {
+.toggle-password {
     position: absolute;
-    right: 13px;
+    right: 15px;
     top: 50%;
     transform: translateY(-50%);
     background: none;
     border: none;
+    color: #666;
     cursor: pointer;
-    color: #b0a098;
-    font-size: .9rem;
-    padding: 4px;
-    transition: color .2s;
+    padding: 8px;
+    font-size: 1.1rem;
+    transition: color 0.3s;
 }
 
-.rp-toggle-pw:hover { color: var(--rp-red); }
-
-.rp-form-control {
-    width: 100%;
-    padding: 12px 42px 12px 40px;
-    border: 1.5px solid var(--rp-border);
-    border-radius: 11px;
-    font-size: .95rem;
-    background: #fffefc;
-    color: var(--rp-ink);
-    box-sizing: border-box;
-    transition: border-color .2s, box-shadow .2s;
+.toggle-password:hover {
+    color: #b3261e;
 }
 
-.rp-form-control:focus {
-    outline: none;
-    border-color: #d06d44;
-    box-shadow: 0 0 0 3px rgba(239,107,46,.14);
-}
-
-.rp-form-control.is-error {
-    border-color: var(--rp-red);
-    box-shadow: 0 0 0 3px rgba(179,38,30,.12);
-}
-
-/* ---- Password strength ---- */
+/* Password strength meter */
 .pw-strength-wrap {
-    margin-top: 9px;
+    margin-top: 10px;
 }
 
 .pw-strength-bars {
     display: flex;
-    gap: 5px;
+    gap: 6px;
     height: 4px;
-    margin-bottom: 5px;
+    margin-bottom: 6px;
 }
 
 .pw-bar {
     flex: 1;
     border-radius: 4px;
     background: #e8d4c3;
-    transition: background .3s;
+    transition: background 0.3s;
 }
 
 .pw-bar.active-weak   { background: #dc2626; }
@@ -250,285 +293,317 @@ include 'includes/header.php';
 .pw-bar.active-strong { background: #15803d; }
 
 .pw-strength-label {
-    font-size: .78rem;
-    font-weight: 600;
-    color: var(--rp-muted);
-    transition: color .2s;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #7b6d64;
+    transition: color 0.2s;
 }
 
-/* ---- Requirements checklist ---- */
+/* Requirements checklist */
 .pw-reqs {
-    margin: 10px 0 20px;
+    margin: 12px 0 24px;
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 6px;
 }
 
 .pw-req-item {
     display: flex;
     align-items: center;
-    gap: 7px;
-    font-size: .82rem;
-    color: #9e8e86;
-    transition: color .2s;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: #7b6d64;
+    transition: color 0.2s;
 }
 
 .pw-req-item i {
-    width: 14px;
+    width: 16px;
     text-align: center;
-    color: #cfc2ba;
-    transition: color .2s;
+    color: #d0c0b6;
+    transition: color 0.2s;
 }
 
 .pw-req-item.met {
     color: #15803d;
+    font-weight: 600;
 }
 
 .pw-req-item.met i {
     color: #15803d;
 }
 
-/* ---- Submit button ---- */
-.rp-btn {
+/* Button Styles */
+.btn-primary {
     width: 100%;
-    padding: 14px;
+    padding: 16px;
+    background: linear-gradient(135deg, #b3261e 0%, #ef6b2e 100%);
+    color: white;
     border: none;
-    border-radius: 11px;
-    background: linear-gradient(135deg, var(--rp-red), var(--rp-orange));
-    color: #fff;
-    font-size: 1rem;
-    font-weight: 700;
+    border-radius: 10px;
+    font-size: 1.1rem;
+    font-weight: 600;
     cursor: pointer;
-    box-shadow: 0 10px 26px rgba(179,38,30,.26);
-    transition: box-shadow .2s, transform .15s, opacity .2s;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
     position: relative;
     overflow: hidden;
-    letter-spacing: .3px;
-    margin-top: 4px;
+    letter-spacing: 0.5px;
+    margin-top: 10px;
+    box-shadow: 0 12px 28px rgba(179, 38, 30, 0.26);
 }
 
-.rp-btn:hover:not(:disabled) {
-    box-shadow: 0 14px 32px rgba(179,38,30,.34);
-    transform: translateY(-2px);
+.btn-primary:hover:not(:disabled) {
+    transform: translateY(-3px);
+    box-shadow: 0 15px 34px rgba(179, 38, 30, 0.34);
 }
 
-.rp-btn:active:not(:disabled) {
-    transform: translateY(0);
+.btn-primary:active:not(:disabled) {
+    transform: translateY(-1px);
 }
 
-.rp-btn:disabled {
-    opacity: .65;
+.btn-primary:disabled {
+    background: #cccccc;
     cursor: not-allowed;
     transform: none;
     box-shadow: none;
 }
 
-.rp-btn.loading { color: transparent; }
+.btn-primary.loading {
+    color: transparent;
+}
 
-.rp-btn.loading::after {
+.btn-primary.loading::after {
     content: '';
     position: absolute;
-    inset: 0;
-    margin: auto;
-    width: 20px;
-    height: 20px;
-    border: 3px solid rgba(255,255,255,.35);
-    border-top-color: #fff;
+    width: 22px;
+    height: 22px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
     border-radius: 50%;
-    animation: rpSpin .8s linear infinite;
+    animation: spin 1s linear infinite;
 }
 
-@keyframes rpSpin { to { transform: rotate(360deg); } }
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
 
-/* ---- Footer links ---- */
-.rp-links {
-    margin-top: 20px;
+/* Auth Link */
+.auth-link {
     text-align: center;
-    font-size: .88rem;
-    color: var(--rp-muted);
-    border-top: 1px solid #f0e5da;
+    margin-top: 25px;
+    color: #7b6d64;
+    font-size: 0.95rem;
     padding-top: 20px;
+    border-top: 1px solid #efddcd;
 }
 
-.rp-links a {
-    color: var(--rp-red);
-    font-weight: 600;
-    text-decoration: none;
-    margin: 0 4px;
-    transition: color .2s;
+.auth-link a {
+    color: #b3261e !important;
+    text-decoration: none !important;
+    font-weight: 700 !important;
+    transition: all 0.3s;
 }
 
-.rp-links a:hover { color: var(--rp-orange); }
+.auth-link a:hover {
+    color: #8f261a !important;
+    text-decoration: underline !important;
+}
 
-/* ---- Success / invalid state ---- */
+/* Status State Box */
 .rp-state-box {
     text-align: center;
-    padding: 8px 0 16px;
+    padding: 10px 0 20px;
 }
 
 .rp-state-icon {
-    width: 68px;
-    height: 68px;
+    width: 72px;
+    height: 72px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 0 auto 18px;
-    font-size: 26px;
+    margin: 0 auto 20px;
+    font-size: 28px;
 }
 
 .rp-state-icon.success { background: #dcfce7; color: #15803d; }
-.rp-state-icon.error   { background: #fee2e2; color: #dc2626; }
+.rp-state-icon.error   { background: #fee2e2; color: #b3261e; }
 
-.rp-state-box h2 { margin: 0 0 10px; color: var(--rp-ink); font-size: 1.3rem; }
-.rp-state-box p  { margin: 0; color: var(--rp-muted); font-size: .9rem; line-height: 1.7; }
+.rp-state-box h2 { margin: 0 0 10px; color: #171922; font-size: 1.5rem; font-weight: 800; }
+.rp-state-box p  { margin: 0; color: #7b6d64; font-size: 0.95rem; line-height: 1.6; }
 
-.rp-state-box .rp-btn { max-width: 260px; margin: 24px auto 0; display: block; }
-
-@media (max-width: 576px) {
-    .rp-body { padding: 26px 22px 30px; }
-    .rp-header-bar { padding: 24px 22px 20px; }
+/* Responsive Design */
+@media (max-width: 850px) {
+    .login-wrapper {
+        flex-direction: column;
+    }
+    .login-right {
+        width: 100%;
+        height: auto;
+        min-height: calc(100vh - 64px);
+        padding: 40px 20px !important;
+    }
+    .login-left {
+        display: none !important;
+    }
+    input, select, textarea, .form-control {
+        font-size: 16px !important;
+    }
 }
 </style>
 
-<div class="rp-page">
-    <div class="rp-card">
-
-        <!-- Header bar -->
-        <div class="rp-header-bar">
-            <div class="rp-icon-wrap">
-                <i class="fas <?php echo $success ? 'fa-check' : 'fa-lock-open'; ?>"></i>
+<div class="login-page-container">
+    <div class="login-wrapper">
+        <!-- Left Side: Branding Panel with Floating Mascot Pigs -->
+        <div class="login-left">
+            <div class="floating-pigs-container">
+                <div class="floating-pig pig-1">🐷</div>
+                <div class="floating-pig pig-2">🐷</div>
+                <div class="floating-pig pig-3">🐷</div>
+                <div class="floating-pig pig-4">🐷</div>
+                <div class="floating-pig pig-5">🐷</div>
             </div>
-            <h1><?php echo $success ? 'Password Updated' : 'Create New Password'; ?></h1>
-            <p><?php echo $success ? 'Your account is secured.' : 'Choose a strong password for your account.'; ?></p>
+            <div class="brand-content" style="position: relative; z-index: 10;">
+                <h1 class="brand-title">Lechon Delights</h1>
+                <p class="brand-subtitle">Cavite's Finest Lechon at Your Doorsteps</p>
+            </div>
         </div>
 
-        <!-- Body -->
-        <div class="rp-body">
-
-            <?php if ($success): ?>
-            <!-- Success state -->
-            <div class="rp-state-box">
-                <div class="rp-state-icon success">
-                    <i class="fas fa-check"></i>
-                </div>
-                <h2>All Done!</h2>
-                <p><?php echo htmlspecialchars($success); ?></p>
-                <a href="login.php" class="rp-btn" style="text-decoration:none;display:flex;align-items:center;justify-content:center;gap:8px;">
-                    <i class="fas fa-sign-in-alt"></i> Sign In Now
-                </a>
-            </div>
-
-            <?php elseif (!$is_valid_token): ?>
-            <!-- Invalid / expired token state -->
-            <div class="rp-state-box">
-                <div class="rp-state-icon error">
-                    <i class="fas fa-exclamation-triangle"></i>
-                </div>
-                <h2>Link Expired</h2>
-                <p><?php echo htmlspecialchars($error); ?></p>
-                <a href="reset_password_request.php" class="rp-btn" style="text-decoration:none;display:flex;align-items:center;justify-content:center;gap:8px;">
-                    <i class="fas fa-redo"></i> Request a New Link
-                </a>
-            </div>
-
-            <?php else: ?>
-            <!-- Password reset form -->
-            <a href="login.php" class="rp-back">
-                <i class="fas fa-arrow-left"></i> Back to login
-            </a>
-
-            <form method="POST" id="resetPasswordForm" autocomplete="off">
-                <input type="hidden" name="token" value="<?php echo htmlspecialchars($token); ?>">
-
-                <!-- New password -->
-                <div class="rp-form-group">
-                    <label for="new_password">New Password</label>
-                    <div class="rp-input-wrap">
-                        <i class="fas fa-lock rp-input-icon" id="newPwIcon"></i>
-                        <input type="password"
-                               id="new_password"
-                               name="new_password"
-                               class="rp-form-control"
-                               placeholder="Create a strong password"
-                               required
-                               autocomplete="new-password">
-                        <button type="button" class="rp-toggle-pw" data-target="new_password" aria-label="Toggle visibility">
-                            <i class="fas fa-eye"></i>
-                        </button>
+        <!-- Reset Password Form Section -->
+        <div class="login-right">
+            <div style="max-width: 440px; width: 100%; margin: auto 0; display: flex; flex-direction: column;">
+                <div class="login-header">
+                    <div style="display: inline-flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 12px;">
+                        <img src="assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 48px; height: 48px; object-fit: cover; border-radius: 12px; display: block; border: 1px solid #efddcd; box-shadow: 0 4px 12px rgba(0,0,0,0.06);">
+                        <span style="font-size: 1.6rem; font-weight: 800; color: #171922; font-family: 'Outfit', sans-serif;">Lechon Delights</span>
                     </div>
+                    <h2><?php echo $success ? 'Password Updated' : ($is_valid_token ? 'Create New Password' : 'Link Expired'); ?></h2>
+                    <p><?php echo $success ? 'Your account is secured.' : ($is_valid_token ? 'Choose a strong password for your account.' : 'Request a new password reset link.'); ?></p>
+                </div>
 
-                    <!-- Strength indicator -->
-                    <div class="pw-strength-wrap" id="strengthWrap" style="display:none;">
-                        <div class="pw-strength-bars">
-                            <div class="pw-bar" id="bar1"></div>
-                            <div class="pw-bar" id="bar2"></div>
-                            <div class="pw-bar" id="bar3"></div>
-                            <div class="pw-bar" id="bar4"></div>
+                <?php if ($success): ?>
+                <!-- Success state -->
+                <div class="rp-state-box">
+                    <div class="rp-state-icon success">
+                        <i class="fas fa-check"></i>
+                    </div>
+                    <h2>All Done!</h2>
+                    <p><?php echo htmlspecialchars($success); ?></p>
+                    <a href="login.php" class="btn-primary" style="text-decoration:none;margin-top:24px;">
+                        <i class="fas fa-sign-in-alt"></i> <span>Sign In Now</span>
+                    </a>
+                </div>
+
+                <?php elseif (!$is_valid_token): ?>
+                <!-- Invalid / expired token state -->
+                <div class="rp-state-box">
+                    <div class="rp-state-icon error">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <h2>Link Expired</h2>
+                    <p><?php echo htmlspecialchars($error); ?></p>
+                    <a href="reset_password_request.php" class="btn-primary" style="text-decoration:none;margin-top:24px;">
+                        <i class="fas fa-redo"></i> <span>Request a New Link</span>
+                    </a>
+                </div>
+
+                <?php else: ?>
+                <!-- Password reset form -->
+                <form method="POST" id="resetPasswordForm" class="login-form" autocomplete="off">
+                    <input type="hidden" name="token" value="<?php echo htmlspecialchars($token); ?>">
+                    <input type="hidden" name="reset_password_submit" value="1">
+
+                    <!-- New password -->
+                    <div class="form-group">
+                        <label for="new_password">New Password</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-lock input-icon"></i>
+                            <input type="password"
+                                   id="new_password"
+                                   name="new_password"
+                                   class="form-control"
+                                   placeholder="Create a strong password"
+                                   required
+                                   autocomplete="new-password">
+                            <button type="button" class="toggle-password" data-target="new_password" aria-label="Toggle password visibility">
+                                <i class="fas fa-eye"></i>
+                            </button>
                         </div>
-                        <span class="pw-strength-label" id="strengthLabel">Weak</span>
+
+                        <!-- Strength indicator -->
+                        <div class="pw-strength-wrap" id="strengthWrap" style="display:none;">
+                            <div class="pw-strength-bars">
+                                <div class="pw-bar" id="bar1"></div>
+                                <div class="pw-bar" id="bar2"></div>
+                                <div class="pw-bar" id="bar3"></div>
+                                <div class="pw-bar" id="bar4"></div>
+                            </div>
+                            <span class="pw-strength-label" id="strengthLabel">Weak</span>
+                        </div>
                     </div>
+
+                    <!-- Requirements checklist -->
+                    <div class="pw-reqs" id="pwReqs">
+                        <div class="pw-req-item" id="req-len">
+                            <i class="fas fa-circle-dot"></i>
+                            <span>At least 8 characters</span>
+                        </div>
+                        <div class="pw-req-item" id="req-upper">
+                            <i class="fas fa-circle-dot"></i>
+                            <span>One uppercase letter (A–Z)</span>
+                        </div>
+                        <div class="pw-req-item" id="req-num">
+                            <i class="fas fa-circle-dot"></i>
+                            <span>One number (0–9)</span>
+                        </div>
+                        <div class="pw-req-item" id="req-special">
+                            <i class="fas fa-circle-dot"></i>
+                            <span>One special character recommended</span>
+                        </div>
+                    </div>
+
+                    <!-- Confirm password -->
+                    <div class="form-group">
+                        <label for="confirm_password">Confirm Password</label>
+                        <div class="input-with-icon">
+                            <i class="fas fa-lock input-icon"></i>
+                            <input type="password"
+                                   id="confirm_password"
+                                   name="confirm_password"
+                                   class="form-control"
+                                   placeholder="Repeat your new password"
+                                   required
+                                   autocomplete="new-password">
+                            <button type="button" class="toggle-password" data-target="confirm_password" aria-label="Toggle password visibility">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn-primary" name="reset_password_submit" id="resetSubmitBtn">
+                        <i class="fas fa-key"></i> <span>Update Password</span>
+                    </button>
+                </form>
+                <?php endif; ?>
+
+                <div class="auth-link">
+                    Remembered your password? <a href="login.php">Sign in here</a>
                 </div>
-
-                <!-- Requirements checklist -->
-                <div class="pw-reqs" id="pwReqs">
-                    <div class="pw-req-item" id="req-len">
-                        <i class="fas fa-circle-dot"></i>
-                        <span>At least 8 characters</span>
-                    </div>
-                    <div class="pw-req-item" id="req-upper">
-                        <i class="fas fa-circle-dot"></i>
-                        <span>One uppercase letter (A–Z)</span>
-                    </div>
-                    <div class="pw-req-item" id="req-num">
-                        <i class="fas fa-circle-dot"></i>
-                        <span>One number (0–9)</span>
-                    </div>
-                    <div class="pw-req-item" id="req-special">
-                        <i class="fas fa-circle-dot"></i>
-                        <span>One special character recommended</span>
-                    </div>
-                </div>
-
-                <!-- Confirm password -->
-                <div class="rp-form-group">
-                    <label for="confirm_password">Confirm Password</label>
-                    <div class="rp-input-wrap">
-                        <i class="fas fa-lock rp-input-icon" id="confirmPwIcon"></i>
-                        <input type="password"
-                               id="confirm_password"
-                               name="confirm_password"
-                               class="rp-form-control"
-                               placeholder="Repeat your new password"
-                               required
-                               autocomplete="new-password">
-                        <button type="button" class="rp-toggle-pw" data-target="confirm_password" aria-label="Toggle visibility">
-                            <i class="fas fa-eye"></i>
-                        </button>
-                    </div>
-                </div>
-
-                <button type="submit" class="rp-btn" name="reset_password_submit" id="resetSubmitBtn">
-                    <i class="fas fa-key"></i>&nbsp; Update Password
-                </button>
-            </form>
-            <?php endif; ?>
-
-            <div class="rp-links">
-                Remembered your password? <a href="login.php">Sign in</a>
-                &nbsp;&bull;&nbsp;
-                <a href="reset_password_request.php">Request new link</a>
             </div>
         </div>
     </div>
 </div>
 
+<!-- SweetAlert2 JS -->
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
 
-    // ── Toggle password visibility ──────────────────────────────────
-    document.querySelectorAll('.rp-toggle-pw').forEach(function (btn) {
+    // Toggle password visibility
+    document.querySelectorAll('.toggle-password').forEach(function (btn) {
         btn.addEventListener('click', function () {
             const input = document.getElementById(this.dataset.target);
             const icon  = this.querySelector('i');
@@ -536,11 +611,12 @@ document.addEventListener('DOMContentLoaded', function () {
             const isHidden = input.type === 'password';
             input.type = isHidden ? 'text' : 'password';
             icon.className = isHidden ? 'fas fa-eye-slash' : 'fas fa-eye';
+            this.setAttribute('aria-label', isHidden ? 'Hide password' : 'Show password');
         });
     });
 
-    // ── Password strength meter ─────────────────────────────────────
-    const newPwInput  = document.getElementById('new_password');
+    // Password strength meter
+    const newPwInput   = document.getElementById('new_password');
     const confirmInput = document.getElementById('confirm_password');
     const strengthWrap = document.getElementById('strengthWrap');
     const strengthLabel = document.getElementById('strengthLabel');
@@ -557,8 +633,12 @@ document.addEventListener('DOMContentLoaded', function () {
     const reqSpecial = document.getElementById('req-special');
 
     function markReq(el, met) {
+        if (!el) return;
         el.classList.toggle('met', met);
-        el.querySelector('i').className = met ? 'fas fa-check-circle' : 'fas fa-circle-dot';
+        const icon = el.querySelector('i');
+        if (icon) {
+            icon.className = met ? 'fas fa-check-circle' : 'fas fa-circle-dot';
+        }
     }
 
     function evaluateStrength(pw) {
@@ -590,21 +670,23 @@ document.addEventListener('DOMContentLoaded', function () {
         newPwInput.addEventListener('input', function () {
             const pw = this.value;
             if (pw.length === 0) {
-                strengthWrap.style.display = 'none';
-                bars.forEach(b => { b.className = 'pw-bar'; });
+                if (strengthWrap) strengthWrap.style.display = 'none';
+                bars.forEach(b => { if (b) b.className = 'pw-bar'; });
                 return;
             }
-            strengthWrap.style.display = 'block';
+            if (strengthWrap) strengthWrap.style.display = 'block';
             const score = evaluateStrength(pw);
             bars.forEach(function (bar, i) {
-                bar.className = 'pw-bar' + (i < score ? ' ' + levelClass[score] : '');
+                if (bar) bar.className = 'pw-bar' + (i < score ? ' ' + levelClass[score] : '');
             });
-            strengthLabel.textContent = levelNames[score];
-            strengthLabel.style.color = labelColors[score];
+            if (strengthLabel) {
+                strengthLabel.textContent = levelNames[score];
+                strengthLabel.style.color = labelColors[score];
+            }
         });
     }
 
-    // ── Form submit validation ──────────────────────────────────────
+    // Form submit validation
     const form = document.getElementById('resetPasswordForm');
     if (form) {
         form.addEventListener('submit', function (e) {
@@ -615,28 +697,29 @@ document.addEventListener('DOMContentLoaded', function () {
             if (pw.length < 8) {
                 e.preventDefault();
                 Swal.fire({ icon: 'warning', title: 'Too Short', text: 'Password must be at least 8 characters.', confirmButtonColor: '#b3261e' });
-                return;
+                return false;
             }
             if (!/[A-Z]/.test(pw)) {
                 e.preventDefault();
                 Swal.fire({ icon: 'warning', title: 'Missing Uppercase', text: 'Add at least one uppercase letter (A–Z).', confirmButtonColor: '#b3261e' });
-                return;
+                return false;
             }
             if (!/[0-9]/.test(pw)) {
                 e.preventDefault();
                 Swal.fire({ icon: 'warning', title: 'Missing Number', text: 'Add at least one number (0–9).', confirmButtonColor: '#b3261e' });
-                return;
+                return false;
             }
             if (pw !== confirm) {
                 e.preventDefault();
                 if (confirmInput) confirmInput.classList.add('is-error');
                 Swal.fire({ icon: 'warning', title: 'Passwords Don\'t Match', text: 'Both fields must contain the same password.', confirmButtonColor: '#b3261e' });
-                return;
+                return false;
             }
 
             if (btn) {
                 btn.classList.add('loading');
-                btn.disabled = true;
+                const span = btn.querySelector('span');
+                if (span) span.textContent = 'Updating Password...';
             }
         });
     }
@@ -648,6 +731,22 @@ document.addEventListener('DOMContentLoaded', function () {
             this.classList.toggle('is-error', this.value.length > 0 && !match);
         });
     }
+
+    <?php if ($success): ?>
+    Swal.fire({
+        icon: 'success',
+        title: 'Password Updated!',
+        text: '<?php echo addslashes($success); ?>',
+        confirmButtonColor: '#b3261e',
+        confirmButtonText: 'Sign In Now',
+        allowOutsideClick: false,
+        allowEscapeKey: false
+    }).then((result) => {
+        if (result.isConfirmed) {
+            window.location.href = 'login.php';
+        }
+    });
+    <?php endif; ?>
 
     <?php if ($error && $is_valid_token): ?>
     Swal.fire({
