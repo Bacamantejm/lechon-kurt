@@ -2518,38 +2518,7 @@ body {
         <div class="container">
             <div class="market-explorer">
                 <aside class="market-sidebar">
-                    <?php if (!empty($_SESSION['user_id'])): ?>
-                        <!-- App Promo Card -->
-                        <div class="sidebar-app-promo" style="background:#2a211d; color:#ffffff; padding:20px; border-radius:20px; position:relative; margin-bottom:24px; box-shadow:0 8px 24px rgba(0,0,0,0.12); display:flex; flex-direction:column; align-items:center; text-align:center;">
-                            <button type="button" onclick="this.parentElement.style.display='none';" style="position:absolute; top:12px; right:12px; background:transparent; border:none; color:#a1a1a1; cursor:pointer; font-size:1rem; padding:0; line-height:1;"><i class="fas fa-xmark"></i></button>
-                            <div style="background:#ffffff; padding:12px; border-radius:16px; margin-bottom:12px; display:inline-block; border:1px solid #efddcd; line-height:0;">
-                                <svg width="90" height="90" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-                                    <rect width="100" height="100" fill="#fff"/>
-                                    <rect x="10" y="10" width="25" height="25" fill="#2a211d"/>
-                                    <rect x="15" y="15" width="15" height="15" fill="#fff"/>
-                                    <rect x="18" y="18" width="9" height="9" fill="#2a211d"/>
-                                    <rect x="65" y="10" width="25" height="25" fill="#2a211d"/>
-                                    <rect x="70" y="15" width="15" height="15" fill="#fff"/>
-                                    <rect x="73" y="18" width="9" height="9" fill="#2a211d"/>
-                                    <rect x="10" y="65" width="25" height="25" fill="#2a211d"/>
-                                    <rect x="15" y="70" width="15" height="15" fill="#fff"/>
-                                    <rect x="18" y="73" width="9" height="9" fill="#2a211d"/>
-                                    <rect x="45" y="15" width="8" height="8" fill="#b3261e"/>
-                                    <rect x="53" y="30" width="8" height="8" fill="#2a211d"/>
-                                    <rect x="40" y="45" width="20" height="20" fill="#b3261e" rx="4"/>
-                                    <circle cx="50" cy="55" r="6" fill="#fff"/>
-                                    <path d="M48 55 C48 53, 52 53, 52 55 C52 57, 48 57, 48 55" fill="#b3261e"/>
-                                    <rect x="70" y="45" width="12" height="12" fill="#2a211d"/>
-                                    <rect x="75" y="70" width="15" height="15" fill="#2a211d"/>
-                                </svg>
-                            </div>
-                            <h4 style="margin:0 0 6px 0; font-family:'Outfit', sans-serif; font-size:0.92rem; font-weight:800; line-height:1.3; color:#ffffff;">Unlock more app-only deals. Download now.</h4>
-                            <div style="display:flex; gap:8px; width:100%; justify-content:center; margin-top:8px;">
-                                <a href="#" style="background:#111; color:#fff; border:1px solid #444; border-radius:8px; padding:6px 10px; font-size:0.68rem; display:inline-flex; align-items:center; gap:6px; text-decoration:none; font-weight:700;"><i class="fab fa-apple" style="font-size:0.9rem;"></i> App Store</a>
-                                <a href="#" style="background:#111; color:#fff; border:1px solid #444; border-radius:8px; padding:6px 10px; font-size:0.68rem; display:inline-flex; align-items:center; gap:6px; text-decoration:none; font-weight:700;"><i class="fab fa-google-play" style="font-size:0.8rem;"></i> Play Store</a>
-                            </div>
-                        </div>
-                    <?php endif; ?>
+
                     <div class="market-sidebar-section">
                         <h3>Filters</h3>
                     </div>
@@ -2729,31 +2698,31 @@ body {
 
                     <?php if (!empty($featured_products)): ?>
                     <!-- Prominent Best Sellers & Top Rated Dishes Section -->
-                    <section class="bestsellers-section" style="margin-bottom: 32px; padding: 24px; background: linear-gradient(135deg, #fff9f2 0%, #ffffff 100%); border: 1px solid #efddcd; border-radius: 20px; box-shadow: 0 8px 24px rgba(42,33,29,0.04);">
-                        <div class="market-head" style="margin-bottom: 18px; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 12px;">
+                    <section class="bestsellers-section" style="margin-bottom: 24px; padding: 18px 20px; background: linear-gradient(135deg, #fff9f2 0%, #ffffff 100%); border: 1px solid #efddcd; border-radius: 16px; box-shadow: 0 6px 18px rgba(42,33,29,0.04);">
+                        <div class="market-head" style="margin-bottom: 14px; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 10px;">
                             <div>
-                                <div style="display:inline-flex; align-items:center; gap:6px; padding:4px 12px; background:#fff1f2; border:1px solid #ffe4e6; border-radius:999px; color:#b3261e; font-size:0.78rem; font-weight:800; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:6px;">
+                                <div style="display:inline-flex; align-items:center; gap:5px; padding:3px 10px; background:#fff1f2; border:1px solid #ffe4e6; border-radius:999px; color:#b3261e; font-size:0.72rem; font-weight:800; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:4px;">
                                     <i class="fas fa-fire" style="color:#ef6b2e;"></i> Top Customer Choices
                                 </div>
-                                <h2 style="font-family:'Outfit',sans-serif; font-size:1.55rem; font-weight:800; color:#171922; margin:0 0 4px 0;">Best Sellers & Top Rated Dishes</h2>
-                                <p style="font-size:0.88rem; color:#7b6d64; margin:0;">Hand-picked customer favorites with high sales volume and top customer ratings across Cavite.</p>
+                                <h2 style="font-family:'Outfit',sans-serif; font-size:1.3rem; font-weight:800; color:#171922; margin:0 0 3px 0;">Best Sellers & Top Rated Dishes</h2>
+                                <p style="font-size:0.82rem; color:#7b6d64; margin:0;">Hand-picked customer favorites with high sales volume and top customer ratings across Cavite.</p>
                             </div>
-                            <a href="menu.php" class="btn-outline btn-sm" style="border-radius:999px; font-weight:700; text-decoration:none; padding:8px 18px; font-size:0.85rem;">
+                            <a href="menu.php" class="btn-outline btn-sm" style="border-radius:999px; font-weight:700; text-decoration:none; padding:6px 14px; font-size:0.78rem;">
                                 Explore Full Menu <i class="fas fa-arrow-right" style="margin-left:4px;"></i>
                             </a>
                         </div>
 
-                        <div class="bestsellers-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px;">
+                        <div class="bestsellers-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(195px, 1fr)); gap: 14px;">
                             <?php foreach ($featured_products as $idx => $product): ?>
                                 <?php
                                 $prod_id_val = (string)($product['id'] ?? '');
                                 $is_prod_fav = !empty($favorite_store_keys['product_' . $prod_id_val]);
                                 $rank_num = $idx + 1;
                                 ?>
-                                <a href="<?php echo htmlspecialchars($product['menu_link'] ?? 'menu.php'); ?>" class="bestseller-card panda-card-link" style="background:#ffffff; border:1px solid #efddcd; border-radius:16px; overflow:hidden; display:flex; flex-direction:column; transition:transform 0.25s ease, box-shadow 0.25s ease; text-decoration:none; position:relative;">
-                                    <div class="store-card-image-wrap" style="height: 145px; position:relative; overflow:hidden;">
+                                <a href="<?php echo htmlspecialchars($product['menu_link'] ?? 'menu.php'); ?>" class="bestseller-card panda-card-link" style="background:#ffffff; border:1px solid #efddcd; border-radius:14px; overflow:hidden; display:flex; flex-direction:column; transition:transform 0.25s ease, box-shadow 0.25s ease; text-decoration:none; position:relative;">
+                                    <div class="store-card-image-wrap" style="height: 115px; position:relative; overflow:hidden;">
                                         <div class="market-store-row-thumb" style="background-image: url('<?php echo htmlspecialchars($product['image']); ?>'); width:100%; height:100%; background-size:cover; background-position:center; transition:transform 0.4s ease;"></div>
-                                        <span class="bestseller-rank-badge" style="position:absolute; top:10px; left:10px; background:linear-gradient(135deg, #b3261e, #ef6b2e); color:#ffffff; font-weight:800; font-size:0.75rem; padding:4px 10px; border-radius:999px; box-shadow:0 4px 10px rgba(179,38,30,0.3); display:inline-flex; align-items:center; gap:4px; z-index:2;">
+                                        <span class="bestseller-rank-badge" style="position:absolute; top:8px; left:8px; background:linear-gradient(135deg, #b3261e, #ef6b2e); color:#ffffff; font-weight:800; font-size:0.68rem; padding:3px 8px; border-radius:999px; box-shadow:0 3px 8px rgba(179,38,30,0.25); display:inline-flex; align-items:center; gap:3px; z-index:2;">
                                             <i class="fas fa-fire"></i> #<?php echo $rank_num; ?> Best Seller
                                         </span>
                                         <button
@@ -2766,32 +2735,32 @@ body {
                                             aria-pressed="<?php echo $is_prod_fav ? 'true' : 'false'; ?>"
                                             title="<?php echo $is_prod_fav ? 'Remove from favorites' : 'Save to favorites'; ?>"
                                             onclick="event.preventDefault(); event.stopPropagation();"
-                                            style="position:absolute; top:10px; right:10px; z-index:2;">
+                                            style="position:absolute; top:8px; right:8px; z-index:2; width:28px; height:28px; font-size:0.75rem;">
                                             <i class="<?php echo $is_prod_fav ? 'fas' : 'far'; ?> fa-heart"></i>
                                         </button>
                                     </div>
 
-                                    <div class="store-card-details" style="padding: 14px; display:flex; flex-direction:column; flex:1;">
-                                        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:4px;">
-                                            <h3 style="font-family:'Outfit',sans-serif; font-size:1rem; font-weight:800; color:#171922; margin:0; line-height:1.35; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; flex:1;"><?php echo htmlspecialchars($product['name']); ?></h3>
+                                    <div class="store-card-details" style="padding: 10px 12px; display:flex; flex-direction:column; flex:1;">
+                                        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:6px; margin-bottom:3px;">
+                                            <h3 style="font-family:'Outfit',sans-serif; font-size:0.88rem; font-weight:800; color:#171922; margin:0; line-height:1.3; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; flex:1;"><?php echo htmlspecialchars($product['name']); ?></h3>
                                             <?php if ($product['rating'] > 0): ?>
-                                            <span style="font-size:0.82rem; font-weight:800; color:#171922; display:inline-flex; align-items:center; gap:3px; white-space:nowrap;">
+                                            <span style="font-size:0.78rem; font-weight:800; color:#171922; display:inline-flex; align-items:center; gap:2px; white-space:nowrap;">
                                                 <i class="fas fa-star" style="color:#ef6b2e;"></i><?php echo number_format((float)$product['rating'], 1); ?>
                                             </span>
                                             <?php endif; ?>
                                         </div>
                                         
-                                        <div style="font-size:0.8rem; color:#7b6d64; margin-bottom:12px; display:flex; align-items:center; gap:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                                        <div style="font-size:0.75rem; color:#7b6d64; margin-bottom:8px; display:flex; align-items:center; gap:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                                             <i class="fas fa-store" style="color:#ef6b2e;"></i> <span><?php echo htmlspecialchars($product['store']); ?></span>
                                         </div>
 
-                                        <div style="margin-top:auto; padding-top:10px; border-top:1px dashed #efddcd; display:flex; justify-content:space-between; align-items:center;">
+                                        <div style="margin-top:auto; padding-top:8px; border-top:1px dashed #efddcd; display:flex; justify-content:space-between; align-items:center;">
                                             <div>
-                                                <strong style="font-size:1.05rem; color:#b3261e; font-weight:800; display:block;">PHP <?php echo number_format((float)$product['price'], 2); ?></strong>
-                                                <span style="font-size:0.75rem; color:#7b6d64; font-weight:600;"><?php echo number_format((int)$product['sold']); ?> sold</span>
+                                                <strong style="font-size:0.92rem; color:#b3261e; font-weight:800; display:block;">PHP <?php echo number_format((float)$product['price'], 2); ?></strong>
+                                                <span style="font-size:0.7rem; color:#7b6d64; font-weight:600;"><?php echo number_format((int)$product['sold']); ?> sold</span>
                                             </div>
-                                            <span class="btn-primary btn-sm" style="padding:6px 12px; font-size:0.78rem; border-radius:8px; pointer-events:none; background:linear-gradient(135deg, #b3261e, #ef6b2e); color:#fff; font-weight:700;">
-                                                Order Now <i class="fas fa-arrow-right" style="font-size:0.75rem;"></i>
+                                            <span class="btn-primary btn-sm" style="padding:5px 10px; font-size:0.72rem; border-radius:6px; pointer-events:none; background:linear-gradient(135deg, #b3261e, #ef6b2e); color:#fff; font-weight:700;">
+                                                Order Now <i class="fas fa-arrow-right" style="font-size:0.7rem;"></i>
                                             </span>
                                         </div>
                                     </div>
