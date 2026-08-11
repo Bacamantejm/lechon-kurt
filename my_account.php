@@ -728,23 +728,19 @@ include 'includes/header.php';
 
 .account-page {
     --acc-red: #b3261e;
-    --acc-orange: #ef6b2e;
-    --acc-cream: #fff8ef;
-    --acc-ink: #171922;
+    --acc-brand: #ef6b2e;
+    --acc-ink: #101828;
     --acc-muted: #667085;
-    --acc-border: #efddcd;
-    --acc-shadow: 0 10px 30px rgba(42, 33, 29, 0.05);
+    --acc-border: #eaecf0;
+    --acc-bg: #f8f9fa;
     padding: 32px 0 80px;
     min-height: 85vh;
     font-family: 'Plus Jakarta Sans', sans-serif;
-    background:
-        radial-gradient(circle at 95% -5%, rgba(239, 107, 46, 0.08), transparent 40%),
-        radial-gradient(circle at 0% 20%, rgba(179, 38, 30, 0.05), transparent 38%),
-        linear-gradient(180deg, #fff9f2 0%, #ffffff 100%);
+    background: var(--acc-bg);
 }
 
 .account-page .container {
-    max-width: 1240px;
+    max-width: 1200px;
     margin: 0 auto;
     padding: 0 20px;
 }
@@ -756,15 +752,15 @@ include 'includes/header.php';
 
 .account-header-title h1 {
     font-family: 'Outfit', sans-serif;
-    font-size: 1.85rem;
-    font-weight: 800;
+    font-size: 1.75rem;
+    font-weight: 700;
     color: var(--acc-ink);
     margin: 0 0 4px;
     letter-spacing: -0.02em;
 }
 
 .account-header-title p {
-    font-size: 0.92rem;
+    font-size: 0.9rem;
     color: var(--acc-muted);
     margin: 0;
 }
@@ -772,7 +768,7 @@ include 'includes/header.php';
 /* 2-Column Dashboard Grid Layout */
 .account-dashboard-layout {
     display: grid;
-    grid-template-columns: 310px 1fr;
+    grid-template-columns: 280px 1fr;
     gap: 24px;
     align-items: start;
 }
@@ -781,57 +777,68 @@ include 'includes/header.php';
 .account-sidebar-panel {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 16px;
     position: sticky;
     top: 90px;
 }
 
 /* User Profile Card */
 .user-profile-card {
-    background: linear-gradient(135deg, #ffffff 0%, #fffbf7 100%);
+    background: #ffffff;
     border: 1px solid var(--acc-border);
-    border-radius: 22px;
-    padding: 24px;
-    box-shadow: var(--acc-shadow);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
     text-align: center;
-    position: relative;
-    overflow: hidden;
-}
-
-.user-profile-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 60px;
-    background: linear-gradient(135deg, rgba(179, 38, 30, 0.12), rgba(239, 107, 46, 0.12));
-    z-index: 0;
 }
 
 .user-avatar-wrap {
-    position: relative;
-    z-index: 1;
-    margin: 10px auto 14px;
-    width: 84px;
-    height: 84px;
+    margin: 0 auto 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 .user-avatar-badge {
-    width: 84px;
-    height: 84px;
-    border-radius: 24px;
-    background: linear-gradient(135deg, var(--acc-red), var(--acc-orange));
-    color: #ffffff;
+    position: relative;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: #fff1f0;
+    color: var(--acc-red);
     display: flex;
     align-items: center;
     justify-content: center;
     font-family: 'Outfit', sans-serif;
-    font-size: 1.8rem;
-    font-weight: 800;
-    border: 3px solid #ffffff;
-    box-shadow: 0 8px 20px rgba(179, 38, 30, 0.2);
+    font-size: 1.5rem;
+    font-weight: 700;
+    border: 2px solid #ffccc7;
     overflow: hidden;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.user-avatar-badge:hover {
+    border-color: var(--acc-red);
+    transform: scale(1.03);
+}
+
+.avatar-edit-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(16, 24, 40, 0.55);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.15rem;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    border-radius: 50%;
+}
+
+.user-avatar-badge:hover .avatar-edit-overlay {
+    opacity: 1;
 }
 
 .user-avatar-badge.has-image {
@@ -846,129 +853,110 @@ include 'includes/header.php';
     display: block;
 }
 
+.btn-change-photo {
+    background: none;
+    border: none;
+    color: var(--acc-red);
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 4px 8px;
+    margin-top: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: color 0.15s ease;
+}
+
+.btn-change-photo:hover {
+    color: #981b15;
+    text-decoration: underline;
+}
+
+.remove-photo-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: #667085;
+    font-size: 0.75rem;
+    font-weight: 500;
+    cursor: pointer;
+    margin-top: 2px;
+}
+
+.remove-photo-label:hover {
+    color: #b3261e;
+}
+
 .user-name-display {
     font-family: 'Outfit', sans-serif;
-    font-size: 1.25rem;
-    font-weight: 800;
+    font-size: 1.15rem;
+    font-weight: 700;
     color: var(--acc-ink);
     margin: 0 0 2px;
-    position: relative;
-    z-index: 1;
 }
 
 .user-email-display {
     font-size: 0.82rem;
     color: var(--acc-muted);
-    margin: 0 0 14px;
-    position: relative;
-    z-index: 1;
+    margin: 0;
     word-break: break-all;
-}
-
-.user-role-tag {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 5px 14px;
-    border-radius: 999px;
-    background: #ffe8d2;
-    color: var(--acc-red);
-    font-size: 0.74rem;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
 }
 
 /* Sidebar Vertical Navigation Menu */
 .sidebar-nav-menu {
     background: #ffffff;
     border: 1px solid var(--acc-border);
-    border-radius: 22px;
-    padding: 10px;
-    box-shadow: var(--acc-shadow);
+    border-radius: 16px;
+    padding: 8px;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
 }
 
 .sidebar-nav-btn {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
+    gap: 10px;
+    padding: 10px 14px;
     border: none;
     background: transparent;
-    border-radius: 14px;
-    font-size: 0.9rem;
-    font-weight: 700;
-    color: var(--acc-muted);
+    border-radius: 10px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #475467;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.15s ease;
     text-align: left;
     width: 100%;
 }
 
 .sidebar-nav-btn i {
-    font-size: 1.05rem;
-    width: 22px;
+    font-size: 1rem;
+    width: 20px;
     text-align: center;
-    color: #94a3b8;
-    transition: color 0.2s ease;
+    color: #667085;
+    transition: color 0.15s ease;
 }
 
 .sidebar-nav-btn:hover {
-    background: var(--acc-cream);
-    color: var(--acc-red);
+    background: #f8f9fa;
+    color: #101828;
 }
 
 .sidebar-nav-btn:hover i {
-    color: var(--acc-red);
+    color: #101828;
 }
 
 .sidebar-nav-btn.active {
-    background: linear-gradient(135deg, var(--acc-red) 0%, var(--acc-orange) 100%);
+    background: var(--acc-red);
     color: #ffffff !important;
-    box-shadow: 0 6px 18px rgba(179, 38, 30, 0.22);
+    box-shadow: none;
 }
 
 .sidebar-nav-btn.active i {
     color: #ffffff !important;
-}
-
-/* Sidebar Quick Metrics Block */
-.sidebar-metrics-card {
-    background: #ffffff;
-    border: 1px solid var(--acc-border);
-    border-radius: 22px;
-    padding: 18px;
-    box-shadow: var(--acc-shadow);
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-}
-
-.sidebar-metric-item {
-    text-align: center;
-    padding: 10px 8px;
-    background: #fffdfb;
-    border-radius: 14px;
-    border: 1px solid #f5e7db;
-}
-
-.sidebar-metric-item small {
-    display: block;
-    font-size: 0.68rem;
-    color: var(--acc-muted);
-    font-weight: 800;
-    text-transform: uppercase;
-    margin-bottom: 2px;
-}
-
-.sidebar-metric-item strong {
-    font-family: 'Outfit', sans-serif;
-    font-size: 1.15rem;
-    font-weight: 800;
-    color: var(--acc-ink);
 }
 
 /* Main Workspace Panel */
@@ -978,28 +966,26 @@ include 'includes/header.php';
 
 /* Alert Notifications */
 .alert {
-    padding: 16px 20px;
-    border-radius: 16px;
+    padding: 14px 18px;
+    border-radius: 12px;
     margin-bottom: 20px;
     display: flex;
     align-items: center;
     gap: 12px;
-    font-weight: 700;
-    font-size: 0.92rem;
+    font-weight: 600;
+    font-size: 0.9rem;
 }
 
 .alert-success {
-    background-color: #e8f5e9;
-    color: #2e7d32;
-    border: 1px solid #c8e6c9;
-    border-left: 5px solid #2e7d32;
+    background-color: #f0fdf4;
+    color: #166534;
+    border: 1px solid #bbf7d0;
 }
 
 .alert-error {
-    background-color: #ffebee;
-    color: #c62828;
-    border: 1px solid #ffcdd2;
-    border-left: 5px solid var(--acc-red);
+    background-color: #fef2f2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
 }
 
 .tab-pane {
@@ -1008,104 +994,99 @@ include 'includes/header.php';
 
 .tab-pane.active {
     display: block;
-    animation: fadeIn 0.3s ease;
+    animation: fadeIn 0.2s ease-in-out;
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(6px); }
+    from { opacity: 0; transform: translateY(4px); }
     to { opacity: 1; transform: translateY(0); }
 }
 
 /* Feature Cards & Content Panes */
 .profile-card,
-.orders-card,
-.franchise-card,
 .password-card {
     background-color: #ffffff;
-    padding: 32px;
-    border-radius: 24px;
+    padding: 28px;
+    border-radius: 16px;
     border: 1px solid var(--acc-border);
-    box-shadow: var(--acc-shadow);
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
     margin-bottom: 24px;
 }
 
 .card-head {
-    margin-bottom: 22px;
-    border-bottom: 1px solid #f3e8de;
-    padding-bottom: 16px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #f2f4f7;
+    padding-bottom: 14px;
 }
 
 .profile-card h2,
-.orders-card h2,
-.franchise-card h2,
 .password-card h2 {
     color: var(--acc-ink);
     margin: 0 0 4px;
     font-family: 'Outfit', sans-serif;
-    font-size: 1.45rem;
-    font-weight: 800;
-    letter-spacing: -0.02em;
+    font-size: 1.35rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
 }
 
 .card-head p {
     margin: 0;
     color: var(--acc-muted);
-    font-size: 0.9rem;
+    font-size: 0.88rem;
 }
 
+/* Callout Alert Boxes (NO HIGHLIGHT BORDER STRIPE - FLAT CLEAN) */
 .info-callout {
-    background: #fff6ed;
-    border: 1px solid var(--acc-border);
-    border-left: 4px solid var(--acc-orange);
-    padding: 14px 18px;
-    border-radius: 16px;
-    margin-bottom: 24px;
-    font-size: 0.88rem;
-    color: var(--acc-ink);
+    background: #f8fafc;
+    border: 1px solid #eaecf0;
+    padding: 12px 16px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    font-size: 0.86rem;
+    color: #344054;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
 }
 
 .info-callout i {
-    font-size: 1.15rem;
-    color: var(--acc-orange);
+    font-size: 1rem;
+    color: #64748b;
     flex-shrink: 0;
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, var(--acc-red) 0%, var(--acc-orange) 100%);
+    background: var(--acc-red);
     color: #ffffff;
     border: 0;
-    padding: 12px 24px;
-    border-radius: 14px;
-    font-weight: 700;
-    font-size: 0.92rem;
+    padding: 10px 20px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.88rem;
     cursor: pointer;
-    box-shadow: 0 4px 14px rgba(179, 38, 30, 0.2);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    transition: background-color 0.15s ease;
     display: inline-flex;
     align-items: center;
     gap: 8px;
     text-decoration: none;
+    box-shadow: none;
 }
 
 .btn-primary:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(179, 38, 30, 0.3);
+    background: #981b15;
     color: #ffffff;
 }
 
 .btn-outline {
     background: #ffffff;
-    color: var(--acc-ink);
-    border: 1px solid var(--acc-border);
-    padding: 10px 18px;
-    border-radius: 14px;
-    font-weight: 700;
-    font-size: 0.88rem;
+    color: #344054;
+    border: 1px solid #d0d5dd;
+    padding: 9px 16px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.86rem;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.15s ease;
     display: inline-flex;
     align-items: center;
     gap: 8px;
@@ -1113,41 +1094,40 @@ include 'includes/header.php';
 }
 
 .btn-outline:hover {
-    background: var(--acc-cream);
-    border-color: var(--acc-red);
-    color: var(--acc-red);
-    transform: translateY(-1px);
+    background: #f8f9fa;
+    border-color: #d0d5dd;
+    color: #101828;
 }
 
 .form-row {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 18px;
-    margin-bottom: 18px;
+    gap: 16px;
+    margin-bottom: 16px;
 }
 
 .form-group {
-    margin-bottom: 20px;
+    margin-bottom: 18px;
 }
 
 .form-group label {
     display: block;
-    margin-bottom: 8px;
-    color: var(--acc-ink);
-    font-weight: 700;
-    font-size: 0.9rem;
+    margin-bottom: 6px;
+    color: #344054;
+    font-weight: 600;
+    font-size: 0.88rem;
 }
 
 .form-group input,
 .form-group textarea,
 .form-group select {
     width: 100%;
-    padding: 12px 16px;
-    border: 1px solid var(--acc-border);
-    border-radius: 14px;
-    font-size: 0.92rem;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
-    background: #fff8f0;
+    padding: 10px 14px;
+    border: 1px solid #d0d5dd;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    background: #ffffff;
     color: var(--acc-ink);
 }
 
@@ -1156,7 +1136,7 @@ include 'includes/header.php';
 .form-group select:focus {
     outline: none;
     border-color: var(--acc-red);
-    box-shadow: 0 0 0 4px rgba(239, 107, 46, 0.12);
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.1);
     background: #ffffff;
 }
 
@@ -1169,29 +1149,29 @@ include 'includes/header.php';
 .profile-upload-row {
     display: flex;
     align-items: center;
-    gap: 18px;
+    gap: 16px;
     flex-wrap: wrap;
-    background: #fff8f0;
-    border: 1px solid var(--acc-border);
-    border-radius: 18px;
-    padding: 18px;
+    background: #f8f9fa;
+    border: 1px solid #eaecf0;
+    border-radius: 12px;
+    padding: 16px;
 }
 
 .profile-upload-preview {
-    width: 80px;
-    height: 80px;
-    border-radius: 20px;
-    border: 2px solid #ffffff;
-    background: linear-gradient(135deg, var(--acc-red) 0%, var(--acc-orange) 100%);
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    border: 1px solid #eaecf0;
+    background: #fff1f0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.6rem;
+    font-size: 1.3rem;
     font-family: 'Outfit', sans-serif;
-    font-weight: 800;
-    color: #ffffff;
+    font-weight: 700;
+    color: var(--acc-red);
     overflow: hidden;
-    box-shadow: 0 6px 16px rgba(179, 38, 30, 0.18);
+    box-shadow: none;
 }
 
 .profile-upload-preview img {
@@ -1207,20 +1187,20 @@ include 'includes/header.php';
 }
 
 .upload-note {
-    margin: 6px 0 0;
+    margin: 5px 0 0;
     color: var(--acc-muted);
-    font-size: 0.82rem;
+    font-size: 0.8rem;
     line-height: 1.4;
 }
 
 .checkbox-label {
-    margin-top: 10px;
+    margin-top: 8px;
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    color: var(--acc-ink);
-    font-size: 0.86rem;
-    font-weight: 700;
+    gap: 6px;
+    color: #344054;
+    font-size: 0.84rem;
+    font-weight: 600;
     cursor: pointer;
 }
 
@@ -1232,8 +1212,8 @@ include 'includes/header.php';
 .address-book-pane {
     background: #ffffff;
     border: 1px solid var(--acc-border);
-    border-radius: 24px;
-    box-shadow: var(--acc-shadow);
+    border-radius: 16px;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
     overflow: hidden;
 }
 
@@ -1243,92 +1223,6 @@ include 'includes/header.php';
     border: none;
     display: block;
     background: transparent;
-}
-
-.orders-list {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-}
-
-.order-item {
-    background-color: #ffffff;
-    padding: 20px;
-    border-radius: 18px;
-    border: 1px solid var(--acc-border);
-    border-left: 5px solid var(--acc-red);
-    box-shadow: 0 4px 14px rgba(42, 33, 29, 0.03);
-    transition: transform 0.25s ease, box-shadow 0.25s ease;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.order-item:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 24px rgba(179, 38, 30, 0.08);
-}
-
-.order-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px dashed #f3e8de;
-    padding-bottom: 10px;
-}
-
-.order-number {
-    font-weight: 800;
-    font-family: 'Outfit', sans-serif;
-    color: var(--acc-ink);
-    font-size: 1.05rem;
-}
-
-.order-date {
-    color: var(--acc-muted);
-    font-size: 0.82rem;
-    font-weight: 600;
-}
-
-.order-details {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.order-status {
-    padding: 5px 12px;
-    border-radius: 999px;
-    font-size: 0.78rem;
-    font-weight: 800;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    text-transform: capitalize;
-}
-
-.status-pending { background-color: #fff3e0; color: #f57c00; border: 1px solid #ffe0b2; }
-.status-assigned, .status-picked_up, .status-on_the_way, .status-arriving { background-color: #fff0eb; color: var(--acc-red); border: 1px solid var(--acc-border); }
-.status-delivered, .status-completed { background-color: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; }
-.status-cancelled, .status-rejected { background-color: #ffebee; color: #c62828; border: 1px solid #ffcdd2; }
-
-.order-total {
-    font-weight: 800;
-    font-family: 'Outfit', sans-serif;
-    color: var(--acc-red);
-    font-size: 1.15rem;
-}
-
-.empty-state {
-    text-align: center;
-    padding: 48px 20px;
-    color: var(--acc-muted);
-}
-
-.empty-state i {
-    font-size: 3rem;
-    color: var(--acc-orange);
-    margin-bottom: 12px;
 }
 
 /* Mobile Responsiveness */
@@ -1348,13 +1242,13 @@ include 'includes/header.php';
         bottom: 0;
         left: 0;
         right: 0;
-        background: rgba(255, 255, 255, 0.95);
-        backdrop-filter: blur(12px);
+        background: rgba(255, 255, 255, 0.96);
+        backdrop-filter: blur(8px);
         border-top: 1px solid var(--acc-border);
         z-index: 1000;
         padding: 8px 12px;
         justify-content: space-around;
-        box-shadow: 0 -4px 20px rgba(0,0,0,0.06);
+        box-shadow: 0 -2px 10px rgba(0,0,0,0.04);
     }
     .mobile-tab-btn {
         background: none;
@@ -1365,18 +1259,18 @@ include 'includes/header.php';
         gap: 3px;
         color: var(--acc-muted);
         font-size: 0.72rem;
-        font-weight: 700;
-        padding: 6px 10px;
-        border-radius: 12px;
+        font-weight: 600;
+        padding: 6px 12px;
+        border-radius: 8px;
         cursor: pointer;
-        transition: all 0.2s ease;
+        transition: all 0.15s ease;
     }
     .mobile-tab-btn.active {
         color: var(--acc-red);
-        background: var(--acc-cream);
+        background: #fff1f0;
     }
     .mobile-tab-btn i {
-        font-size: 1.1rem;
+        font-size: 1.05rem;
     }
 }
 
@@ -1391,8 +1285,8 @@ include 'includes/header.php';
 <div class="account-page">
     <div class="container">
         <div class="account-header-title">
-            <h1>My Account Dashboard</h1>
-            <p>Manage your profile, saved addresses, live order tracking, and account security.</p>
+            <h1>My Account</h1>
+            <p>Manage your profile information, address book, and security settings.</p>
         </div>
 
         <?php if ($success_msg): ?>
@@ -1407,72 +1301,69 @@ include 'includes/header.php';
         </div>
         <?php endif; ?>
 
-        <div class="account-dashboard-layout">
-            <!-- Left Sidebar Panel -->
-            <aside class="account-sidebar-panel">
-                <div class="user-profile-card">
-                    <div class="user-avatar-wrap">
-                        <div class="user-avatar-badge<?php echo $has_profile_image ? ' has-image' : ''; ?>">
+        <form method="POST" action="" id="profileForm" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($my_account_csrf); ?>">
+            <input type="hidden" name="update_profile" value="1">
+            
+            <div class="account-dashboard-layout">
+                <!-- Left Sidebar Panel -->
+                <aside class="account-sidebar-panel">
+                    <div class="user-profile-card">
+                        <div class="user-avatar-wrap">
+                            <div class="user-avatar-badge<?php echo $has_profile_image ? ' has-image' : ''; ?>" id="sidebarAvatarBadge" onclick="triggerAvatarUpload();" title="Click to change profile picture">
+                                <?php if ($has_profile_image): ?>
+                                <img src="<?php echo htmlspecialchars($profile_image_relative_path); ?>" alt="Profile picture" id="sidebarAvatarImg">
+                                <?php else: ?>
+                                <span id="sidebarAvatarInitials"><?php echo htmlspecialchars($avatar_initials); ?></span>
+                                <?php endif; ?>
+                                <div class="avatar-edit-overlay">
+                                    <i class="fas fa-camera"></i>
+                                </div>
+                            </div>
+                            <?php if ($avatar_column_exists_for_account): ?>
+                            <input type="file" id="account_avatar" name="account_avatar" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" style="display:none;" onchange="handleAvatarChange(this);">
+                            <button type="button" class="btn-change-photo" onclick="triggerAvatarUpload();">
+                                <i class="fas fa-camera"></i> Change Photo
+                            </button>
                             <?php if ($has_profile_image): ?>
-                            <img src="<?php echo htmlspecialchars($profile_image_relative_path); ?>" alt="Profile picture">
-                            <?php else: ?>
-                            <?php echo htmlspecialchars($avatar_initials); ?>
+                            <label class="remove-photo-label" for="remove_account_avatar">
+                                <input type="checkbox" name="remove_account_avatar" id="remove_account_avatar" value="1" onchange="this.form.submit();">
+                                <span>Remove photo</span>
+                            </label>
+                            <?php endif; ?>
                             <?php endif; ?>
                         </div>
+                        <h3 class="user-name-display"><?php echo htmlspecialchars($user['full_name'] ?? 'My Account'); ?></h3>
+                        <p class="user-email-display"><?php echo htmlspecialchars($user['email'] ?? ''); ?></p>
                     </div>
-                    <h3 class="user-name-display"><?php echo htmlspecialchars($user['full_name'] ?? 'My Account'); ?></h3>
-                    <p class="user-email-display"><?php echo htmlspecialchars($user['email'] ?? ''); ?></p>
-                    <span class="user-role-tag"><i class="fas fa-shield-check"></i> Customer Account</span>
-                </div>
 
-                <nav class="sidebar-nav-menu" aria-label="Account navigation">
-                    <button type="button" class="sidebar-nav-btn tab-btn active" data-tab="profile">
-                        <i class="fas fa-id-badge"></i> <span>Profile Information</span>
-                    </button>
-                    <button type="button" class="sidebar-nav-btn tab-btn" data-tab="addresses">
-                        <i class="fas fa-address-book"></i> <span>Address Book</span>
-                    </button>
-                    <button type="button" class="sidebar-nav-btn tab-btn" data-tab="password">
-                        <i class="fas fa-lock"></i> <span>Security & Password</span>
-                    </button>
-                </nav>
+                    <nav class="sidebar-nav-menu" aria-label="Account navigation">
+                        <button type="button" class="sidebar-nav-btn tab-btn active" data-tab="profile">
+                            <i class="fas fa-id-badge"></i> <span>Profile Information</span>
+                        </button>
+                        <button type="button" class="sidebar-nav-btn tab-btn" data-tab="addresses">
+                            <i class="fas fa-address-book"></i> <span>Address Book</span>
+                        </button>
+                        <button type="button" class="sidebar-nav-btn tab-btn" data-tab="password">
+                            <i class="fas fa-lock"></i> <span>Security & Password</span>
+                        </button>
+                    </nav>
+                </aside>
 
-                <div class="sidebar-metrics-card">
-                    <div class="sidebar-metric-item">
-                        <small>Total Orders</small>
-                        <strong><?php echo (int)$order_stats['total_orders']; ?></strong>
-                    </div>
-                    <div class="sidebar-metric-item">
-                        <small>Active</small>
-                        <strong><?php echo (int)$order_stats['active_orders']; ?></strong>
-                    </div>
-                    <div class="sidebar-metric-item">
-                        <small>Completed</small>
-                        <strong><?php echo (int)$order_stats['completed_orders']; ?></strong>
-                    </div>
-                    <div class="sidebar-metric-item">
-                        <small>Total Spent</small>
-                        <strong>&#8369;<?php echo number_format((float)$order_stats['total_spent'], 0); ?></strong>
-                    </div>
-                </div>
-            </aside>
-
-            <!-- Main Workspace Content Area -->
-            <main class="account-workspace-panel">
-                <div class="tab-content">
-                    <!-- Profile Tab -->
-                    <div class="tab-pane active" id="profile">
-                        <div class="profile-card">
-                            <div class="card-head">
-                                <h2>Profile Information</h2>
-                                <p>Keep your contact details updated for smoother order coordination.</p>
-                            </div>
-                            <div class="info-callout">
-                                <i class="fas fa-circle-info"></i>
-                                <span>Your contact name and phone number are automatically used for delivery receipts and SMS order notifications.</span>
-                            </div>
-                            <form method="POST" action="" id="profileForm" enctype="multipart/form-data">
-                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($my_account_csrf); ?>">
+                <!-- Main Workspace Content Area -->
+                <main class="account-workspace-panel">
+                    <div class="tab-content">
+                        <!-- Profile Tab -->
+                        <div class="tab-pane active" id="profile">
+                            <div class="profile-card">
+                                <div class="card-head">
+                                    <h2>Profile Information</h2>
+                                    <p>Keep your contact details updated for smoother order coordination.</p>
+                                </div>
+                                <div class="info-callout">
+                                    <i class="fas fa-circle-info"></i>
+                                    <span>Your contact name and phone number are automatically used for delivery receipts and SMS order notifications.</span>
+                                </div>
                                 <div class="form-row">
                                     <div class="form-group">
                                         <label for="full_name">Full Name</label>
@@ -1518,33 +1409,6 @@ include 'includes/header.php';
                                     <?php endif; ?>
                                 </div>
                                 <?php endif; ?>
-
-                                <div class="form-group">
-                                    <label for="account_avatar"><?php echo htmlspecialchars($avatar_field_label); ?></label>
-                                    <?php if ($avatar_column_exists_for_account): ?>
-                                    <div class="profile-upload-row">
-                                        <div class="profile-upload-preview" id="profileImagePreview">
-                                            <?php if ($has_profile_image): ?>
-                                            <img src="<?php echo htmlspecialchars($profile_image_relative_path); ?>" alt="Current avatar">
-                                            <?php else: ?>
-                                            <span><?php echo htmlspecialchars($avatar_initials); ?></span>
-                                            <?php endif; ?>
-                                        </div>
-                                        <div class="profile-upload-fields">
-                                            <input type="file" id="account_avatar" name="account_avatar" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp">
-                                            <p class="upload-note">Accepted formats: JPG, PNG, WEBP. Maximum file size: 5MB.</p>
-                                            <?php if ($has_profile_image): ?>
-                                            <label class="checkbox-label" for="remove_account_avatar">
-                                                <input type="checkbox" name="remove_account_avatar" id="remove_account_avatar" value="1">
-                                                Remove current <?php echo htmlspecialchars(strtolower($avatar_field_label)); ?>
-                                            </label>
-                                            <?php endif; ?>
-                                        </div>
-                                    </div>
-                                    <?php else: ?>
-                                    <p class="upload-note schema-note"><?php echo htmlspecialchars($avatar_field_label); ?> upload needs the latest schema. Run <code>database/schema_updates/run.php</code> once to enable this field.</p>
-                                    <?php endif; ?>
-                                </div>
                                 
                                 <div class="form-group">
                                     <label for="quick_address_select">Saved Addresses</label>
@@ -2047,6 +1911,23 @@ document.addEventListener('DOMContentLoaded', function() {
 
         syncQuickAddressSelectionWithInput();
     }
+
+    window.triggerAvatarUpload = function() {
+        const fileInput = document.getElementById('account_avatar');
+        if (fileInput) fileInput.click();
+    };
+
+    window.handleAvatarChange = function(input) {
+        if (input && input.files && input.files[0]) {
+            const form = document.getElementById('profileForm');
+            if (form) {
+                const removeCb = document.getElementById('remove_account_avatar');
+                if (removeCb) removeCb.checked = false;
+                ensureHiddenActionField(form, 'update_profile', '1');
+                form.submit();
+            }
+        }
+    };
 
     const newPassword = document.getElementById('new_password');
     const confirmPassword = document.getElementById('confirm_password');
