@@ -42,325 +42,417 @@ include 'includes/header.php';
 ?>
 
 <style>
-    .tracking-page {
-        padding: 50px 0 80px;
-        background: linear-gradient(180deg, #fff9f2 0%, #fff4e8 100%);
-        min-height: 85vh;
-    }
-    .tracking-container { max-width: 1240px; margin: 0 auto; padding: 0 16px; }
-    
-    .tracking-header { text-align: center; margin-bottom: 28px; }
-    .tracking-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        background: #fff0eb;
-        color: #b3261e;
-        border: 1px solid #efddcd;
-        padding: 6px 16px;
-        border-radius: 20px;
-        font-size: 0.8rem;
-        font-weight: 700;
-        letter-spacing: 0.5px;
-        text-transform: uppercase;
-        margin-bottom: 12px;
-    }
-    .tracking-header h1 {
-        font-size: clamp(2rem, 4.5vw, 2.6rem);
-        color: #171922;
-        font-weight: 800;
-        margin-bottom: 6px;
-        letter-spacing: -0.3px;
-    }
-    .tracking-header h1 span {
-        background: linear-gradient(135deg, #b3261e, #ef6b2e);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-    }
-    .tracking-order-num {
-        display: inline-block;
-        font-size: 0.95rem;
-        color: #7b6d64;
-        background: #ffffff;
-        border: 1px solid #efddcd;
-        padding: 4px 14px;
-        border-radius: 8px;
-        font-family: monospace;
-        font-weight: 600;
-    }
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
-    .tracking-meta {
-        margin-top: 22px;
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 16px;
-    }
-    .tracking-meta-card {
-        background: #ffffff;
-        border: 1px solid #efddcd;
-        border-radius: 16px;
-        padding: 16px 18px;
-        box-shadow: 0 8px 24px rgba(42, 33, 29, 0.04);
-        display: flex;
-        align-items: center;
-        gap: 14px;
-        text-align: left;
-        transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.22s ease;
-    }
-    .tracking-meta-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 12px 30px rgba(179, 38, 30, 0.08);
-        border-color: #e8d4c3;
-    }
-    .tracking-meta-card i {
-        width: 44px;
-        height: 44px;
-        border-radius: 12px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        background: linear-gradient(135deg, #b3261e, #ef6b2e);
-        color: #ffffff;
-        font-size: 1.1rem;
-        box-shadow: 0 6px 16px rgba(179, 38, 30, 0.2);
-        flex-shrink: 0;
-    }
-    .tracking-meta-card span {
-        display: block;
-        font-size: 0.76rem;
-        color: #7b6d64;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        font-weight: 700;
-    }
-    .tracking-meta-card strong {
-        display: block;
-        color: #171922;
-        font-size: 1.05rem;
-        font-weight: 800;
-        margin-top: 2px;
-    }
+.tracking-page {
+    padding: 32px 0 140px;
+    background: #f8f9fa;
+    min-height: 85vh;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+}
 
-    .tracking-grid { display: grid; grid-template-columns: 1.85fr 1fr; gap: 24px; }
-    
-    #map {
-        height: 600px;
-        width: 100%;
-        border-radius: 18px;
-        border: 1px solid #efddcd;
-        box-shadow: 0 14px 34px rgba(23, 25, 34, 0.08);
-        overflow: hidden;
-    }
+.tracking-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
 
-    .status-panel {
-        background: #ffffff;
-        border-radius: 18px;
-        padding: 24px;
-        border: 1px solid #efddcd;
-        box-shadow: 0 14px 34px rgba(23, 25, 34, 0.07);
-    }
-    .status-panel h3 {
-        font-size: 1.3rem;
-        font-weight: 800;
-        margin-bottom: 18px;
-        border-bottom: 1px solid #f3e8de;
-        padding-bottom: 14px;
-        color: #171922;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-    }
-    .status-panel h3 .live-indicator {
-        font-size: 0.75rem;
-        background: #e8f5e9;
-        color: #2e7d32;
-        border: 1px solid #c8e6c9;
-        padding: 3px 10px;
-        border-radius: 12px;
-        font-weight: 700;
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-    }
-    .status-panel h3 .live-dot {
-        width: 7px;
-        height: 7px;
-        border-radius: 50%;
-        background: #2e7d32;
-        animation: blink 1.5s infinite;
-    }
-    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+.tracking-header {
+    text-align: center;
+    margin-bottom: 24px;
+}
 
-    .eta-badge {
-        background: linear-gradient(135deg, #fff9f2 0%, #fff4e8 100%);
-        color: #b3261e;
-        padding: 14px 16px;
-        border-radius: 14px;
-        font-weight: 800;
-        font-size: 1.1rem;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 16px;
-        border: 1px solid #efddcd;
-        box-shadow: 0 4px 14px rgba(179, 38, 30, 0.05);
-        width: 100%;
-    }
-    .eta-badge i { font-size: 1.25rem; color: #ef6b2e; }
+.tracking-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #fff1f0;
+    color: #b3261e;
+    border: 1px solid #fee4e2;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 10px;
+}
 
-    .route-metrics {
-        background: #fffaf5;
-        border: 1px solid #efddcd;
-        border-radius: 14px;
-        padding: 14px 16px;
-        margin-bottom: 18px;
-    }
-    .route-metric-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        font-size: 0.88rem;
-        color: #7b6d64;
-        padding: 6px 0;
-        border-bottom: 1px dashed #f3e3d4;
-    }
-    .route-metric-row:last-child { border-bottom: 0; }
-    .route-metric-row span { display: flex; align-items: center; gap: 8px; }
-    .route-metric-row span i { color: #ef6b2e; width: 14px; text-align: center; }
-    .route-metric-row strong {
-        color: #171922;
-        font-weight: 800;
-    }
+.tracking-header h1 {
+    font-size: 1.35rem;
+    color: #101828;
+    font-weight: 700;
+    font-family: 'Outfit', sans-serif;
+    margin: 0 0 6px;
+}
 
-    .status-item { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; background: #fffaf5; border: 1px solid #efddcd; border-radius: 14px; padding: 14px; }
-    .status-icon { width: 46px; height: 46px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0; }
-    .status-icon.pending { background: #fff3e0; color: #f57c00; }
-    .status-icon.assigned { background: #fff0eb; color: #b3261e; }
-    .status-icon.on_the_way { background: #fff0eb; color: #ef6b2e; }
-    .status-icon.delivered { background: #e8f5e9; color: #2e7d32; }
-    .status-text strong { display: block; font-size: 1.05rem; color: #171922; font-weight: 800; }
-    .status-text span { font-size: 0.88rem; color: #667085; line-height: 1.45; margin-top: 2px; display: block; }
+.tracking-order-num {
+    display: inline-block;
+    font-size: 0.85rem;
+    color: #344054;
+    background: #ffffff;
+    border: 1px solid #d0d5dd;
+    padding: 4px 12px;
+    border-radius: 8px;
+    font-family: monospace;
+    font-weight: 600;
+}
 
-    .driver-info { margin-top: 20px; padding-top: 18px; border-top: 1px solid #f3e8de; }
-    .driver-info h4 { margin-bottom: 12px; color: #171922; font-size: 1rem; font-weight: 800; }
-    .driver-card-mini { display: flex; align-items: center; justify-content: space-between; background: #fffaf5; border: 1px solid #efddcd; border-radius: 14px; padding: 12px 14px; }
-    .driver-meta-name { font-weight: 800; color: #171922; font-size: 0.98rem; }
-    .btn-call-driver {
-        background: linear-gradient(135deg, #b3261e, #ef6b2e);
-        color: #ffffff !important;
-        border: 0;
-        padding: 8px 16px;
-        border-radius: 10px;
-        font-weight: 700;
-        font-size: 0.85rem;
-        text-decoration: none;
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        box-shadow: 0 4px 12px rgba(179, 38, 30, 0.2);
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-    .btn-call-driver:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(179, 38, 30, 0.3); color: #fff !important; }
+.tracking-meta {
+    margin-top: 20px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+}
 
-    .delivery-address-info { margin-top: 20px; padding-top: 18px; border-top: 1px solid #f3e8de; }
-    .delivery-address-info h4 { margin-bottom: 8px; color: #171922; font-size: 1rem; font-weight: 800; display: flex; align-items: center; gap: 8px; }
-    .delivery-address-info h4 i { color: #b3261e; }
-    .delivery-address-info p { color: #667085; font-size: 0.92rem; margin: 0; line-height: 1.5; }
+.tracking-meta-card {
+    background: #ffffff;
+    border: 1px solid #eaecf0;
+    border-radius: 14px;
+    padding: 16px;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-align: left;
+    transition: all 0.15s ease;
+}
 
-    .delivery-chat-panel { margin-top: 20px; padding-top: 18px; border-top: 1px solid #f3e8de; }
-    .delivery-chat-panel h4 { margin-bottom: 12px; color: #171922; font-size: 1rem; font-weight: 800; display: flex; align-items: center; gap: 8px; }
-    .delivery-chat-panel h4 i { color: #ef6b2e; }
-    .delivery-chat-messages {
-        max-height: 240px;
-        overflow-y: auto;
-        background: #fffaf5;
-        border: 1px solid #efddcd;
-        border-radius: 14px;
-        padding: 14px;
-        margin-bottom: 12px;
-    }
-    .chat-empty { color: #7b6d64; text-align: center; padding: 16px; font-size: 0.9rem; }
-    .chat-message.customer .chat-bubble { background: linear-gradient(135deg, #b3261e, #ef6b2e); color: #ffffff; border-radius: 14px 14px 2px 14px; box-shadow: 0 4px 12px rgba(179, 38, 30, 0.15); }
-    .chat-message.driver .chat-bubble { background: #ffffff; color: #171922; border: 1px solid #efddcd; border-radius: 14px 14px 14px 2px; }
-    .chat-time { font-size: 0.72rem; color: #7b6d64; margin-top: 3px; }
-    
-    .delivery-chat-form { display: flex; gap: 8px; align-items: flex-end; }
-    .delivery-chat-form textarea {
-        flex: 1;
-        min-height: 44px;
-        max-height: 120px;
-        border: 1px solid #efddcd;
-        border-radius: 12px;
-        padding: 10px 12px;
-        font-size: 0.92rem;
-        background: #ffffff;
-        color: #171922;
-        transition: border-color 0.2s ease, box-shadow 0.2s ease;
-    }
-    .delivery-chat-form textarea:focus {
-        outline: none;
-        border-color: #b3261e;
-        box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.12);
-    }
-    .delivery-chat-form button {
-        border: 0;
-        border-radius: 12px;
-        background: linear-gradient(135deg, #b3261e, #ef6b2e);
-        color: #ffffff;
-        padding: 11px 20px;
-        font-weight: 700;
-        box-shadow: 0 4px 14px rgba(179, 38, 30, 0.2);
-        transition: transform 0.18s ease, background 0.18s ease;
-    }
-    .delivery-chat-form button:hover:not(:disabled) {
-        transform: translateY(-1px);
-    }
+.tracking-meta-card:hover {
+    border-color: #d0d5dd;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(16, 24, 40, 0.08);
+}
 
-    .view-proof-link {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        margin-top: 10px;
-        padding: 8px 16px;
-        background: #2e7d32;
-        color: white !important;
-        text-decoration: none;
-        border-radius: 8px;
-        font-weight: 700;
-        font-size: 0.88rem;
-    }
-    .rate-delivery-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        margin-top: 10px;
-        padding: 8px 16px;
-        background: #ffb300;
-        color: #171922 !important;
-        text-decoration: none;
-        border-radius: 8px;
-        font-weight: 700;
-        font-size: 0.88rem;
-        border: none;
-        cursor: pointer;
-    }
-    .rate-delivery-btn.disabled {
-        background: #e9ecef;
-        color: #6c757d !important;
-        cursor: not-allowed;
-    }
-    @media (max-width: 992px) {
-        .tracking-meta { grid-template-columns: 1fr; }
-        .tracking-grid { grid-template-columns: 1fr; }
-        #map { height: 420px; }
-    }
+.tracking-meta-card i {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff1f0;
+    color: #b3261e;
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.tracking-meta-card span {
+    display: block;
+    font-size: 0.72rem;
+    color: #667085;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 700;
+}
+
+.tracking-meta-card strong {
+    display: block;
+    color: #101828;
+    font-size: 0.98rem;
+    font-weight: 700;
+    margin-top: 2px;
+}
+
+.tracking-grid {
+    display: grid;
+    grid-template-columns: 1.85fr 1fr;
+    gap: 24px;
+    margin-top: 24px;
+}
+
+#map {
+    height: 580px;
+    width: 100%;
+    border-radius: 16px;
+    border: 1px solid #eaecf0;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+    overflow: hidden;
+}
+
+.status-panel {
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 24px;
+    border: 1px solid #eaecf0;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+}
+
+.status-panel h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    font-family: 'Outfit', sans-serif;
+    margin: 0 0 16px;
+    border-bottom: 1px solid #f2f4f7;
+    padding-bottom: 12px;
+    color: #101828;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.status-panel h3 .live-indicator {
+    font-size: 0.72rem;
+    background: #ecfdf3;
+    color: #027a48;
+    border: 1px solid #abefc6;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.status-panel h3 .live-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #12b76a;
+    animation: blink 1.5s infinite;
+}
+
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+.eta-badge {
+    background: #fff1f0;
+    color: #b3261e;
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.98rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+    border: 1px solid #fee4e2;
+    width: 100%;
+}
+
+.eta-badge i { font-size: 1.1rem; color: #b3261e; }
+
+.route-metrics {
+    background: #f8f9fa;
+    border: 1px solid #eaecf0;
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 16px;
+}
+
+.route-metric-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.84rem;
+    color: #475467;
+    padding: 5px 0;
+    border-bottom: 1px dashed #eaecf0;
+}
+
+.route-metric-row:last-child { border-bottom: 0; }
+.route-metric-row span { display: flex; align-items: center; gap: 6px; }
+.route-metric-row span i { color: #b3261e; width: 14px; text-align: center; }
+.route-metric-row strong {
+    color: #101828;
+    font-weight: 700;
+}
+
+.status-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+    background: #f8f9fa;
+    border: 1px solid #eaecf0;
+    border-radius: 10px;
+    padding: 12px 14px;
+}
+
+.status-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.status-icon.pending { background: #fffaeb; color: #b54708; border: 1px solid #fedf89; }
+.status-icon.assigned { background: #fff1f0; color: #b3261e; border: 1px solid #fee4e2; }
+.status-icon.on_the_way { background: #eff8ff; color: #175cd3; border: 1px solid #b2ddff; }
+.status-icon.delivered { background: #ecfdf3; color: #027a48; border: 1px solid #abefc6; }
+
+.status-text strong { display: block; font-size: 0.95rem; color: #101828; font-weight: 700; }
+.status-text span { font-size: 0.82rem; color: #667085; line-height: 1.4; margin-top: 2px; display: block; }
+
+.driver-info { margin-top: 18px; padding-top: 16px; border-top: 1px solid #f2f4f7; }
+.driver-info h4 { margin-bottom: 10px; color: #101828; font-size: 0.95rem; font-weight: 700; font-family: 'Outfit', sans-serif; }
+.driver-card-mini { display: flex; align-items: center; justify-content: space-between; background: #f8f9fa; border: 1px solid #eaecf0; border-radius: 10px; padding: 12px 14px; }
+.driver-meta-name { font-weight: 700; color: #101828; font-size: 0.9rem; }
+
+.btn-call-driver {
+    background: #b3261e;
+    color: #ffffff !important;
+    border: 0;
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.82rem;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: background-color 0.15s ease;
+}
+.btn-call-driver:hover { background: #981b15; color: #ffffff !important; }
+
+.delivery-address-info { margin-top: 18px; padding-top: 16px; border-top: 1px solid #f2f4f7; }
+.delivery-address-info h4 { margin-bottom: 6px; color: #101828; font-size: 0.95rem; font-weight: 700; font-family: 'Outfit', sans-serif; display: flex; align-items: center; gap: 6px; }
+.delivery-address-info h4 i { color: #b3261e; }
+.delivery-address-info p { color: #475467; font-size: 0.86rem; margin: 0; line-height: 1.45; }
+
+.delivery-chat-panel { margin-top: 18px; padding-top: 16px; border-top: 1px solid #f2f4f7; }
+.delivery-chat-panel h4 { margin-bottom: 10px; color: #101828; font-size: 0.95rem; font-weight: 700; font-family: 'Outfit', sans-serif; display: flex; align-items: center; gap: 6px; }
+.delivery-chat-panel h4 i { color: #b3261e; }
+.delivery-chat-messages {
+    max-height: 220px;
+    overflow-y: auto;
+    background: #f8f9fa;
+    border: 1px solid #eaecf0;
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 10px;
+}
+.chat-empty { color: #667085; text-align: center; padding: 14px; font-size: 0.84rem; }
+.chat-message.customer .chat-bubble { background: #b3261e; color: #ffffff; border-radius: 10px 10px 2px 10px; }
+.chat-message.driver .chat-bubble { background: #ffffff; color: #101828; border: 1px solid #eaecf0; border-radius: 10px 10px 10px 2px; }
+.chat-time { font-size: 0.72rem; color: #667085; margin-top: 3px; }
+
+.delivery-chat-form { display: flex; gap: 8px; align-items: flex-end; }
+.delivery-chat-form textarea {
+    flex: 1;
+    min-height: 40px;
+    max-height: 100px;
+    border: 1px solid #d0d5dd;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 0.86rem;
+    background: #ffffff;
+    color: #101828;
+    outline: none;
+    transition: border-color 0.15s ease;
+}
+.delivery-chat-form textarea:focus {
+    border-color: #b3261e;
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.1);
+}
+.delivery-chat-form button {
+    border: 0;
+    border-radius: 8px;
+    background: #b3261e;
+    color: #ffffff;
+    padding: 9px 16px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+.delivery-chat-form button:hover:not(:disabled) {
+    background: #981b15;
+}
+
+.tracking-pending-box {
+    background: #ffffff;
+    border: 1px dashed #eaecf0;
+    border-radius: 16px;
+    padding: 40px 24px;
+    text-align: center;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+    max-width: 680px;
+    margin: 24px auto 0;
+}
+
+.tracking-pending-icon {
+    width: 54px;
+    height: 54px;
+    border-radius: 50%;
+    background: #fff1f0;
+    color: #b3261e;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.35rem;
+    margin-bottom: 14px;
+    border: 1px solid #fee4e2;
+}
+
+.tracking-pending-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #101828;
+    font-family: 'Outfit', sans-serif;
+    margin: 0 0 6px;
+}
+
+.tracking-pending-desc {
+    color: #667085;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    margin: 0 0 20px;
+}
+
+.tracking-pending-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.btn-track-action-primary {
+    background: #b3261e;
+    color: #ffffff !important;
+    padding: 9px 18px;
+    border-radius: 8px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: background-color 0.15s ease;
+}
+.btn-track-action-primary:hover { background: #981b15; }
+
+.btn-track-action-secondary {
+    background: #ffffff;
+    color: #344054 !important;
+    border: 1px solid #d0d5dd;
+    padding: 9px 18px;
+    border-radius: 8px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s ease;
+}
+.btn-track-action-secondary:hover { background: #f8f9fa; color: #101828 !important; }
+
+@media (max-width: 992px) {
+    .tracking-meta { grid-template-columns: 1fr; }
+    .tracking-grid { grid-template-columns: 1fr; }
+    #map { height: 380px; }
+}
 </style>
 
 <section class="tracking-page">
     <div class="container tracking-container">
         <div class="tracking-header">
             <div class="tracking-badge"><i class="fas fa-satellite-dish"></i> Live Order Tracking</div>
-            <h1>Track <span>Your Order</span></h1>
+            <h1>Track Order</h1>
             <div class="tracking-order-num">#<?php echo htmlspecialchars($order['order_number']); ?></div>
             <div class="tracking-meta">
                 <div class="tracking-meta-card">
@@ -388,15 +480,15 @@ include 'includes/header.php';
         </div>
 
         <?php if ($tracking_info): ?>
-        <div id="trackingNotificationToast" style="display:none; background:#171922; color:#fff; border-left:4px solid #ef6b2e; padding:14px 18px; border-radius:14px; margin-bottom:18px; box-shadow:0 10px 25px rgba(23,25,34,0.15);">
+        <div id="trackingNotificationToast" style="display:none; background:#171922; color:#fff; border-left:4px solid #b3261e; padding:14px 18px; border-radius:12px; margin-bottom:18px; box-shadow:0 4px 12px rgba(16,24,40,0.08);">
             <div style="display:flex; align-items:center; justify-content:space-between;">
                 <div style="display:flex; align-items:center; gap:14px;">
-                    <div style="width:42px; height:42px; border-radius:50%; background:linear-gradient(135deg,#b3261e,#ef6b2e); display:flex; align-items:center; justify-content:center; color:#fff; font-size:1.2rem; flex-shrink:0; box-shadow:0 4px 12px rgba(179,38,30,0.3);">
+                    <div style="width:38px; height:38px; border-radius:50%; background:#b3261e; display:flex; align-items:center; justify-content:center; color:#fff; font-size:1.1rem; flex-shrink:0;">
                         <i class="fas fa-motorcycle"></i>
                     </div>
                     <div>
-                        <strong id="toastTitle" style="display:block; font-size:1.05rem; color:#fff; font-weight:800;">Rider En Route!</strong>
-                        <span id="toastMessage" style="font-size:0.92rem; color:#cbd5e1; line-height:1.4;">Your rider has picked up your order and left the store.</span>
+                        <strong id="toastTitle" style="display:block; font-size:1rem; color:#fff; font-weight:700;">Rider En Route!</strong>
+                        <span id="toastMessage" style="font-size:0.86rem; color:#cbd5e1; line-height:1.4;">Your rider has picked up your order and left the store.</span>
                     </div>
                 </div>
                 <button onclick="document.getElementById('trackingNotificationToast').style.display='none'" style="background:transparent; border:0; color:#94a3b8; font-size:1.3rem; cursor:pointer; padding:0 6px;">&times;</button>
@@ -422,7 +514,7 @@ include 'includes/header.php';
                     <div class="driver-card-mini">
                         <div>
                             <div class="driver-meta-name" id="driverName">--</div>
-                            <span style="font-size:0.8rem; color:#7b6d64;">Assigned Delivery Rider</span>
+                            <span style="font-size:0.8rem; color:#667085;">Assigned Delivery Rider</span>
                         </div>
                         <div id="driverPhoneRow" style="display: none;">
                             <a id="driverPhoneLink" href="#" class="btn-call-driver"><i class="fas fa-phone-alt"></i> Call</a>
@@ -447,8 +539,14 @@ include 'includes/header.php';
             </div>
         </div>
         <?php else: ?>
-        <div class="alert alert-info text-center">
-            Tracking information is not yet available for this order. It will appear here once a driver is assigned.
+        <div class="tracking-pending-box">
+            <div class="tracking-pending-icon"><i class="fas fa-clock"></i></div>
+            <h3 class="tracking-pending-title">Tracking Pending Assignment</h3>
+            <p class="tracking-pending-desc">Tracking information is not yet available for this order. It will automatically update live here once a delivery driver is assigned.</p>
+            <div class="tracking-pending-actions">
+                <a href="my_orders.php" class="btn-track-action-secondary"><i class="fas fa-arrow-left"></i> View My Orders</a>
+                <a href="help_center.php" class="btn-track-action-primary"><i class="fas fa-headset"></i> Contact Support</a>
+            </div>
         </div>
         <?php endif; ?>
     </div>
