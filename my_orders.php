@@ -858,17 +858,17 @@ unset($order);
 
 /* Page Header */
 .orders-header {
-    margin-bottom: 20px;
+    margin-bottom: 12px;
 }
 .header-text h1 {
-    font-size: 1.75rem;
-    font-weight: 800;
+    font-size: 1.25rem;
+    font-weight: 700;
     color: #101828;
-    margin: 0 0 4px 0;
-    letter-spacing: -0.3px;
+    margin: 0 0 2px 0;
+    letter-spacing: -0.2px;
 }
 .header-text p {
-    font-size: 0.95rem;
+    font-size: 0.82rem;
     color: #667085;
     margin: 0;
 }

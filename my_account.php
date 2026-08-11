@@ -1284,11 +1284,6 @@ include 'includes/header.php';
 
 <div class="account-page">
     <div class="container">
-        <div class="account-header-title">
-            <h1>My Account</h1>
-            <p>Manage your profile information, address book, and security settings.</p>
-        </div>
-
         <?php if ($success_msg): ?>
         <div class="alert alert-success">
             <i class="fas fa-check-circle"></i> <?php echo $success_msg; ?>

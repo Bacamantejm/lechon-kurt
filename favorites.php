@@ -167,67 +167,96 @@ if (!empty($favorite_product_ids)) {
 include 'includes/header.php';
 ?>
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
 .favorites-page {
-    padding: 28px 0 60px;
+    padding: 32px 0 140px;
+    background: #f8f9fa;
+    min-height: 85vh;
+    font-family: 'Plus Jakarta Sans', sans-serif;
 }
 
 .favorites-page .container {
     max-width: 1160px;
+    margin: 0 auto;
+    padding: 0 20px;
 }
 
 .favorites-head {
-    margin-bottom: 16px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid #eaecf0;
+    padding-bottom: 16px;
 }
 
 .favorites-head h1 {
-    margin: 0 0 10px;
-    font-size: clamp(2rem, 3.2vw, 2.8rem);
+    margin: 0 0 4px;
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #101828;
+    font-family: 'Outfit', sans-serif;
 }
 
 .favorites-head p {
     margin: 0;
-    color: #6b7280;
+    color: #667085;
+    font-size: 0.88rem;
 }
 
 .favorite-section {
-    margin-top: 28px;
+    margin-top: 24px;
 }
 
 .favorite-section-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
+    gap: 12px;
     flex-wrap: wrap;
     margin-bottom: 14px;
 }
 
 .favorite-section-head h2 {
     margin: 0;
-    font-size: 1.4rem;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #101828;
+    font-family: 'Outfit', sans-serif;
 }
 
 .favorite-count {
-    font-weight: 700;
-    color: #64748b;
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: #f2f4f7;
+    color: #344054;
+    font-size: 0.76rem;
+    font-weight: 600;
 }
 
 .favorite-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 14px;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 16px;
 }
 
 .favorite-card {
-    background: #fff;
-    border: 1px solid #efdccf;
-    border-radius: 20px;
+    background: #ffffff;
+    border: 1px solid #eaecf0;
+    border-radius: 14px;
     overflow: hidden;
-    box-shadow: 0 14px 28px rgba(15, 23, 42, 0.08);
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+    transition: all 0.15s ease;
+}
+
+.favorite-card:hover {
+    border-color: #d0d5dd;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(16, 24, 40, 0.08);
 }
 
 .favorite-cover {
-    height: 150px;
+    height: 140px;
     background-position: center;
     background-size: cover;
     position: relative;
@@ -235,65 +264,116 @@ include 'includes/header.php';
 
 .favorite-toggle {
     position: absolute;
-    top: 12px;
-    right: 12px;
-    width: 36px;
-    height: 36px;
+    top: 10px;
+    right: 10px;
+    width: 34px;
+    height: 34px;
     border-radius: 50%;
-    border: 1px solid rgba(255, 255, 255, 0.9);
-    background: rgba(255, 255, 255, 0.95);
-    color: #8b7e76;
+    border: 1px solid #fee4e2;
+    background: #ffffff;
+    color: #b3261e;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    transition: all 0.15s ease;
+}
+
+.favorite-toggle:hover {
+    transform: scale(1.08);
 }
 
 .favorite-toggle.is-active {
     color: #b3261e;
-    background: #fff1ea;
-    border-color: #f4c8b1;
+    background: #ffffff;
 }
 
 .favorite-body {
-    padding: 14px 15px 16px;
+    padding: 14px 16px;
 }
 
 .favorite-subtitle {
-    margin: 0 0 6px;
-    font-size: 0.82rem;
-    color: #7c8798;
+    margin: 0 0 4px;
+    font-size: 0.72rem;
+    color: #b3261e;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.04em;
 }
 
 .favorite-title {
-    margin: 0 0 8px;
-    font-size: 1.1rem;
+    margin: 0 0 6px;
+    font-size: 0.98rem;
+    font-weight: 700;
+    color: #101828;
+    line-height: 1.35;
 }
 
 .favorite-meta {
-    margin: 0 0 14px;
-    color: #667085;
-    font-size: 0.92rem;
+    margin: 0 0 12px;
+    color: #475467;
+    font-size: 0.84rem;
 }
 
 .favorite-link {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    background: #ffffff;
+    border: 1px solid #d0d5dd;
+    color: #344054;
+    font-size: 0.8rem;
+    font-weight: 600;
     text-decoration: none;
-    font-weight: 700;
-    color: #111827;
+    transition: all 0.15s ease;
+}
+
+.favorite-link:hover {
+    background: #f8f9fa;
+    color: #101828;
+    border-color: #98a2b3;
 }
 
 .favorite-empty {
-    background: #fff;
-    border: 1px dashed #ebd9cb;
-    border-radius: 18px;
-    padding: 20px;
+    background: #ffffff;
+    border: 1px dashed #eaecf0;
+    border-radius: 12px;
+    padding: 32px 24px;
+    text-align: center;
     color: #667085;
+    font-size: 0.88rem;
+}
+
+.favorite-empty i {
+    font-size: 1.6rem;
+    color: #98a2b3;
+    margin-bottom: 8px;
+    display: block;
+}
+
+.favorite-empty-text {
+    margin-bottom: 12px;
+}
+
+.btn-empty-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    background: #b3261e;
+    color: #ffffff;
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background-color 0.15s ease;
+}
+
+.btn-empty-action:hover {
+    background: #981b15;
 }
 </style>
 
@@ -310,7 +390,11 @@ include 'includes/header.php';
                 <span class="favorite-count" id="favoriteShopsCount"><?php echo number_format(count($favorite_stores)); ?> saved</span>
             </div>
             <?php if (empty($favorite_stores)): ?>
-                <div class="favorite-empty" id="favoriteShopsEmpty">No favorite shops yet. Browse stores and tap the heart icon to save one.</div>
+                <div class="favorite-empty" id="favoriteShopsEmpty">
+                    <i class="fas fa-store-slash"></i>
+                    <div class="favorite-empty-text">No favorite shops yet. Browse partner stores and tap the heart icon to save them here.</div>
+                    <a href="index.php#marketplaceStores" class="btn-empty-action"><i class="fas fa-store"></i> Browse Partner Stores</a>
+                </div>
             <?php else: ?>
                 <div class="favorite-grid" id="favoriteShopsGrid">
                     <?php foreach ($favorite_stores as $store): ?>
@@ -337,7 +421,11 @@ include 'includes/header.php';
                         </article>
                     <?php endforeach; ?>
                 </div>
-                <div class="favorite-empty" id="favoriteShopsEmpty" style="display:none;">No favorite shops yet. Browse stores and tap the heart icon to save one.</div>
+                <div class="favorite-empty" id="favoriteShopsEmpty" style="display:none;">
+                    <i class="fas fa-store-slash"></i>
+                    <div class="favorite-empty-text">No favorite shops yet. Browse partner stores and tap the heart icon to save them here.</div>
+                    <a href="index.php#marketplaceStores" class="btn-empty-action"><i class="fas fa-store"></i> Browse Partner Stores</a>
+                </div>
             <?php endif; ?>
         </section>
 
@@ -347,7 +435,11 @@ include 'includes/header.php';
                 <span class="favorite-count" id="favoriteProductsCount"><?php echo number_format(count($favorite_products)); ?> saved</span>
             </div>
             <?php if (empty($favorite_products)): ?>
-                <div class="favorite-empty" id="favoriteProductsEmpty">No favorite products yet. Open the menu and save the dishes you want to order again.</div>
+                <div class="favorite-empty" id="favoriteProductsEmpty">
+                    <i class="fas fa-utensils"></i>
+                    <div class="favorite-empty-text">No favorite products yet. Open the menu and save the dishes you want to order again.</div>
+                    <a href="menu.php" class="btn-empty-action"><i class="fas fa-book-open"></i> View Menu</a>
+                </div>
             <?php else: ?>
                 <div class="favorite-grid" id="favoriteProductsGrid">
                     <?php foreach ($favorite_products as $product): ?>
@@ -379,7 +471,11 @@ include 'includes/header.php';
                         </article>
                     <?php endforeach; ?>
                 </div>
-                <div class="favorite-empty" id="favoriteProductsEmpty" style="display:none;">No favorite products yet. Open the menu and save the dishes you want to order again.</div>
+                <div class="favorite-empty" id="favoriteProductsEmpty" style="display:none;">
+                    <i class="fas fa-utensils"></i>
+                    <div class="favorite-empty-text">No favorite products yet. Open the menu and save the dishes you want to order again.</div>
+                    <a href="menu.php" class="btn-empty-action"><i class="fas fa-book-open"></i> View Menu</a>
+                </div>
             <?php endif; ?>
         </section>
     </div>
