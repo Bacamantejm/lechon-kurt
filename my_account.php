@@ -1432,12 +1432,6 @@ include 'includes/header.php';
                     <button type="button" class="sidebar-nav-btn tab-btn" data-tab="addresses">
                         <i class="fas fa-address-book"></i> <span>Address Book</span>
                     </button>
-                    <button type="button" class="sidebar-nav-btn tab-btn" data-tab="orders">
-                        <i class="fas fa-receipt"></i> <span>My Orders</span>
-                    </button>
-                    <button type="button" class="sidebar-nav-btn tab-btn" data-tab="franchise">
-                        <i class="fas fa-store"></i> <span>Franchise Application</span>
-                    </button>
                     <button type="button" class="sidebar-nav-btn tab-btn" data-tab="password">
                         <i class="fas fa-lock"></i> <span>Security & Password</span>
                     </button>
@@ -1618,137 +1612,7 @@ include 'includes/header.php';
                         </div>
                     </div>
                     
-                    <!-- Orders Tab -->
-                    <div class="tab-pane" id="orders">
-                        <div class="orders-card">
-                            <div class="card-head">
-                                <h2>My Orders</h2>
-                                <p>Review status, amount, and order history in one timeline.</p>
-                            </div>
-                            <div class="info-callout">
-                                <i class="fas fa-truck-fast"></i>
-                                <span>Active orders feature live rider tracking. Click <strong>Track Delivery</strong> to view your rider moving in real-time on the map.</span>
-                            </div>
-                            <?php
-                            // Get user orders
-                            $orders_query = "SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC";
-                            $stmt = mysqli_prepare($conn, $orders_query);
-                            mysqli_stmt_bind_param($stmt, "i", $user_id);
-                            mysqli_stmt_execute($stmt);
-                            $orders_result = mysqli_stmt_get_result($stmt);
-                            
-                            if (mysqli_num_rows($orders_result) > 0): ?>
-                            <div class="orders-list">
-                                <?php while ($order = mysqli_fetch_assoc($orders_result)): 
-                                    $status_clean = strtolower((string)$order['status']);
-                                    $is_active_order = in_array($status_clean, ['assigned', 'picked_up', 'on_the_way', 'arriving', 'pending', 'confirmed', 'preparing'], true);
-                                ?>
-                                <div class="order-item">
-                                    <div class="order-header">
-                                        <div class="order-number"><i class="fas fa-receipt" style="color:#ef6b2e; margin-right:6px;"></i> Order #<?php echo htmlspecialchars($order['order_number']); ?></div>
-                                        <div class="order-date"><i class="far fa-calendar-alt"></i> <?php echo date('M j, Y • g:i A', strtotime($order['created_at'])); ?></div>
-                                    </div>
-                                    <div class="order-details">
-                                        <div class="order-status status-<?php echo $status_clean; ?>">
-                                            <?php if ($is_active_order): ?>
-                                            <span style="display:inline-block; width:7px; height:7px; border-radius:50%; background:#b3261e; animation:blink 1.5s infinite; margin-right:6px;"></span>
-                                            <?php endif; ?>
-                                            <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $order['status']))); ?>
-                                        </div>
-                                        <div class="order-total">&#8369;<?php echo number_format((float)$order['total_amount'], 2); ?></div>
-                                    </div>
-                                    <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:6px;">
-                                        <?php if ($is_active_order): ?>
-                                        <a href="track_order.php?order_id=<?php echo $order['id']; ?>" class="btn-primary" style="padding: 8px 16px; font-size:0.85rem;"><i class="fas fa-motorcycle"></i> Track Delivery</a>
-                                        <?php else: ?>
-                                        <a href="track_order.php?order_id=<?php echo $order['id']; ?>" class="btn-outline" style="padding: 8px 16px; font-size:0.85rem;"><i class="fas fa-eye"></i> View Details</a>
-                                        <?php endif; ?>
-                                    </div>
-                                </div>
-                                <?php endwhile; ?>
-                            </div>
-                            <?php else: ?>
-                            <div class="empty-state">
-                                <i class="fas fa-shopping-bag"></i>
-                                <p>You haven't placed any orders yet.</p>
-                                <a href="menu.php" class="btn-primary">Order Now</a>
-                            </div>
-                            <?php endif; ?>
-                            <?php mysqli_stmt_close($stmt); ?>
-                        </div>
-                    </div>
-                    
-                    <!-- Franchise Tab -->
-                    <div class="tab-pane" id="franchise">
-                        <div class="franchise-card">
-                            <div class="card-head">
-                                <h2>Franchise Application</h2>
-                                <p>Track your business application status and next available actions.</p>
-                            </div>
-                            
-                            <?php if ($franchise): ?>
-                            <div class="application-status">
-                                <h3>Application Status</h3>
-                                <div class="status-card status-<?php echo $franchise['status']; ?>">
-                                    <div class="status-header">
-                                        <h4>Application #<?php echo $franchise['application_number']; ?></h4>
-                                        <span class="status-badge"><?php echo ucfirst($franchise['status']); ?></span>
-                                    </div>
-                                    <p>Submitted on: <?php echo date('F j, Y, g:i a', strtotime($franchise['created_at'])); ?></p>
-                                    
-                                    <?php if ($franchise['status'] == 'approved'): ?>
-                                    <div class="status-message success">
-                                        <i class="fas fa-check-circle"></i>
-                                        <p>Congratulations! Your franchise application has been approved.</p>
-                                    </div>
-                                    <div class="status-actions">
-                                        <a href="seller_products.php" class="btn-primary">
-                                            <i class="fas fa-box"></i> Manage My Products
-                                        </a>
-                                        <a href="locations.php" class="btn-outline">
-                                            <i class="fas fa-map-marker-alt"></i> View Store In Locations
-                                        </a>
-                                    </div>
-                                    <?php elseif ($franchise['status'] == 'rejected'): ?>
-                                    <div class="status-message error">
-                                        <i class="fas fa-times-circle"></i>
-                                        <p>Your application has been rejected. Reason: <?php echo htmlspecialchars($franchise['admin_notes']); ?></p>
-                                    </div>
-                                    <?php elseif ($franchise['status'] == 'pending'): ?>
-                                    <div class="status-message info">
-                                        <i class="fas fa-clock"></i>
-                                        <p>Your application is under review. We'll notify you once it's processed.</p>
-                                    </div>
-                                    <?php endif; ?>
-                                </div>
-                                
-                                <?php if ($franchise['status'] != 'pending'): ?>
-                                <a href="franchise_application.php" class="btn-primary">Apply Again</a>
-                                <?php endif; ?>
-                            </div>
-                            <?php else: ?>
-                            <div class="application-guide">
-                                <h3>Apply for a Lechon Delights Franchise</h3>
-                                <p>Want to own and operate your own Lechon Delights store? Fill out our franchise application form.</p>
-                                
-                                <div class="requirements-list">
-                                    <h4>Requirements:</h4>
-                                    <ol>
-                                        <li>Business Registration (DTI/SEC)</li>
-                                        <li>Local Permits (Barangay Clearance & Mayor's Permit)</li>
-                                        <li>BIR Registration</li>
-                                        <li>Sanitary Permit</li>
-                                        <li>Business Bank Account</li>
-                                    </ol>
-                                </div>
-                                
-                                <a href="franchise_application.php" class="btn-primary btn-large">
-                                    <i class="fas fa-store"></i> Start Franchise Application
-                                </a>
-                            </div>
-                            <?php endif; ?>
-                        </div>
-                    </div>
+
                     
                     <!-- Password Tab -->
                     <div class="tab-pane" id="password">
@@ -1806,17 +1670,9 @@ include 'includes/header.php';
                 <i class="fas fa-id-badge"></i>
                 <span>Profile</span>
             </button>
-            <button type="button" class="mobile-tab-btn" data-tab="orders">
-                <i class="fas fa-receipt"></i>
-                <span>Orders</span>
-            </button>
             <button type="button" class="mobile-tab-btn" data-tab="addresses">
                 <i class="fas fa-address-book"></i>
                 <span>Address</span>
-            </button>
-            <button type="button" class="mobile-tab-btn" data-tab="franchise">
-                <i class="fas fa-store"></i>
-                <span>Franchise</span>
             </button>
             <button type="button" class="mobile-tab-btn" data-tab="password">
                 <i class="fas fa-lock"></i>
