@@ -1241,6 +1241,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
     }
 }
 
+$current_page = 'franchise_application';
 $page_title = "Business Application | Lechon Delights";
 include 'includes/header.php';
 ?>
@@ -1248,28 +1249,147 @@ include 'includes/header.php';
 <div class="franchise-application-page">
     <div class="container">
 
-        <!-- Compliance Playbook Banner -->
-        <section class="application-playbook">
-            <div class="playbook-head">
-                <h2><i class="fas fa-compass"></i> Streamlined Registration Guide</h2>
-                <p>Follow our quick 3-step checklist to submit your business application for priority review.</p>
-            </div>
-            <div class="playbook-grid">
-                <article class="playbook-step">
-                    <span class="playbook-step-number">1</span>
-                    <h3>Business Entity Registration</h3>
-                    <p>Enter your entity details (Sole Proprietorship via DTI, Partnership/Corporation via SEC).</p>
-                </article>
-                <article class="playbook-step">
-                    <span class="playbook-step-number">2</span>
-                    <h3>Essential File Uploads</h3>
-                    <p>Attach required core documents (Logo, DTI/SEC, BIR, Valid ID, Proof of Address) to start screening.</p>
-                </article>
-                <article class="playbook-step">
-                    <span class="playbook-step-number">3</span>
-                    <h3>Review & Fast Track</h3>
-                    <p>Confirm your submission details and track status directly inside your account dashboard.</p>
-                </article>
+        <!-- Merchant Partner Onboarding Hero Section (Screenshot 2 & Login UI Style) -->
+        <section class="foodpanda-hero-section" style="position: relative; background: linear-gradient(rgba(23, 25, 34, 0.75), rgba(23, 25, 34, 0.88)), url('assets/images/promo_lechon.jpg') center/cover no-repeat; border-radius: 28px; padding: 52px 40px; color: #fff; margin-bottom: 48px; box-shadow: 0 20px 48px rgba(0,0,0,0.22); min-height: 560px; display: flex; align-items: center;">
+            <div style="display: grid; grid-template-columns: 1fr 460px; gap: 44px; width: 100%; align-items: start;">
+                <!-- Left Title & Subtitle (Screenshot 2) -->
+                <div style="padding-top: 32px;">
+                    <span style="background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.3); padding: 6px 16px; border-radius: 999px; font-size: 0.82rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; display: inline-block; margin-bottom: 16px;">
+                        <i class="fas fa-store" style="margin-right: 6px; color: #ef6b2e;"></i> Partner With Us
+                    </span>
+                    <h1 style="font-family: 'Outfit', sans-serif; font-size: 3.4rem; font-weight: 800; color: #ffffff; margin: 0 0 18px 0; line-height: 1.1; text-shadow: 0 3px 12px rgba(0,0,0,0.5);">
+                        Register your restaurant with us!
+                    </h1>
+                    <p style="font-size: 1.35rem; color: rgba(255,255,255,0.92); line-height: 1.45; font-weight: 500; max-width: 520px; text-shadow: 0 2px 8px rgba(0,0,0,0.4);">
+                        Sign up easily, showcase your menu, and you can start reaching new customers
+                    </p>
+                    <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-top: 24px;">
+                        <div style="display: flex; align-items: center; gap: 8px; font-size: 0.92rem; font-weight: 700; background: rgba(255,255,255,0.12); padding: 10px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.2);">
+                            <i class="fas fa-check-circle" style="color: #25d366;"></i> Instant Verification
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px; font-size: 0.92rem; font-weight: 700; background: rgba(255,255,255,0.12); padding: 10px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.2);">
+                            <i class="fas fa-check-circle" style="color: #25d366;"></i> Zero Upfront Setup Fee
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Floating Form Card (Screenshot 1 & 2) -->
+                <div style="background: #ffffff; border-radius: 24px; padding: 34px 30px; color: #171922; box-shadow: 0 24px 56px rgba(0,0,0,0.32);">
+                    <h2 style="font-family: 'Outfit', sans-serif; font-size: 1.6rem; font-weight: 800; color: #171922; margin: 0 0 20px 0;">
+                        Ready to boost your sales?
+                    </h2>
+
+                    <form method="POST" action="" id="heroFranchiseForm">
+                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token, ENT_QUOTES, 'UTF-8'); ?>">
+                        <input type="hidden" name="submit_application" value="1">
+                        <input type="hidden" name="contact_person" id="hidden_contact_person" value="">
+
+                        <div style="display: flex; flex-direction: column; gap: 14px;">
+                            <!-- Business Name -->
+                            <div class="fp-form-field">
+                                <input type="text" id="hero_business_name" name="business_name" class="fp-input" placeholder="Your Business Name *" required value="<?php echo oldFormValue('business_name', $franchise_prefill['business_name'] ?? ''); ?>">
+                            </div>
+
+                            <!-- Owner First Name -->
+                            <div class="fp-form-field">
+                                <input type="text" id="hero_owner_first_name" class="fp-input" placeholder="Business Owner First Name *" required>
+                            </div>
+
+                            <!-- Owner Last Name -->
+                            <div class="fp-form-field">
+                                <input type="text" id="hero_owner_last_name" class="fp-input" placeholder="Business Owner Last Name *" required>
+                            </div>
+
+                            <!-- Business Description Dropdown -->
+                            <div class="fp-form-field">
+                                <select id="hero_business_desc" name="business_type" class="fp-select" required>
+                                    <option value="">What describes your business? *</option>
+                                    <option value="Restaurant / Eatery">Restaurant / Eatery</option>
+                                    <option value="Food Stall / Kiosk">Food Stall / Kiosk</option>
+                                    <option value="Partnership / Sole Proprietorship">Partnership / Sole Proprietorship</option>
+                                    <option value="Cloud Kitchen / Bakery">Cloud Kitchen / Bakery</option>
+                                </select>
+                            </div>
+
+                            <!-- BIR 2303 Radio Group -->
+                            <div class="fp-radio-group">
+                                <label class="fp-radio-label">Do you have BIR 2303 form? *</label>
+                                <div style="display: flex; gap: 24px; margin-top: 6px;">
+                                    <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; font-size: 0.9rem;">
+                                        <input type="radio" name="hero_bir_form" value="Yes" checked style="accent-color: #b3261e;"> Yes
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; font-size: 0.9rem;">
+                                        <input type="radio" name="hero_bir_form" value="No" style="accent-color: #b3261e;"> No
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Android Device Radio Group -->
+                            <div class="fp-radio-group">
+                                <label class="fp-radio-label">Do you have an android device to receive orders? *</label>
+                                <div style="display: flex; gap: 24px; margin-top: 6px;">
+                                    <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; font-size: 0.9rem;">
+                                        <input type="radio" name="hero_android_device" value="Yes" checked style="accent-color: #b3261e;"> Yes
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; font-size: 0.9rem;">
+                                        <input type="radio" name="hero_android_device" value="No" style="accent-color: #b3261e;"> No
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Number of branches -->
+                            <div class="fp-form-field" style="position: relative;">
+                                <label style="font-size: 0.75rem; color: #667085; font-weight: 700; display: block; margin-bottom: 2px;">Number of branches to register *</label>
+                                <input type="number" id="hero_branches" name="number_of_branches" class="fp-input" value="1" min="1" required style="padding-right: 36px;">
+                                <i class="fas fa-info-circle" style="position: absolute; right: 14px; top: 28px; color: #b3261e; font-size: 16px;" title="Total physical store locations"></i>
+                            </div>
+
+                            <!-- Business Email -->
+                            <div class="fp-form-field">
+                                <input type="email" id="hero_business_email" name="contact_email" class="fp-input" placeholder="Enter your Business Email *" required value="<?php echo oldFormValue('contact_email', $franchise_prefill['contact_email'] ?? ($_SESSION['email'] ?? '')); ?>">
+                            </div>
+
+                            <!-- Phone Number -->
+                            <div class="fp-form-field" style="display: flex; border: 1px solid #d0d5dd; border-radius: 12px; overflow: hidden; align-items: center;">
+                                <span style="background: #f8f9fa; padding: 14px; font-weight: 700; color: #344054; border-right: 1px solid #d0d5dd; font-size: 0.95rem;">+63</span>
+                                <input type="tel" id="hero_phone" name="contact_phone" class="fp-input" placeholder="Business Owner Phone Number *" style="border: none; border-radius: 0;" required value="<?php echo oldFormValue('contact_phone', $franchise_prefill['contact_phone'] ?? ''); ?>">
+                            </div>
+
+                            <!-- Info Alert Note (Screenshot 1) -->
+                            <div style="background: #f0f8ff; border-radius: 12px; padding: 14px 16px; display: flex; gap: 12px; align-items: start;">
+                                <i class="fas fa-info-circle" style="color: #0284c7; font-size: 18px; margin-top: 2px;"></i>
+                                <p style="font-size: 0.82rem; color: #334155; line-height: 1.45; margin: 0; font-weight: 500;">
+                                    We’ll send an OTP to this number for verification. This number will also be used for all important communication.
+                                </p>
+                            </div>
+
+                            <!-- Checkboxes (Screenshot 1) -->
+                            <label style="display: flex; align-items: start; gap: 10px; font-size: 0.85rem; color: #171922; font-weight: 700; cursor: pointer; margin-top: 4px;">
+                                <input type="checkbox" checked style="accent-color: #b3261e; width: 18px; height: 18px; margin-top: 2px;">
+                                My Business Phone is the same as my Mobile Number
+                            </label>
+
+                            <label style="display: flex; align-items: start; gap: 10px; font-size: 0.85rem; color: #171922; font-weight: 700; cursor: pointer;">
+                                <input type="checkbox" checked style="accent-color: #b3261e; width: 18px; height: 18px; margin-top: 2px;">
+                                <span>I'd like to get updates & promotions by <strong style="color: #25d366;"><i class="fab fa-whatsapp"></i> WhatsApp</strong> and I also agree to the <a href="#" style="color: #b3261e; text-decoration: underline;">AI Notice</a></span>
+                            </label>
+
+                            <!-- Submit Button -->
+                            <button type="submit" id="btnHeroQuickApply" style="width: 100%; background: #b3261e; color: #fff; font-weight: 800; font-size: 1.05rem; border: none; border-radius: 12px; padding: 16px; cursor: pointer; margin-top: 8px; box-shadow: 0 6px 18px rgba(179,38,30,0.32); transition: all 0.2s;">
+                                SUBMIT APPLICATION
+                            </button>
+
+                            <!-- Footer Links -->
+                            <div style="text-align: center; margin-top: 8px; font-size: 0.82rem; color: #667085; line-height: 1.6;">
+                                Already have an account? <a href="login.php" style="color: #b3261e; font-weight: 700; text-decoration: none;">Login</a><br>
+                                Do you want to be a delivery rider? <a href="locations.php" style="color: #b3261e; font-weight: 700; text-decoration: none;">Click here</a>
+                            </div>
+                            <p style="font-size: 0.7rem; color: #98a2b3; text-align: center; margin: 4px 0 0 0; line-height: 1.3;">
+                                This site is protected by reCAPTCHA and the Google <a href="privacy_policy.php" style="color: #667085;">Privacy Policy</a> and <a href="terms_of_service.php" style="color: #667085;">Terms of Service</a> apply.
+                            </p>
+                        </div>
+                    </form>
+                </div>
             </div>
         </section>
 
@@ -1283,277 +1403,6 @@ include 'includes/header.php';
         <div class="alert alert-error" style="background-color: #f8d7da; border: 2px solid #dc3545; border-radius: 12px; padding: 20px; color: #721c24; font-size: 1.05rem; margin-bottom: 24px;">
             <i class="fas fa-exclamation-circle" style="color: #dc3545; margin-right: 10px;"></i> <?php echo $error_msg; ?>
         </div>
-        <?php endif; ?>
-
-        <div class="application-container">
-            <div class="application-form-container">
-
-                <!-- Workflow status header pill row -->
-                <div class="application-workflow-card">
-                    <div class="workflow-pill-row">
-                        <span class="workflow-pill"><i class="fas fa-layer-group"></i> Total Attempts: <?php echo (int)$franchise_workflow['total_attempts']; ?>/2</span>
-                        <span class="workflow-pill"><i class="fas fa-hourglass-half"></i> Remaining Attempts: <?php echo (int)$franchise_workflow['remaining_attempts']; ?></span>
-                        <?php if (!empty($franchise_workflow['approved_trial_ends_at'])): ?>
-                            <span class="workflow-pill"><i class="fas fa-calendar-check"></i> Trial Ends: <?php echo date('F j, Y', strtotime((string)$franchise_workflow['approved_trial_ends_at'])); ?></span>
-                        <?php elseif (!empty($franchise_workflow['next_eligible_at'])): ?>
-                            <span class="workflow-pill"><i class="fas fa-clock"></i> Reapply On: <?php echo date('F j, Y g:i A', strtotime((string)$franchise_workflow['next_eligible_at'])); ?></span>
-                        <?php endif; ?>
-                    </div>
-                    <p class="workflow-summary"><?php echo htmlspecialchars((string)($franchise_workflow['message'] ?? '')); ?></p>
-                </div>
-
-                <?php if (!$franchise_workflow['can_submit'] && !$success_msg): ?>
-                <div class="alert" style="background:#fff8e1;border:1px solid #ffd54f;color:#8a6d3b;border-radius:12px;padding:20px;margin-bottom:22px;">
-                    <i class="fas fa-info-circle" style="margin-right:8px;color:#f57f17;font-size:1.2rem;"></i>
-                    <?php echo htmlspecialchars((string)($franchise_workflow['message'] ?? 'Application workflow is currently restricted.')); ?>
-                    <?php if (!empty($latest_application['application_number'])): ?>
-                        <br>Latest Application: <strong><?php echo htmlspecialchars((string)$latest_application['application_number']); ?></strong>
-                    <?php endif; ?>
-                    <?php if (!empty($latest_application['created_at'])): ?>
-                        <br>Submitted on: <?php echo date('F j, Y g:i a', strtotime((string)$latest_application['created_at'])); ?>.
-                    <?php endif; ?>
-                </div>
-                <div class="form-actions" style="margin-top:20px;">
-                    <a href="my_account.php" class="btn-primary btn-large" style="text-decoration:none;">
-                        <i class="fas fa-user-circle"></i> Go to My Account
-                    </a>
-                    <?php if (in_array($franchise_workflow['stage'], ['approved_partner', 'already_registered_partner'], true)): ?>
-                        <a href="admin/index.php" class="btn-secondary btn-large" style="text-decoration:none;">
-                            <i class="fas fa-store"></i> Open Partner Dashboard
-                        </a>
-                    <?php endif; ?>
-                </div>
-                <?php else: ?>
-
-                <!-- WIZARD STEPPER PROGRESS BAR -->
-                <div class="wizard-stepper" id="wizardStepper">
-                    <div class="stepper-track">
-                        <div class="stepper-progress" id="stepperProgress"></div>
-                    </div>
-                    <div class="stepper-item active" data-step="1">
-                        <div class="stepper-icon"><i class="fas fa-building"></i></div>
-                        <div class="stepper-label">1. Business Info</div>
-                    </div>
-                    <div class="stepper-item" data-step="2">
-                        <div class="stepper-icon"><i class="fas fa-file-upload"></i></div>
-                        <div class="stepper-label">2. Documents</div>
-                    </div>
-                    <div class="stepper-item" data-step="3">
-                        <div class="stepper-icon"><i class="fas fa-check-circle"></i></div>
-                        <div class="stepper-label">3. Review & Submit</div>
-                    </div>
-                </div>
-
-                <form method="POST" action="" enctype="multipart/form-data" class="application-form" id="franchiseForm">
-                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token, ENT_QUOTES, 'UTF-8'); ?>">
-
-                    <!-- ========================================== -->
-                    <!-- WIZARD STEP 1: Business & Contact Info     -->
-                    <!-- ========================================== -->
-                    <div class="wizard-pane active" id="wizardStep1">
-                        <div class="form-section">
-                            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-                                <h3 style="margin:0;"><i class="fas fa-building"></i> Business Profile</h3>
-                                <button type="button" class="btn-outline btn-sm" id="btnAutoFillProfile" style="padding:6px 14px;font-size:0.82rem;border-radius:999px;">
-                                    <i class="fas fa-wand-magic-sparkles" style="color:#ef6b2e;"></i> Auto-Fill From Profile
-                                </button>
-                            </div>
-                            <p class="section-description">Provide your registered business name. Business partner applications default to Partnership structure.</p>
-
-                            <div style="display:inline-flex;align-items:center;gap:8px;padding:8px 16px;border-radius:999px;background:#fff8ef;border:1px solid #efddcd;color:#b3261e;font-weight:700;font-size:0.88rem;margin-bottom:18px;">
-                                <i class="fas fa-handshake" style="color:#ef6b2e;"></i> Business Structure: <strong>Partnership</strong>
-                            </div>
-
-                            <input type="hidden" name="business_type" id="business_type" value="partnership">
-
-                            <div class="form-row">
-                                <div class="form-group" style="grid-column: 1 / -1;">
-                                    <label for="business_name">Business Name *</label>
-                                    <input type="text" id="business_name" name="business_name" required
-                                        value="<?php echo oldFormValue('business_name', $franchise_prefill['business_name'] ?? ''); ?>"
-                                        placeholder="Enter registered business name">
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Business Location & PSGC -->
-                        <div class="form-section">
-                            <h3><i class="fas fa-location-dot"></i> Business Location (Cavite Scope)</h3>
-                            <p class="section-description">Select your PSGC location fields. Franchise applications are currently accepted for Cavite locations.</p>
-
-                            <input type="hidden" name="psgc_region_name" id="psgcRegionName" value="<?php echo oldFormValue('psgc_region_name', $franchise_prefill['psgc_region_name'] ?? ''); ?>">
-                            <input type="hidden" name="psgc_province_name" id="psgcProvinceName" value="<?php echo oldFormValue('psgc_province_name', $franchise_prefill['psgc_province_name'] ?? ''); ?>">
-                            <input type="hidden" name="psgc_city_name" id="psgcCityName" value="<?php echo oldFormValue('psgc_city_name', $franchise_prefill['psgc_city_name'] ?? ''); ?>">
-                            <input type="hidden" name="psgc_barangay_name" id="psgcBarangayName" value="<?php echo oldFormValue('psgc_barangay_name', $franchise_prefill['psgc_barangay_name'] ?? ''); ?>">
-                            <input type="hidden" name="psgc_manual_mode" id="psgcManualMode" value="<?php echo oldFormValue('psgc_manual_mode', $franchise_prefill['psgc_manual_mode'] ?? '0'); ?>">
-
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="business_address_street">Street Address / Landmark *</label>
-                                    <textarea id="business_address_street" name="business_address_street" rows="2" required
-                                            placeholder="House/Bldg No., Street, Subdivision, Landmark"><?php echo oldFormValue('business_address_street', $franchise_prefill['business_address_street'] ?? ''); ?></textarea>
-                                </div>
-                            </div>
-
-                            <div class="form-row psgc-row">
-                                <div class="form-group">
-                                    <label for="psgcRegion">Region *</label>
-                                    <select id="psgcRegion" name="psgc_region_code" required data-selected="<?php echo oldFormValue('psgc_region_code', $franchise_prefill['psgc_region_code'] ?? ''); ?>">
-                                        <option value="">Select region</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="psgcProvince">Province *</label>
-                                    <select id="psgcProvince" name="psgc_province_code" required data-selected="<?php echo oldFormValue('psgc_province_code', $franchise_prefill['psgc_province_code'] ?? ''); ?>" disabled>
-                                        <option value="">Select province</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div class="form-row psgc-row">
-                                <div class="form-group">
-                                    <label for="psgcCity">City / Municipality *</label>
-                                    <select id="psgcCity" name="psgc_city_code" required data-selected="<?php echo oldFormValue('psgc_city_code', $franchise_prefill['psgc_city_code'] ?? ''); ?>" disabled>
-                                        <option value="">Select city / municipality</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="psgcBarangay">Barangay *</label>
-                                    <select id="psgcBarangay" name="psgc_barangay_code" required data-selected="<?php echo oldFormValue('psgc_barangay_code', $franchise_prefill['psgc_barangay_code'] ?? ''); ?>" disabled>
-                                        <option value="">Select barangay</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <p class="psgc-help" id="psgcAddressHelp">PSGC location selector helps speed up site verification.</p>
-
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="business_address">Composed Business Address *</label>
-                                    <textarea id="business_address" name="business_address" rows="2" required readonly
-                                            placeholder="Generated complete address"><?php echo oldFormValue('business_address', $franchise_prefill['business_address'] ?? ''); ?></textarea>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Contact & Investment -->
-                        <div class="form-section">
-                            <h3><span class="step-tag">Contact & Investment</span></h3>
-
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="contact_person">Contact Person *</label>
-                                    <input type="text" id="contact_person" name="contact_person" required
-                                        value="<?php echo oldFormValue('contact_person', $franchise_prefill['contact_person'] ?? ($_SESSION['full_name'] ?? '')); ?>">
-                                </div>
-                                <div class="form-group">
-                                    <label for="contact_phone">Contact Phone *</label>
-                                    <input type="tel" id="contact_phone" name="contact_phone" required
-                                        value="<?php echo oldFormValue('contact_phone', $franchise_prefill['contact_phone'] ?? ''); ?>"
-                                        placeholder="0912-345-6789">
-                                </div>
-                            </div>
-
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="contact_email">Contact Email *</label>
-                                    <input type="email" id="contact_email" name="contact_email" required
-                                        value="<?php echo oldFormValue('contact_email', $franchise_prefill['contact_email'] ?? ($_SESSION['email'] ?? '')); ?>">
-                                </div>
-                                <div class="form-group">
-                                    <label for="capital_investment">Capital Investment (PHP) *</label>
-                                    <input type="number" id="capital_investment" name="capital_investment" required
-                                        value="<?php echo oldFormValue('capital_investment', $franchise_prefill['capital_investment'] ?? ''); ?>"
-                                        min="100000" step="10000" placeholder="500000">
-                                    <div class="quick-chip-row" style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">
-                                        <button type="button" class="chip-btn" data-capital="100000">₱100K</button>
-                                        <button type="button" class="chip-btn" data-capital="250000">₱250K</button>
-                                        <button type="button" class="chip-btn" data-capital="500000">₱500K</button>
-                                        <button type="button" class="chip-btn" data-capital="1000000">₱1M</button>
-                                    </div>
-                                    <small class="form-text">Minimum investment: PHP 100,000</small>
-                                </div>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="business_experience">Business Experience *</label>
-                                <textarea id="business_experience" name="business_experience" rows="3" required
-                                        placeholder="Describe your relevant business experience"><?php echo oldFormValue('business_experience', $franchise_prefill['business_experience'] ?? ''); ?></textarea>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="marketing_plan">Marketing Strategy *</label>
-                                <textarea id="marketing_plan" name="marketing_plan" rows="3" required
-                                        placeholder="How do you plan to promote your store?"><?php echo oldFormValue('marketing_plan', $franchise_prefill['marketing_plan'] ?? ''); ?></textarea>
-                            </div>
-                        </div>
-
-                        <div class="wizard-nav-bar">
-                            <div></div>
-                            <button type="button" class="btn-primary" id="btnGoToStep2">
-                                Next: Upload Documents <i class="fas fa-arrow-right"></i>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- ========================================== -->
-                    <!-- WIZARD STEP 2: Document Uploads            -->
-                    <!-- ========================================== -->
-                    <div class="wizard-pane" id="wizardStep2">
-                        <div class="form-section">
-                            <h3><i class="fas fa-file-upload"></i> Essential Documents (5 Required Files)</h3>
-                            <p class="section-description">Drag and drop or click to upload your core business documents. Accepted formats: PDF, JPG, PNG (Max size: <?php echo htmlspecialchars($max_document_size_label); ?>).</p>
-                            
-                            <div id="docRequirementStatus" class="doc-requirement-status info">Waiting for required documents upload...</div>
-
-                            <div class="documents-grid">
-                                <div class="document-item required-highlight logo-featured-item" style="border: 2px solid #b3261e; background: #fff8ef;">
-                                    <label class="document-label">
-                                        <span style="color:#b3261e;font-weight:800;font-size:0.95rem;display:flex;align-items:center;gap:6px;">
-                                            <i class="fas fa-store" style="color:#ef6b2e;"></i> Store Business Logo *
-                                        </span>
-                                        <input type="file" name="business_logo" id="business_logo_input" accept="image/png,image/jpeg,image/jpg,.pdf" required>
-                                        <small style="color:#7b6d64;font-weight:600;">Official store logo image (PNG/JPG/PDF)</small>
-                                        <div id="logoPreviewContainer" style="margin-top:8px;display:none;text-align:center;">
-                                            <img id="logoPreviewImg" src="" alt="Store Logo Preview" style="max-height:80px;max-width:100%;border-radius:8px;border:1px solid #efddcd;box-shadow:0 4px 10px rgba(0,0,0,0.06);">
-                                        </div>
-                                    </label>
-                                </div>
-
-                                <div class="document-item required-highlight">
-                                    <label class="document-label">
-                                        <span>DTI / SEC Certificate *</span>
-                                        <input type="file" name="dti_doc" accept=".pdf,.jpg,.jpeg,.png" required>
-                                        <small>Business registration cert</small>
-                                    </label>
-                                </div>
-
-                                <div class="document-item required-highlight">
-                                    <label class="document-label">
-                                        <span>BIR Registration (Form 2303) *</span>
-                                        <input type="file" name="bir_doc" accept=".pdf,.jpg,.jpeg,.png" required>
-                                        <small>Tax registration certificate</small>
-                                    </label>
-                                </div>
-
-                                <div class="document-item required-highlight">
-                                    <label class="document-label">
-                                        <span>Valid ID of Owner *</span>
-                                        <input type="file" name="valid_id" accept=".pdf,.jpg,.jpeg,.png" required>
-                                        <small>Driver's License, Passport, PhilID</small>
-                                    </label>
-                                </div>
-
-                                <div class="document-item required-highlight">
-                                    <label class="document-label">
-                                        <span>Proof of Address *</span>
-                                        <input type="file" name="address_proof" accept=".pdf,.jpg,.jpeg,.png" required>
-                                        <small>Utility bill or barangay clearance</small>
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-
                         <!-- Expandable Optional Compliance Files -->
                         <div class="form-section">
                             <div class="accordion-header" id="toggleOptionalDocs">
@@ -1779,16 +1628,315 @@ include 'includes/header.php';
                     <div class="contact-support">
                         <h4>Need Assistance?</h4>
                         <p><i class="fas fa-phone"></i> (02) 8123-4567</p>
-                        <p><i class="fas fa-envelope"></i> franchise@lechondelights.com</p>
+                        <p><i class="fas fa-envelope"></i> partner@lechondelights.com</p>
                     </div>
                 </div>
             </div>
         </div>
+
+        <!-- ============================================================== -->
+        <!-- SECTION 2: Platform Opportunities ("Lechon Delights brings new opportunities") -->
+        <!-- ============================================================== -->
+        <section style="margin-top: 56px; margin-bottom: 56px;">
+            <div style="text-align: center; max-width: 640px; margin: 0 auto 36px auto;">
+                <h2 style="font-family: 'Outfit', sans-serif; font-size: 2rem; font-weight: 800; color: #171922; margin-bottom: 8px;">
+                    Lechon Delights brings new opportunities
+                </h2>
+                <p style="color: #667085; font-size: 1rem; margin: 0;">Grow your food business with our powerful marketplace and delivery network.</p>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px;">
+                <div style="background: #fff; border: 1px solid #efddcd; border-radius: 20px; padding: 32px 24px; text-align: center; box-shadow: 0 8px 24px rgba(42,33,29,0.04); transition: transform 0.2s;">
+                    <div style="width: 64px; height: 64px; background: #fff8ef; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px auto; color: #b3261e; font-size: 24px;">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <h3 style="font-size: 1.25rem; font-weight: 800; color: #171922; margin-bottom: 12px;">Connect With New Customers</h3>
+                    <p style="font-size: 0.95rem; color: #667085; line-height: 1.5; margin: 0;">
+                        Adding your business to the platform means access to thousands of new customers in different neighbourhoods across Cavite.
+                    </p>
+                </div>
+                <div style="background: #fff; border: 1px solid #efddcd; border-radius: 20px; padding: 32px 24px; text-align: center; box-shadow: 0 8px 24px rgba(42,33,29,0.04); transition: transform 0.2s;">
+                    <div style="width: 64px; height: 64px; background: #fff8ef; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px auto; color: #ef6b2e; font-size: 24px;">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <h3 style="font-size: 1.25rem; font-weight: 800; color: #171922; margin-bottom: 12px;">Unlock Revenue</h3>
+                    <p style="font-size: 0.95rem; color: #667085; line-height: 1.5; margin: 0;">
+                        Let customers enjoy your business from anywhere, and capture the interest of new ones who haven't tried your food yet.
+                    </p>
+                </div>
+                <div style="background: #fff; border: 1px solid #efddcd; border-radius: 20px; padding: 32px 24px; text-align: center; box-shadow: 0 8px 24px rgba(42,33,29,0.04); transition: transform 0.2s;">
+                    <div style="width: 64px; height: 64px; background: #fff8ef; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px auto; color: #b3261e; font-size: 24px;">
+                        <i class="fas fa-motorcycle"></i>
+                    </div>
+                    <h3 style="font-size: 1.25rem; font-weight: 800; color: #171922; margin-bottom: 12px;">Focus On Your Business</h3>
+                    <p style="font-size: 0.95rem; color: #667085; line-height: 1.5; margin: 0;">
+                        We take care of all the payments and customer support, whilst our riders take care of delivery. Leaving you to focus on what matters!
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- SECTION 3: How It Works ("We make it simple and easy")         -->
+        <!-- ============================================================== -->
+        <section style="background: #fff9f2; border: 1px solid #efddcd; border-radius: 24px; padding: 48px 32px; margin-bottom: 56px;">
+            <div style="text-align: center; max-width: 640px; margin: 0 auto 40px auto;">
+                <span style="color: #b3261e; font-weight: 800; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px;">Simple Onboarding</span>
+                <h2 style="font-family: 'Outfit', sans-serif; font-size: 2.2rem; font-weight: 800; color: #171922; margin-top: 4px;">
+                    Partner with Lechon Delights today
+                </h2>
+                <p style="color: #667085; font-size: 1rem; margin-top: 6px;">Take your business to the next level by reaching new customers and boosting your sales!</p>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 24px;">
+                <div style="background: #fff; border-radius: 16px; padding: 24px; border: 1px solid #efddcd; position: relative;">
+                    <span style="font-size: 2.5rem; font-weight: 800; color: #ef6b2e; opacity: 0.3; position: absolute; right: 16px; top: 12px;">01</span>
+                    <i class="fas fa-mobile-screen-button" style="font-size: 28px; color: #b3261e; margin-bottom: 16px; display: block;"></i>
+                    <h4 style="font-size: 1.1rem; font-weight: 800; color: #171922; margin-bottom: 8px;">The Customer Orders</h4>
+                    <p style="font-size: 0.9rem; color: #667085; line-height: 1.4; margin: 0;">The customer places an order through the Lechon Delights web & mobile application.</p>
+                </div>
+                <div style="background: #fff; border-radius: 16px; padding: 24px; border: 1px solid #efddcd; position: relative;">
+                    <span style="font-size: 2.5rem; font-weight: 800; color: #ef6b2e; opacity: 0.3; position: absolute; right: 16px; top: 12px;">02</span>
+                    <i class="fas fa-utensils" style="font-size: 28px; color: #ef6b2e; margin-bottom: 16px; display: block;"></i>
+                    <h4 style="font-size: 1.1rem; font-weight: 800; color: #171922; margin-bottom: 8px;">You Prepare</h4>
+                    <p style="font-size: 0.9rem; color: #667085; line-height: 1.4; margin: 0;">You will receive a notification to start preparing the order fresh for dispatch.</p>
+                </div>
+                <div style="background: #fff; border-radius: 16px; padding: 24px; border: 1px solid #efddcd; position: relative;">
+                    <span style="font-size: 2.5rem; font-weight: 800; color: #ef6b2e; opacity: 0.3; position: absolute; right: 16px; top: 12px;">03</span>
+                    <i class="fas fa-truck-ramp-box" style="font-size: 28px; color: #b3261e; margin-bottom: 16px; display: block;"></i>
+                    <h4 style="font-size: 1.1rem; font-weight: 800; color: #171922; margin-bottom: 8px;">We Deliver</h4>
+                    <p style="font-size: 0.9rem; color: #667085; line-height: 1.4; margin: 0;">A rider will be along shortly to pick up the order and deliver it to the customer.</p>
+                </div>
+                <div style="background: #fff; border-radius: 16px; padding: 24px; border: 1px solid #efddcd; position: relative;">
+                    <span style="font-size: 2.5rem; font-weight: 800; color: #ef6b2e; opacity: 0.3; position: absolute; right: 16px; top: 12px;">04</span>
+                    <i class="fas fa-square-poll-vertical" style="font-size: 28px; color: #15803d; margin-bottom: 16px; display: block;"></i>
+                    <h4 style="font-size: 1.1rem; font-weight: 800; color: #171922; margin-bottom: 8px;">Watch Your Business Grow</h4>
+                    <p style="font-size: 0.9rem; color: #667085; line-height: 1.4; margin: 0;">We provide you with real-time insights so you can keep track of revenue and performance.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- SECTION 4: Partner Testimonials & Quotes                      -->
+        <!-- ============================================================== -->
+        <section style="margin-bottom: 56px;">
+            <div style="text-align: center; margin-bottom: 32px;">
+                <h2 style="font-family: 'Outfit', sans-serif; font-size: 2rem; font-weight: 800; color: #171922; margin: 0;">
+                    What our merchant partners say
+                </h2>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px;">
+                <div style="background: #fff; border: 1px solid #efddcd; border-radius: 20px; padding: 32px; box-shadow: 0 8px 24px rgba(42,33,29,0.04);">
+                    <p style="font-size: 1.05rem; color: #2a211d; line-height: 1.6; font-style: italic; margin-bottom: 20px;">
+                        "The platform provided an opportunity for our brands to be readily accessible to customers whenever and wherever they are."
+                    </p>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="width: 44px; height: 44px; border-radius: 50%; background: #b3261e; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800;">LA</div>
+                        <div>
+                            <strong style="display: block; color: #171922; font-size: 1rem;">Lorent Adrias</strong>
+                            <span style="font-size: 0.85rem; color: #667085;">Kenny Rogers Group</span>
+                        </div>
+                    </div>
+                </div>
+                <div style="background: #fff; border: 1px solid #efddcd; border-radius: 20px; padding: 32px; box-shadow: 0 8px 24px rgba(42,33,29,0.04);">
+                    <p style="font-size: 1.05rem; color: #2a211d; line-height: 1.6; font-style: italic; margin-bottom: 20px;">
+                        "Apart from their strong consumer base, Lechon Delights always ensures that we grow our business together. Thank you!"
+                    </p>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="width: 44px; height: 44px; border-radius: 50%; background: #ef6b2e; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800;">ME</div>
+                        <div>
+                            <strong style="display: block; color: #171922; font-size: 1rem;">Mark Embino</strong>
+                            <span style="font-size: 0.85rem; color: #667085;">Minute Burger</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- SECTION 5: Latest Trends & Articles Grid                      -->
+        <!-- ============================================================== -->
+        <section style="margin-bottom: 56px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 28px; flex-wrap: wrap; gap: 12px;">
+                <div>
+                    <span style="color: #b3261e; font-weight: 800; font-size: 0.85rem; text-transform: uppercase;">Resource Center</span>
+                    <h2 style="font-family: 'Outfit', sans-serif; font-size: 2rem; font-weight: 800; color: #171922; margin-top: 4px;">
+                        Latest trends and tips for new partners
+                    </h2>
+                </div>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px;">
+                <!-- Article 1 -->
+                <article style="background: #fff; border: 1px solid #efddcd; border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 4px 16px rgba(42,33,29,0.03);">
+                    <div style="padding: 24px; display: flex; flex-direction: column; flex: 1;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <span style="background: #fff8ef; color: #b3261e; font-size: 0.75rem; font-weight: 800; padding: 4px 10px; border-radius: 999px; text-transform: uppercase;">RESTAURANT TIPS</span>
+                            <span style="font-size: 0.8rem; color: #667085; font-weight: 600;"><i class="far fa-clock"></i> 5 minutes</span>
+                        </div>
+                        <h3 style="font-size: 1.15rem; font-weight: 800; color: #171922; margin-bottom: 8px; line-height: 1.3;">5 Types of Restaurant Logos to Elevate Your Brand</h3>
+                        <p style="font-size: 0.88rem; color: #667085; line-height: 1.5; margin-bottom: 16px; flex: 1;">
+                            Your restaurant's logo is more than just a picture – it's the visual cornerstone of your brand identity. Here are five primary types to enhance your brand presence.
+                        </p>
+                        <a href="faq.php" style="color: #b3261e; font-weight: 700; font-size: 0.9rem; text-decoration: none;">Read more <i class="fas fa-arrow-right" style="font-size: 12px;"></i></a>
+                    </div>
+                </article>
+                <!-- Article 2 -->
+                <article style="background: #fff; border: 1px solid #efddcd; border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 4px 16px rgba(42,33,29,0.03);">
+                    <div style="padding: 24px; display: flex; flex-direction: column; flex: 1;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <span style="background: #fff8ef; color: #b3261e; font-size: 0.75rem; font-weight: 800; padding: 4px 10px; border-radius: 999px; text-transform: uppercase;">RESTAURANT TIPS</span>
+                            <span style="font-size: 0.8rem; color: #667085; font-weight: 600;"><i class="far fa-clock"></i> 5 minutes</span>
+                        </div>
+                        <h3 style="font-size: 1.15rem; font-weight: 800; color: #171922; margin-bottom: 8px; line-height: 1.3;">How to Create a Restaurant Menu design that Sells</h3>
+                        <p style="font-size: 0.88rem; color: #667085; line-height: 1.5; margin-bottom: 16px; flex: 1;">
+                            In today's competitive landscape, a well-designed menu is a strategic tool to attract customers, boost sales, and build a strong brand identity.
+                        </p>
+                        <a href="faq.php" style="color: #b3261e; font-weight: 700; font-size: 0.9rem; text-decoration: none;">Read more <i class="fas fa-arrow-right" style="font-size: 12px;"></i></a>
+                    </div>
+                </article>
+                <!-- Article 3 -->
+                <article style="background: #fff; border: 1px solid #efddcd; border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 4px 16px rgba(42,33,29,0.03);">
+                    <div style="padding: 24px; display: flex; flex-direction: column; flex: 1;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <span style="background: #fff8ef; color: #b3261e; font-size: 0.75rem; font-weight: 800; padding: 4px 10px; border-radius: 999px; text-transform: uppercase;">RESTAURANT TIPS</span>
+                            <span style="font-size: 0.8rem; color: #667085; font-weight: 600;"><i class="far fa-clock"></i> 5 minutes</span>
+                        </div>
+                        <h3 style="font-size: 1.15rem; font-weight: 800; color: #171922; margin-bottom: 8px; line-height: 1.3;">6 key steps to opening a new restaurant</h3>
+                        <p style="font-size: 0.88rem; color: #667085; line-height: 1.5; margin-bottom: 16px; flex: 1;">
+                            Opening a new restaurant can be an exciting experience. Learn key steps from choosing the right location to menu development and hiring staff.
+                        </p>
+                        <a href="faq.php" style="color: #b3261e; font-weight: 700; font-size: 0.9rem; text-decoration: none;">Read more <i class="fas fa-arrow-right" style="font-size: 12px;"></i></a>
+                    </div>
+                </article>
+                <!-- Article 4 -->
+                <article style="background: #fff; border: 1px solid #efddcd; border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 4px 16px rgba(42,33,29,0.03);">
+                    <div style="padding: 24px; display: flex; flex-direction: column; flex: 1;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <span style="background: #fff8ef; color: #b3261e; font-size: 0.75rem; font-weight: 800; padding: 4px 10px; border-radius: 999px; text-transform: uppercase;">RESTAURANT TIPS</span>
+                            <span style="font-size: 0.8rem; color: #667085; font-weight: 600;"><i class="far fa-clock"></i> 5 minutes</span>
+                        </div>
+                        <h3 style="font-size: 1.15rem; font-weight: 800; color: #171922; margin-bottom: 8px; line-height: 1.3;">How to Create a Business Plan for Your Restaurant</h3>
+                        <p style="font-size: 0.88rem; color: #667085; line-height: 1.5; margin-bottom: 16px; flex: 1;">
+                            Writing a business plan will help you clarify your concept, identify target markets, and develop a financial roadmap for your business.
+                        </p>
+                        <a href="faq.php" style="color: #b3261e; font-weight: 700; font-size: 0.9rem; text-decoration: none;">Read more <i class="fas fa-arrow-right" style="font-size: 12px;"></i></a>
+                    </div>
+                </article>
+                <!-- Article 5 -->
+                <article style="background: #fff; border: 1px solid #efddcd; border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 4px 16px rgba(42,33,29,0.03);">
+                    <div style="padding: 24px; display: flex; flex-direction: column; flex: 1;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <span style="background: #fff8ef; color: #ef6b2e; font-size: 0.75rem; font-weight: 800; padding: 4px 10px; border-radius: 999px; text-transform: uppercase;">ONLINE FOOD DELIVERY</span>
+                            <span style="font-size: 0.8rem; color: #667085; font-weight: 600;"><i class="far fa-clock"></i> 5 minutes</span>
+                        </div>
+                        <h3 style="font-size: 1.15rem; font-weight: 800; color: #171922; margin-bottom: 8px; line-height: 1.3;">Benefits of Online Food Delivery for your Restaurant</h3>
+                        <p style="font-size: 0.88rem; color: #667085; line-height: 1.5; margin-bottom: 16px; flex: 1;">
+                            Online food delivery has become an essential part of the restaurant industry, providing an easy way for customers to order favorite meals.
+                        </p>
+                        <a href="faq.php" style="color: #b3261e; font-weight: 700; font-size: 0.9rem; text-decoration: none;">Read more <i class="fas fa-arrow-right" style="font-size: 12px;"></i></a>
+                    </div>
+                </article>
+                <!-- Article 6 -->
+                <article style="background: #fff; border: 1px solid #efddcd; border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 4px 16px rgba(42,33,29,0.03);">
+                    <div style="padding: 24px; display: flex; flex-direction: column; flex: 1;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <span style="background: #fff8ef; color: #b3261e; font-size: 0.75rem; font-weight: 800; padding: 4px 10px; border-radius: 999px; text-transform: uppercase;">RESTAURANT TIPS</span>
+                            <span style="font-size: 0.8rem; color: #667085; font-weight: 600;"><i class="far fa-clock"></i> 5 minutes</span>
+                        </div>
+                        <h3 style="font-size: 1.15rem; font-weight: 800; color: #171922; margin-bottom: 8px; line-height: 1.3;">Tips to Reduce Food Wastage in Your Restaurant</h3>
+                        <p style="font-size: 0.88rem; color: #667085; line-height: 1.5; margin-bottom: 16px; flex: 1;">
+                            Food waste management in restaurants helps cut operating costs, improve profits, and build goodwill among environmentally aware customers.
+                        </p>
+                        <a href="faq.php" style="color: #b3261e; font-weight: 700; font-size: 0.9rem; text-decoration: none;">Read more <i class="fas fa-arrow-right" style="font-size: 12px;"></i></a>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- SECTION 6: FAQ & Footer Quick Links                            -->
+        <!-- ============================================================== -->
+        <footer style="border-top: 1px solid #efddcd; padding-top: 40px; margin-top: 32px;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 32px; margin-bottom: 32px;">
+                <div>
+                    <h4 style="font-size: 1.1rem; font-weight: 800; color: #171922; margin-bottom: 14px;">Any questions?</h4>
+                    <p style="font-size: 0.9rem; color: #667085; line-height: 1.5;">Our merchant support team is available 24/7 to assist with onboarding & setup.</p>
+                </div>
+                <div>
+                    <h4 style="font-size: 1rem; font-weight: 800; color: #171922; margin-bottom: 14px;">Company</h4>
+                    <ul style="list-style: none; padding: 0; margin: 0; line-height: 2; font-size: 0.9rem;">
+                        <li><a href="about.php" style="color: #667085; text-decoration: none;">About us</a></li>
+                        <li><a href="faq.php" style="color: #667085; text-decoration: none;">Resources</a></li>
+                        <li><a href="terms_of_service.php" style="color: #667085; text-decoration: none;">Terms & Conditions</a></li>
+                        <li><a href="privacy_policy.php" style="color: #667085; text-decoration: none;">Privacy Policy</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 style="font-size: 1rem; font-weight: 800; color: #171922; margin-bottom: 14px;">Contact Us</h4>
+                    <ul style="list-style: none; padding: 0; margin: 0; line-height: 2; font-size: 0.9rem;">
+                        <li><a href="help_center.php" style="color: #667085; text-decoration: none;">Help Center</a></li>
+                        <li><a href="mailto:partner@lechondelights.com" style="color: #667085; text-decoration: none;">partner@lechondelights.com</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div style="border-top: 1px solid #efddcd; padding-top: 20px; text-align: center; color: #7b6d64; font-size: 0.85rem;">
+                © Lechon Delights Marketplace 2026. All rights reserved.
+            </div>
+        </footer>
     </div>
 </div>
 
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+.market-address-wrap, #marketAddressWrap {
+    display: none !important;
+}
+
+/* Foodpanda-style Floating Form Card Fields */
+.fp-form-field {
+    width: 100%;
+}
+.fp-input {
+    width: 100%;
+    padding: 14px 16px;
+    border: 1px solid #d0d5dd;
+    border-radius: 12px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: #171922;
+    background: #ffffff;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.fp-input:focus {
+    border-color: #d81b60;
+    box-shadow: 0 0 0 4px rgba(216, 27, 96, 0.12);
+}
+.fp-select {
+    width: 100%;
+    padding: 14px 16px;
+    border: 1px solid #d0d5dd;
+    border-radius: 12px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: #171922;
+    background: #ffffff;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.fp-select:focus {
+    border-color: #d81b60;
+    box-shadow: 0 0 0 4px rgba(216, 27, 96, 0.12);
+}
+.fp-radio-group {
+    margin-top: 2px;
+}
+.fp-radio-label {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #171922;
+    display: block;
+}
 
 .franchise-application-page {
     --food-red: #b3261e;
@@ -2551,6 +2699,49 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Auto-Fill Profile Button Handler
+    // Hero Quick Application Handler (Screenshot 1 & 2)
+    const btnHeroQuickApply = document.getElementById('btnHeroQuickApply');
+    if (btnHeroQuickApply) {
+        btnHeroQuickApply.addEventListener('click', function() {
+            const bizName = document.getElementById('hero_business_name')?.value.trim() || '';
+            const firstName = document.getElementById('hero_owner_first_name')?.value.trim() || '';
+            const lastName = document.getElementById('hero_owner_last_name')?.value.trim() || '';
+            const bizEmail = document.getElementById('hero_business_email')?.value.trim() || '';
+            const bizPhone = document.getElementById('hero_phone')?.value.trim() || '';
+
+            if (!bizName) {
+                Swal.fire('Business Name Required', 'Please enter your business name.', 'warning');
+                return;
+            }
+
+            const fullName = (firstName + ' ' + lastName).trim() || bizName;
+
+            const nameInput = document.getElementById('business_name');
+            const contactPersonInput = document.getElementById('contact_person');
+            const emailInput = document.getElementById('contact_email');
+            const phoneInput = document.getElementById('contact_phone');
+
+            if (nameInput) nameInput.value = bizName;
+            if (contactPersonInput && fullName) contactPersonInput.value = fullName;
+            if (emailInput && bizEmail) emailInput.value = bizEmail;
+            if (phoneInput && bizPhone) phoneInput.value = bizPhone;
+
+            const formElem = document.getElementById('franchiseForm') || document.getElementById('wizardStepper');
+            if (formElem) {
+                formElem.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+
+            Swal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: 'success',
+                title: 'Business info saved! Complete your location & document verification below.',
+                showConfirmButton: false,
+                timer: 3000
+            });
+        });
+    }
+
     const btnAutoFill = document.getElementById('btnAutoFillProfile');
     if (btnAutoFill) {
         btnAutoFill.addEventListener('click', function() {

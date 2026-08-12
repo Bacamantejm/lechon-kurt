@@ -614,7 +614,7 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
             <span class="logo-copy"><span class="logo-title">Lechon Delights</span><span class="logo-sub">Marketplace</span></span>
         </a>
 
-        <?php if ($current_page !== 'register' && $current_page !== 'login' && $current_page !== 'checkout'): ?>
+        <?php if ($current_page !== 'register' && $current_page !== 'login' && $current_page !== 'checkout' && $current_page !== 'franchise_application'): ?>
         <div class="market-address-wrap" id="marketAddressWrap">
             <button type="button" class="market-address-trigger" id="marketAddressToggle">
                 <i class="fas fa-location-dot"></i><span class="address-text" id="marketAddressDisplay"><?php echo htmlspecialchars($market_header_address_display); ?></span><i class="fas fa-chevron-down"></i>

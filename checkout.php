@@ -446,13 +446,15 @@ $remaining = $total - $downpayment;
                             <button type="button"
                                     id="modePickupBtn"
                                     class="checkout-mode-btn <?php echo $current_checkout_delivery_option === 'pickup' ? 'is-active' : ''; ?>"
-                                    data-mode="pickup">
+                                    data-mode="pickup"
+                                    onclick="switchCheckoutFulfillmentMode('pickup')">
                                 <i class="fas fa-store"></i> Pickup
                             </button>
                             <button type="button"
                                     id="modeDeliveryBtn"
                                     class="checkout-mode-btn <?php echo $current_checkout_delivery_option === 'delivery' ? 'is-active' : ''; ?>"
-                                    data-mode="delivery">
+                                    data-mode="delivery"
+                                    onclick="switchCheckoutFulfillmentMode('delivery')">
                                 <i class="fas fa-truck"></i> Delivery
                             </button>
                         </div>
@@ -544,8 +546,31 @@ $remaining = $total - $downpayment;
                         </div>
                     </div>
                     
-                    <!-- Step 2: Delivery Details -->
+                    <!-- Step 2: Delivery Details & Pickup Store Details -->
                     <div class="step-content" id="stepContent2">
+                        <!-- Pickup Store Section (Form for Pickup Mode) -->
+                        <div id="pickupStoreSection" style="<?php echo ($current_checkout_delivery_option === 'pickup') ? '' : 'display: none;'; ?>">
+                            <div class="co-address-card" style="background: #fff; border: 1px solid #efddcd; border-radius: 16px; padding: 24px; margin-bottom: 24px; box-shadow: 0 4px 16px rgba(0,0,0,0.03);">
+                                <h3 style="font-size: 22px; font-weight: 800; color: #2a211d; margin: 0 0 16px 0; font-family: inherit;">Pickup store location</h3>
+                                <label for="pickup_location_step" style="font-weight: 700; color: #2a211d; display: block; margin-bottom: 8px;">Select Store for Pickup *</label>
+                                <select id="pickup_location_step" class="store-select" style="width: 100%; padding: 14px 16px; border: 1px solid #efddcd; border-radius: 12px; font-size: 15px; color: #2a211d; background: #fff9f2; outline: none; box-sizing: border-box; margin-bottom: 16px; font-weight: 600;">
+                                    <?php foreach ($stores as $store): ?>
+                                    <option value="<?php echo $store['id']; ?>" <?php echo ($store['id'] == ($_SESSION['pickup_location'] ?? 1)) ? 'selected' : ''; ?>>
+                                        <?php echo htmlspecialchars($store['name'] ?? ($store['store_name'] ?? 'Store')); ?> - <?php echo htmlspecialchars($store['city']); ?>
+                                    </option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <div class="store-info" id="storeInfoStep">
+                                    <?php if ($selected_store): ?>
+                                    <p style="margin: 6px 0; color: #2a211d; font-size: 14px; font-weight: 600;"><i class="fas fa-map-marker-alt" style="color: #b3261e; margin-right: 8px;"></i> <?php echo htmlspecialchars($selected_store['address']); ?></p>
+                                    <p style="margin: 6px 0; color: #667085; font-size: 14px;"><i class="fas fa-phone" style="color: #ef6b2e; margin-right: 8px;"></i> <?php echo htmlspecialchars($selected_store['phone']); ?></p>
+                                    <p style="margin: 6px 0; color: #667085; font-size: 14px;"><i class="fas fa-clock" style="color: #667085; margin-right: 8px;"></i> <?php echo htmlspecialchars($selected_store['hours'] ?? ($selected_store['opening_hours'] ?? '')); ?></p>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Delivery Address Section (Form for Delivery Mode) -->
                         <div id="deliveryAddressSection" style="<?php echo ($current_checkout_delivery_option === 'delivery') ? '' : 'display: none;'; ?>">
                             <div class="co-address-card" id="mainDeliveryAddressCard" style="background: #fff; border: 1px solid #efddcd; border-radius: 16px; padding: 24px; margin-bottom: 24px; box-shadow: 0 4px 16px rgba(0,0,0,0.03); cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
@@ -723,13 +748,15 @@ $remaining = $total - $downpayment;
                             <button type="button"
                                     id="stickyModePickupBtn"
                                     class="checkout-mode-btn <?php echo $current_checkout_delivery_option === 'pickup' ? 'is-active' : ''; ?>"
-                                    data-mode="pickup">
+                                    data-mode="pickup"
+                                    onclick="switchCheckoutFulfillmentMode('pickup')">
                                 <i class="fas fa-store"></i> Pickup
                             </button>
                             <button type="button"
                                     id="stickyModeDeliveryBtn"
                                     class="checkout-mode-btn <?php echo $current_checkout_delivery_option === 'delivery' ? 'is-active' : ''; ?>"
-                                    data-mode="delivery">
+                                    data-mode="delivery"
+                                    onclick="switchCheckoutFulfillmentMode('delivery')">
                                 <i class="fas fa-truck"></i> Delivery
                             </button>
                         </div>
@@ -2134,26 +2161,30 @@ body {
     color: #ffffff !important;
 }
 .checkout-mode-btn {
-    border: 1px solid #efddcd !important;
-    background: #ffffff !important;
-    color: #667085 !important;
-    border-radius: 8px !important;
-    font-weight: 700 !important;
-    transition: all 0.2s ease !important;
-    padding: 8px 16px !important;
+    border: 1px solid #efddcd;
+    background: #ffffff;
+    color: #667085;
+    border-radius: 8px;
+    font-weight: 700;
+    transition: all 0.2s ease;
+    padding: 8px 16px;
 }
 .checkout-mode-btn:hover {
-    background-color: #fff8ef !important;
-    border-color: #efddcd !important;
-    color: #171922 !important;
+    background-color: #fff8ef;
+    border-color: #efddcd;
+    color: #171922;
 }
-#modePickupBtn.is-active, .sticky-mode-btn[data-mode="pickup"].is-active {
+.checkout-mode-btn[data-mode="pickup"].is-active,
+#modePickupBtn.is-active,
+#stickyModePickupBtn.is-active {
     background-color: #ef6b2e !important;
     border-color: #ef6b2e !important;
     color: #ffffff !important;
     box-shadow: 0 4px 12px rgba(239, 107, 46, 0.25) !important;
 }
-#modeDeliveryBtn.is-active, .sticky-mode-btn[data-mode="delivery"].is-active {
+.checkout-mode-btn[data-mode="delivery"].is-active,
+#modeDeliveryBtn.is-active,
+#stickyModeDeliveryBtn.is-active {
     background-color: #b3261e !important;
     border-color: #b3261e !important;
     color: #ffffff !important;
@@ -2276,6 +2307,89 @@ const checkoutTenantMessage = <?php echo json_encode($checkout_tenant_message, J
 let latestResolvedAddressText = userAddressSeed || '';
 const psgcCache = new Map();
 const marketAddressPayloadStorageKey = 'market_address_payload';
+
+async function switchCheckoutFulfillmentMode(mode) {
+    const normalizedMode = (String(mode || '').toLowerCase() === 'delivery') ? 'delivery' : 'pickup';
+    const isDelivery = (normalizedMode === 'delivery');
+    activeCheckoutDeliveryOption = normalizedMode;
+
+    // 1. Toggle Button UI Classes
+    ['modePickupBtn', 'stickyModePickupBtn'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) {
+            btn.classList.toggle('is-active', !isDelivery);
+            btn.setAttribute('aria-pressed', (!isDelivery).toString());
+        }
+    });
+    ['modeDeliveryBtn', 'stickyModeDeliveryBtn'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) {
+            btn.classList.toggle('is-active', isDelivery);
+            btn.setAttribute('aria-pressed', isDelivery.toString());
+        }
+    });
+
+    // 2. Toggle Mode Card Copy & Summary Labels
+    const card = document.getElementById('checkoutModeCard');
+    if (card) {
+        card.classList.toggle('mode-delivery', isDelivery);
+        card.classList.toggle('mode-pickup', !isDelivery);
+    }
+    const label = document.getElementById('activeModeLabel');
+    if (label) label.textContent = isDelivery ? 'Home Delivery' : 'Pickup from Store';
+    const summaryVal = document.getElementById('summaryModeValue');
+    if (summaryVal) summaryVal.textContent = isDelivery ? 'Delivery' : 'Pickup';
+
+    // 3. Toggle Form Visibility Directly
+    const pickupBlock = document.getElementById('pickupLocation');
+    const pickupStepSection = document.getElementById('pickupStoreSection');
+    const deliveryBlock = document.getElementById('deliveryLocation');
+    const deliverySection = document.getElementById('deliveryAddressSection');
+
+    if (pickupBlock) pickupBlock.style.display = isDelivery ? 'none' : 'block';
+    if (pickupStepSection) pickupStepSection.style.display = isDelivery ? 'none' : 'block';
+    if (deliveryBlock) deliveryBlock.style.display = isDelivery ? 'block' : 'none';
+    if (deliverySection) deliverySection.style.display = isDelivery ? 'block' : 'none';
+
+    // 4. Update Hidden Inputs
+    const hiddenDeliveryInput = document.getElementById('delivery_option_hidden');
+    if (hiddenDeliveryInput) hiddenDeliveryInput.value = normalizedMode;
+    const hiddenPickupInput = document.getElementById('pickup_location_hidden');
+    if (hiddenPickupInput) hiddenPickupInput.value = document.getElementById('pickup_location')?.value || document.getElementById('pickup_location_step')?.value || '1';
+
+    // 5. Update Delivery Field Requirements
+    if (typeof setDeliveryAddressFieldRequirements === 'function') {
+        setDeliveryAddressFieldRequirements(isDelivery);
+    }
+
+    // 6. Sync with Backend PHP Session
+    try {
+        await fetch('update_delivery_option.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                delivery_option: normalizedMode,
+                pickup_location: document.getElementById('pickup_location')?.value || '1'
+            })
+        });
+    } catch (err) {
+        console.error('Failed to update delivery option on server:', err);
+    }
+
+    // 7. Calculate or Reset Delivery Fee
+    if (isDelivery) {
+        const latVal = (document.getElementById('latitude')?.value || '').trim();
+        const lngVal = (document.getElementById('longitude')?.value || '').trim();
+        if (latVal && lngVal && typeof calculateDeliveryFee === 'function') {
+            await calculateDeliveryFee(latVal, lngVal);
+        }
+    } else {
+        currentDeliveryFee = 0;
+        if (typeof recalculateOrderTotals === 'function') {
+            recalculateOrderTotals();
+        }
+    }
+}
 
 function normalizePostalCode(value) {
     return String(value || '').replace(/[^\dA-Za-z-]/g, '').trim();
@@ -2893,9 +3007,15 @@ const applyCheckoutModeUI = (mode) => {
         stickyModeDeliveryBtn.setAttribute('aria-pressed', isDelivery.toString());
     }
 
-    if (pickupLocationBlock) pickupLocationBlock.style.display = isDelivery ? 'none' : '';
-    if (deliveryLocationBlock) deliveryLocationBlock.style.display = isDelivery ? '' : 'none';
-    if (deliveryAddressSection) deliveryAddressSection.style.display = isDelivery ? '' : 'none';
+    const pickupBlock = document.getElementById('pickupLocation');
+    const pickupStepSection = document.getElementById('pickupStoreSection');
+    const deliveryBlock = document.getElementById('deliveryLocation');
+    const deliverySection = document.getElementById('deliveryAddressSection');
+
+    if (pickupBlock) pickupBlock.style.display = isDelivery ? 'none' : 'block';
+    if (pickupStepSection) pickupStepSection.style.display = isDelivery ? 'none' : 'block';
+    if (deliveryBlock) deliveryBlock.style.display = isDelivery ? 'block' : 'none';
+    if (deliverySection) deliverySection.style.display = isDelivery ? 'block' : 'none';
 };
 
 const setCheckoutMode = async (mode, syncServer = true) => {
@@ -4150,47 +4270,35 @@ if (saveCurrentAddressBtn) {
     saveCurrentAddressBtn.addEventListener('click', saveCurrentAddress);
 }
 
-if (modePickupBtn) {
-    modePickupBtn.addEventListener('click', async () => {
-        if (activeCheckoutDeliveryOption === 'pickup') return;
+// Fulfillment Mode Button Click Listeners (Delivery & Pickup)
+document.querySelectorAll('.checkout-mode-btn').forEach(btn => {
+    btn.addEventListener('click', async function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const mode = this.getAttribute('data-mode') || (this.id && this.id.toLowerCase().includes('delivery') ? 'delivery' : 'pickup');
         try {
-            await setCheckoutMode('pickup', true);
+            await setCheckoutMode(mode, true);
+
+            // Automatically advance to Step 2 (Address / Store Selection) if currently on Step 1
+            if (typeof currentStep !== 'undefined' && currentStep === 1) {
+                if (typeof goToStep === 'function') goToStep(2);
+            }
         } catch (error) {
-            console.error('Unable to switch to pickup mode:', error);
+            console.error('Unable to switch fulfillment mode:', error);
         }
     });
-}
+});
 
-if (modeDeliveryBtn) {
-    modeDeliveryBtn.addEventListener('click', async () => {
-        if (activeCheckoutDeliveryOption === 'delivery') return;
-        try {
-            await setCheckoutMode('delivery', true);
-        } catch (error) {
-            console.error('Unable to switch to delivery mode:', error);
-        }
+const pickupSelectMain = document.getElementById('pickup_location');
+const pickupSelectStep = document.getElementById('pickup_location_step');
+
+if (pickupSelectMain && pickupSelectStep) {
+    pickupSelectStep.addEventListener('change', function() {
+        pickupSelectMain.value = this.value;
+        pickupSelectMain.dispatchEvent(new Event('change'));
     });
-}
-
-if (stickyModePickupBtn) {
-    stickyModePickupBtn.addEventListener('click', async () => {
-        if (activeCheckoutDeliveryOption === 'pickup') return;
-        try {
-            await setCheckoutMode('pickup', true);
-        } catch (error) {
-            console.error('Unable to switch to pickup mode:', error);
-        }
-    });
-}
-
-if (stickyModeDeliveryBtn) {
-    stickyModeDeliveryBtn.addEventListener('click', async () => {
-        if (activeCheckoutDeliveryOption === 'delivery') return;
-        try {
-            await setCheckoutMode('delivery', true);
-        } catch (error) {
-            console.error('Unable to switch to delivery mode:', error);
-        }
+    pickupSelectMain.addEventListener('change', function() {
+        pickupSelectStep.value = this.value;
     });
 }
 
