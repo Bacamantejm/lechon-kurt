@@ -3330,15 +3330,32 @@ const applySavedAddressToForm = async (savedAddress) => {
 
     const latitudeInput = document.getElementById('latitude');
     const longitudeInput = document.getElementById('longitude');
-    const lat = parseFloat(savedAddress.latitude || '');
-    const lng = parseFloat(savedAddress.longitude || '');
-    if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
+    let lat = parseFloat(savedAddress.latitude || '');
+    let lng = parseFloat(savedAddress.longitude || '');
+
+    if ((Number.isNaN(lat) || Number.isNaN(lng) || (!lat && !lng)) && addressText) {
+        try {
+            if (typeof forwardGeocodeFromNominatim === 'function') {
+                const geocoded = await forwardGeocodeFromNominatim(addressText);
+                if (geocoded) {
+                    lat = geocoded.lat;
+                    lng = geocoded.lng;
+                }
+            }
+        } catch (e) {
+            console.warn('Geocode fallback error:', e);
+        }
+    }
+
+    if (!Number.isNaN(lat) && !Number.isNaN(lng) && lat !== 0 && lng !== 0) {
         if (latitudeInput) latitudeInput.value = String(lat);
         if (longitudeInput) longitudeInput.value = String(lng);
 
         if (map && marker) {
             map.setView([lat, lng], 17);
             marker.setLatLng([lat, lng]);
+        }
+        if (typeof calculateDeliveryFee === 'function') {
             calculateDeliveryFee(lat, lng);
         }
     }
@@ -4832,13 +4849,17 @@ if (activeCheckoutDeliveryOption === 'delivery' && initialDeliveryQuote && initi
             <div id="modalSavedAddressesList" style="display: flex; flex-direction: column; gap: 12px;">
                 <?php foreach ($saved_addresses as $index => $saved_addr): ?>
                 <?php
-                $is_addr_default = !empty($saved_addr['is_default']) || $index === 0;
+                $is_addr_default = ($default_saved_address_id > 0) ? ((int)$saved_addr['id'] === $default_saved_address_id) : ($index === 0);
                 $addr_notes = !empty($saved_addr['notes']) ? htmlspecialchars($saved_addr['notes']) : 'none';
                 ?>
                 <div class="modal-saved-addr-card <?php echo $is_addr_default ? 'is-selected' : ''; ?>" 
                      data-address-id="<?php echo (int)$saved_addr['id']; ?>" 
                      data-street="<?php echo htmlspecialchars($saved_addr['street_address'] ?? ($saved_addr['full_address'] ?? '')); ?>"
                      data-city="<?php echo htmlspecialchars($saved_addr['city_name'] ?? ($saved_addr['full_address'] ?? '')); ?>"
+                     data-full-address="<?php echo htmlspecialchars($saved_addr['full_address'] ?? ''); ?>"
+                     data-latitude="<?php echo htmlspecialchars($saved_addr['latitude'] ?? ''); ?>"
+                     data-longitude="<?php echo htmlspecialchars($saved_addr['longitude'] ?? ''); ?>"
+                     data-notes="<?php echo htmlspecialchars($saved_addr['notes'] ?? ''); ?>"
                      style="border: 1px solid <?php echo $is_addr_default ? '#2a211d' : '#e8d4c3'; ?>; border-radius: 14px; padding: 16px 18px; cursor: pointer; transition: all 0.2s; background: #fff; display: flex; align-items: flex-start; justify-content: space-between; gap: 14px;">
                     <div style="display: flex; gap: 12px; align-items: flex-start; flex: 1;">
                         <!-- Radio Icon -->
@@ -4878,10 +4899,13 @@ if (activeCheckoutDeliveryOption === 'delivery' && initialDeliveryQuote && initi
             </div>
         </div>
 
-        <!-- + Add Address Button -->
-        <div style="border-top: 1px solid #efddcd; padding-top: 16px;">
+        <!-- Footer Actions: + Add Address Button & Confirm Address Button -->
+        <div style="border-top: 1px solid #efddcd; padding-top: 16px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
             <button type="button" id="openAddAddressModalBtn" style="background: none; border: none; color: #2a211d; font-size: 15px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; padding: 4px 0;">
                 <i class="fas fa-plus" style="font-size: 14px;"></i> Add address
+            </button>
+            <button type="button" id="confirmSelectedAddressBtn" style="background: #b3261e; color: #ffffff; font-weight: 800; font-size: 14px; letter-spacing: 0.5px; border: none; border-radius: 10px; padding: 12px 28px; cursor: pointer; transition: background 0.2s, transform 0.1s; box-shadow: 0 4px 12px rgba(179,38,30,0.25);">
+                Confirm Address
             </button>
         </div>
     </div>
@@ -5053,36 +5077,186 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Modal Saved Address Card Click (Select Address)
-    document.querySelectorAll('.modal-saved-addr-card').forEach(card => {
-        card.addEventListener('click', async function() {
-            document.querySelectorAll('.modal-saved-addr-card').forEach(c => {
-                c.style.borderColor = '#e8d4c3';
-                c.classList.remove('is-selected');
-                const radioInner = c.querySelector('.addr-radio-inner');
-                if (radioInner) radioInner.style.background = 'transparent';
-                const radioBtn = c.querySelector('.addr-radio-btn');
-                if (radioBtn) radioBtn.style.borderColor = '#7b6d64';
-            });
+    function parseAddressCardDisplayTexts(selectedCard, savedRow) {
+        const streetLineEl = selectedCard ? selectedCard.querySelector('.addr-street-line') : null;
+        const cityLineEl = selectedCard ? selectedCard.querySelector('.addr-city-line') : null;
 
-            this.style.borderColor = '#2a211d';
-            this.classList.add('is-selected');
-            const selInner = this.querySelector('.addr-radio-inner');
-            if (selInner) selInner.style.background = '#2a211d';
-            const selRadio = this.querySelector('.addr-radio-btn');
-            if (selRadio) selRadio.style.borderColor = '#2a211d';
+        let fullText = (
+            savedRow?.full_address || 
+            selectedCard?.getAttribute('data-full-address') || 
+            (streetLineEl ? streetLineEl.textContent : '') || 
+            ''
+        ).trim();
 
-            const addrId = this.getAttribute('data-address-id');
-            const savedRow = findSavedAddressById(addrId);
-            if (savedRow) {
-                await applySavedAddressToForm(savedRow);
-                const streetText = savedRow.street_address || (savedRow.full_address ? savedRow.full_address.split(',')[0] : '');
-                const cityText = savedRow.city_name || savedRow.full_address || '';
-                updateDisplayAddressText(streetText, cityText);
+        let streetText = '';
+        let cityText = '';
+
+        if (fullText) {
+            const parts = fullText.split(',').map(p => p.trim()).filter(Boolean);
+            if (parts.length >= 2) {
+                const firstPartIsNumberOnly = parts[0].length <= 10 && (
+                    /^\d/.test(parts[0]) || 
+                    /^blk\s/i.test(parts[0]) || 
+                    /^unit\s/i.test(parts[0]) || 
+                    /^apt\s/i.test(parts[0])
+                );
+                
+                if (firstPartIsNumberOnly && parts.length >= 3) {
+                    streetText = parts.slice(0, 2).join(', ');
+                    cityText = parts.slice(2).join(', ');
+                } else {
+                    streetText = parts[0];
+                    cityText = parts.slice(1).join(', ');
+                }
+            } else {
+                streetText = fullText;
+                cityText = '';
             }
+        } else {
+            streetText = (savedRow?.street_address || selectedCard?.getAttribute('data-street') || (streetLineEl ? streetLineEl.textContent : 'Selected Address')).trim();
+            cityText = (savedRow?.city_name || selectedCard?.getAttribute('data-city') || (cityLineEl ? cityLineEl.textContent : '')).trim();
+            if (cityText === streetText) cityText = '';
+        }
+
+        return { streetText, cityText, fullText };
+    }
+
+    function selectAndApplyAddressCard(selectedCard) {
+        if (!selectedCard) return;
+
+        // 1. Highlight card visually
+        document.querySelectorAll('.modal-saved-addr-card').forEach(c => {
+            c.style.borderColor = '#e8d4c3';
+            c.classList.remove('is-selected');
+            const radioInner = c.querySelector('.addr-radio-inner');
+            if (radioInner) radioInner.style.background = 'transparent';
+            const radioBtn = c.querySelector('.addr-radio-btn');
+            if (radioBtn) radioBtn.style.borderColor = '#7b6d64';
+        });
+
+        selectedCard.style.borderColor = '#2a211d';
+        selectedCard.classList.add('is-selected');
+        const selInner = selectedCard.querySelector('.addr-radio-inner');
+        if (selInner) selInner.style.background = '#2a211d';
+        const selRadio = selectedCard.querySelector('.addr-radio-btn');
+        if (selRadio) selRadio.style.borderColor = '#2a211d';
+
+        // 2. Extract address data
+        const addrId = selectedCard.getAttribute('data-address-id');
+        let savedRow = typeof findSavedAddressById === 'function' ? findSavedAddressById(addrId) : null;
+        if (!savedRow) {
+            savedRow = {
+                id: addrId,
+                street_address: selectedCard.getAttribute('data-street') || '',
+                city_name: selectedCard.getAttribute('data-city') || '',
+                full_address: selectedCard.getAttribute('data-full-address') || selectedCard.getAttribute('data-street') || '',
+                latitude: selectedCard.getAttribute('data-latitude') || '',
+                longitude: selectedCard.getAttribute('data-longitude') || '',
+                notes: selectedCard.getAttribute('data-notes') || ''
+            };
+        }
+
+        const { streetText, cityText, fullText } = parseAddressCardDisplayTexts(selectedCard, savedRow);
+
+        // 3. Update Checkout UI Card text INSTANTLY in real-time
+        updateDisplayAddressText(streetText, cityText);
+
+        // 4. Update hidden inputs & Note to rider INSTANTLY
+        const streetInput = document.getElementById('street_address');
+        const deliveryAddressInput = document.getElementById('delivery_address');
+        const instructionsInput = document.getElementById('delivery_instructions');
+        const latitudeInput = document.getElementById('latitude');
+        const longitudeInput = document.getElementById('longitude');
+        const savedAddressIdInput = document.getElementById('saved_address_id');
+        const riderNoteEl = selectedCard.querySelector('.addr-rider-note');
+
+        const fullAddrVal = fullText || `${streetText}, ${cityText}`;
+        if (streetInput) streetInput.value = streetText;
+        if (deliveryAddressInput) deliveryAddressInput.value = fullAddrVal;
+        if (savedAddressIdInput) savedAddressIdInput.value = String(savedRow.id || '');
+
+        if (instructionsInput) {
+            let noteValue = savedRow.notes || '';
+            if (!noteValue && riderNoteEl) {
+                const rawNoteText = riderNoteEl.textContent.replace(/^Note to rider:\s*/i, '').trim();
+                if (rawNoteText && rawNoteText.toLowerCase() !== 'none') {
+                    noteValue = rawNoteText;
+                }
+            }
+            instructionsInput.value = (noteValue && noteValue.toLowerCase() !== 'none') ? noteValue : '';
+        }
+
+        // 5. Sync storage INSTANTLY
+        let lat = parseFloat(savedRow.latitude || '');
+        let lng = parseFloat(savedRow.longitude || '');
+        const payload = {
+            full_address: fullAddrVal,
+            street_address: streetText,
+            city_name: cityText,
+            latitude: String(lat || ''),
+            longitude: String(lng || '')
+        };
+        try {
+            localStorage.setItem('market_address', JSON.stringify(payload));
+            sessionStorage.setItem('market_address', JSON.stringify(payload));
+        } catch(e) {}
+
+        // 6. Coordinates & Delivery Fee Recalculation (async background helper)
+        (async function processCoordinatesAndFee() {
+            if ((Number.isNaN(lat) || Number.isNaN(lng) || (!lat && !lng)) && fullAddrVal) {
+                if (typeof forwardGeocodeFromNominatim === 'function') {
+                    const geocoded = await forwardGeocodeFromNominatim(fullAddrVal);
+                    if (geocoded) {
+                        lat = geocoded.lat;
+                        lng = geocoded.lng;
+                    }
+                }
+            }
+
+            if (!Number.isNaN(lat) && !Number.isNaN(lng) && lat !== 0 && lng !== 0) {
+                if (latitudeInput) latitudeInput.value = String(lat);
+                if (longitudeInput) longitudeInput.value = String(lng);
+
+                if (typeof map !== 'undefined' && map && typeof marker !== 'undefined' && marker) {
+                    map.setView([lat, lng], 17);
+                    marker.setLatLng([lat, lng]);
+                }
+                if (typeof calculateDeliveryFee === 'function') {
+                    calculateDeliveryFee(lat, lng);
+                }
+            }
+        })().catch(err => console.warn('Coord fee error:', err));
+
+        // 7. PSGC background sync
+        if (typeof applySavedAddressToForm === 'function') {
+            applySavedAddressToForm(savedRow).catch(err => console.warn('Background PSGC sync:', err));
+        }
+    }
+
+    // Modal Saved Address Card Selection (Single Click & Double Click)
+    document.querySelectorAll('.modal-saved-addr-card').forEach(card => {
+        card.addEventListener('click', function() {
+            selectAndApplyAddressCard(this);
+        });
+
+        card.addEventListener('dblclick', function() {
+            selectAndApplyAddressCard(this);
             if (changeModal) changeModal.style.display = 'none';
         });
     });
+
+    // Confirm Selected Address Button Click
+    const confirmAddrBtn = document.getElementById('confirmSelectedAddressBtn');
+    if (confirmAddrBtn) {
+        confirmAddrBtn.addEventListener('click', function() {
+            const selectedCard = document.querySelector('.modal-saved-addr-card.is-selected') 
+                              || document.querySelector('.modal-saved-addr-card');
+            if (selectedCard) {
+                selectAndApplyAddressCard(selectedCard);
+            }
+            if (changeModal) changeModal.style.display = 'none';
+        });
+    }
 
     // Edit Saved Address (Pencil Icon)
     document.querySelectorAll('.btn-edit-saved-addr').forEach(btn => {
@@ -5187,9 +5361,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Update display address on initial load
     setTimeout(function() {
+        const selectedSavedCard = document.querySelector('.modal-saved-addr-card.is-selected') || document.querySelector('.modal-saved-addr-card');
         const streetInput = document.getElementById('street_address');
         const hiddenAddr = document.getElementById('delivery_address');
         const navPayload = readMarketAddressPayloadFromStorage();
+
+        if (selectedSavedCard) {
+            const addrId = selectedSavedCard.getAttribute('data-address-id');
+            const savedRow = typeof findSavedAddressById === 'function' ? findSavedAddressById(addrId) : null;
+            const { streetText, cityText } = parseAddressCardDisplayTexts(selectedSavedCard, savedRow);
+            if (streetText) {
+                updateDisplayAddressText(streetText, cityText);
+                return;
+            }
+        }
+
         if (streetInput && streetInput.value.trim()) {
             const parts = streetInput.value.split(',');
             updateDisplayAddressText(parts[0].trim(), parts.slice(1).join(',').trim());
