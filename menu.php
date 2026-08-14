@@ -2549,13 +2549,16 @@ document.addEventListener('click', function(e) {
 /* Foodpanda Unified Sticky Category Navigation Bar */
 .panda-menu-sticky-bar {
     position: sticky !important;
-    top: var(--site-header-offset, 64px) !important;
-    z-index: 80 !important;
+    top: var(--site-header-offset, 72px) !important;
+    z-index: 1100 !important;
     background: #ffffff !important;
-    border-bottom: 1px solid #e2e8f0 !important;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04) !important;
-    margin: 0 -22px 30px -22px !important;
-    padding: 10px 22px !important;
+    border: 1px solid #eaecf0 !important;
+    border-radius: 16px !important;
+    box-shadow: 0 4px 16px rgba(16, 24, 40, 0.05) !important;
+    margin: 0 0 24px 0 !important;
+    padding: 10px 16px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
 }
 
 .panda-menu-bar-inner {
@@ -4849,9 +4852,16 @@ body {
 
 .menu-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 360px;
+    grid-template-columns: minmax(0, 1fr) 340px;
     gap: 24px;
     align-items: start;
+}
+
+@media (max-width: 1200px) {
+    .menu-layout {
+        grid-template-columns: minmax(0, 1fr) 300px;
+        gap: 16px;
+    }
 }
 
 .menu-main-column {
@@ -4860,17 +4870,15 @@ body {
 
 .menu-side-column {
     min-width: 0;
-    height: 100%;
 }
 
 .menu-side-stack {
     position: sticky !important;
-    top: var(--menu-side-stack-top, calc(var(--site-header-offset, 72px) + 74px)) !important;
+    top: var(--menu-side-stack-top, calc(var(--site-header-offset, 72px) + 76px)) !important;
     display: flex;
     flex-direction: column;
     gap: 16px;
     z-index: 100 !important;
-    overflow: visible !important;
 }
 
 .quick-order-panel,
@@ -4878,7 +4886,7 @@ body {
     background: #fff;
     border: 1px solid var(--menu-border);
     border-radius: 16px;
-    box-shadow: 0 14px 28px rgba(74, 32, 20, 0.12);
+    box-shadow: 0 10px 24px rgba(16, 24, 40, 0.06);
 }
 
 .quick-order-panel {
@@ -4905,7 +4913,8 @@ body {
     color: #6d5143;
     font-weight: 700;
     border-radius: 10px;
-    padding: 11px 8px;
+    padding: 10px 8px;
+    font-size: 0.92rem;
     cursor: pointer !important;
     transition: var(--transition-fast);
     position: relative !important;
@@ -4916,40 +4925,43 @@ body {
 .quick-order-tab.active {
     background: #fff;
     color: var(--menu-red);
-    box-shadow: 0 6px 12px rgba(74, 32, 20, 0.08);
+    box-shadow: 0 4px 10px rgba(74, 32, 20, 0.08);
 }
 
 .quick-order-hero {
-    min-height: 235px;
-    display: grid;
-    place-items: center;
+    min-height: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     text-align: center;
-    padding: 16px 6px 12px;
+    padding: 14px 8px 10px;
 }
 
 .quick-order-hero-icon {
-    width: 66px;
-    height: 66px;
-    border-radius: 18px;
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     color: #f39b35;
     background: linear-gradient(135deg, #fff4e1, #ffe2bf);
     box-shadow: inset 0 0 0 1px #f4d2a8;
-    font-size: 1.75rem;
+    font-size: 1.35rem;
 }
 
 .quick-order-hero h3 {
-    margin: 12px 0 4px;
+    margin: 8px 0 2px;
     color: #2c2521;
-    font-size: 1.7rem;
-    line-height: 1.15;
+    font-size: 1.25rem;
+    font-weight: 800;
+    line-height: 1.2;
 }
 
 .quick-order-hero p {
     margin: 0;
     color: #7d6b62;
+    font-size: 0.85rem;
     font-weight: 600;
 }
 
@@ -5344,8 +5356,12 @@ body {
         grid-template-columns: minmax(0, 1fr);
     }
 
-    .menu-side-stack {
-        position: static;
+    .menu-side-column {
+        display: none !important;
+    }
+
+    .mobile-quick-order {
+        display: block !important;
     }
 
     .store-review-list {
