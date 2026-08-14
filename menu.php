@@ -4854,7 +4854,6 @@ body {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 340px;
     gap: 24px;
-    align-items: start;
 }
 
 @media (max-width: 1200px) {
@@ -4870,6 +4869,7 @@ body {
 
 .menu-side-column {
     min-width: 0;
+    height: 100%;
 }
 
 .menu-side-stack {
@@ -5644,7 +5644,7 @@ body {
 }
 @media (min-width: 993px) {
     #backToTopBtn {
-        z-index: 80 !important;
+        z-index: 1050 !important;
     }
 }
 </style>
