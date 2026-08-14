@@ -124,8 +124,11 @@ function dpCalculateDeliveryFeeFromDistance(float $distanceKm, array $config = [
     return max(0.0, ceil($baseFee + ($distanceKm * $perKmRate)));
 }
 
+require_once __DIR__ . '/LalamoveService.php';
+
 function dpBuildDeliveryQuote(array $stores, float $customerLat, float $customerLng, int $preferredOwnerUserId = 0, array $config = []): array
 {
+    global $conn;
     $config = array_merge(dpGetDeliveryPricingConfig(), $config);
     $nearestStore = dpFindNearestStore($stores, $customerLat, $customerLng, $preferredOwnerUserId);
 
@@ -137,13 +140,62 @@ function dpBuildDeliveryQuote(array $stores, float $customerLat, float $customer
     }
 
     $distanceKm = round((float)($nearestStore['distance_km'] ?? 0), 2);
-    $fee = dpCalculateDeliveryFeeFromDistance($distanceKm, $config);
+    $fee = null;
+    $lalamoveUsed = false;
+    $serviceType = 'MOTORCYCLE';
+
+    // 1. Try Lalamove Real-Time API Quote if enabled in DB
+    if ($conn instanceof mysqli) {
+        $lalamoveQuery = "SELECT api_key, api_secret, partner_id, is_active, sandbox_mode FROM food_delivery_integrations WHERE platform_name = 'Lalamove' AND is_active = 1 LIMIT 1";
+        $lalamoveRes = @mysqli_query($conn, $lalamoveQuery);
+        if ($lalamoveRes && $lalamoveRow = mysqli_fetch_assoc($lalamoveRes)) {
+            $apiKey = trim((string)($lalamoveRow['api_key'] ?? ''));
+            $apiSecret = trim((string)($lalamoveRow['api_secret'] ?? ''));
+            $sandboxMode = !empty($lalamoveRow['sandbox_mode']);
+            $serviceType = trim((string)($lalamoveRow['partner_id'] ?? 'MOTORCYCLE')) ?: 'MOTORCYCLE';
+
+            if (!empty($apiKey) && !empty($apiSecret)) {
+                $lalamove = new LalamoveService($apiKey, $apiSecret, $sandboxMode, 'PH');
+                $storeAddress = trim(implode(', ', array_filter([
+                    (string)($nearestStore['name'] ?? ''),
+                    (string)($nearestStore['address'] ?? ''),
+                    (string)($nearestStore['city'] ?? ''),
+                ]))) ?: 'Store Location';
+
+                $quoteResult = $lalamove->getQuotation(
+                    (float)$nearestStore['latitude'],
+                    (float)$nearestStore['longitude'],
+                    $customerLat,
+                    $customerLng,
+                    $storeAddress,
+                    'Customer Delivery Location',
+                    $serviceType
+                );
+
+                if (!empty($quoteResult['success']) && is_numeric($quoteResult['fee'])) {
+                    $fee = (float)$quoteResult['fee'];
+                    $lalamoveUsed = true;
+                    if (!empty($quoteResult['distance_km'])) {
+                        $distanceKm = (float)$quoteResult['distance_km'];
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Fallback to distance-based calculation if Lalamove API is inactive or unavailable
+    if ($fee === null) {
+        $fee = dpCalculateDeliveryFeeFromDistance($distanceKm, $config);
+    }
+
     $eta = dpCalculateEtaWindow($distanceKm, $config);
+    $providerLabel = $lalamoveUsed ? 'Lalamove Express (' . htmlspecialchars($serviceType) . ')' : (string)($nearestStore['name'] ?? 'Nearest Store');
 
     return [
         'success' => true,
         'fee' => $fee,
         'distance_km' => $distanceKm,
+        'lalamove_used' => $lalamoveUsed,
         'nearest_store_id' => (int)($nearestStore['id'] ?? 0),
         'nearest_store_name' => (string)($nearestStore['name'] ?? 'Nearest Store'),
         'nearest_store_address' => trim(implode(', ', array_filter([
@@ -151,7 +203,7 @@ function dpBuildDeliveryQuote(array $stores, float $customerLat, float $customer
             (string)($nearestStore['city'] ?? ''),
             (string)($nearestStore['province'] ?? ''),
         ]))),
-        'delivery_details' => 'Delivery via ' . (string)($nearestStore['name'] ?? 'Nearest Store') . ' (' . number_format($distanceKm, 1) . ' km)',
+        'delivery_details' => 'Delivery via ' . $providerLabel . ' (' . number_format($distanceKm, 1) . ' km)',
         'eta_min_minutes' => (int)$eta['min_minutes'],
         'eta_max_minutes' => (int)$eta['max_minutes'],
         'estimated_delivery_text' => (string)$eta['label'],

@@ -1779,9 +1779,9 @@ class PlatformMonetizationService
         }
 
         $defaults = [
-            ['starter', 'Starter', 'Basic storefront, chat support, and order presence for small shops.', 1499.00, 14990.00, 7.50, 5.00, 2, 0, 0, 0, 0],
-            ['growth', 'Growth', 'Adds AI support automation, more staff access, and better visibility tools.', 3499.00, 34990.00, 6.00, 3.00, 6, 1, 1, 0, 0],
-            ['pro', 'Pro', 'Best for high-volume stores with priority handling and stronger branding.', 6999.00, 69990.00, 4.50, 2.00, 15, 1, 1, 1, 1]
+            ['starter', 'Starter', 'Basic storefront, chat support, and order presence for small shops.', 500.00, 5000.00, 7.50, 5.00, 2, 0, 0, 0, 0],
+            ['growth', 'Growth', 'Adds AI support automation, more staff access, and better visibility tools.', 1000.00, 10000.00, 6.00, 3.00, 6, 1, 1, 0, 0],
+            ['pro', 'Pro', 'Best for high-volume stores with priority handling and stronger branding.', 1199.00, 11990.00, 4.50, 2.00, 15, 1, 1, 1, 1]
         ];
 
         foreach ($defaults as $plan) {

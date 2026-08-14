@@ -5,8 +5,9 @@ require_once __DIR__ . '/includes/favorites_helper.php';
 require_once __DIR__ . '/includes/store_availability_helper.php';
 require_once __DIR__ . '/includes/partner_advertisement_helper.php';
 
-$current_page = 'home';
-$page_title = 'Marketplace Home';
+$is_pickup_mode = isset($_GET['type']) && strtolower(trim((string)$_GET['type'])) === 'pickup';
+$current_page = $is_pickup_mode ? 'pickup' : 'home';
+$page_title = $is_pickup_mode ? 'Pick-up Stores & Branches' : 'Marketplace Home';
 $show_welcome = !empty($_SESSION['register_success']);
 $user_email = $_SESSION['register_email'] ?? '';
 unset($_SESSION['register_success'], $_SESSION['register_email']);
@@ -2550,7 +2551,25 @@ body {
                 </aside>
 
                 <div>
-                    <?php if (!empty($_SESSION['user_id'])): 
+                    <?php if ($is_pickup_mode): ?>
+                        <!-- Foodpanda-Style Pick-up Map Section (Leaflet Map for Nearby Stores) -->
+                        <div class="foodpanda-pickup-banner" style="background: linear-gradient(135deg, #f0fdf4 0%, #e0f2fe 100%); border: 1px solid #cbd5e1; border-radius: 20px; padding: 22px; margin-bottom: 24px; box-shadow: 0 4px 16px rgba(15,23,42,0.04);">
+                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; flex-wrap: wrap;">
+                                <div>
+                                    <div style="display: inline-flex; align-items: center; gap: 6px; background: #ffffff; color: #b3261e; padding: 4px 14px; border-radius: 999px; font-size: 0.8rem; font-weight: 800; margin-bottom: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.06);">
+                                        <i class="fas fa-person-walking"></i> Nearby Pick-up Branches
+                                    </div>
+                                    <h2 style="margin: 0; font-family: 'Outfit', sans-serif; font-size: 1.45rem; font-weight: 800; color: #1e293b;">Explore restaurants around you</h2>
+                                </div>
+                                <span style="font-size: 0.85rem; color: #64748b; font-weight: 600;"><i class="fas fa-location-dot" style="color: #b3261e;"></i> Showing nearby Cavite store pins</span>
+                            </div>
+                            <div id="pickupMapContainer" style="width: 100%;">
+                                <div id="pickupLeafletMap" style="width: 100%; height: 340px; border-radius: 16px; border: 2px solid #ffffff; box-shadow: 0 8px 24px rgba(15,23,42,0.12); z-index: 1;"></div>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+
+                    <?php if (empty($is_pickup_mode) && !empty($_SESSION['user_id'])): 
                         $first_name = explode(' ', $_SESSION['full_name'] ?? 'Guest')[0];
                     ?>
                         <div class="panda-welcome-banner" style="background: linear-gradient(135deg, #b3261e 0%, #8f261a 100%); color: #fff; padding: 28px 24px; border-radius: 24px; margin-bottom: 24px; box-shadow: 0 12px 28px rgba(179, 38, 30, 0.15); display: flex; justify-content: space-between; align-items: center; overflow: hidden; position: relative;">
@@ -2868,6 +2887,62 @@ document.addEventListener('DOMContentLoaded', function () {
             window.location.href = 'login.php';
         });
     });
+
+    // Auto-initialize Foodpanda Leaflet Pick-up Map for Nearby Stores
+    const pickupMapElement = document.getElementById('pickupLeafletMap');
+    let pickupLeafletMap = null;
+
+    if (pickupMapElement && typeof L !== 'undefined') {
+        setTimeout(function() {
+            pickupLeafletMap = L.map('pickupLeafletMap').setView([14.3294, 120.9367], 12);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(pickupLeafletMap);
+
+            const storeIcon = L.divIcon({
+                className: 'pickup-leaflet-marker',
+                html: '<div style="background:#b3261e; color:#fff; width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; border:2px solid #fff; box-shadow:0 4px 12px rgba(0,0,0,0.3); font-size:15px;"><i class="fas fa-location-dot"></i></div>',
+                iconSize: [34, 34],
+                iconAnchor: [17, 34],
+                popupAnchor: [0, -34]
+            });
+
+            const rowsList = Array.from(document.querySelectorAll('.market-store-row'));
+            const bounds = [];
+
+            rowsList.forEach(row => {
+                const lat = parseFloat(row.dataset.lat || '');
+                const lng = parseFloat(row.dataset.lng || '');
+                const storeTitle = row.querySelector('.market-store-row-title')?.textContent.trim() || 'Lechon Branch';
+                const storeLink = row.dataset.href || 'menu.php';
+
+                if (Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0) {
+                    bounds.push([lat, lng]);
+                    const marker = L.marker([lat, lng], { icon: storeIcon }).addTo(pickupLeafletMap);
+                    marker.bindPopup(`
+                        <div style="font-family:'Outfit',sans-serif; padding:4px;">
+                            <strong style="font-size:14px; color:#2a211d;">${storeTitle}</strong>
+                            <div style="font-size:12px; color:#667085; margin:4px 0 8px 0;">Pickup Branch Available</div>
+                            <a href="${storeLink}" style="background:#b3261e; color:#fff; padding:6px 12px; border-radius:6px; font-size:12px; font-weight:700; text-decoration:none; display:inline-block;">View Menu & Order</a>
+                        </div>
+                    `);
+                }
+            });
+
+            if (bounds.length > 0) {
+                pickupLeafletMap.fitBounds(bounds, { padding: [40, 40] });
+            }
+            pickupLeafletMap.invalidateSize();
+        }, 150);
+    }
+
+    if (window.location.search.includes('type=pickup')) {
+        const filterBranchOnly = document.getElementById('filterBranchOnly');
+        if (filterBranchOnly && !filterBranchOnly.checked) {
+            filterBranchOnly.checked = true;
+        }
+    }
 
     const heroSearch = document.getElementById('heroStoreSearch');
     const gridSearch = document.getElementById('gridStoreSearch');
