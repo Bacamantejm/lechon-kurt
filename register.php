@@ -1309,87 +1309,84 @@ include 'includes/header.php';
 /* Modern Food Registration Refresh */
 :root {
     --reg-red: #b3261e;
+    --reg-hover: #981b15;
     --reg-orange: #ef6b2e;
-    --reg-cream: #fff8ef;
-    --reg-ink: #2a211d;
-    --reg-muted: #7c6e65;
-    --reg-border: #efddcc;
+    --reg-cream: #fff9f6;
+    --reg-ink: #1e293b;
+    --reg-muted: #64748b;
+    --reg-border: #eaecf0;
 }
 
 body {
-    background:
-        radial-gradient(circle at 0% 0%, rgba(239, 107, 46, 0.12), transparent 34%),
-        radial-gradient(circle at 100% 12%, rgba(179, 38, 30, 0.1), transparent 30%),
-        var(--reg-cream);
+    background: #ffffff;
 }
 
 .registration-page {
-    background: transparent;
+    background: #ffffff !important;
 }
 
 .registration-container {
-    border: 1px solid var(--reg-border);
-    border-radius: 22px;
-    box-shadow: 0 22px 44px rgba(74, 32, 20, 0.14);
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
 }
 
 .registration-header {
-    background:
-        linear-gradient(130deg, rgba(22, 14, 10, 0.9), rgba(65, 30, 20, 0.78)),
-        url('images/about-us-bg.jpg') center/cover no-repeat;
+    background: #ffffff;
 }
 
 .registration-body {
-    background: linear-gradient(180deg, #fffaf4 0%, #fff 100%);
+    background: #ffffff;
 }
 
 .step.active .step-number {
-    background: linear-gradient(135deg, var(--reg-red), var(--reg-orange));
+    background: var(--reg-red);
 }
 
 .account-type-card,
 .form-control,
 .terms-agreement {
-    border: 1px solid #ead4c1;
-    background: #fffdfb;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
 }
 
 .account-type-card.selected {
-    border-color: #d79972;
-    background: #fff5e9;
+    border-color: var(--reg-red);
+    background: #fff8f6;
 }
 
 .account-type-card i,
 .step.active .step-label,
 .auth-link a {
-    color: #9a3322;
+    color: var(--reg-red);
 }
 
 .form-control:focus {
-    border-color: #d17148;
-    box-shadow: 0 0 0 3px rgba(239, 107, 46, 0.15);
+    border-color: var(--reg-red);
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.1);
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, var(--reg-red), var(--reg-orange));
-    box-shadow: 0 12px 28px rgba(179, 38, 30, 0.26);
+    background: var(--reg-red);
+    box-shadow: 0 4px 14px rgba(179, 38, 30, 0.2);
 }
 
 .btn-primary:hover {
-    box-shadow: 0 16px 34px rgba(179, 38, 30, 0.34);
+    background: var(--reg-hover);
+    box-shadow: 0 6px 18px rgba(179, 38, 30, 0.28);
 }
 
 .btn-secondary {
-    background: white !important;
-    color: var(--reg-red) !important;
-    border: 2px solid var(--reg-red) !important;
+    background: #ffffff !important;
+    color: #344054 !important;
+    border: 1px solid #d0d5dd !important;
 }
 
 .btn-secondary:hover {
-    background: var(--reg-red) !important;
-    color: white !important;
+    background: #fff8f6 !important;
+    color: var(--reg-red) !important;
     border-color: var(--reg-red) !important;
-    box-shadow: 0 8px 20px rgba(179, 38, 30, 0.2) !important;
+    box-shadow: 0 4px 12px rgba(179, 38, 30, 0.12) !important;
     transform: translateY(-2px) !important;
 }
 
@@ -1426,7 +1423,8 @@ body {
 
 .registration-image-side {
     width: 50%;
-    background: linear-gradient(135deg, #b3261e 0%, #8f261a 100%) !important;
+    background: linear-gradient(145deg, #fff7f2 0%, #ffede5 45%, #fedecf 100%) !important;
+    border-right: 1px solid #efddcd;
     display: flex !important;
     flex-direction: column;
     align-items: center;
@@ -1441,21 +1439,21 @@ body {
 
 .brand-title {
     font-family: 'Outfit', sans-serif;
-    font-size: 3.8rem;
+    font-size: 3.4rem;
     font-weight: 900;
     letter-spacing: -1.5px;
     margin: 0;
-    color: #ffffff !important;
-    text-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+    color: #b3261e !important;
+    text-shadow: 0 2px 10px rgba(179, 38, 30, 0.12);
 }
 
 .brand-subtitle {
-    font-size: 1.25rem;
-    color: rgba(255, 255, 255, 0.9) !important;
-    margin-top: 15px;
+    font-size: 1.2rem;
+    color: #564840 !important;
+    margin-top: 14px;
     max-width: 340px;
     font-weight: 600;
-    line-height: 1.6;
+    line-height: 1.5;
 }
 
 .floating-pigs-container {
