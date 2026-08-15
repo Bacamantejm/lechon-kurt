@@ -38,7 +38,7 @@ function ensureFoodDeliveryIntegrationsTable($conn, &$error_message = '') {
 
     $seed_sql = "
         INSERT INTO food_delivery_integrations (platform_name, is_active, sandbox_mode)
-        VALUES ('FoodPanda', 0, 1), ('GrabFood', 0, 1)
+        VALUES ('FoodPanda', 0, 1), ('GrabFood', 0, 1), ('Lalamove', 0, 1)
         ON DUPLICATE KEY UPDATE platform_name = VALUES(platform_name)
     ";
     if (!mysqli_query($conn, $seed_sql)) {
@@ -58,6 +58,34 @@ if (!$settings_bootstrap_ok) {
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && $settings_bootstrap_ok) {
     $action = $_POST['action'] ?? '';
+
+    if ($action == 'update_lalamove') {
+        $api_key = trim($_POST['lalamove_api_key'] ?? '');
+        $api_secret = trim($_POST['lalamove_api_secret'] ?? '');
+        $service_type = trim($_POST['lalamove_service_type'] ?? 'MOTORCYCLE');
+        $is_active = isset($_POST['lalamove_active']) ? 1 : 0;
+        $sandbox = isset($_POST['lalamove_sandbox']) ? 1 : 0;
+        
+        $query = "INSERT INTO food_delivery_integrations (platform_name, api_key, api_secret, partner_id, is_active, sandbox_mode)
+                  VALUES ('Lalamove', ?, ?, ?, ?, ?)
+                  ON DUPLICATE KEY UPDATE
+                      api_key = VALUES(api_key),
+                      api_secret = VALUES(api_secret),
+                      partner_id = VALUES(partner_id),
+                      is_active = VALUES(is_active),
+                      sandbox_mode = VALUES(sandbox_mode),
+                      updated_at = CURRENT_TIMESTAMP";
+        
+        if ($stmt = mysqli_prepare($conn, $query)) {
+            mysqli_stmt_bind_param($stmt, "sssii", $api_key, $api_secret, $service_type, $is_active, $sandbox);
+            if (mysqli_stmt_execute($stmt)) {
+                $success = 'Lalamove API settings updated successfully';
+            } else {
+                $error = 'Failed to update Lalamove settings';
+            }
+            mysqli_stmt_close($stmt);
+        }
+    }
     
     if ($action == 'update_foodpanda') {
         $api_key = trim($_POST['foodpanda_api_key'] ?? '');
@@ -117,10 +145,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && $settings_bootstrap_ok) {
 }
 
 // Get current settings
+$lalamove_settings = null;
 $foodpanda_settings = null;
 $grabfood_settings = null;
 
 if ($settings_bootstrap_ok) {
+    $lm_query = "SELECT * FROM food_delivery_integrations WHERE platform_name = 'Lalamove'";
+    if ($lm_stmt = mysqli_prepare($conn, $lm_query)) {
+        mysqli_stmt_execute($lm_stmt);
+        $lm_result = mysqli_stmt_get_result($lm_stmt);
+        $lalamove_settings = mysqli_fetch_assoc($lm_result);
+        mysqli_stmt_close($lm_stmt);
+    }
+
     $fp_query = "SELECT * FROM food_delivery_integrations WHERE platform_name = 'FoodPanda'";
     if ($fp_stmt = mysqli_prepare($conn, $fp_query)) {
         mysqli_stmt_execute($fp_stmt);
@@ -341,6 +378,60 @@ include '../includes/header.php';
     <?php endif; ?>
     
     <div class="settings-grid">
+        <!-- Lalamove Real-Time Delivery Fee API Settings -->
+        <div class="settings-card" style="border-top: 4px solid #ef6b2e;">
+            <h2><i class="fas fa-truck-fast" style="color: #ef6b2e;"></i> Lalamove API Integration</h2>
+            
+            <form method="POST" action="">
+                <input type="hidden" name="action" value="update_lalamove">
+                
+                <div class="config-info">
+                    📋 Obtain your Lalamove REST API v3 key & secret from the <strong>Lalamove Partner Portal</strong>.
+                </div>
+                
+                <div class="form-group">
+                    <label>API Key</label>
+                    <input type="password" name="lalamove_api_key" value="<?php echo htmlspecialchars($lalamove_settings['api_key'] ?? ''); ?>" placeholder="Enter Lalamove API Key">
+                    <div class="help-text">Your Lalamove API Key (v3 HMAC)</div>
+                </div>
+                
+                <div class="form-group">
+                    <label>API Secret</label>
+                    <input type="password" name="lalamove_api_secret" value="<?php echo htmlspecialchars($lalamove_settings['api_secret'] ?? ''); ?>" placeholder="Enter Lalamove API Secret">
+                    <div class="help-text">Your Lalamove Secret Key</div>
+                </div>
+
+                <div class="form-group">
+                    <label>Default Vehicle Service Type</label>
+                    <select name="lalamove_service_type" style="width:100%; padding:10px; border-radius:4px; border:1px solid #ccc;">
+                        <?php $current_service = $lalamove_settings['partner_id'] ?? 'MOTORCYCLE'; ?>
+                        <option value="MOTORCYCLE" <?php echo ($current_service === 'MOTORCYCLE' ? 'selected' : ''); ?>>Motorcycle (Default / Fast Delivery)</option>
+                        <option value="SEDAN" <?php echo ($current_service === 'SEDAN' ? 'selected' : ''); ?>>Sedan / 4-Wheeler Car</option>
+                        <option value="MPV" <?php echo ($current_service === 'MPV' ? 'selected' : ''); ?>>MPV (300kg Large Orders)</option>
+                        <option value="VAN" <?php echo ($current_service === 'VAN' ? 'selected' : ''); ?>>Van / L300 (Whole Roasted Pig)</option>
+                    </select>
+                    <div class="help-text">Vehicle fleet category used for real-time quotation queries</div>
+                </div>
+                
+                <div class="form-group">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="lm_active" name="lalamove_active" value="1" <?php echo (($lalamove_settings['is_active'] ?? 0) ? 'checked' : ''); ?>>
+                        <label for="lm_active"><strong>Enable Lalamove Real-Time Delivery Pricing</strong></label>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="lm_sandbox" name="lalamove_sandbox" value="1" <?php echo (($lalamove_settings['sandbox_mode'] ?? 0) ? 'checked' : ''); ?>>
+                        <label for="lm_sandbox">Use Sandbox Mode (Testing)</label>
+                    </div>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn-submit" style="background: #ef6b2e;">Save Lalamove Settings</button>
+                </div>
+            </form>
+        </div>
         <!-- FoodPanda Settings -->
         <div class="settings-card">
             <h2>🍽️ FoodPanda Integration</h2>

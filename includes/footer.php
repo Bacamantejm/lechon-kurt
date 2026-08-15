@@ -637,7 +637,7 @@
         .footer {
             background: #171922;
             color: #94a3b8;
-            margin-top: 36px;
+            margin-top: 0;
             border-top: 1px solid #2b3144;
             font-size: 0.82rem;
         }

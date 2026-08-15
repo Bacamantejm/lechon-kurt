@@ -84,7 +84,7 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
-        :root { --ink:#171922; --muted:#667085; --line:#efddcd; --rose:#b3261e; --bg:#fff9f2; --card:#fff; --shadow:0 12px 30px rgba(15,23,42,.1); --primary-color:#b3261e; --primary-dark:#8f261a; --motion-ease:cubic-bezier(.22,1,.36,1); --motion-fast:.22s; --motion-base:.28s; --transition-fast:all var(--motion-fast) var(--motion-ease); --transition-fade:opacity var(--motion-fast) var(--motion-ease), visibility var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease); --transition-lift:transform var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease); }
+        :root { --ink:#171922; --muted:#667085; --line:#efddcd; --rose:#b3261e; --bg:#f8f9fa; --card:#fff; --shadow:0 12px 30px rgba(15,23,42,.1); --primary-color:#b3261e; --primary-dark:#8f261a; --motion-ease:cubic-bezier(.22,1,.36,1); --motion-fast:.22s; --motion-base:.28s; --transition-fast:all var(--motion-fast) var(--motion-ease); --transition-fade:opacity var(--motion-fast) var(--motion-ease), visibility var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease); --transition-lift:transform var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease); }
         * { box-sizing:border-box; }
         html, body { margin:0; padding:0; overflow-x:clip !important; max-width:100vw; width:100%; font-family:"Plus Jakarta Sans","Segoe UI",sans-serif; background:var(--bg); color:var(--ink); }
         h1,h2,h3,h4,h5,h6 { font-family:"Outfit","Plus Jakarta Sans",sans-serif; }
@@ -98,11 +98,11 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
         .logo-sub { font-size:.65rem; text-transform:uppercase; letter-spacing:.12em; color:#7f879a; font-weight:700; }
         .header-actions,.auth-buttons,.main-nav,.market-home-nav { display:flex; align-items:center; gap:9px; flex-shrink:0; }
         .auth-buttons { gap:10px; display:flex !important; }
-        .btn-signin,.btn-register { min-height:38px; padding:0 14px; border-radius:999px; border:1px solid; text-decoration:none; font-weight:700; font-size:.84rem; display:inline-flex; align-items:center; justify-content:center; transition:var(--transition-fast); white-space:nowrap; }
-        .btn-signin { border-color:var(--ink); color:var(--ink); background:#fff; }
-        .btn-signin:hover { background:var(--ink); color:#fff; }
-        .btn-register { border-color:var(--ink); background:#fff; color:var(--ink); }
-        .btn-register:hover { background:var(--ink); color:#fff; border-color:var(--ink); }
+        .btn-signin,.btn-register { min-height:38px; padding:0 16px; border-radius:999px; border:1px solid; text-decoration:none; font-weight:700; font-size:.84rem; display:inline-flex; align-items:center; justify-content:center; transition:var(--transition-fast); white-space:nowrap; }
+        .btn-signin { border-color:#d0d5dd; color:#344054; background:#ffffff; }
+        .btn-signin:hover { background:#f8fafc; border-color:#98a2b3; color:#101828; }
+        .btn-register { border-color:#b3261e; background:#b3261e; color:#ffffff; }
+        .btn-register:hover { background:#981b15; border-color:#981b15; color:#ffffff; }
         .icon-btn { width:38px; height:38px; border-radius:10px; border:1px solid var(--line); background:#fff; color:#222a3d; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; transition:var(--transition-fast); position:relative; font-size:.9rem; }
         .icon-btn:hover { background:var(--ink); color:#fff; border-color:var(--ink); }
         .user-avatar-btn { padding:0; overflow:hidden; }
@@ -614,7 +614,7 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
             <span class="logo-copy"><span class="logo-title">Lechon Delights</span><span class="logo-sub">Marketplace</span></span>
         </a>
 
-        <?php if ($current_page !== 'register' && $current_page !== 'login' && $current_page !== 'checkout'): ?>
+        <?php if ($current_page !== 'register' && $current_page !== 'login' && $current_page !== 'checkout' && $current_page !== 'franchise_application'): ?>
         <div class="market-address-wrap" id="marketAddressWrap">
             <button type="button" class="market-address-trigger" id="marketAddressToggle">
                 <i class="fas fa-location-dot"></i><span class="address-text" id="marketAddressDisplay"><?php echo htmlspecialchars($market_header_address_display); ?></span><i class="fas fa-chevron-down"></i>

@@ -446,13 +446,15 @@ $remaining = $total - $downpayment;
                             <button type="button"
                                     id="modePickupBtn"
                                     class="checkout-mode-btn <?php echo $current_checkout_delivery_option === 'pickup' ? 'is-active' : ''; ?>"
-                                    data-mode="pickup">
+                                    data-mode="pickup"
+                                    onclick="switchCheckoutFulfillmentMode('pickup')">
                                 <i class="fas fa-store"></i> Pickup
                             </button>
                             <button type="button"
                                     id="modeDeliveryBtn"
                                     class="checkout-mode-btn <?php echo $current_checkout_delivery_option === 'delivery' ? 'is-active' : ''; ?>"
-                                    data-mode="delivery">
+                                    data-mode="delivery"
+                                    onclick="switchCheckoutFulfillmentMode('delivery')">
                                 <i class="fas fa-truck"></i> Delivery
                             </button>
                         </div>
@@ -544,8 +546,31 @@ $remaining = $total - $downpayment;
                         </div>
                     </div>
                     
-                    <!-- Step 2: Delivery Details -->
+                    <!-- Step 2: Delivery Details & Pickup Store Details -->
                     <div class="step-content" id="stepContent2">
+                        <!-- Pickup Store Section (Form for Pickup Mode) -->
+                        <div id="pickupStoreSection" style="<?php echo ($current_checkout_delivery_option === 'pickup') ? '' : 'display: none;'; ?>">
+                            <div class="co-address-card" style="background: #fff; border: 1px solid #efddcd; border-radius: 16px; padding: 24px; margin-bottom: 24px; box-shadow: 0 4px 16px rgba(0,0,0,0.03);">
+                                <h3 style="font-size: 22px; font-weight: 800; color: #2a211d; margin: 0 0 16px 0; font-family: inherit;">Pickup store location</h3>
+                                <label for="pickup_location_step" style="font-weight: 700; color: #2a211d; display: block; margin-bottom: 8px;">Select Store for Pickup *</label>
+                                <select id="pickup_location_step" class="store-select" style="width: 100%; padding: 14px 16px; border: 1px solid #efddcd; border-radius: 12px; font-size: 15px; color: #2a211d; background: #fff9f2; outline: none; box-sizing: border-box; margin-bottom: 16px; font-weight: 600;">
+                                    <?php foreach ($stores as $store): ?>
+                                    <option value="<?php echo $store['id']; ?>" <?php echo ($store['id'] == ($_SESSION['pickup_location'] ?? 1)) ? 'selected' : ''; ?>>
+                                        <?php echo htmlspecialchars($store['name'] ?? ($store['store_name'] ?? 'Store')); ?> - <?php echo htmlspecialchars($store['city']); ?>
+                                    </option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <div class="store-info" id="storeInfoStep">
+                                    <?php if ($selected_store): ?>
+                                    <p style="margin: 6px 0; color: #2a211d; font-size: 14px; font-weight: 600;"><i class="fas fa-map-marker-alt" style="color: #b3261e; margin-right: 8px;"></i> <?php echo htmlspecialchars($selected_store['address']); ?></p>
+                                    <p style="margin: 6px 0; color: #667085; font-size: 14px;"><i class="fas fa-phone" style="color: #ef6b2e; margin-right: 8px;"></i> <?php echo htmlspecialchars($selected_store['phone']); ?></p>
+                                    <p style="margin: 6px 0; color: #667085; font-size: 14px;"><i class="fas fa-clock" style="color: #667085; margin-right: 8px;"></i> <?php echo htmlspecialchars($selected_store['hours'] ?? ($selected_store['opening_hours'] ?? '')); ?></p>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Delivery Address Section (Form for Delivery Mode) -->
                         <div id="deliveryAddressSection" style="<?php echo ($current_checkout_delivery_option === 'delivery') ? '' : 'display: none;'; ?>">
                             <div class="co-address-card" id="mainDeliveryAddressCard" style="background: #fff; border: 1px solid #efddcd; border-radius: 16px; padding: 24px; margin-bottom: 24px; box-shadow: 0 4px 16px rgba(0,0,0,0.03); cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
@@ -723,13 +748,15 @@ $remaining = $total - $downpayment;
                             <button type="button"
                                     id="stickyModePickupBtn"
                                     class="checkout-mode-btn <?php echo $current_checkout_delivery_option === 'pickup' ? 'is-active' : ''; ?>"
-                                    data-mode="pickup">
+                                    data-mode="pickup"
+                                    onclick="switchCheckoutFulfillmentMode('pickup')">
                                 <i class="fas fa-store"></i> Pickup
                             </button>
                             <button type="button"
                                     id="stickyModeDeliveryBtn"
                                     class="checkout-mode-btn <?php echo $current_checkout_delivery_option === 'delivery' ? 'is-active' : ''; ?>"
-                                    data-mode="delivery">
+                                    data-mode="delivery"
+                                    onclick="switchCheckoutFulfillmentMode('delivery')">
                                 <i class="fas fa-truck"></i> Delivery
                             </button>
                         </div>
@@ -2134,26 +2161,30 @@ body {
     color: #ffffff !important;
 }
 .checkout-mode-btn {
-    border: 1px solid #efddcd !important;
-    background: #ffffff !important;
-    color: #667085 !important;
-    border-radius: 8px !important;
-    font-weight: 700 !important;
-    transition: all 0.2s ease !important;
-    padding: 8px 16px !important;
+    border: 1px solid #efddcd;
+    background: #ffffff;
+    color: #667085;
+    border-radius: 8px;
+    font-weight: 700;
+    transition: all 0.2s ease;
+    padding: 8px 16px;
 }
 .checkout-mode-btn:hover {
-    background-color: #fff8ef !important;
-    border-color: #efddcd !important;
-    color: #171922 !important;
+    background-color: #fff8ef;
+    border-color: #efddcd;
+    color: #171922;
 }
-#modePickupBtn.is-active, .sticky-mode-btn[data-mode="pickup"].is-active {
+.checkout-mode-btn[data-mode="pickup"].is-active,
+#modePickupBtn.is-active,
+#stickyModePickupBtn.is-active {
     background-color: #ef6b2e !important;
     border-color: #ef6b2e !important;
     color: #ffffff !important;
     box-shadow: 0 4px 12px rgba(239, 107, 46, 0.25) !important;
 }
-#modeDeliveryBtn.is-active, .sticky-mode-btn[data-mode="delivery"].is-active {
+.checkout-mode-btn[data-mode="delivery"].is-active,
+#modeDeliveryBtn.is-active,
+#stickyModeDeliveryBtn.is-active {
     background-color: #b3261e !important;
     border-color: #b3261e !important;
     color: #ffffff !important;
@@ -2276,6 +2307,89 @@ const checkoutTenantMessage = <?php echo json_encode($checkout_tenant_message, J
 let latestResolvedAddressText = userAddressSeed || '';
 const psgcCache = new Map();
 const marketAddressPayloadStorageKey = 'market_address_payload';
+
+async function switchCheckoutFulfillmentMode(mode) {
+    const normalizedMode = (String(mode || '').toLowerCase() === 'delivery') ? 'delivery' : 'pickup';
+    const isDelivery = (normalizedMode === 'delivery');
+    activeCheckoutDeliveryOption = normalizedMode;
+
+    // 1. Toggle Button UI Classes
+    ['modePickupBtn', 'stickyModePickupBtn'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) {
+            btn.classList.toggle('is-active', !isDelivery);
+            btn.setAttribute('aria-pressed', (!isDelivery).toString());
+        }
+    });
+    ['modeDeliveryBtn', 'stickyModeDeliveryBtn'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) {
+            btn.classList.toggle('is-active', isDelivery);
+            btn.setAttribute('aria-pressed', isDelivery.toString());
+        }
+    });
+
+    // 2. Toggle Mode Card Copy & Summary Labels
+    const card = document.getElementById('checkoutModeCard');
+    if (card) {
+        card.classList.toggle('mode-delivery', isDelivery);
+        card.classList.toggle('mode-pickup', !isDelivery);
+    }
+    const label = document.getElementById('activeModeLabel');
+    if (label) label.textContent = isDelivery ? 'Home Delivery' : 'Pickup from Store';
+    const summaryVal = document.getElementById('summaryModeValue');
+    if (summaryVal) summaryVal.textContent = isDelivery ? 'Delivery' : 'Pickup';
+
+    // 3. Toggle Form Visibility Directly
+    const pickupBlock = document.getElementById('pickupLocation');
+    const pickupStepSection = document.getElementById('pickupStoreSection');
+    const deliveryBlock = document.getElementById('deliveryLocation');
+    const deliverySection = document.getElementById('deliveryAddressSection');
+
+    if (pickupBlock) pickupBlock.style.display = isDelivery ? 'none' : 'block';
+    if (pickupStepSection) pickupStepSection.style.display = isDelivery ? 'none' : 'block';
+    if (deliveryBlock) deliveryBlock.style.display = isDelivery ? 'block' : 'none';
+    if (deliverySection) deliverySection.style.display = isDelivery ? 'block' : 'none';
+
+    // 4. Update Hidden Inputs
+    const hiddenDeliveryInput = document.getElementById('delivery_option_hidden');
+    if (hiddenDeliveryInput) hiddenDeliveryInput.value = normalizedMode;
+    const hiddenPickupInput = document.getElementById('pickup_location_hidden');
+    if (hiddenPickupInput) hiddenPickupInput.value = document.getElementById('pickup_location')?.value || document.getElementById('pickup_location_step')?.value || '1';
+
+    // 5. Update Delivery Field Requirements
+    if (typeof setDeliveryAddressFieldRequirements === 'function') {
+        setDeliveryAddressFieldRequirements(isDelivery);
+    }
+
+    // 6. Sync with Backend PHP Session
+    try {
+        await fetch('update_delivery_option.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                delivery_option: normalizedMode,
+                pickup_location: document.getElementById('pickup_location')?.value || '1'
+            })
+        });
+    } catch (err) {
+        console.error('Failed to update delivery option on server:', err);
+    }
+
+    // 7. Calculate or Reset Delivery Fee
+    if (isDelivery) {
+        const latVal = (document.getElementById('latitude')?.value || '').trim();
+        const lngVal = (document.getElementById('longitude')?.value || '').trim();
+        if (latVal && lngVal && typeof calculateDeliveryFee === 'function') {
+            await calculateDeliveryFee(latVal, lngVal);
+        }
+    } else {
+        currentDeliveryFee = 0;
+        if (typeof recalculateOrderTotals === 'function') {
+            recalculateOrderTotals();
+        }
+    }
+}
 
 function normalizePostalCode(value) {
     return String(value || '').replace(/[^\dA-Za-z-]/g, '').trim();
@@ -2893,9 +3007,15 @@ const applyCheckoutModeUI = (mode) => {
         stickyModeDeliveryBtn.setAttribute('aria-pressed', isDelivery.toString());
     }
 
-    if (pickupLocationBlock) pickupLocationBlock.style.display = isDelivery ? 'none' : '';
-    if (deliveryLocationBlock) deliveryLocationBlock.style.display = isDelivery ? '' : 'none';
-    if (deliveryAddressSection) deliveryAddressSection.style.display = isDelivery ? '' : 'none';
+    const pickupBlock = document.getElementById('pickupLocation');
+    const pickupStepSection = document.getElementById('pickupStoreSection');
+    const deliveryBlock = document.getElementById('deliveryLocation');
+    const deliverySection = document.getElementById('deliveryAddressSection');
+
+    if (pickupBlock) pickupBlock.style.display = isDelivery ? 'none' : 'block';
+    if (pickupStepSection) pickupStepSection.style.display = isDelivery ? 'none' : 'block';
+    if (deliveryBlock) deliveryBlock.style.display = isDelivery ? 'block' : 'none';
+    if (deliverySection) deliverySection.style.display = isDelivery ? 'block' : 'none';
 };
 
 const setCheckoutMode = async (mode, syncServer = true) => {
@@ -3210,15 +3330,32 @@ const applySavedAddressToForm = async (savedAddress) => {
 
     const latitudeInput = document.getElementById('latitude');
     const longitudeInput = document.getElementById('longitude');
-    const lat = parseFloat(savedAddress.latitude || '');
-    const lng = parseFloat(savedAddress.longitude || '');
-    if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
+    let lat = parseFloat(savedAddress.latitude || '');
+    let lng = parseFloat(savedAddress.longitude || '');
+
+    if ((Number.isNaN(lat) || Number.isNaN(lng) || (!lat && !lng)) && addressText) {
+        try {
+            if (typeof forwardGeocodeFromNominatim === 'function') {
+                const geocoded = await forwardGeocodeFromNominatim(addressText);
+                if (geocoded) {
+                    lat = geocoded.lat;
+                    lng = geocoded.lng;
+                }
+            }
+        } catch (e) {
+            console.warn('Geocode fallback error:', e);
+        }
+    }
+
+    if (!Number.isNaN(lat) && !Number.isNaN(lng) && lat !== 0 && lng !== 0) {
         if (latitudeInput) latitudeInput.value = String(lat);
         if (longitudeInput) longitudeInput.value = String(lng);
 
         if (map && marker) {
             map.setView([lat, lng], 17);
             marker.setLatLng([lat, lng]);
+        }
+        if (typeof calculateDeliveryFee === 'function') {
             calculateDeliveryFee(lat, lng);
         }
     }
@@ -4150,47 +4287,35 @@ if (saveCurrentAddressBtn) {
     saveCurrentAddressBtn.addEventListener('click', saveCurrentAddress);
 }
 
-if (modePickupBtn) {
-    modePickupBtn.addEventListener('click', async () => {
-        if (activeCheckoutDeliveryOption === 'pickup') return;
+// Fulfillment Mode Button Click Listeners (Delivery & Pickup)
+document.querySelectorAll('.checkout-mode-btn').forEach(btn => {
+    btn.addEventListener('click', async function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const mode = this.getAttribute('data-mode') || (this.id && this.id.toLowerCase().includes('delivery') ? 'delivery' : 'pickup');
         try {
-            await setCheckoutMode('pickup', true);
+            await setCheckoutMode(mode, true);
+
+            // Automatically advance to Step 2 (Address / Store Selection) if currently on Step 1
+            if (typeof currentStep !== 'undefined' && currentStep === 1) {
+                if (typeof goToStep === 'function') goToStep(2);
+            }
         } catch (error) {
-            console.error('Unable to switch to pickup mode:', error);
+            console.error('Unable to switch fulfillment mode:', error);
         }
     });
-}
+});
 
-if (modeDeliveryBtn) {
-    modeDeliveryBtn.addEventListener('click', async () => {
-        if (activeCheckoutDeliveryOption === 'delivery') return;
-        try {
-            await setCheckoutMode('delivery', true);
-        } catch (error) {
-            console.error('Unable to switch to delivery mode:', error);
-        }
+const pickupSelectMain = document.getElementById('pickup_location');
+const pickupSelectStep = document.getElementById('pickup_location_step');
+
+if (pickupSelectMain && pickupSelectStep) {
+    pickupSelectStep.addEventListener('change', function() {
+        pickupSelectMain.value = this.value;
+        pickupSelectMain.dispatchEvent(new Event('change'));
     });
-}
-
-if (stickyModePickupBtn) {
-    stickyModePickupBtn.addEventListener('click', async () => {
-        if (activeCheckoutDeliveryOption === 'pickup') return;
-        try {
-            await setCheckoutMode('pickup', true);
-        } catch (error) {
-            console.error('Unable to switch to pickup mode:', error);
-        }
-    });
-}
-
-if (stickyModeDeliveryBtn) {
-    stickyModeDeliveryBtn.addEventListener('click', async () => {
-        if (activeCheckoutDeliveryOption === 'delivery') return;
-        try {
-            await setCheckoutMode('delivery', true);
-        } catch (error) {
-            console.error('Unable to switch to delivery mode:', error);
-        }
+    pickupSelectMain.addEventListener('change', function() {
+        pickupSelectStep.value = this.value;
     });
 }
 
@@ -4724,13 +4849,17 @@ if (activeCheckoutDeliveryOption === 'delivery' && initialDeliveryQuote && initi
             <div id="modalSavedAddressesList" style="display: flex; flex-direction: column; gap: 12px;">
                 <?php foreach ($saved_addresses as $index => $saved_addr): ?>
                 <?php
-                $is_addr_default = !empty($saved_addr['is_default']) || $index === 0;
+                $is_addr_default = ($default_saved_address_id > 0) ? ((int)$saved_addr['id'] === $default_saved_address_id) : ($index === 0);
                 $addr_notes = !empty($saved_addr['notes']) ? htmlspecialchars($saved_addr['notes']) : 'none';
                 ?>
                 <div class="modal-saved-addr-card <?php echo $is_addr_default ? 'is-selected' : ''; ?>" 
                      data-address-id="<?php echo (int)$saved_addr['id']; ?>" 
                      data-street="<?php echo htmlspecialchars($saved_addr['street_address'] ?? ($saved_addr['full_address'] ?? '')); ?>"
                      data-city="<?php echo htmlspecialchars($saved_addr['city_name'] ?? ($saved_addr['full_address'] ?? '')); ?>"
+                     data-full-address="<?php echo htmlspecialchars($saved_addr['full_address'] ?? ''); ?>"
+                     data-latitude="<?php echo htmlspecialchars($saved_addr['latitude'] ?? ''); ?>"
+                     data-longitude="<?php echo htmlspecialchars($saved_addr['longitude'] ?? ''); ?>"
+                     data-notes="<?php echo htmlspecialchars($saved_addr['notes'] ?? ''); ?>"
                      style="border: 1px solid <?php echo $is_addr_default ? '#2a211d' : '#e8d4c3'; ?>; border-radius: 14px; padding: 16px 18px; cursor: pointer; transition: all 0.2s; background: #fff; display: flex; align-items: flex-start; justify-content: space-between; gap: 14px;">
                     <div style="display: flex; gap: 12px; align-items: flex-start; flex: 1;">
                         <!-- Radio Icon -->
@@ -4770,10 +4899,13 @@ if (activeCheckoutDeliveryOption === 'delivery' && initialDeliveryQuote && initi
             </div>
         </div>
 
-        <!-- + Add Address Button -->
-        <div style="border-top: 1px solid #efddcd; padding-top: 16px;">
+        <!-- Footer Actions: + Add Address Button & Confirm Address Button -->
+        <div style="border-top: 1px solid #efddcd; padding-top: 16px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
             <button type="button" id="openAddAddressModalBtn" style="background: none; border: none; color: #2a211d; font-size: 15px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; padding: 4px 0;">
                 <i class="fas fa-plus" style="font-size: 14px;"></i> Add address
+            </button>
+            <button type="button" id="confirmSelectedAddressBtn" style="background: #b3261e; color: #ffffff; font-weight: 800; font-size: 14px; letter-spacing: 0.5px; border: none; border-radius: 10px; padding: 12px 28px; cursor: pointer; transition: background 0.2s, transform 0.1s; box-shadow: 0 4px 12px rgba(179,38,30,0.25);">
+                Confirm Address
             </button>
         </div>
     </div>
@@ -4945,36 +5077,186 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Modal Saved Address Card Click (Select Address)
-    document.querySelectorAll('.modal-saved-addr-card').forEach(card => {
-        card.addEventListener('click', async function() {
-            document.querySelectorAll('.modal-saved-addr-card').forEach(c => {
-                c.style.borderColor = '#e8d4c3';
-                c.classList.remove('is-selected');
-                const radioInner = c.querySelector('.addr-radio-inner');
-                if (radioInner) radioInner.style.background = 'transparent';
-                const radioBtn = c.querySelector('.addr-radio-btn');
-                if (radioBtn) radioBtn.style.borderColor = '#7b6d64';
-            });
+    function parseAddressCardDisplayTexts(selectedCard, savedRow) {
+        const streetLineEl = selectedCard ? selectedCard.querySelector('.addr-street-line') : null;
+        const cityLineEl = selectedCard ? selectedCard.querySelector('.addr-city-line') : null;
 
-            this.style.borderColor = '#2a211d';
-            this.classList.add('is-selected');
-            const selInner = this.querySelector('.addr-radio-inner');
-            if (selInner) selInner.style.background = '#2a211d';
-            const selRadio = this.querySelector('.addr-radio-btn');
-            if (selRadio) selRadio.style.borderColor = '#2a211d';
+        let fullText = (
+            savedRow?.full_address || 
+            selectedCard?.getAttribute('data-full-address') || 
+            (streetLineEl ? streetLineEl.textContent : '') || 
+            ''
+        ).trim();
 
-            const addrId = this.getAttribute('data-address-id');
-            const savedRow = findSavedAddressById(addrId);
-            if (savedRow) {
-                await applySavedAddressToForm(savedRow);
-                const streetText = savedRow.street_address || (savedRow.full_address ? savedRow.full_address.split(',')[0] : '');
-                const cityText = savedRow.city_name || savedRow.full_address || '';
-                updateDisplayAddressText(streetText, cityText);
+        let streetText = '';
+        let cityText = '';
+
+        if (fullText) {
+            const parts = fullText.split(',').map(p => p.trim()).filter(Boolean);
+            if (parts.length >= 2) {
+                const firstPartIsNumberOnly = parts[0].length <= 10 && (
+                    /^\d/.test(parts[0]) || 
+                    /^blk\s/i.test(parts[0]) || 
+                    /^unit\s/i.test(parts[0]) || 
+                    /^apt\s/i.test(parts[0])
+                );
+                
+                if (firstPartIsNumberOnly && parts.length >= 3) {
+                    streetText = parts.slice(0, 2).join(', ');
+                    cityText = parts.slice(2).join(', ');
+                } else {
+                    streetText = parts[0];
+                    cityText = parts.slice(1).join(', ');
+                }
+            } else {
+                streetText = fullText;
+                cityText = '';
             }
+        } else {
+            streetText = (savedRow?.street_address || selectedCard?.getAttribute('data-street') || (streetLineEl ? streetLineEl.textContent : 'Selected Address')).trim();
+            cityText = (savedRow?.city_name || selectedCard?.getAttribute('data-city') || (cityLineEl ? cityLineEl.textContent : '')).trim();
+            if (cityText === streetText) cityText = '';
+        }
+
+        return { streetText, cityText, fullText };
+    }
+
+    function selectAndApplyAddressCard(selectedCard) {
+        if (!selectedCard) return;
+
+        // 1. Highlight card visually
+        document.querySelectorAll('.modal-saved-addr-card').forEach(c => {
+            c.style.borderColor = '#e8d4c3';
+            c.classList.remove('is-selected');
+            const radioInner = c.querySelector('.addr-radio-inner');
+            if (radioInner) radioInner.style.background = 'transparent';
+            const radioBtn = c.querySelector('.addr-radio-btn');
+            if (radioBtn) radioBtn.style.borderColor = '#7b6d64';
+        });
+
+        selectedCard.style.borderColor = '#2a211d';
+        selectedCard.classList.add('is-selected');
+        const selInner = selectedCard.querySelector('.addr-radio-inner');
+        if (selInner) selInner.style.background = '#2a211d';
+        const selRadio = selectedCard.querySelector('.addr-radio-btn');
+        if (selRadio) selRadio.style.borderColor = '#2a211d';
+
+        // 2. Extract address data
+        const addrId = selectedCard.getAttribute('data-address-id');
+        let savedRow = typeof findSavedAddressById === 'function' ? findSavedAddressById(addrId) : null;
+        if (!savedRow) {
+            savedRow = {
+                id: addrId,
+                street_address: selectedCard.getAttribute('data-street') || '',
+                city_name: selectedCard.getAttribute('data-city') || '',
+                full_address: selectedCard.getAttribute('data-full-address') || selectedCard.getAttribute('data-street') || '',
+                latitude: selectedCard.getAttribute('data-latitude') || '',
+                longitude: selectedCard.getAttribute('data-longitude') || '',
+                notes: selectedCard.getAttribute('data-notes') || ''
+            };
+        }
+
+        const { streetText, cityText, fullText } = parseAddressCardDisplayTexts(selectedCard, savedRow);
+
+        // 3. Update Checkout UI Card text INSTANTLY in real-time
+        updateDisplayAddressText(streetText, cityText);
+
+        // 4. Update hidden inputs & Note to rider INSTANTLY
+        const streetInput = document.getElementById('street_address');
+        const deliveryAddressInput = document.getElementById('delivery_address');
+        const instructionsInput = document.getElementById('delivery_instructions');
+        const latitudeInput = document.getElementById('latitude');
+        const longitudeInput = document.getElementById('longitude');
+        const savedAddressIdInput = document.getElementById('saved_address_id');
+        const riderNoteEl = selectedCard.querySelector('.addr-rider-note');
+
+        const fullAddrVal = fullText || `${streetText}, ${cityText}`;
+        if (streetInput) streetInput.value = streetText;
+        if (deliveryAddressInput) deliveryAddressInput.value = fullAddrVal;
+        if (savedAddressIdInput) savedAddressIdInput.value = String(savedRow.id || '');
+
+        if (instructionsInput) {
+            let noteValue = savedRow.notes || '';
+            if (!noteValue && riderNoteEl) {
+                const rawNoteText = riderNoteEl.textContent.replace(/^Note to rider:\s*/i, '').trim();
+                if (rawNoteText && rawNoteText.toLowerCase() !== 'none') {
+                    noteValue = rawNoteText;
+                }
+            }
+            instructionsInput.value = (noteValue && noteValue.toLowerCase() !== 'none') ? noteValue : '';
+        }
+
+        // 5. Sync storage INSTANTLY
+        let lat = parseFloat(savedRow.latitude || '');
+        let lng = parseFloat(savedRow.longitude || '');
+        const payload = {
+            full_address: fullAddrVal,
+            street_address: streetText,
+            city_name: cityText,
+            latitude: String(lat || ''),
+            longitude: String(lng || '')
+        };
+        try {
+            localStorage.setItem('market_address', JSON.stringify(payload));
+            sessionStorage.setItem('market_address', JSON.stringify(payload));
+        } catch(e) {}
+
+        // 6. Coordinates & Delivery Fee Recalculation (async background helper)
+        (async function processCoordinatesAndFee() {
+            if ((Number.isNaN(lat) || Number.isNaN(lng) || (!lat && !lng)) && fullAddrVal) {
+                if (typeof forwardGeocodeFromNominatim === 'function') {
+                    const geocoded = await forwardGeocodeFromNominatim(fullAddrVal);
+                    if (geocoded) {
+                        lat = geocoded.lat;
+                        lng = geocoded.lng;
+                    }
+                }
+            }
+
+            if (!Number.isNaN(lat) && !Number.isNaN(lng) && lat !== 0 && lng !== 0) {
+                if (latitudeInput) latitudeInput.value = String(lat);
+                if (longitudeInput) longitudeInput.value = String(lng);
+
+                if (typeof map !== 'undefined' && map && typeof marker !== 'undefined' && marker) {
+                    map.setView([lat, lng], 17);
+                    marker.setLatLng([lat, lng]);
+                }
+                if (typeof calculateDeliveryFee === 'function') {
+                    calculateDeliveryFee(lat, lng);
+                }
+            }
+        })().catch(err => console.warn('Coord fee error:', err));
+
+        // 7. PSGC background sync
+        if (typeof applySavedAddressToForm === 'function') {
+            applySavedAddressToForm(savedRow).catch(err => console.warn('Background PSGC sync:', err));
+        }
+    }
+
+    // Modal Saved Address Card Selection (Single Click & Double Click)
+    document.querySelectorAll('.modal-saved-addr-card').forEach(card => {
+        card.addEventListener('click', function() {
+            selectAndApplyAddressCard(this);
+        });
+
+        card.addEventListener('dblclick', function() {
+            selectAndApplyAddressCard(this);
             if (changeModal) changeModal.style.display = 'none';
         });
     });
+
+    // Confirm Selected Address Button Click
+    const confirmAddrBtn = document.getElementById('confirmSelectedAddressBtn');
+    if (confirmAddrBtn) {
+        confirmAddrBtn.addEventListener('click', function() {
+            const selectedCard = document.querySelector('.modal-saved-addr-card.is-selected') 
+                              || document.querySelector('.modal-saved-addr-card');
+            if (selectedCard) {
+                selectAndApplyAddressCard(selectedCard);
+            }
+            if (changeModal) changeModal.style.display = 'none';
+        });
+    }
 
     // Edit Saved Address (Pencil Icon)
     document.querySelectorAll('.btn-edit-saved-addr').forEach(btn => {
@@ -5079,9 +5361,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Update display address on initial load
     setTimeout(function() {
+        const selectedSavedCard = document.querySelector('.modal-saved-addr-card.is-selected') || document.querySelector('.modal-saved-addr-card');
         const streetInput = document.getElementById('street_address');
         const hiddenAddr = document.getElementById('delivery_address');
         const navPayload = readMarketAddressPayloadFromStorage();
+
+        if (selectedSavedCard) {
+            const addrId = selectedSavedCard.getAttribute('data-address-id');
+            const savedRow = typeof findSavedAddressById === 'function' ? findSavedAddressById(addrId) : null;
+            const { streetText, cityText } = parseAddressCardDisplayTexts(selectedSavedCard, savedRow);
+            if (streetText) {
+                updateDisplayAddressText(streetText, cityText);
+                return;
+            }
+        }
+
         if (streetInput && streetInput.value.trim()) {
             const parts = streetInput.value.split(',');
             updateDisplayAddressText(parts[0].trim(), parts.slice(1).join(',').trim());
