@@ -195,7 +195,7 @@ include 'includes/header.php';
 /* Left Side - Brand/Info */
 .login-left {
     width: 50%;
-    background: linear-gradient(135deg, #fff2eb 0%, #ffd9ce 100%) !important;
+    background: linear-gradient(135deg, #b3261e 0%, #8f261a 100%) !important;
     display: flex !important;
     flex-direction: column;
     align-items: center;
@@ -214,13 +214,13 @@ include 'includes/header.php';
     font-weight: 900;
     letter-spacing: -1.5px;
     margin: 0;
-    color: #b3261e !important;
-    text-shadow: 0 4px 12px rgba(179,38,30,0.15);
+    color: #ffffff !important;
+    text-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
 }
 
 .brand-subtitle {
     font-size: 1.25rem;
-    color: #7b6d64 !important;
+    color: rgba(255, 255, 255, 0.9) !important;
     margin-top: 15px;
     max-width: 340px;
     font-weight: 600;
@@ -348,19 +348,19 @@ include 'includes/header.php';
 .form-control {
     width: 100%;
     padding: 15px 18px;
-    border: 1px solid #e8d4c3;
+    border: 1px solid #d0d5dd;
     border-radius: 10px;
     font-size: 1rem;
     transition: all 0.3s;
     font-family: inherit;
-    background-color: #fffdfb;
+    background-color: #ffffff;
 }
 
 .form-control:focus {
     outline: none;
-    border-color: #ef6b2e;
-    background-color: white;
-    box-shadow: 0 0 0 4px rgba(239, 107, 46, 0.15);
+    border-color: #b3261e;
+    background-color: #ffffff;
+    box-shadow: 0 0 0 4px rgba(179, 38, 30, 0.12);
 }
 
 .input-with-icon {
