@@ -323,32 +323,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     // Business partner fields
     $business_name = preg_replace('/\s+/', ' ', trim($_POST['business_name'] ?? ''));
     $business_type = 'restaurant';
-    $business_registration = trim($_POST['business_registration'] ?? '');
+$business_registration = trim($_POST['business_registration'] ?? '');
     $website = null;
     $tax_id = trim($_POST['tax_id'] ?? '');
     $street_address = trim($_POST['street_address'] ?? '');
     $address = trim($_POST['address'] ?? '');
-    $psgc_region_code = trim($_POST['psgc_region_code'] ?? '');
-    $psgc_region_name = trim($_POST['psgc_region_name'] ?? '');
-    $psgc_province_code = trim($_POST['psgc_province_code'] ?? '');
-    $psgc_province_name = trim($_POST['psgc_province_name'] ?? '');
-    $psgc_city_code = trim($_POST['psgc_city_code'] ?? '');
-    $psgc_city_name = trim($_POST['psgc_city_name'] ?? '');
-    $psgc_barangay_code = trim($_POST['psgc_barangay_code'] ?? '');
-    $psgc_barangay_name = trim($_POST['psgc_barangay_name'] ?? '');
+    $latitude = trim($_POST['latitude'] ?? '');
+    $longitude = trim($_POST['longitude'] ?? '');
+    $city_name = trim($_POST['city_name'] ?? '');
+    $province_name = trim($_POST['province_name'] ?? 'Cavite');
 
-    $address_parts = array_filter([
-        $street_address,
-        $psgc_barangay_name,
-        $psgc_city_name,
-        $psgc_province_name,
-        $psgc_region_name
-    ], static function ($part) {
-        return $part !== '';
-    });
-
-    if (!empty($address_parts)) {
-        $address = implode(', ', array_unique($address_parts));
+    if ($address === '' && $street_address !== '') {
+        $address = $street_address . ', Cavite';
     }
 
     // Store form data for repopulation
@@ -369,14 +355,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         'tax_id' => $tax_id,
         'street_address' => $street_address,
         'address' => $address,
-        'psgc_region_code' => $psgc_region_code,
-        'psgc_region_name' => $psgc_region_name,
-        'psgc_province_code' => $psgc_province_code,
-        'psgc_province_name' => $psgc_province_name,
-        'psgc_city_code' => $psgc_city_code,
-        'psgc_city_name' => $psgc_city_name,
-        'psgc_barangay_code' => $psgc_barangay_code,
-        'psgc_barangay_name' => $psgc_barangay_name
+        'latitude' => $latitude,
+        'longitude' => $longitude,
+        'city_name' => $city_name,
+        'province_name' => $province_name,
     ];
 
     // Validation
@@ -406,65 +388,56 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $error = 'Please upload a photo of the front side of your valid ID.';
         } elseif (empty($valid_id_back) || !is_array($valid_id_back) || (int)($valid_id_back['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
             $error = 'Please upload a photo of the back side of your valid ID.';
-        } else {
-            $front_validation = validateRegistrationValidIdUpload($valid_id_front);
-            $back_validation = validateRegistrationValidIdUpload($valid_id_back);
-            if (empty($front_validation['valid'])) {
-                $error = 'Front of ID: ' . (string)($front_validation['message'] ?? 'Please upload a clear JPG, PNG, or WEBP image up to 5MB.');
-            } elseif (empty($back_validation['valid'])) {
-                $error = 'Back of ID: ' . (string)($back_validation['message'] ?? 'Please upload a clear JPG, PNG, or WEBP image up to 5MB.');
-            }
-        }
-
-        if ($error === '' && $account_type === 'organization' && empty($business_name)) {
+        } elseif ($account_type === 'organization' && empty($business_name)) {
             $error = 'Please enter your restaurant name.';
-        } elseif ($error === '' && strlen($address) < 10) {
-            $error = 'Please provide a complete delivery address.';
-        } elseif (
-            $error === '' &&
-            ($psgc_region_code !== '' || $psgc_region_name !== '' || $psgc_city_code !== '' || $psgc_city_name !== '' || $psgc_barangay_code !== '' || $psgc_barangay_name !== '') &&
-            ($psgc_region_name === '' || $psgc_city_name === '' || $psgc_barangay_name === '')
-        ) {
-            $error = 'Please complete the PSGC address fields (region, city/municipality, and barangay).';
-        } elseif ($error === '' && $account_type === 'organization') {
-            $is_complete_org_psgc = (
-                $psgc_region_code !== '' && $psgc_region_name !== '' &&
-                $psgc_province_code !== '' && $psgc_province_name !== '' &&
-                $psgc_city_code !== '' && $psgc_city_name !== '' &&
-                $psgc_barangay_code !== '' && $psgc_barangay_name !== ''
-            );
-
-            if (!$is_complete_org_psgc) {
-                $error = 'Please complete your PSGC business address details for Cavite (Region IV-A CALABARZON).';
-            } elseif (
-                ($psgc_region_code !== '040000000') ||
-                (stripos($psgc_region_name, 'calabarzon') === false)
-            ) {
-                $error = 'Business partner registration is limited to CALABARZON (Region IV-A).';
-            } elseif (
-                ($psgc_province_code !== '042100000') ||
-                (stripos($psgc_province_name, 'cavite') === false)
-            ) {
-                $error = 'Business partner registration is limited to Cavite province.';
+        } elseif (strlen($address) < 6) {
+            $error = 'Please enter your complete home address in Cavite.';
+        } else {
+            // Validate that the location is inside Cavite
+            $is_cavite = false;
+            if ($latitude !== '' && $longitude !== '' && is_numeric($latitude) && is_numeric($longitude)) {
+                $lat_num = (float)$latitude;
+                $lng_num = (float)$longitude;
+                // Cavite coordinates boundary check
+                if ($lat_num >= 14.00 && $lat_num <= 14.55 && $lng_num >= 120.55 && $lng_num <= 121.15) {
+                    $is_cavite = true;
+                }
             }
-        } elseif ($error === '') {
-            $is_ncr_region = (
-                $psgc_region_code === '130000000' ||
-                stripos($psgc_region_name, 'national capital region') !== false ||
-                preg_match('/\bncr\b/i', $psgc_region_name)
-            );
 
-            $is_complete_individual_psgc = (
-                $psgc_region_code !== '' && $psgc_region_name !== '' &&
-                $psgc_city_code !== '' && $psgc_city_name !== '' &&
-                $psgc_barangay_code !== '' && $psgc_barangay_name !== '' &&
-                ($is_ncr_region || ($psgc_province_code !== '' && $psgc_province_name !== ''))
-            );
+            // Keyword check for Cavite cities / municipalities
+            $cavite_keywords = [
+                'cavite', 'dasmariñas', 'dasmarinas', 'imus', 'bacoor', 'general trias', 'gen. trias',
+                'tagaytay', 'cavite city', 'trece martires', 'silang', 'kawit', 'tanza', 'alfonso',
+                'amadeo', 'carmona', 'gma', 'general mariano alvarez', 'indang', 'magallanes',
+                'maragondon', 'mendez', 'naic', 'noveleta', 'rosario', 'ternate', 'bailen', 'aguinaldo'
+            ];
+            $addr_lower = strtolower($address);
+            foreach ($cavite_keywords as $kw) {
+                if (strpos($addr_lower, $kw) !== false) {
+                    $is_cavite = true;
+                    break;
+                }
+            }
 
-            if (!$is_complete_individual_psgc) {
-                $error = 'Please complete your PSGC home address details for Luzon.';
-            } elseif (!isLuzonRegionSelection($psgc_region_code, $psgc_region_name)) {
-                $error = 'Individual registration is limited to Luzon regions only.';
+            // Explicit rejection of outside areas (e.g. NCR/Manila, Laguna, Batangas)
+            $outside_keywords = ['las piñas', 'las pinas', 'parañaque', 'paranaque', 'muntinlupa', 'metro manila', 'ncr', 'batangas', 'laguna', 'quezon city', 'pasay'];
+            foreach ($outside_keywords as $out_kw) {
+                if (strpos($addr_lower, $out_kw) !== false && strpos($addr_lower, 'cavite') === false) {
+                    $is_cavite = false;
+                    break;
+                }
+            }
+
+            if (!$is_cavite) {
+                $error = 'Service Area Restriction: Registration is exclusively available for addresses inside Cavite province. Please pin or enter a location within Cavite.';
+            } else {
+                $front_validation = validateRegistrationValidIdUpload($valid_id_front);
+                $back_validation = validateRegistrationValidIdUpload($valid_id_back);
+                if (empty($front_validation['valid'])) {
+                    $error = 'Front of ID: ' . (string)($front_validation['message'] ?? 'Please upload a clear JPG, PNG, or WEBP image up to 5MB.');
+                } elseif (empty($back_validation['valid'])) {
+                    $error = 'Back of ID: ' . (string)($back_validation['message'] ?? 'Please upload a clear JPG, PNG, or WEBP image up to 5MB.');
+                }
             }
         }
     }
@@ -516,6 +489,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     }
                 }
                 $error = (string)(empty($saved_front['success']) ? $saved_front['message'] : ($saved_back['message'] ?? 'Unable to save your government ID uploads. Please try again.'));
+            } else {
+                // Save verified Cavite address in user_saved_addresses table
+                require_once 'includes/checkout_address_helper.php';
+                caSaveUserSavedAddress($conn, $created_user_id, [
+                    'label' => 'Home Address',
+                    'contact_name' => $full_name,
+                    'contact_phone' => $phone_cleaned,
+                    'street_address' => $street_address ?: $address,
+                    'city_name' => $city_name ?: 'Cavite',
+                    'province_name' => 'Cavite',
+                    'full_address' => $address,
+                    'latitude' => $latitude,
+                    'longitude' => $longitude,
+                    'is_default' => 1
+                ], true);
             }
         }
 
@@ -1744,7 +1732,7 @@ body {
                         <div class="form-group">
                             <label style="display:block; margin-bottom:8px; font-weight:600; color:#333; font-size:0.9rem;">Front of ID Card *</label>
                             <div class="id-upload-zone" id="zoneFront" style="border: 2px dashed #cbd5e1; border-radius: 12px; padding: 20px 15px; text-align: center; cursor: pointer; transition: all 0.2s ease; background: #f8fafc; position: relative;">
-                                <input type="file" id="validIdFront" name="valid_id_front" accept="image/*" style="display:none;" required>
+                                <input type="file" id="validIdFront" name="valid_id_front" accept="image/*" style="display:none;">
                                 <div class="upload-zone-content" id="zoneContentFront">
                                     <i class="fas fa-id-card" style="font-size: 2.2rem; color: #b3261e; margin-bottom: 10px; display: block;"></i>
                                     <span style="font-size: 0.85rem; font-weight:700; color: #475569; display: block; margin-bottom: 4px;">Capture Front Side</span>
@@ -1761,7 +1749,7 @@ body {
                         <div class="form-group">
                             <label style="display:block; margin-bottom:8px; font-weight:600; color:#333; font-size:0.9rem;">Back of ID Card *</label>
                             <div class="id-upload-zone" id="zoneBack" style="border: 2px dashed #cbd5e1; border-radius: 12px; padding: 20px 15px; text-align: center; cursor: pointer; transition: all 0.2s ease; background: #f8fafc; position: relative;">
-                                <input type="file" id="validIdBack" name="valid_id_back" accept="image/*" style="display:none;" required>
+                                <input type="file" id="validIdBack" name="valid_id_back" accept="image/*" style="display:none;">
                                 <div class="upload-zone-content" id="zoneContentBack">
                                     <i class="fas fa-id-card-clip" style="font-size: 2.2rem; color: #b3261e; margin-bottom: 10px; display: block;"></i>
                                     <span style="font-size: 0.85rem; font-weight:700; color: #475569; display: block; margin-bottom: 4px;">Capture Back Side</span>
@@ -1826,60 +1814,57 @@ body {
                         </div>
                     </div>
                     
-                    <div class="form-group">
-                        <label for="psgcRegion" id="addressSectionLabel">Home Address *</label>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="psgcRegion" id="regionLabel">Region *</label>
-                                <select id="psgcRegion" class="form-control" required
-                                    data-selected-code="<?php echo htmlspecialchars($form_data['psgc_region_code'] ?? ''); ?>"
-                                    data-selected-name="<?php echo htmlspecialchars($form_data['psgc_region_name'] ?? ''); ?>">
-                                    <option value="">Select region</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="psgcProvince" id="provinceLabel">Province *</label>
-                                <select id="psgcProvince" class="form-control" required disabled
-                                    data-selected-code="<?php echo htmlspecialchars($form_data['psgc_province_code'] ?? ''); ?>"
-                                    data-selected-name="<?php echo htmlspecialchars($form_data['psgc_province_name'] ?? ''); ?>">
-                                    <option value="">Select province</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="psgcCity">City / Municipality *</label>
-                                <select id="psgcCity" class="form-control" required disabled
-                                    data-selected-code="<?php echo htmlspecialchars($form_data['psgc_city_code'] ?? ''); ?>"
-                                    data-selected-name="<?php echo htmlspecialchars($form_data['psgc_city_name'] ?? ''); ?>">
-                                    <option value="">Select city or municipality</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="psgcBarangay">Barangay *</label>
-                                <select id="psgcBarangay" class="form-control" required disabled
-                                    data-selected-code="<?php echo htmlspecialchars($form_data['psgc_barangay_code'] ?? ''); ?>"
-                                    data-selected-name="<?php echo htmlspecialchars($form_data['psgc_barangay_name'] ?? ''); ?>">
-                                    <option value="">Select barangay</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label for="streetAddress" id="streetAddressLabel">House No. / Street / Landmark *</label>
-                            <input type="text" id="streetAddress" name="street_address" class="form-control"
-                                placeholder="e.g., Blk 5 Lot 2, Brgy. San Agustin"
-                                value="<?php echo htmlspecialchars($form_data['street_address'] ?? ''); ?>"
-                                maxlength="120"
-                                required>
+                    <div class="form-group" style="margin-bottom: 14px;">
+                        <label for="homeAddressInput" id="addressSectionLabel" style="font-weight: 700; color: #1e293b; font-size: 0.95rem; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
+                            <span><i class="fas fa-location-dot" style="color: #b3261e; margin-right: 6px;"></i> Enter Home Address *</span>
+                            <span style="font-size: 0.78rem; font-weight: 700; color: #b3261e; background: #fff1f0; padding: 3px 10px; border-radius: 12px; border: 1px solid #fee4e2;">Cavite Only</span>
+                        </label>
+                        <div class="input-with-icon" style="position: relative;">
+                            <i class="fas fa-search" style="color: #94a3b8;"></i>
+                            <input type="text" id="homeAddressInput" class="form-control"
+                                placeholder="Type your street, subdivision, barangay, or landmark in Cavite..."
+                                value="<?php echo htmlspecialchars($form_data['address'] ?? ''); ?>"
+                                autocomplete="street-address"
+                                style="padding-left: 46px; padding-right: 40px;">
+                            <button type="button" id="clearRegAddressBtn" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 1rem; padding: 4px; display: none;">
+                                <i class="fas fa-times-circle"></i>
+                            </button>
                         </div>
                     </div>
 
-                    <div class="form-group">
-                        <label for="address" id="completeAddressLabel">Complete Home Address *</label>
-                        <textarea id="address" name="address" class="form-control" rows="3"
-                                placeholder="Your complete home address will appear here after selecting PSGC fields"
-                                readonly required><?php echo htmlspecialchars($form_data['address'] ?? ''); ?></textarea>
+                    <!-- Interactive Leaflet Map for Pinning Exact Cavite Location -->
+                    <div class="form-group" style="margin-bottom: 16px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                            <span style="font-size: 0.88rem; font-weight: 600; color: #475569;">
+                                <i class="fas fa-map-pin" style="color: #b3261e; margin-right: 4px;"></i> Pin exact location on map:
+                            </span>
+                            <button type="button" id="useCurrentLocationBtn" style="background: none; border: none; color: #b3261e; font-size: 0.82rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px;">
+                                <i class="fas fa-crosshairs"></i> Use My Current Location
+                            </button>
+                        </div>
+                        <div id="registerMapWrapper" style="position: relative; border-radius: 14px; overflow: hidden; border: 2px solid #e2e8f0; box-shadow: 0 4px 14px rgba(0,0,0,0.06); transition: border-color 0.2s;">
+                            <div id="registerMapCanvas" style="width: 100%; height: 260px; background: #f8fafc; z-index: 1;"></div>
+                            
+                            <!-- Map Overlay Controls -->
+                            <div style="position: absolute; top: 10px; right: 10px; z-index: 400; background: rgba(255,255,255,0.95); backdrop-filter: blur(4px); padding: 4px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; color: #1e293b; border: 1px solid #e2e8f0; pointer-events: none; box-shadow: 0 2px 6px rgba(0,0,0,0.08);">
+                                <i class="fas fa-hand-pointer" style="color: #b3261e; margin-right: 4px;"></i> Drag pin or click map
+                            </div>
+                        </div>
+
+                        <!-- Real-time Cavite Status Banner -->
+                        <div id="caviteAreaStatusBadge" style="margin-top: 10px; padding: 10px 14px; border-radius: 10px; font-size: 0.88rem; display: flex; align-items: center; gap: 10px; transition: all 0.2s; background: #fff8f6; border: 1px solid #fed7c7; color: #b3261e;">
+                            <i id="caviteStatusIcon" class="fas fa-info-circle" style="font-size: 1.1rem; flex-shrink: 0;"></i>
+                            <span id="caviteStatusText">Drag the map pin or type your address to verify your location inside Cavite.</span>
+                        </div>
                     </div>
+
+                    <!-- Hidden Form Inputs for verified address payload -->
+                    <input type="hidden" id="regAddress" name="address" value="<?php echo htmlspecialchars($form_data['address'] ?? ''); ?>">
+                    <input type="hidden" id="regStreetAddress" name="street_address" value="<?php echo htmlspecialchars($form_data['street_address'] ?? ''); ?>">
+                    <input type="hidden" id="regLatitude" name="latitude" value="<?php echo htmlspecialchars($form_data['latitude'] ?? ''); ?>">
+                    <input type="hidden" id="regLongitude" name="longitude" value="<?php echo htmlspecialchars($form_data['longitude'] ?? ''); ?>">
+                    <input type="hidden" id="regCityName" name="city_name" value="<?php echo htmlspecialchars($form_data['city_name'] ?? ''); ?>">
+                    <input type="hidden" id="regProvinceName" name="province_name" value="Cavite">
                     
                     <div class="form-actions">
                         <button type="button" class="btn-secondary" id="prevStep3">
@@ -2037,518 +2022,6 @@ body {
 <!-- SweetAlert2 JS -->
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
-<script type="text/plain" data-legacy-registration-script>
-document.addEventListener('DOMContentLoaded', function() {
-    if (!window.__useLegacyRegistrationScript) {
-        return;
-    }
-
-    console.log('DOM loaded - registration form initialized');
-    
-    // Initialize SweetAlert2
-    const Toast = Swal.mixin({
-        toast: true,
-        position: 'top-end',
-        showConfirmButton: false,
-        timer: 3000,
-        timerProgressBar: true,
-        didOpen: (toast) => {
-            toast.addEventListener('mouseenter', Swal.stopTimer)
-            toast.addEventListener('mouseleave', Swal.resumeTimer)
-        }
-    });
-    
-    // Current step tracking
-    let currentStep = 1;
-    const totalSteps = 4;
-    let accountType = (document.getElementById('accountType')?.value || '').trim() || 'individual';
-    
-    // DOM Elements
-    const steps = document.querySelectorAll('.step');
-    const formSteps = document.querySelectorAll('.form-step');
-    const accountTypeCards = document.querySelectorAll('.account-type-card');
-    const accountTypeInput = document.getElementById('accountType');
-    const organizationFields = document.getElementById('organizationFields');
-    
-    // Initialize
-    updateProgressBar();
-    updateOrganizationFields();
-    
-    // Debug logging
-    console.log('Form steps found:', formSteps.length);
-    console.log('Account type cards found:', accountTypeCards.length);
-    
-    // Back to login button
-    document.getElementById('backToLoginBtn').addEventListener('click', function() {
-        window.location.href = 'login.php';
-    });
-    
-    // Account Type Selection
-    accountTypeCards.forEach(card => {
-        card.addEventListener('click', function() {
-            console.log('Account type card clicked:', this.dataset.type);
-            // Remove selected class from all cards
-            accountTypeCards.forEach(c => c.classList.remove('selected'));
-            
-            // Add selected class to clicked card
-            this.classList.add('selected');
-            
-            // Update account type
-            accountType = this.dataset.type;
-            accountTypeInput.value = accountType;
-            console.log('Account type set to:', accountType);
-            
-            // Update organization fields visibility
-            updateOrganizationFields();
-        });
-    });
-    
-    // Step Navigation - SIMPLIFIED EVENT LISTENERS
-    document.getElementById('nextStep1').addEventListener('click', function() {
-        console.log('Next Step 1 clicked');
-        goToStep(2);
-    });
-    
-    document.getElementById('nextStep2').addEventListener('click', function() {
-        console.log('Next Step 2 clicked');
-        validateStep2();
-    });
-    
-    document.getElementById('nextStep3').addEventListener('click', function() {
-        console.log('Next Step 3 clicked');
-        validateStep3();
-    });
-    
-    document.getElementById('prevStep2').addEventListener('click', function() {
-        console.log('Prev Step 2 clicked');
-        goToStep(1);
-    });
-    
-    document.getElementById('prevStep3').addEventListener('click', function() {
-        console.log('Prev Step 3 clicked');
-        goToStep(2);
-    });
-    
-    document.getElementById('prevStep4').addEventListener('click', function() {
-        console.log('Prev Step 4 clicked');
-        goToStep(3);
-    });
-    
-    // Toggle password visibility
-    document.querySelectorAll('.toggle-password').forEach(button => {
-        button.addEventListener('click', function() {
-            const input = this.closest('.password-wrapper').querySelector('input');
-            const icon = this.querySelector('i');
-            
-            if (input.type === 'password') {
-                input.type = 'text';
-                icon.className = 'fas fa-eye-slash';
-                this.setAttribute('aria-label', 'Hide password');
-            } else {
-                input.type = 'password';
-                icon.className = 'fas fa-eye';
-                this.setAttribute('aria-label', 'Show password');
-            }
-        });
-    });
-    
-    // Password strength indicator
-    const passwordInput = document.getElementById('password');
-    if (passwordInput) {
-        passwordInput.addEventListener('input', function() {
-            const password = this.value;
-            const strengthBars = [
-                document.getElementById('strengthBar1'),
-                document.getElementById('strengthBar2'),
-                document.getElementById('strengthBar3'),
-                document.getElementById('strengthBar4')
-            ];
-            const strengthText = document.getElementById('strengthText');
-            
-            let score = 0;
-            if (password.length >= 8) score++;
-            if (/[A-Z]/.test(password)) score++;
-            if (/[0-9]/.test(password)) score++;
-            if (/[^A-Za-z0-9]/.test(password)) score++;
-            
-            // Reset bars
-            strengthBars.forEach(bar => {
-                bar.className = 'strength-bar';
-            });
-            
-            // Update bars
-            for (let i = 0; i < score; i++) {
-                if (score <= 1) {
-                    strengthBars[i].classList.add('weak');
-                    strengthText.textContent = 'Weak';
-                    strengthText.style.color = '#ff5252';
-                } else if (score <= 2) {
-                    strengthBars[i].classList.add('medium');
-                    strengthText.textContent = 'Fair';
-                    strengthText.style.color = '#ff9800';
-                } else {
-                    strengthBars[i].classList.add('strong');
-                    strengthText.textContent = 'Strong';
-                    strengthText.style.color = '#4caf50';
-                }
-            }
-            
-            if (password.length === 0) {
-                strengthText.textContent = 'Weak';
-                strengthText.style.color = '#666';
-            }
-        });
-    }
-    
-    // Form submission
-    const registrationForm = document.getElementById('registrationForm');
-    if (registrationForm) {
-        registrationForm.addEventListener('submit', function(e) {
-            console.log('Form submission attempted');
-            e.preventDefault();
-            
-            // Validate step 4
-            if (!validateStep4()) {
-                return false;
-            }
-            
-            const submitBtn = document.getElementById('submitRegistration');
-            if (submitBtn) {
-                submitBtn.classList.add('loading');
-                submitBtn.disabled = true;
-                const span = submitBtn.querySelector('span');
-                if (span) {
-                    span.textContent = 'Creating account...';
-                }
-            }
-            
-            // Submit form
-            console.log('Submitting form...');
-            this.submit();
-        });
-    }
-    
-    // Functions
-    function goToStep(step) {
-        console.log('Going to step:', step, 'from current step:', currentStep);
-        
-        // Validate current step before proceeding
-        if (currentStep === 1 && !validateStep1()) {
-            console.log('Step 1 validation failed');
-            return;
-        }
-        
-        // Update current step
-        currentStep = step;
-        console.log('Current step updated to:', currentStep);
-        
-        // Update UI
-        updateSteps();
-        updateProgressBar();
-        
-        // Scroll to top of form
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        
-        // Focus on first input
-        setTimeout(() => {
-            const formStep = document.getElementById(`step${step}Form`);
-            if (formStep) {
-                const firstInput = formStep.querySelector('input:not([type="hidden"]), select, textarea');
-                if (firstInput) {
-                    firstInput.focus();
-                    console.log('Focused on:', firstInput.id);
-                }
-            }
-        }, 300);
-    }
-    
-    function updateSteps() {
-        console.log('Updating steps UI');
-        // Update step indicators
-        steps.forEach((step, index) => {
-            step.classList.remove('active', 'completed');
-            if (index + 1 === currentStep) {
-                step.classList.add('active');
-            } else if (index + 1 < currentStep) {
-                step.classList.add('completed');
-            }
-        });
-        
-        // Update form steps
-        formSteps.forEach((formStep, index) => {
-            formStep.classList.remove('active');
-            if (index + 1 === currentStep) {
-                formStep.classList.add('active');
-                console.log('Activated form step:', index + 1);
-            }
-        });
-    }
-    
-    function updateProgressBar() {
-        const progressBar = document.getElementById('progressBar');
-        const progress = ((currentStep - 1) / (totalSteps - 1)) * 100;
-        if (progressBar) {
-            progressBar.style.width = `${progress}%`;
-        }
-    }
-    
-    function updateOrganizationFields() {
-        console.log('Updating organization fields for account type:', accountType);
-        if (accountType === 'organization') {
-            organizationFields.style.display = 'block';
-            // Make business name required
-            const businessNameInput = document.getElementById('businessName');
-            if (businessNameInput) {
-                businessNameInput.required = true;
-            }
-        } else {
-            organizationFields.style.display = 'none';
-            // Make business name optional
-            const businessNameInput = document.getElementById('businessName');
-            if (businessNameInput) {
-                businessNameInput.required = false;
-            }
-        }
-    }
-    
-    // Validation functions
-    function validateStep1() {
-        console.log('Validating step 1, account type:', accountType);
-        if (!accountType) {
-            Swal.fire({
-                icon: 'error',
-                title: 'Account Type Required',
-                text: 'Please select an account type to continue.',
-                confirmButtonColor: '#b3261e'
-            });
-            return false;
-        }
-        return true;
-    }
-    
-    function validateStep2() {
-        console.log('Validating step 2');
-        
-        const firstName = document.getElementById('firstName').value.trim();
-        const lastName = document.getElementById('lastName').value.trim();
-        const email = document.getElementById('email').value.trim();
-        const phone = document.getElementById('phone').value.trim();
-        
-        console.log('First name:', firstName);
-        console.log('Last name:', lastName);
-        console.log('Email:', email);
-        console.log('Phone:', phone);
-        
-        // Check for empty fields
-        if (!firstName || !lastName || !email || !phone) {
-            console.log('Validation failed: Empty fields');
-            Swal.fire({
-                icon: 'error',
-                title: 'Missing Information',
-                text: 'Please fill in all required fields.',
-                confirmButtonColor: '#b3261e'
-            });
-            return false;
-        }
-        
-        // Validate email
-        if (!isValidEmail(email)) {
-            console.log('Validation failed: Invalid email');
-            Swal.fire({
-                icon: 'error',
-                title: 'Invalid Email',
-                text: 'Please enter a valid email address.',
-                confirmButtonColor: '#b3261e'
-            });
-            return false;
-        }
-        
-        // Validate phone - MUCH MORE FLEXIBLE
-        if (!isValidPhone(phone)) {
-            console.log('Validation failed: Invalid phone');
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Invalid Phone Number',
-                    text: 'Please enter a valid Philippine mobile number (e.g., 09XXXXXXXXX).',
-                    confirmButtonColor: '#b3261e'
-                });
-                return false;
-            }
-        
-        console.log('Step 2 validation passed');
-        goToStep(3);
-        return true;
-    }
-    
-    function validateStep3() {
-        console.log('Validating step 3');
-        
-        if (accountType === 'organization') {
-            const businessName = document.getElementById('businessName').value.trim();
-            console.log('Business name:', businessName);
-            
-            if (!businessName) {
-                console.log('Validation failed: Business name required');
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Business Name Required',
-                    text: 'Please enter your business name.',
-                    confirmButtonColor: '#b3261e'
-                });
-                return false;
-            }
-        }
-        
-        console.log('Step 3 validation passed');
-        goToStep(4);
-        return true;
-    }
-    
-    function validateStep4() {
-        console.log('Validating step 4');
-        
-        const password = document.getElementById('password').value;
-        const confirmPassword = document.getElementById('confirmPassword').value;
-        const terms = document.getElementById('acceptTerms');
-        
-        console.log('Password length:', password.length);
-        console.log('Terms checked:', terms.checked);
-        
-        if (!password || !confirmPassword) {
-            console.log('Validation failed: Password required');
-            Swal.fire({
-                icon: 'error',
-                title: 'Password Required',
-                text: 'Please enter and confirm your password.',
-                confirmButtonColor: '#b3261e'
-            });
-            return false;
-        }
-        
-        if (password.length < 8) {
-            console.log('Validation failed: Password too short');
-            Swal.fire({
-                icon: 'error',
-                title: 'Weak Password',
-                text: 'Password must be at least 8 characters long.',
-                confirmButtonColor: '#b3261e'
-            });
-            return false;
-        }
-        
-        if (password !== confirmPassword) {
-            console.log('Validation failed: Passwords dont match');
-            Swal.fire({
-                icon: 'error',
-                title: 'Passwords Mismatch',
-                text: 'Passwords do not match. Please try again.',
-                confirmButtonColor: '#b3261e'
-            });
-            return false;
-        }
-        
-        if (!terms.checked) {
-            console.log('Validation failed: Terms not accepted');
-            Swal.fire({
-                icon: 'error',
-                title: 'Terms Required',
-                text: 'Please accept the Terms of Service and Privacy Policy.',
-                confirmButtonColor: '#b3261e'
-            });
-            return false;
-        }
-        
-        console.log('Step 4 validation passed');
-        return true;
-    }
-    
-    function isValidEmail(email) {
-        const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        return re.test(email);
-    }
-    
-    function isValidPhone(phone) {
-        // Accept PH mobile formats:
-        // 09XXXXXXXXX, 9XXXXXXXXX, +639XXXXXXXXX, 639XXXXXXXXX
-        console.log('Validating phone:', phone);
-        
-        const cleaned = phone.replace(/[^\d]/g, '');
-        console.log('Cleaned phone:', cleaned);
-        
-        const valid =
-            /^09\d{9}$/.test(cleaned) ||
-            /^9\d{9}$/.test(cleaned) ||
-            /^639\d{9}$/.test(cleaned);
-
-        if (valid) {
-            console.log('Phone validation passed');
-            return true;
-        }
-        
-        console.log('Phone validation failed');
-        return false;
-    }
-    
-    // Auto-select account type card based on previous selection
-    if (accountType === 'organization') {
-        const orgCard = document.querySelector('.account-type-card[data-type="organization"]');
-        if (orgCard) {
-            orgCard.classList.add('selected');
-        }
-    }
-    
-    // Show error message if exists
-    <?php if ($error): ?>
-    Toast.fire({
-        icon: 'error',
-        title: '<?php echo addslashes($error); ?>'
-    });
-    <?php endif; ?>
-    
-    // Add Enter key support for mobile keyboards
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            if (currentStep === 1) {
-                document.getElementById('nextStep1').click();
-            } else if (currentStep === 2) {
-                document.getElementById('nextStep2').click();
-            } else if (currentStep === 3) {
-                document.getElementById('nextStep3').click();
-            } else if (currentStep === 4) {
-                document.getElementById('submitRegistration').click();
-            }
-        }
-    });
-    
-    // Test button functionality
-    console.log('All event listeners attached');
-    console.log('nextStep2 button exists:', !!document.getElementById('nextStep2'));
-    console.log('nextStep3 button exists:', !!document.getElementById('nextStep3'));
-
-    // Social Registration Handlers
-    document.getElementById('googleRegisterBtn').addEventListener('click', function(e) {
-        e.preventDefault();
-        window.location.href = 'controllers/google_auth.php?action=register';
-    });
-
-    document.getElementById('facebookRegisterBtn').addEventListener('click', function(e) {
-        e.preventDefault();
-        window.location.href = 'controllers/facebook_auth.php?action=register';
-    });
-
-    document.getElementById('twitterRegisterBtn').addEventListener('click', function(e) {
-        e.preventDefault();
-        window.location.href = 'controllers/twitter_auth.php?action=register';
-    });
-
-    document.getElementById('instagramRegisterBtn').addEventListener('click', function(e) {
-        e.preventDefault();
-        window.location.href = 'controllers/instagram_auth.php?action=register';
-    });
-});
-</script>
-
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const Toast = Swal.mixin({
@@ -2576,41 +2049,40 @@ document.addEventListener('DOMContentLoaded', function() {
     const step3Title = document.getElementById('step3Title');
     const step3Subtitle = document.getElementById('step3Subtitle');
     const step3NavLabel = document.getElementById('step3NavLabel');
-    const addressSectionLabel = document.getElementById('addressSectionLabel');
-    const regionLabel = document.getElementById('regionLabel');
-    const provinceLabel = document.getElementById('provinceLabel');
-    const streetAddressLabel = document.getElementById('streetAddressLabel');
-    const completeAddressLabel = document.getElementById('completeAddressLabel');
     let accountType = 'individual';
 
-    const regionSelect = document.getElementById('psgcRegion');
-    const provinceSelect = document.getElementById('psgcProvince');
-    const citySelect = document.getElementById('psgcCity');
-    const barangaySelect = document.getElementById('psgcBarangay');
-    const streetAddressInput = document.getElementById('streetAddress');
-    const addressPreviewInput = document.getElementById('address');
-    const psgcAddressHelp = document.getElementById('psgcAddressHelp');
-    const psgcRegionNameInput = document.getElementById('psgcRegionName');
-    const psgcProvinceNameInput = document.getElementById('psgcProvinceName');
-    const psgcCityNameInput = document.getElementById('psgcCityName');
-    const psgcBarangayNameInput = document.getElementById('psgcBarangayName');
+    let regMap = null;
+    let regMarker = null;
+    let isAddressInCavite = false;
+    let addressDebounceTimer = null;
 
-    const PSGC_API_BASE = 'https://psgc.gitlab.io/api';
-    const CALABARZON_REGION_CODE = '040000000';
-    const CAVITE_PROVINCE_CODE = '042100000';
-    const NCR_REGION_CODE = '130000000';
-    const LUZON_REGION_CODES = [
-        '010000000', // Ilocos Region
-        '020000000', // Cagayan Valley
-        '030000000', // Central Luzon
-        '040000000', // CALABARZON
-        '050000000', // Bicol Region
-        '130000000', // NCR
-        '140000000', // CAR
-        '170000000'  // MIMAROPA
+    const homeAddressInput = document.getElementById('homeAddressInput');
+    const regAddress = document.getElementById('regAddress');
+    const regStreetAddress = document.getElementById('regStreetAddress');
+    const regLatitude = document.getElementById('regLatitude');
+    const regLongitude = document.getElementById('regLongitude');
+    const regCityName = document.getElementById('regCityName');
+    const regProvinceName = document.getElementById('regProvinceName');
+    const caviteStatusBadge = document.getElementById('caviteAreaStatusBadge');
+    const caviteStatusIcon = document.getElementById('caviteStatusIcon');
+    const caviteStatusText = document.getElementById('caviteStatusText');
+    const registerMapWrapper = document.getElementById('registerMapWrapper');
+    const useCurrentLocationBtn = document.getElementById('useCurrentLocationBtn');
+    const clearRegAddressBtn = document.getElementById('clearRegAddressBtn');
+
+    const CAVITE_BOUNDS = {
+        minLat: 14.00,
+        maxLat: 14.52,
+        minLng: 120.55,
+        maxLng: 121.12
+    };
+
+    const CAVITE_CITIES = [
+        'cavite', 'dasmariñas', 'dasmarinas', 'imus', 'bacoor', 'general trias', 'gen. trias',
+        'tagaytay', 'cavite city', 'trece martires', 'silang', 'kawit', 'tanza', 'alfonso',
+        'amadeo', 'carmona', 'gma', 'general mariano alvarez', 'indang', 'magallanes',
+        'maragondon', 'mendez', 'naic', 'noveleta', 'rosario', 'ternate', 'bailen', 'aguinaldo'
     ];
-    let psgcEnabled = true;
-    const psgcCache = new Map();
 
     function showError(title, text) {
         Swal.fire({
@@ -2621,547 +2093,252 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    function isNcrSelection(regionCode, regionName) {
-        const code = String(regionCode || '').trim();
-        const name = String(regionName || '').toLowerCase();
-        return code === NCR_REGION_CODE || name.includes('national capital region') || /\bncr\b/i.test(name);
-    }
+    function checkIsLocationInCavite(lat, lng, addressString, addressObj) {
+        const latNum = parseFloat(lat);
+        const lngNum = parseFloat(lng);
 
-    function isLuzonSelection(regionCode, regionName) {
-        const code = String(regionCode || '').trim();
-        if (LUZON_REGION_CODES.includes(code)) {
+        const withinCoords = (
+            !isNaN(latNum) && !isNaN(lngNum) &&
+            latNum >= CAVITE_BOUNDS.minLat && latNum <= CAVITE_BOUNDS.maxLat &&
+            lngNum >= CAVITE_BOUNDS.minLng && lngNum <= CAVITE_BOUNDS.maxLng
+        );
+
+        const textToCheck = ((addressString || '') + ' ' + (addressObj ? JSON.stringify(addressObj) : '')).toLowerCase();
+        
+        const isExplicitOutside = (
+            textToCheck.includes('metro manila') || textToCheck.includes('ncr') ||
+            textToCheck.includes('las piñas') || textToCheck.includes('las pinas') ||
+            textToCheck.includes('parañaque') || textToCheck.includes('paranaque') ||
+            textToCheck.includes('muntinlupa') || textToCheck.includes('pasay') ||
+            textToCheck.includes('manila') || textToCheck.includes('quezon city') ||
+            textToCheck.includes('batangas') || textToCheck.includes('laguna') ||
+            textToCheck.includes('rizal') || textToCheck.includes('bulacan')
+        );
+
+        const hasCaviteName = CAVITE_CITIES.some(city => textToCheck.includes(city));
+
+        if (withinCoords && !isExplicitOutside && (hasCaviteName || !addressString)) {
             return true;
         }
-
-        const name = String(regionName || '').toLowerCase();
-        return (
-            name.includes('ilocos') ||
-            name.includes('cagayan valley') ||
-            name.includes('central luzon') ||
-            name.includes('calabarzon') ||
-            name.includes('bicol') ||
-            name.includes('national capital region') ||
-            /\bncr\b/i.test(name) ||
-            name.includes('cordillera') ||
-            name.includes('mimaropa')
-        );
+        if (hasCaviteName && !isExplicitOutside) {
+            return true;
+        }
+        return false;
     }
 
-    function normalizePlaceName(value) {
-        let text = String(value || '').toLowerCase();
-        try {
-            text = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        } catch (error) {
-            // Keep original text when normalize is unavailable.
-        }
-        return text.replace(/[^a-z0-9]/g, '');
-    }
+    function updateCaviteStatusUI(isValid, message) {
+        isAddressInCavite = isValid;
+        if (!caviteStatusBadge) return;
 
-    function toNameTokens(value) {
-        let text = String(value || '').toLowerCase();
-        try {
-            text = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        } catch (error) {
-            // Keep original text when normalize is unavailable.
-        }
-
-        if (text.includes('metro manila')) {
-            text += ' ncr national capital region';
-        }
-        if (text.includes('national capital region') || /\bncr\b/.test(text)) {
-            text += ' metro manila ncr';
-        }
-        if (text.includes('calabarzon') || text.includes('region iv-a') || text.includes('region iva') || text.includes('region 4a')) {
-            text += ' calabarzon region iva region 4a iv-a';
-        }
-
-        text = text
-            .replace(/&/g, ' and ')
-            .replace(/[^a-z0-9]+/g, ' ')
-            .trim();
-
-        const stopWords = new Set([
-            'city',
-            'municipality',
-            'municipal',
-            'province',
-            'region',
-            'barangay',
-            'brgy',
-            'of',
-            'the',
-            'and'
-        ]);
-
-        return Array.from(new Set(text.split(/\s+/).filter(function(token) {
-            return token && !stopWords.has(token);
-        })));
-    }
-
-    function toCandidateNames() {
-        const seen = new Set();
-        const names = [];
-        const addName = function(value) {
-            const text = String(value || '').trim();
-            if (!text) return;
-            const key = normalizePlaceName(text);
-            if (!key || seen.has(key)) return;
-            seen.add(key);
-            names.push(text);
-        };
-
-        Array.prototype.slice.call(arguments).forEach(function(group) {
-            if (Array.isArray(group)) {
-                group.forEach(addName);
-            } else {
-                addName(group);
+        if (isValid) {
+            caviteStatusBadge.style.background = '#ecfdf3';
+            caviteStatusBadge.style.borderColor = '#abefc6';
+            caviteStatusBadge.style.color = '#027a48';
+            if (caviteStatusIcon) {
+                caviteStatusIcon.className = 'fas fa-check-circle';
+                caviteStatusIcon.style.color = '#12b76a';
             }
-        });
-        return names;
-    }
-
-    function findOptionValueByName(selectElement, targetName) {
-        if (!selectElement || !targetName) return '';
-        const normalizedTarget = normalizePlaceName(targetName);
-        const targetTokens = toNameTokens(targetName);
-        if (!normalizedTarget || targetTokens.length === 0) return '';
-
-        let bestValue = '';
-        let bestScore = 0;
-        let bestOverlap = 0;
-
-        Array.from(selectElement.options || []).forEach(function(option) {
-            if (!option || !option.value) return;
-            const normalizedOption = normalizePlaceName(option.textContent || option.label || '');
-            if (!normalizedOption) return;
-
-            if (normalizedOption === normalizedTarget ||
-                normalizedOption.includes(normalizedTarget) ||
-                normalizedTarget.includes(normalizedOption)) {
-                bestValue = bestValue || option.value;
-                bestScore = 1;
-                bestOverlap = targetTokens.length;
-                return;
+            if (caviteStatusText) {
+                caviteStatusText.textContent = message || 'Location verified: Inside Cavite area.';
             }
-
-            const optionTokens = toNameTokens(option.textContent || option.label || '');
-            if (!optionTokens.length) return;
-            const optionTokenSet = new Set(optionTokens);
-            let overlap = 0;
-            targetTokens.forEach(function(token) {
-                if (optionTokenSet.has(token)) overlap++;
-            });
-            if (overlap <= 0) return;
-
-            const score = overlap / Math.max(targetTokens.length, optionTokens.length);
-            if (overlap > bestOverlap || (overlap === bestOverlap && score > bestScore)) {
-                bestOverlap = overlap;
-                bestScore = score;
-                bestValue = option.value;
-            }
-        });
-
-        if (bestValue && (bestOverlap >= Math.max(1, targetTokens.length - 1) || bestScore >= 0.45)) {
-            return bestValue;
-        }
-        return '';
-    }
-
-    function findOptionValueFromCandidates(selectElement, candidates) {
-        const names = toCandidateNames(candidates);
-        for (let i = 0; i < names.length; i += 1) {
-            const code = findOptionValueByName(selectElement, names[i]);
-            if (code) return code;
-        }
-        return '';
-    }
-
-    function hasOptionValue(selectElement, value) {
-        const target = String(value || '').trim();
-        if (!selectElement || !target) return false;
-        return Array.from(selectElement.options || []).some(function(option) {
-            return String(option.value || '').trim() === target;
-        });
-    }
-
-    function applySelectCodeOrName(selectElement, code, candidateNames) {
-        const normalizedCode = String(code || '').trim();
-        if (normalizedCode && hasOptionValue(selectElement, normalizedCode)) {
-            selectElement.value = normalizedCode;
-            return normalizedCode;
-        }
-        const fallbackCode = findOptionValueFromCandidates(selectElement, candidateNames);
-        if (fallbackCode) {
-            selectElement.value = fallbackCode;
-            return fallbackCode;
-        }
-        return '';
-    }
-
-    function sortByName(items) {
-        return [].slice.call(items).sort(function(a, b) {
-            return String(a.name || '').localeCompare(String(b.name || ''));
-        });
-    }
-
-    function setSelectOptions(selectElement, items, placeholder) {
-        if (!selectElement) {
-            return;
-        }
-        selectElement.innerHTML = '';
-        const defaultOption = document.createElement('option');
-        defaultOption.value = '';
-        defaultOption.textContent = placeholder;
-        selectElement.appendChild(defaultOption);
-
-        sortByName(items).forEach(function(item) {
-            const option = document.createElement('option');
-            option.value = item.code || '';
-            option.textContent = item.name || '';
-            selectElement.appendChild(option);
-        });
-    }
-
-    function getSelectedLabel(selectElement) {
-        if (!selectElement || selectElement.selectedIndex < 0) {
-            return '';
-        }
-        const selectedOption = selectElement.options[selectElement.selectedIndex];
-        if (!selectedOption || !selectedOption.value) {
-            return '';
-        }
-        return selectedOption.textContent.trim();
-    }
-
-    async function fetchPsgc(path) {
-        const key = String(path || '');
-        if (psgcCache.has(key)) {
-            return psgcCache.get(key);
-        }
-        const response = await fetch(PSGC_API_BASE + key, {
-            headers: { 'Accept': 'application/json' }
-        });
-        if (!response.ok) {
-            throw new Error('PSGC request failed for ' + key);
-        }
-        const payload = await response.json();
-        psgcCache.set(key, payload);
-        return payload;
-    }
-
-    function resetSelect(selectElement, placeholder, disabled = true) {
-        if (!selectElement) return;
-        selectElement.innerHTML = '';
-        const defaultOption = document.createElement('option');
-        defaultOption.value = '';
-        defaultOption.textContent = placeholder;
-        selectElement.appendChild(defaultOption);
-        selectElement.value = '';
-        selectElement.disabled = disabled;
-    }
-
-    function populateSelect(selectElement, items, placeholder, selectedCode, selectedName) {
-        if (!selectElement) return '';
-        resetSelect(selectElement, placeholder, false);
-        let appliedCode = '';
-        const targetCode = String(selectedCode || '').trim();
-        const targetName = String(selectedName || '').trim();
-
-        sortByName(items).forEach(function(item) {
-            const option = document.createElement('option');
-            option.value = String(item.code || '');
-            option.textContent = String(item.name || '').trim();
-            if (targetCode && option.value === targetCode) {
-                option.selected = true;
-                appliedCode = option.value;
-            }
-            selectElement.appendChild(option);
-        });
-
-        if (!appliedCode && targetName) {
-            const fallbackCode = findOptionValueByName(selectElement, targetName);
-            if (fallbackCode) {
-                selectElement.value = fallbackCode;
-                appliedCode = fallbackCode;
-            }
-        }
-
-        return appliedCode;
-    }
-
-    async function loadRegions() {
-        if (!regionSelect) return '';
-        const selectedCode = regionSelect.dataset.selectedCode || (psgcRegionNameInput ? document.getElementById('psgcRegionCode').value : '');
-        const selectedName = regionSelect.dataset.selectedName || (psgcRegionNameInput ? psgcRegionNameInput.value : '');
-
-        let regions = await fetchPsgc('/regions');
-        if (Array.isArray(regions)) {
-            if (accountType === 'organization') {
-                regions = regions.filter(function(r) {
-                    return String(r.code) === CALABARZON_REGION_CODE || String(r.name).toLowerCase().includes('calabarzon');
-                });
-            } else {
-                regions = regions.filter(function(r) {
-                    return isLuzonSelection(r.code, r.name);
-                });
+            if (registerMapWrapper) {
+                registerMapWrapper.style.borderColor = '#12b76a';
             }
         } else {
-            regions = [];
-        }
-
-        const code = populateSelect(regionSelect, regions, 'Select region', selectedCode, selectedName);
-        if (code) {
-            const psgcRegionCodeInput = document.getElementById('psgcRegionCode');
-            if (psgcRegionCodeInput) psgcRegionCodeInput.value = regionSelect.value;
-            if (psgcRegionNameInput) psgcRegionNameInput.value = getSelectedLabel(regionSelect);
-        }
-        return code;
-    }
-
-    async function loadProvinces(regionCode) {
-        if (!provinceSelect) return '';
-        if (!regionCode) {
-            resetSelect(provinceSelect, 'Select province', true);
-            const psgcProvinceCodeInput = document.getElementById('psgcProvinceCode');
-            if (psgcProvinceCodeInput) psgcProvinceCodeInput.value = '';
-            if (psgcProvinceNameInput) psgcProvinceNameInput.value = '';
-            return '';
-        }
-
-        const selectedCode = provinceSelect.dataset.selectedCode || (psgcProvinceNameInput ? document.getElementById('psgcProvinceCode').value : '');
-        const selectedName = provinceSelect.dataset.selectedName || (psgcProvinceNameInput ? psgcProvinceNameInput.value : '');
-
-        let provinces = await fetchPsgc('/regions/' + encodeURIComponent(regionCode) + '/provinces');
-        let provinceItems = Array.isArray(provinces) ? provinces : [];
-
-        if (accountType === 'organization') {
-            provinceItems = provinceItems.filter(function(p) {
-                return String(p.code) === CAVITE_PROVINCE_CODE || String(p.name).toLowerCase().includes('cavite');
-            });
-        }
-
-        if (provinceItems.length === 0) {
-            resetSelect(provinceSelect, 'NCR (No Province)', true);
-            provinceSelect.required = false;
-            const psgcProvinceCodeInput = document.getElementById('psgcProvinceCode');
-            if (psgcProvinceCodeInput) psgcProvinceCodeInput.value = '';
-            if (psgcProvinceNameInput) psgcProvinceNameInput.value = '';
-            return '';
-        }
-
-        provinceSelect.required = true;
-        const code = populateSelect(provinceSelect, provinceItems, 'Select province', selectedCode, selectedName);
-        if (code) {
-            const psgcProvinceCodeInput = document.getElementById('psgcProvinceCode');
-            if (psgcProvinceCodeInput) psgcProvinceCodeInput.value = provinceSelect.value;
-            if (psgcProvinceNameInput) psgcProvinceNameInput.value = getSelectedLabel(provinceSelect);
-        }
-        return code;
-    }
-
-    async function loadCities(regionCode, provinceCode) {
-        if (!citySelect) return '';
-        if (!regionCode && !provinceCode) {
-            resetSelect(citySelect, 'Select city or municipality', true);
-            const psgcCityCodeInput = document.getElementById('psgcCityCode');
-            if (psgcCityCodeInput) psgcCityCodeInput.value = '';
-            if (psgcCityNameInput) psgcCityNameInput.value = '';
-            return '';
-        }
-
-        const selectedCode = citySelect.dataset.selectedCode || (psgcCityNameInput ? document.getElementById('psgcCityCode').value : '');
-        const selectedName = citySelect.dataset.selectedName || (psgcCityNameInput ? psgcCityNameInput.value : '');
-
-        let path = '';
-        if (provinceCode) {
-            path = '/provinces/' + encodeURIComponent(provinceCode) + '/cities-municipalities';
-        } else if (regionCode) {
-            path = '/regions/' + encodeURIComponent(regionCode) + '/cities-municipalities';
-        }
-
-        const cities = await fetchPsgc(path);
-        const cityItems = Array.isArray(cities) ? cities : [];
-        const code = populateSelect(citySelect, cityItems, 'Select city or municipality', selectedCode, selectedName);
-        if (code) {
-            const psgcCityCodeInput = document.getElementById('psgcCityCode');
-            if (psgcCityCodeInput) psgcCityCodeInput.value = citySelect.value;
-            if (psgcCityNameInput) psgcCityNameInput.value = getSelectedLabel(citySelect);
-        }
-        return code;
-    }
-
-    async function loadBarangays(cityCode) {
-        if (!barangaySelect) return '';
-        if (!cityCode) {
-            resetSelect(barangaySelect, 'Select barangay', true);
-            const psgcBarangayCodeInput = document.getElementById('psgcBarangayCode');
-            if (psgcBarangayCodeInput) psgcBarangayCodeInput.value = '';
-            if (psgcBarangayNameInput) psgcBarangayNameInput.value = '';
-            return '';
-        }
-
-        const selectedCode = barangaySelect.dataset.selectedCode || (psgcBarangayNameInput ? document.getElementById('psgcBarangayCode').value : '');
-        const selectedName = barangaySelect.dataset.selectedName || (psgcBarangayNameInput ? psgcBarangayNameInput.value : '');
-
-        const barangays = await fetchPsgc('/cities-municipalities/' + encodeURIComponent(cityCode) + '/barangays');
-        const barangayItems = Array.isArray(barangays) ? barangays : [];
-        const code = populateSelect(barangaySelect, barangayItems, 'Select barangay', selectedCode, selectedName);
-        if (code) {
-            const psgcBarangayCodeInput = document.getElementById('psgcBarangayCode');
-            if (psgcBarangayCodeInput) psgcBarangayCodeInput.value = barangaySelect.value;
-            if (psgcBarangayNameInput) psgcBarangayNameInput.value = getSelectedLabel(barangaySelect);
-        }
-        return code;
-    }
-
-    async function handleRegionChange(isRestore) {
-        if (!regionSelect) return;
-        const regionCode = regionSelect.value;
-        const regionName = getSelectedLabel(regionSelect);
-
-        const psgcRegionCodeInput = document.getElementById('psgcRegionCode');
-        if (psgcRegionCodeInput) psgcRegionCodeInput.value = regionCode;
-        if (psgcRegionNameInput) psgcRegionNameInput.value = regionName;
-
-        if (!isRestore) {
-            if (provinceSelect) provinceSelect.dataset.selectedCode = '';
-            if (citySelect) citySelect.dataset.selectedCode = '';
-            if (barangaySelect) barangaySelect.dataset.selectedCode = '';
-        }
-
-        if (isNcrSelection(regionCode, regionName)) {
-            resetSelect(provinceSelect, 'NCR (No Province)', true);
-            provinceSelect.required = false;
-            const psgcProvinceCodeInput = document.getElementById('psgcProvinceCode');
-            if (psgcProvinceCodeInput) psgcProvinceCodeInput.value = '';
-            if (psgcProvinceNameInput) psgcProvinceNameInput.value = '';
-
-            const cityCode = await loadCities(regionCode, '');
-            if (cityCode) {
-                await loadBarangays(cityCode);
-            } else {
-                resetSelect(barangaySelect, 'Select barangay', true);
+            caviteStatusBadge.style.background = '#fff1f0';
+            caviteStatusBadge.style.borderColor = '#fee4e2';
+            caviteStatusBadge.style.color = '#b3261e';
+            if (caviteStatusIcon) {
+                caviteStatusIcon.className = 'fas fa-ban';
+                caviteStatusIcon.style.color = '#b3261e';
             }
-        } else {
-            const provinceCode = await loadProvinces(regionCode);
-            if (provinceCode) {
-                const cityCode = await loadCities(regionCode, provinceCode);
-                if (cityCode) {
-                    await loadBarangays(cityCode);
+            if (caviteStatusText) {
+                caviteStatusText.textContent = message || 'Outside Service Area: Registration is only available for locations within Cavite province. Please pin your location inside Cavite.';
+            }
+            if (registerMapWrapper) {
+                registerMapWrapper.style.borderColor = '#f04438';
+            }
+        }
+    }
+
+    async function reverseGeocodeLocation(lat, lng) {
+        const latNum = parseFloat(lat);
+        const lngNum = parseFloat(lng);
+        if (isNaN(latNum) || isNaN(lngNum)) return;
+
+        if (regLatitude) regLatitude.value = String(latNum.toFixed(7));
+        if (regLongitude) regLongitude.value = String(lngNum.toFixed(7));
+
+        try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latNum}&lon=${lngNum}&addressdetails=1`);
+            const data = await res.json();
+            if (data && data.display_name) {
+                const fullAddr = data.display_name;
+                const inCavite = checkIsLocationInCavite(latNum, lngNum, fullAddr, data.address);
+                
+                if (homeAddressInput) {
+                    homeAddressInput.value = fullAddr;
+                }
+                if (clearRegAddressBtn) {
+                    clearRegAddressBtn.style.display = fullAddr ? 'block' : 'none';
+                }
+                if (regAddress) regAddress.value = fullAddr;
+
+                const streetPart = (data.address?.road || data.address?.neighbourhood || data.address?.suburb || fullAddr.split(',')[0] || '').trim();
+                const cityPart = (data.address?.city || data.address?.town || data.address?.municipality || 'Cavite').trim();
+                if (regStreetAddress) regStreetAddress.value = streetPart;
+                if (regCityName) regCityName.value = cityPart;
+
+                if (inCavite) {
+                    updateCaviteStatusUI(true, `Verified: ${cityPart}, Cavite`);
                 } else {
-                    resetSelect(barangaySelect, 'Select barangay', true);
+                    updateCaviteStatusUI(false, `Outside Service Area (${cityPart || 'Non-Cavite'}): Registration only accepts locations within Cavite province.`);
                 }
             } else {
-                resetSelect(citySelect, 'Select city or municipality', true);
-                resetSelect(barangaySelect, 'Select barangay', true);
+                const inCavite = checkIsLocationInCavite(latNum, lngNum, '', null);
+                updateCaviteStatusUI(inCavite, inCavite ? 'Location verified: Inside Cavite coordinates.' : 'Outside Service Area: Coordinates are outside Cavite.');
             }
+        } catch (e) {
+            console.error('Reverse geocode error:', e);
+            const inCavite = checkIsLocationInCavite(latNum, lngNum, '', null);
+            updateCaviteStatusUI(inCavite, inCavite ? 'Location inside Cavite area.' : 'Location outside Cavite.');
         }
-        syncAddressPreview();
     }
 
-    async function handleProvinceChange(isRestore) {
-        if (!provinceSelect) return;
-        const provinceCode = provinceSelect.value;
-        const provinceName = getSelectedLabel(provinceSelect);
+    async function forwardGeocodeAddress(query) {
+        const trimmed = (query || '').trim();
+        if (!trimmed) return;
 
-        const psgcProvinceCodeInput = document.getElementById('psgcProvinceCode');
-        if (psgcProvinceCodeInput) psgcProvinceCodeInput.value = provinceCode;
-        if (psgcProvinceNameInput) psgcProvinceNameInput.value = provinceName;
+        try {
+            // Search prioritizing Cavite Philippines viewbox
+            const searchUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(trimmed + ', Cavite, Philippines')}&limit=1&addressdetails=1`;
+            const res = await fetch(searchUrl);
+            const list = await res.json();
+            if (Array.isArray(list) && list.length > 0) {
+                const first = list[0];
+                const lat = parseFloat(first.lat);
+                const lng = parseFloat(first.lon);
 
-        if (!isRestore) {
-            if (citySelect) citySelect.dataset.selectedCode = '';
-            if (barangaySelect) barangaySelect.dataset.selectedCode = '';
+                if (regMap && regMarker) {
+                    regMap.flyTo([lat, lng], 16);
+                    regMarker.setLatLng([lat, lng]);
+                }
+
+                if (regLatitude) regLatitude.value = String(lat.toFixed(7));
+                if (regLongitude) regLongitude.value = String(lng.toFixed(7));
+                if (regAddress) regAddress.value = first.display_name || trimmed;
+
+                const inCavite = checkIsLocationInCavite(lat, lng, first.display_name, first.address);
+                if (inCavite) {
+                    updateCaviteStatusUI(true, `Verified: ${first.address?.city || first.address?.town || first.address?.municipality || 'Cavite'}`);
+                } else {
+                    updateCaviteStatusUI(false, 'Outside Service Area: Address is outside Cavite province.');
+                }
+            } else {
+                updateCaviteStatusUI(false, 'Location not found. Please pin your location directly on the map.');
+            }
+        } catch (e) {
+            console.error('Forward geocode error:', e);
         }
+    }
 
-        const regionCode = regionSelect ? regionSelect.value : '';
-        const cityCode = await loadCities(regionCode, provinceCode);
-        if (cityCode) {
-            await loadBarangays(cityCode);
+    function initRegisterMap() {
+        const mapElem = document.getElementById('registerMapCanvas');
+        if (!mapElem || !window.L) return;
+
+        let initLat = parseFloat(regLatitude?.value || '') || 14.3294; // Default Dasmariñas Cavite
+        let initLng = parseFloat(regLongitude?.value || '') || 120.9367;
+
+        if (!regMap) {
+            regMap = L.map('registerMapCanvas').setView([initLat, initLng], 14);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(regMap);
+
+            regMarker = L.marker([initLat, initLng], { draggable: true }).addTo(regMap);
+
+            regMarker.on('dragend', function() {
+                const pos = regMarker.getLatLng();
+                if (regMap) regMap.panTo(pos);
+                reverseGeocodeLocation(pos.lat, pos.lng);
+            });
+
+            regMap.on('click', function(e) {
+                const pos = e.latlng;
+                if (regMarker) regMarker.setLatLng(pos);
+                if (regMap) regMap.panTo(pos);
+                reverseGeocodeLocation(pos.lat, pos.lng);
+            });
+
+            // Initial check
+            reverseGeocodeLocation(initLat, initLng);
         } else {
-            resetSelect(barangaySelect, 'Select barangay', true);
+            regMap.invalidateSize();
         }
-        syncAddressPreview();
     }
 
-    async function handleCityChange(isRestore) {
-        if (!citySelect) return;
-        const cityCode = citySelect.value;
-        const cityName = getSelectedLabel(citySelect);
+    // Input typing listener with debounce
+    if (homeAddressInput) {
+        homeAddressInput.addEventListener('input', function() {
+            const val = this.value.trim();
+            if (clearRegAddressBtn) {
+                clearRegAddressBtn.style.display = val ? 'block' : 'none';
+            }
+            if (regAddress) regAddress.value = val;
 
-        const psgcCityCodeInput = document.getElementById('psgcCityCode');
-        if (psgcCityCodeInput) psgcCityCodeInput.value = cityCode;
-        if (psgcCityNameInput) psgcCityNameInput.value = cityName;
-
-        if (!isRestore) {
-            if (barangaySelect) barangaySelect.dataset.selectedCode = '';
-        }
-
-        await loadBarangays(cityCode);
-        syncAddressPreview();
-    }
-
-    function handleBarangayChange() {
-        if (!barangaySelect) return;
-        const barangayCode = barangaySelect.value;
-        const barangayName = getSelectedLabel(barangaySelect);
-
-        const psgcBarangayCodeInput = document.getElementById('psgcBarangayCode');
-        if (psgcBarangayCodeInput) psgcBarangayCodeInput.value = barangayCode;
-        if (psgcBarangayNameInput) psgcBarangayNameInput.value = barangayName;
-
-        syncAddressPreview();
-    }
-
-    function syncAddressPreview() {
-        if (!addressPreviewInput) {
-            return;
-        }
-
-        const regionVal = psgcRegionNameInput ? psgcRegionNameInput.value.trim() : (regionSelect ? getSelectedLabel(regionSelect) : '');
-        const provinceVal = psgcProvinceNameInput ? psgcProvinceNameInput.value.trim() : (provinceSelect ? getSelectedLabel(provinceSelect) : '');
-        const cityVal = psgcCityNameInput ? psgcCityNameInput.value.trim() : (citySelect ? getSelectedLabel(citySelect) : '');
-        const barangayVal = psgcBarangayNameInput ? psgcBarangayNameInput.value.trim() : (barangaySelect ? getSelectedLabel(barangaySelect) : '');
-        const streetVal = streetAddressInput ? streetAddressInput.value.trim() : '';
-
-        const composedAddress = [
-            streetVal,
-            barangayVal,
-            cityVal,
-            provinceVal,
-            regionVal
-        ].filter(Boolean).join(', ');
-
-        addressPreviewInput.value = composedAddress;
-    }
-
-    function setManualAddressFallback(message) {
-        psgcEnabled = false;
-        if (psgcAddressHelp) {
-            psgcAddressHelp.textContent = message;
-            psgcAddressHelp.style.color = '#b71c1c';
-        }
-
-        [regionSelect, provinceSelect, citySelect, barangaySelect].forEach(function(selectElement) {
-            if (selectElement) {
-                selectElement.required = false;
-                selectElement.disabled = true;
+            if (addressDebounceTimer) clearTimeout(addressDebounceTimer);
+            if (val.length >= 4) {
+                addressDebounceTimer = setTimeout(function() {
+                    forwardGeocodeAddress(val);
+                }, 600);
             }
         });
 
-        if (streetAddressInput) {
-            streetAddressInput.required = true;
-            streetAddressInput.disabled = true;
-            streetAddressInput.value = '';
-        }
-
-        if (addressPreviewInput) {
-            addressPreviewInput.readOnly = true;
-            addressPreviewInput.value = '';
-            addressPreviewInput.placeholder = 'PSGC location service is required. Please try again shortly.';
-        }
+        homeAddressInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const val = this.value.trim();
+                if (val) forwardGeocodeAddress(val);
+            }
+        });
     }
 
+    if (clearRegAddressBtn && homeAddressInput) {
+        clearRegAddressBtn.addEventListener('click', function() {
+            homeAddressInput.value = '';
+            clearRegAddressBtn.style.display = 'none';
+            if (regAddress) regAddress.value = '';
+            homeAddressInput.focus();
+        });
+    }
 
+    if (useCurrentLocationBtn) {
+        useCurrentLocationBtn.addEventListener('click', function() {
+            if (navigator.geolocation) {
+                useCurrentLocationBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Locating...';
+                navigator.geolocation.getCurrentPosition(
+                    function(pos) {
+                        useCurrentLocationBtn.innerHTML = '<i class="fas fa-crosshairs"></i> Use My Current Location';
+                        const lat = pos.coords.latitude;
+                        const lng = pos.coords.longitude;
+                        if (regMap && regMarker) {
+                            regMap.flyTo([lat, lng], 16);
+                            regMarker.setLatLng([lat, lng]);
+                        }
+                        reverseGeocodeLocation(lat, lng);
+                    },
+                    function(err) {
+                        useCurrentLocationBtn.innerHTML = '<i class="fas fa-crosshairs"></i> Use My Current Location';
+                        showError('Location Access Error', 'Unable to retrieve your current location. Please drag the pin on the map instead.');
+                    },
+                    { enableHighAccuracy: true, timeout: 8000 }
+                );
+            } else {
+                showError('Geolocation Unavailable', 'Geolocation is not supported by your browser. Please drag the pin on the map.');
+            }
+        });
+    }
 
     function updateSteps() {
         steps.forEach(function(step, index) {
@@ -3176,6 +2353,10 @@ document.addEventListener('DOMContentLoaded', function() {
         formSteps.forEach(function(formStep, index) {
             formStep.classList.toggle('active', index + 1 === currentStep);
         });
+
+        if (currentStep === 3) {
+            setTimeout(initRegisterMap, 150);
+        }
     }
 
     function updateProgressBar() {
@@ -3198,35 +2379,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 businessNameInput.required = true;
             }
             if (step3Title) {
-                step3Title.textContent = 'Business Partner Information';
+                step3Title.textContent = 'Business Address (Cavite Only)';
             }
             if (step3Subtitle) {
-                step3Subtitle.textContent = 'Provide your business details and business address.';
+                step3Subtitle.textContent = 'Enter your restaurant or business location in Cavite on the map.';
             }
             if (step3NavLabel) {
                 step3NavLabel.textContent = 'Partner Info';
-            }
-            if (addressSectionLabel) {
-                addressSectionLabel.textContent = 'Business Address (PSGC) *';
-            }
-            if (regionLabel) {
-                regionLabel.textContent = 'Region (CALABARZON only) *';
-            }
-            if (provinceLabel) {
-                provinceLabel.textContent = 'Province (Cavite only) *';
-            }
-            if (streetAddressLabel) {
-                streetAddressLabel.textContent = 'Business Street / Landmark *';
-            }
-            if (completeAddressLabel) {
-                completeAddressLabel.textContent = 'Complete Business Address *';
-            }
-            if (psgcAddressHelp) {
-                psgcAddressHelp.textContent = 'Business partner registration is limited to Cavite, Region IV-A (CALABARZON).';
-                psgcAddressHelp.style.color = '#666';
-            }
-            if (addressPreviewInput) {
-                addressPreviewInput.placeholder = 'Your complete business address will appear here after selecting PSGC fields';
             }
         } else {
             organizationFields.style.display = 'none';
@@ -3234,64 +2393,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 businessNameInput.required = false;
             }
             if (step3Title) {
-                step3Title.textContent = 'Individual Address Information';
+                step3Title.textContent = 'Home Address (Cavite Only)';
             }
             if (step3Subtitle) {
-                step3Subtitle.textContent = 'Provide your complete home address for deliveries.';
+                step3Subtitle.textContent = 'Enter your home address or pin your location on the map.';
             }
             if (step3NavLabel) {
                 step3NavLabel.textContent = 'Address Info';
             }
-            if (addressSectionLabel) {
-                addressSectionLabel.textContent = 'Home Address (PSGC) *';
-            }
-            if (regionLabel) {
-                regionLabel.textContent = 'Region (Luzon only) *';
-            }
-            if (provinceLabel) {
-                provinceLabel.textContent = 'Province (Required except NCR) *';
-            }
-            if (streetAddressLabel) {
-                streetAddressLabel.textContent = 'House No. / Street / Landmark *';
-            }
-            if (completeAddressLabel) {
-                completeAddressLabel.textContent = 'Complete Home Address *';
-            }
-            if (psgcAddressHelp) {
-                psgcAddressHelp.textContent = 'Individual registration is limited to Luzon regions.';
-                psgcAddressHelp.style.color = '#666';
-            }
-            if (addressPreviewInput) {
-                addressPreviewInput.placeholder = 'Your complete home address will appear here after selecting PSGC fields';
-            }
         }
-    }
-
-    async function refreshAddressScopeByAccountType() {
-        if (!psgcEnabled || !regionSelect || !provinceSelect || !citySelect || !barangaySelect) {
-            return;
-        }
-
-        const previousRegion = String(regionSelect.value || '').trim();
-        await loadRegions();
-        const currentRegion = String(regionSelect.value || '').trim();
-
-        if (currentRegion === '') {
-            resetSelect(provinceSelect, 'Select province');
-            resetSelect(citySelect, 'Select city or municipality');
-            resetSelect(barangaySelect, 'Select barangay');
-            syncAddressPreview();
-            return;
-        }
-
-        if (currentRegion !== previousRegion) {
-            resetSelect(provinceSelect, 'Select province');
-            resetSelect(citySelect, 'Select city or municipality');
-            resetSelect(barangaySelect, 'Select barangay');
-        }
-
-        await handleRegionChange(true);
-        syncAddressPreview();
     }
 
     function goToStep(step) {
@@ -3323,7 +2433,14 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function isValidName(name) {
-        return /^[\p{L}\p{M}'\-\s]{2,60}$/u.test(name);
+        if (!name || typeof name !== 'string') return false;
+        const trimmed = name.trim();
+        if (trimmed.length < 2 || trimmed.length > 60) return false;
+        try {
+            return /^[\p{L}\p{M}'\-\s.]{2,60}$/u.test(trimmed);
+        } catch (e) {
+            return /^[a-zA-Z\s'\-\.]{2,60}$/.test(trimmed);
+        }
     }
 
     function isStrongPassword(password) {
@@ -3335,12 +2452,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const lastName = ((document.getElementById('lastName') || {}).value || '').trim();
 
         if (!firstName || !lastName) {
-            showError('Missing Information', 'Please fill in all required personal details.');
+            showError('Missing Information', 'Please enter your First Name and Last Name.');
             return false;
         }
 
         if (!isValidName(firstName) || !isValidName(lastName)) {
-            showError('Invalid Name', 'Please use letters, spaces, apostrophes, or hyphens only.');
+            showError('Invalid Name', 'Please use valid characters (letters, spaces, dots, hyphens) for your name.');
             return false;
         }
 
@@ -3360,130 +2477,140 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        const formData = new FormData();
-        formData.append('valid_id_file', frontFile);
-        formData.append('csrf_token', csrfToken);
+        const verifyData = new FormData();
+        verifyData.append('first_name', firstName);
+        verifyData.append('last_name', lastName);
+        verifyData.append('valid_id_type', validIdType);
+        verifyData.append('valid_id', frontFile);
+        verifyData.append('csrf_token', csrfToken);
+
+        const progressHtml = `
+            <div style="text-align: left; padding: 10px 5px 0;">
+                <div style="font-size: 0.88rem; color: #475467; margin-bottom: 12px;" id="swalScanMsg">
+                    <i class="fas fa-spinner fa-spin" style="color:#b3261e; margin-right: 6px;"></i> Analyzing Philippine government seal & document authenticity...
+                </div>
+                <div style="width: 100%; height: 6px; background: #eaecf0; border-radius: 4px; overflow: hidden; margin-bottom: 16px;">
+                    <div id="swalScanBar" style="width: 30%; height: 100%; background: #b3261e; transition: width 0.4s ease;"></div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 8px; font-size: 0.82rem; color: #667085;">
+                    <div id="chkOrigin" style="display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-circle-notch fa-spin" style="color: #b3261e; width: 14px;"></i> <span>Verifying Philippine Government Authority</span>
+                    </div>
+                    <div id="chkDoc" style="display: flex; align-items: center; gap: 8px;">
+                        <i class="far fa-circle" style="color: #d0d5dd; width: 14px;"></i> <span>Validating ID Card Legitimacy</span>
+                    </div>
+                    <div id="chkName" style="display: flex; align-items: center; gap: 8px;">
+                        <i class="far fa-circle" style="color: #d0d5dd; width: 14px;"></i> <span>Cross-matching Name: <strong>${firstName} ${lastName}</strong></span>
+                    </div>
+                    <div id="chkFormat" style="display: flex; align-items: center; gap: 8px;">
+                        <i class="far fa-circle" style="color: #d0d5dd; width: 14px;"></i> <span>Checking Official ID Number Format</span>
+                    </div>
+                </div>
+            </div>
+        `;
 
         Swal.fire({
-            title: 'Processing ID Document',
-            html: '<div style="margin-bottom:15px; font-size:0.95rem; color:#475569;" id="swalScanMsg">Extracting details from your ID...</div>' +
-                  '<div class="ocr-scan-progress" style="width:100%; height:8px; background:#e2e8f0; border-radius:4px; overflow:hidden; position:relative; margin-bottom:10px;">' +
-                  '  <div id="swalScanBar" style="position:absolute; top:0; left:0; height:100%; width:10%; background:#b3261e; transition: width 0.3s ease;"></div>' +
-                  '</div>' +
-                  '<div style="font-size:0.8rem; color:#94a3b8;"><i class="fas fa-shield-halved fa-spin"></i> Secure biometric credentials match</div>',
+            title: 'Verifying Government ID',
+            html: progressHtml,
             allowOutsideClick: false,
             allowEscapeKey: false,
             showConfirmButton: false,
-            didOpen: () => {
-                Swal.showLoading();
+            didOpen: function() {
                 const bar = document.getElementById('swalScanBar');
                 const msg = document.getElementById('swalScanMsg');
-                
-                if (bar) bar.style.width = '30%';
+                const chkOrigin = document.getElementById('chkOrigin');
+                const chkDoc = document.getElementById('chkDoc');
+                const chkName = document.getElementById('chkName');
+                const chkFormat = document.getElementById('chkFormat');
 
-                // Step 1: Extract details and run PHIDValidator check
-                fetch('api/extract_valid_id_details.php', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json().then(data => ({ status: response.status, data })))
-                .then(({ status, data }) => {
-                    if (status !== 200 || !data.success) {
-                        throw new Error(data.message || 'OCR extraction failed.');
-                    }
+                // Animate check stages
+                setTimeout(function() {
+                    if (bar) bar.style.width = '55%';
+                    if (chkOrigin) chkOrigin.innerHTML = '<i class="fas fa-check-circle" style="color: #027a48; width: 14px;"></i> <span style="color:#027a48; font-weight:600;">Philippine Government Seal Detected</span>';
+                    if (chkDoc) chkDoc.innerHTML = '<i class="fas fa-circle-notch fa-spin" style="color: #b3261e; width: 14px;"></i> <span>Validating ID Card Legitimacy</span>';
+                }, 1200);
 
-                    const details = data.details || {};
-                    const detectedType = details.id_type || '';
-                    const detectedNumber = details.id_number || '';
-
-                    if (bar) bar.style.width = '60%';
-                    if (msg) msg.textContent = 'Validating ID format...';
-
-                    let formatValid = false;
-                    if (window.PHIDValidator) {
-                        const validatorMap = {
-                            'passport': window.PHIDValidator.validatePassport,
-                            'drivers_license': window.PHIDValidator.validateDriversLicense,
-                            'prc': window.PHIDValidator.validatePRC,
-                            'tin': window.PHIDValidator.validateTIN,
-                            'sss': window.PHIDValidator.validateSSS,
-                            'gsis': window.PHIDValidator.validateGSIS,
-                            'owwa': window.PHIDValidator.validateOWWA,
-                            'postal': window.PHIDValidator.validatePostal,
-                            'ibp': window.PHIDValidator.validateIBP,
-                            'ofw': window.PHIDValidator.validateOFW,
-                            'government': window.PHIDValidator.validateGovernment,
-                            'senior_citizen': window.PHIDValidator.validateSeniorCitizen,
-                            'company': window.PHIDValidator.validateCompany,
-                            'national_id': window.PHIDValidator.validateNationalID,
-                            'pagibig': window.PHIDValidator.validatePagibig,
-                            'pag_ibig': window.PHIDValidator.validatePagibig,
-                            'philhealth': window.PHIDValidator.validatePhilhealth
-                        };
-
-                        const validateFn = validatorMap[detectedType];
-                        if (typeof validateFn === 'function') {
-                            const res = validateFn(detectedNumber);
-                            formatValid = !!(res && res.isValid);
-                        } else {
-                            formatValid = true;
-                        }
-                    } else {
-                        formatValid = true;
-                    }
-
-                    if (!formatValid) {
-                        throw new Error('The extracted ID number does not match standard Philippine formats.');
-                    }
-
+                setTimeout(function() {
                     if (bar) bar.style.width = '80%';
-                    if (msg) msg.textContent = 'Cross-matching name: "' + firstName + ' ' + lastName + '"...';
+                    if (chkDoc) chkDoc.innerHTML = '<i class="fas fa-check-circle" style="color: #027a48; width: 14px;"></i> <span style="color:#027a48; font-weight:600;">ID Card Authenticity Validated</span>';
+                    if (chkName) chkName.innerHTML = '<i class="fas fa-circle-notch fa-spin" style="color: #b3261e; width: 14px;"></i> <span>Cross-matching Name: <strong>' + firstName + ' ' + lastName + '</strong></span>';
+                }, 2200);
 
-                    const verifyData = new FormData();
-                    verifyData.append('first_name', firstName);
-                    verifyData.append('last_name', lastName);
-                    verifyData.append('valid_id_type', validIdType);
-                    verifyData.append('valid_id', frontFile);
-                    verifyData.append('csrf_token', csrfToken);
-
-                    return fetch('api/verify_government_id.php', {
-                        method: 'POST',
-                        body: verifyData
+                fetch('api/verify_government_id.php', {
+                    method: 'POST',
+                    body: verifyData
+                })
+                .then(function(response) {
+                    return response.json().then(function(data) {
+                        return { status: response.status, data: data };
                     });
                 })
-                .then(response => {
-                    if (!response) return;
-                    return response.json().then(data => ({ status: response.status, data }));
-                })
-                .then(resObj => {
-                    if (!resObj) return;
-                    const { status, data } = resObj;
+                .then(function(resObj) {
+                    const status = resObj.status;
+                    const data = resObj.data || {};
+
                     if (status === 200 && data.success && data.verified) {
                         if (bar) bar.style.width = '100%';
-                        if (msg) msg.textContent = 'Verification successful!';
-                        
-                        setTimeout(() => {
+                        if (chkName) chkName.innerHTML = '<i class="fas fa-check-circle" style="color: #027a48; width: 14px;"></i> <span style="color:#027a48; font-weight:600;">Name Matched Registered Account</span>';
+                        if (chkFormat) chkFormat.innerHTML = '<i class="fas fa-check-circle" style="color: #027a48; width: 14px;"></i> <span style="color:#027a48; font-weight:600;">Official Format Verified</span>';
+
+                        setTimeout(function() {
                             Swal.fire({
                                 icon: 'success',
-                                title: 'Identity Verified',
-                                text: 'OCR details successfully match your registration credentials.',
+                                title: 'Philippine ID Verified',
+                                html: `
+                                    <div style="text-align: left; font-size: 0.9rem; color: #344054; line-height: 1.6; background: #f8fafc; border: 1px solid #eaecf0; border-radius: 10px; padding: 14px; margin-top: 10px;">
+                                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                                            <i class="fas fa-check-circle" style="color:#027a48;"></i>
+                                            <span><strong>Document:</strong> Official Philippine Government ID</span>
+                                        </div>
+                                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                                            <i class="fas fa-check-circle" style="color:#027a48;"></i>
+                                            <span><strong>Name Match:</strong> ${firstName} ${lastName}</span>
+                                        </div>
+                                        <div style="display:flex; align-items:center; gap:8px;">
+                                            <i class="fas fa-check-circle" style="color:#027a48;"></i>
+                                            <span><strong>Status:</strong> Authenticated & Ready</span>
+                                        </div>
+                                    </div>
+                                `,
                                 confirmButtonColor: '#b3261e',
+                                confirmButtonText: 'Proceed to Next Step',
                                 allowOutsideClick: false,
                                 allowEscapeKey: false
-                            }).then(() => {
+                            }).then(function() {
                                 idVerified = true;
                                 goToStep(3);
                             });
-                        }, 500);
+                        }, 600);
                     } else {
-                        throw new Error(data.message || 'Name or type match failed.');
+                        const errorMsg = data.message || 'Verification failed. Please make sure you upload a clear Philippine Government ID matching your name.';
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'ID Verification Failed',
+                            html: `
+                                <div style="text-align: left; font-size: 0.88rem; color: #344054; line-height: 1.5; margin-top: 8px;">
+                                    <div style="background: #fff1f0; border: 1px solid #fee4e2; border-radius: 8px; padding: 12px; color: #b3261e; margin-bottom: 12px;">
+                                        <i class="fas fa-exclamation-triangle" style="margin-right: 6px;"></i> ${errorMsg}
+                                    </div>
+                                    <div style="font-weight: 600; color: #101828; margin-bottom: 6px;">Requirements Checklist:</div>
+                                    <ul style="margin: 0; padding-left: 18px; color: #475467; font-size: 0.83rem;">
+                                        <li>Must be an authentic Philippine Government ID (PhilSys National ID, Driver's License, Passport, UMID, SSS, PhilHealth, TIN, Postal ID).</li>
+                                        <li>The name on the ID must match: <strong>${firstName} ${lastName}</strong>.</li>
+                                        <li>Ensure good lighting, sharp focus, and all 4 corners visible.</li>
+                                    </ul>
+                                </div>
+                            `,
+                            confirmButtonColor: '#b3261e',
+                            confirmButtonText: 'Try Again'
+                        });
                     }
                 })
-                .catch(error => {
+                .catch(function(error) {
                     Swal.fire({
                         icon: 'error',
-                        title: 'Verification Failed',
-                        text: error.message || 'ID details do not match or verification failed.',
+                        title: 'Verification Request Failed',
+                        text: error.message || 'Could not connect to ID verification server. Please try again.',
                         confirmButtonColor: '#b3261e'
                     });
                 });
@@ -3492,14 +2619,12 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Reset ID verification flag if details change
-    document.addEventListener('DOMContentLoaded', function() {
-        ['firstName', 'lastName', 'validIdType', 'validIdFront', 'validIdBack'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) {
-                el.addEventListener('change', () => { idVerified = false; });
-                el.addEventListener('input', () => { idVerified = false; });
-            }
-        });
+    ['firstName', 'lastName', 'validIdType', 'validIdFront', 'validIdBack'].forEach(function(id) {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('change', function() { idVerified = false; });
+            el.addEventListener('input', function() { idVerified = false; });
+        }
     });
 
     function validateStep2() {
@@ -3586,21 +2711,14 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
-        const regionVal = regionSelect ? regionSelect.value.trim() : '';
-        const provinceVal = provinceSelect ? provinceSelect.value.trim() : '';
-        const cityVal = citySelect ? citySelect.value.trim() : '';
-        const barangayVal = barangaySelect ? barangaySelect.value.trim() : '';
-        const streetVal = streetAddressInput ? streetAddressInput.value.trim() : '';
-
-        if (!regionVal || !provinceVal || !cityVal || !barangayVal || !streetVal) {
-            showError('Incomplete Address', 'Please fill in all address details (Region, Province, City, Barangay, and Street Address).');
+        const addressVal = (homeAddressInput ? homeAddressInput.value : (regAddress ? regAddress.value : '')).trim();
+        if (!addressVal || addressVal.length < 6) {
+            showError('Address Required', 'Please enter your home address or pin your location on the map.');
             return false;
         }
 
-        if (!addressPreviewInput || addressPreviewInput.value.trim().length < 10) {
-            showError('Address Required', accountType === 'organization'
-                ? 'Please provide a complete business address.'
-                : 'Please provide a complete home address.');
+        if (!isAddressInCavite) {
+            showError('Location Outside Cavite', 'We currently only accept registrations within the Cavite area. Please select a location inside Cavite on the map.');
             return false;
         }
 
@@ -3648,9 +2766,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 accountTypeInput.value = accountType;
             }
             updateOrganizationFields();
-            refreshAddressScopeByAccountType().catch(function() {
-                setManualAddressFallback('PSGC address lookup is unavailable while updating account type scope.');
-            });
         });
     });
 
@@ -3805,24 +2920,12 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    if (regionSelect && provinceSelect && citySelect && barangaySelect && streetAddressInput && addressPreviewInput) {
-        [regionSelect, provinceSelect, citySelect, barangaySelect, streetAddressInput].forEach(function(input) {
-            input.addEventListener('input', syncAddressPreview);
-            input.addEventListener('change', syncAddressPreview);
-        });
-        syncAddressPreview();
-    }
-
     const registrationForm = document.getElementById('registrationForm');
     if (registrationForm) {
         registrationForm.addEventListener('submit', function(e) {
             e.preventDefault();
             if (!validateStep4() || !validateStep3()) {
                 return false;
-            }
-
-            if (psgcEnabled) {
-                syncAddressPreview();
             }
 
             const submitBtn = document.getElementById('submitRegistration');
@@ -4082,52 +3185,20 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    if (regionSelect) {
-        regionSelect.addEventListener('change', function() {
-            handleRegionChange(false).catch(console.error);
-        });
-    }
-    if (provinceSelect) {
-        provinceSelect.addEventListener('change', function() {
-            handleProvinceChange(false).catch(console.error);
-        });
-    }
-    if (citySelect) {
-        citySelect.addEventListener('change', function() {
-            handleCityChange(false).catch(console.error);
-        });
-    }
-    if (barangaySelect) {
-        barangaySelect.addEventListener('change', function() {
-            handleBarangayChange();
-        });
-    }
-    if (streetAddressInput) {
-        streetAddressInput.addEventListener('input', syncAddressPreview);
-        streetAddressInput.addEventListener('change', syncAddressPreview);
-    }
-
     updateOrganizationFields();
     updateSteps();
     updateProgressBar();
 
-    loadRegions().then(function() {
-        if (regionSelect && regionSelect.value) {
-            return handleRegionChange(true);
-        }
-    }).catch(function(err) {
-        console.error('PSGC Initialization Error:', err);
-    });
-
     const serverRegistrationError = <?php echo json_encode($error ?? ''); ?>;
 
     if (serverRegistrationError) {
+        let targetStep = 1;
         const loweredError = serverRegistrationError.toLowerCase();
         if (/(name)/.test(loweredError)) {
             targetStep = 1;
-        } else if (/(email|mobile|phone|valid id|government id)/.test(loweredError)) {
+        } else if (/(email|mobile|phone|valid id|government id|front|back)/.test(loweredError)) {
             targetStep = 2;
-        } else if (/(business|partner|address|psgc|delivery|restaurant)/.test(loweredError)) {
+        } else if (/(business|partner|address|cavite|delivery|restaurant)/.test(loweredError)) {
             targetStep = 3;
         } else if (/(password|terms|token|security)/.test(loweredError)) {
             targetStep = 4;
