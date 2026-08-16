@@ -1822,10 +1822,9 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    const saveMarketLocationToUserDatabase = function(payload) {
+    const saveMarketLocationToUserDatabase = async function(payload) {
         if (!payload || (!payload.street_address && !payload.full_address)) return;
         const bodyData = new URLSearchParams();
-        bodyData.append('address_action', 'save');
         bodyData.append('label', 'Saved Location');
         bodyData.append('street_address', payload.street_address || payload.full_address);
         bodyData.append('city_name', payload.city || 'Cavite');
@@ -1834,11 +1833,28 @@ document.addEventListener('DOMContentLoaded', function () {
         bodyData.append('longitude', String(payload.longitude || ''));
         bodyData.append('is_default', '1');
 
-        fetch('checkout.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: bodyData
-        }).catch(err => console.error('Header save location error:', err));
+        try {
+            const apiEndpoint = '<?php echo $path_prefix; ?>api/save_user_address.php';
+            const response = await fetch(apiEndpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: bodyData
+            });
+            const data = await response.json();
+            if (data && data.success) {
+                if (typeof window.dispatchEvent === 'function') {
+                    window.dispatchEvent(new CustomEvent('marketAddressUpdated', { 
+                        detail: {
+                            ...payload,
+                            address_id: data.saved_address_id || 0,
+                            addresses: data.addresses || []
+                        }
+                    }));
+                }
+            }
+        } catch (err) {
+            console.error('Header save location error:', err);
+        }
     };
 
     const applyQuickAddressSelection = function (street, city) {
@@ -1891,10 +1907,6 @@ document.addEventListener('DOMContentLoaded', function () {
             renderMarketAddressDisplay(stored);
             saveMarketLocationToUserDatabase(stored);
             closeAddressPopover();
-
-            if (typeof window.dispatchEvent === 'function') {
-                window.dispatchEvent(new CustomEvent('marketAddressUpdated', { detail: stored }));
-            }
         });
     }
 
