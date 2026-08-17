@@ -1038,7 +1038,12 @@ function goToStep(step) {
 function validateStep(step) {
     if (step === 1) {
         if (cart.length === 0) {
-            Swal.fire('Error', 'Please select at least one product for your pre-order.', 'warning');
+            Swal.fire({
+                title: 'Selection Required',
+                text: 'Please select at least one product for your pre-order.',
+                icon: 'warning',
+                confirmButtonText: 'Got it'
+            });
             return false;
         }
     } else if (step === 2) {
@@ -1049,23 +1054,48 @@ function validateStep(step) {
         const pickupTime = document.getElementById('pickupTime').value.trim();
 
         if (!fullName) {
-            Swal.fire('Error', 'Please enter your full name for order claiming.', 'warning');
+            Swal.fire({
+                title: 'Claimant Name Required',
+                text: 'Please enter the full name of the person picking up the order.',
+                icon: 'warning',
+                confirmButtonText: 'OK'
+            });
             return false;
         }
         if (!email) {
-            Swal.fire('Error', 'Please enter your email address for order receipt.', 'warning');
+            Swal.fire({
+                title: 'Email Address Required',
+                text: 'Please enter your email address for the order confirmation & claim receipt.',
+                icon: 'warning',
+                confirmButtonText: 'OK'
+            });
             return false;
         }
         if (!phone) {
-            Swal.fire('Error', 'Please enter your mobile phone number for pickup SMS alerts.', 'warning');
+            Swal.fire({
+                title: 'Mobile Phone Required',
+                text: 'Please enter your mobile phone number for order readiness SMS alerts.',
+                icon: 'warning',
+                confirmButtonText: 'OK'
+            });
             return false;
         }
         if (!pickupDate) {
-            Swal.fire('Error', 'Please select your preferred pick-up date.', 'warning');
+            Swal.fire({
+                title: 'Pick-up Date Required',
+                text: 'Please select your preferred pick-up date.',
+                icon: 'warning',
+                confirmButtonText: 'OK'
+            });
             return false;
         }
         if (!pickupTime) {
-            Swal.fire('Error', 'Please select your preferred pick-up time slot.', 'warning');
+            Swal.fire({
+                title: 'Time Slot Required',
+                text: 'Please select your preferred pick-up time slot.',
+                icon: 'warning',
+                confirmButtonText: 'OK'
+            });
             return false;
         }
         syncPreorderStoreAddress();

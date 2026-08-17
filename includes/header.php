@@ -283,10 +283,183 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
         ::-webkit-scrollbar-thumb:hover {
             background: #94a3b8;
         }
-        * {
-            scrollbar-width: thin;
-            scrollbar-color: #cbd5e1 #f8fafc;
+        /* Professional SweetAlert2 Modal & Toast Design System Theme */
+        .swal2-container {
+            backdrop-filter: blur(4px) !important;
+            -webkit-backdrop-filter: blur(4px) !important;
+            background: rgba(16, 24, 40, 0.5) !important;
+            z-index: 999999 !important;
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
         }
+        .swal2-popup {
+            background: #ffffff !important;
+            border-radius: 18px !important;
+            border: 1px solid #eaecf0 !important;
+            box-shadow: 0 20px 25px -5px rgba(16, 24, 40, 0.1), 0 8px 10px -6px rgba(16, 24, 40, 0.04) !important;
+            padding: 28px 24px 24px !important;
+            max-width: 440px !important;
+            width: 90vw !important;
+        }
+        .swal2-title {
+            font-family: 'Outfit', 'Plus Jakarta Sans', sans-serif !important;
+            font-size: 1.25rem !important;
+            font-weight: 800 !important;
+            color: #101828 !important;
+            letter-spacing: -0.01em !important;
+            margin: 8px 0 0 !important;
+            padding: 0 !important;
+        }
+        .swal2-html-container {
+            font-family: 'Plus Jakarta Sans', sans-serif !important;
+            font-size: 0.92rem !important;
+            color: #475467 !important;
+            line-height: 1.55 !important;
+            margin: 8px 0 0 !important;
+            padding: 0 4px !important;
+        }
+        .swal2-icon {
+            width: 58px !important;
+            height: 58px !important;
+            margin: 0 auto 10px !important;
+            border-width: 2.5px !important;
+            border-style: solid !important;
+        }
+        .swal2-icon .swal2-icon-content {
+            font-size: 2.2rem !important;
+            font-weight: 800 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+        /* Error / Danger Icon */
+        .swal2-icon.swal2-error {
+            border-color: #fee4e2 !important;
+            background-color: #fff1f0 !important;
+            color: #b3261e !important;
+        }
+        .swal2-icon.swal2-error [class^=swal2-x-mark-line] {
+            background-color: #b3261e !important;
+            height: 3px !important;
+            border-radius: 2px !important;
+            top: 28px !important;
+        }
+        /* Warning Icon */
+        .swal2-icon.swal2-warning {
+            border-color: #fedf89 !important;
+            background-color: #fffaeb !important;
+            color: #b54708 !important;
+        }
+        .swal2-icon.swal2-warning .swal2-icon-content {
+            color: #b54708 !important;
+        }
+        /* Success Icon */
+        .swal2-icon.swal2-success {
+            border-color: #abefc6 !important;
+            background-color: #ecfdf3 !important;
+            color: #027a48 !important;
+        }
+        .swal2-icon.swal2-success [class^=swal2-success-line] {
+            background-color: #027a48 !important;
+            height: 3px !important;
+            border-radius: 2px !important;
+        }
+        .swal2-icon.swal2-success .swal2-success-ring {
+            border: 3px solid rgba(2, 122, 72, 0.25) !important;
+        }
+        /* Info Icon */
+        .swal2-icon.swal2-info {
+            border-color: #b2ddff !important;
+            background-color: #eff8ff !important;
+            color: #175cd3 !important;
+        }
+        .swal2-icon.swal2-info .swal2-icon-content {
+            color: #175cd3 !important;
+        }
+        /* Question Icon */
+        .swal2-icon.swal2-question {
+            border-color: #eaecf0 !important;
+            background-color: #f8f9fa !important;
+            color: #344054 !important;
+        }
+        /* Modal Action Buttons */
+        .swal2-actions {
+            margin-top: 22px !important;
+            gap: 10px !important;
+            width: 100% !important;
+            justify-content: center !important;
+            padding: 0 !important;
+        }
+        .swal2-styled.swal2-confirm {
+            background-color: #b3261e !important;
+            color: #ffffff !important;
+            border: none !important;
+            border-radius: 10px !important;
+            font-family: 'Plus Jakarta Sans', sans-serif !important;
+            font-size: 0.88rem !important;
+            font-weight: 700 !important;
+            padding: 10px 24px !important;
+            min-width: 110px !important;
+            box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05) !important;
+            transition: all 0.15s ease !important;
+            cursor: pointer !important;
+        }
+        .swal2-styled.swal2-confirm:hover {
+            background-color: #981b15 !important;
+            transform: translateY(-1px) !important;
+            box-shadow: 0 4px 12px rgba(179, 38, 30, 0.2) !important;
+        }
+        .swal2-styled.swal2-cancel {
+            background-color: #ffffff !important;
+            color: #344054 !important;
+            border: 1px solid #d0d5dd !important;
+            border-radius: 10px !important;
+            font-family: 'Plus Jakarta Sans', sans-serif !important;
+            font-size: 0.88rem !important;
+            font-weight: 700 !important;
+            padding: 10px 22px !important;
+            min-width: 100px !important;
+            box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05) !important;
+            transition: all 0.15s ease !important;
+            cursor: pointer !important;
+        }
+        .swal2-styled.swal2-cancel:hover {
+            background-color: #f8f9fa !important;
+            border-color: #98a2b3 !important;
+            color: #101828 !important;
+        }
+        .swal2-styled.swal2-deny {
+            background-color: #fff1f0 !important;
+            color: #b3261e !important;
+            border: 1px solid #fee4e2 !important;
+            border-radius: 10px !important;
+            font-weight: 700 !important;
+            padding: 10px 20px !important;
+        }
+        /* Modern SweetAlert Toast Style */
+        .swal2-toast {
+            background: #ffffff !important;
+            border: 1px solid #eaecf0 !important;
+            border-radius: 14px !important;
+            box-shadow: 0 12px 30px -4px rgba(16, 24, 40, 0.14), 0 4px 6px -2px rgba(16, 24, 40, 0.05) !important;
+            padding: 12px 18px !important;
+        }
+        .swal2-toast .swal2-title {
+            font-size: 0.88rem !important;
+            font-weight: 700 !important;
+            color: #101828 !important;
+            margin: 0 !important;
+            text-align: left !important;
+        }
+        .swal2-toast .swal2-icon {
+            width: 28px !important;
+            height: 28px !important;
+            min-width: 28px !important;
+            margin: 0 10px 0 0 !important;
+        }
+        .swal2-close:focus {
+            box-shadow: none !important;
+        }
+
 
         /* Smooth Foodpanda Dark Backdrop Overlay */
         .market-search-backdrop {
@@ -614,7 +787,7 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
             <span class="logo-copy"><span class="logo-title">Lechon Delights</span><span class="logo-sub">Marketplace</span></span>
         </a>
 
-        <?php if ($current_page !== 'register' && $current_page !== 'login' && $current_page !== 'checkout' && $current_page !== 'franchise_application'): ?>
+        <?php if (in_array($current_page, ['index', 'home'], true)): ?>
         <div class="market-address-wrap" id="marketAddressWrap">
             <button type="button" class="market-address-trigger" id="marketAddressToggle">
                 <i class="fas fa-location-dot"></i><span class="address-text" id="marketAddressDisplay"><?php echo htmlspecialchars($market_header_address_display); ?></span><i class="fas fa-chevron-down"></i>
