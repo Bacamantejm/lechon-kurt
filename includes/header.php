@@ -781,6 +781,23 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
             </div>
         </a>
     </div>
+    <script>
+    (function() {
+        var stickyWidget = document.getElementById('stickyOngoingOrderWidget');
+        if (stickyWidget) {
+            setTimeout(function() {
+                stickyWidget.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+                stickyWidget.style.opacity = '0';
+                stickyWidget.style.transform = 'translateY(20px)';
+                setTimeout(function() {
+                    if (stickyWidget && stickyWidget.parentNode) {
+                        stickyWidget.style.display = 'none';
+                    }
+                }, 500);
+            }, 5000);
+        }
+    })();
+    </script>
     <?php endif; ?>
     
     <div class="map-modal-overlay" id="marketMapModal" aria-hidden="true">

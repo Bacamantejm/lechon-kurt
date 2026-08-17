@@ -34,6 +34,8 @@ if (!$order) {
     die("Order not found or you do not have permission to view it.");
 }
 
+$is_pickup = (strtolower(trim((string)($order['delivery_option'] ?? 'delivery'))) === 'pickup');
+
 // Fetch order items with product images
 $order_items = [];
 $items_stmt = $conn->prepare("SELECT oi.*, p.image as product_image FROM order_items oi LEFT JOIN products p ON (p.product_id = oi.product_id OR p.id = oi.product_id) WHERE oi.order_id = ?");
@@ -65,11 +67,11 @@ if (!$store_details) {
     }
 }
 
-// Get tracking info
+// Get logistics tracking info (for delivery orders)
 $logisticsService = new LogisticsService($conn);
 $tracking_info = $logisticsService->getTrackingByOrderId($order_id);
 
-$page_title = "Track Order #" . $order['order_number'];
+$page_title = ($is_pickup ? "Pick-up Order #" : "Track Order #") . $order['order_number'];
 include 'includes/header.php';
 ?>
 
@@ -149,6 +151,12 @@ include 'includes/header.php';
     margin-bottom: 10px;
 }
 
+.fp-live-badge.pickup-mode {
+    background: #fffaeb;
+    color: #b54708;
+    border-color: #fedf89;
+}
+
 .fp-live-dot {
     width: 7px;
     height: 7px;
@@ -156,6 +164,11 @@ include 'includes/header.php';
     background: #12b76a;
     box-shadow: 0 0 0 0 rgba(18, 183, 106, 0.7);
     animation: fpPulse 1.8s infinite;
+}
+
+.fp-live-badge.pickup-mode .fp-live-dot {
+    background: #f79009;
+    box-shadow: 0 0 0 0 rgba(247, 144, 9, 0.7);
 }
 
 @keyframes fpPulse {
@@ -209,6 +222,12 @@ include 'includes/header.php';
     text-align: right;
 }
 
+.fp-eta-pill.pickup {
+    background: #eff8ff;
+    color: #175cd3;
+    border-color: #b2ddff;
+}
+
 .fp-eta-pill i {
     font-size: 1.2rem;
 }
@@ -222,6 +241,10 @@ include 'includes/header.php';
     color: #981b15;
 }
 
+.fp-eta-pill.pickup .fp-eta-label {
+    color: #175cd3;
+}
+
 .fp-eta-value {
     display: block;
     font-family: 'Outfit', sans-serif;
@@ -229,6 +252,10 @@ include 'includes/header.php';
     font-weight: 800;
     color: var(--fp-primary);
     line-height: 1.1;
+}
+
+.fp-eta-pill.pickup .fp-eta-value {
+    color: #175cd3;
 }
 
 .fp-order-number-pill {
@@ -472,17 +499,17 @@ include 'includes/header.php';
 }
 
 .fp-marker-store-inner {
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
     border-radius: 50%;
     background: #101828;
     border: 3px solid #ffffff;
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
     display: flex;
     align-items: center;
     justify-content: center;
     color: #fca5a5;
-    font-size: 1rem;
+    font-size: 1.15rem;
 }
 
 .fp-marker-home-inner {
@@ -508,7 +535,150 @@ include 'includes/header.php';
     gap: 16px;
 }
 
-/* Rider Card */
+/* Pick-up Claim Pass Card */
+.fp-claim-pass-card {
+    background: #ffffff;
+    border: 2px dashed #b3261e;
+    border-radius: 18px;
+    padding: 20px;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(179, 38, 30, 0.06);
+}
+
+.fp-claim-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 0.82rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #b3261e;
+    margin-bottom: 8px;
+}
+
+.fp-claim-code-box {
+    background: #fff1f0;
+    border: 1px solid #fee4e2;
+    border-radius: 12px;
+    padding: 12px;
+    margin: 8px 0 12px;
+}
+
+.fp-claim-code-text {
+    font-family: monospace;
+    font-size: 1.6rem;
+    font-weight: 900;
+    letter-spacing: 2px;
+    color: #b3261e;
+    display: block;
+}
+
+.fp-claim-hint {
+    font-size: 0.82rem;
+    color: #667085;
+    margin: 0;
+}
+
+/* Store Pickup Location Card */
+.fp-store-card {
+    background: var(--fp-card);
+    border: 1px solid var(--fp-border);
+    border-radius: 18px;
+    padding: 18px 20px;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+}
+
+.fp-store-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.fp-store-header h4 {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 800;
+    font-family: 'Outfit', sans-serif;
+    color: var(--fp-ink);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.fp-store-address-box {
+    background: #f8f9fa;
+    border: 1px solid var(--fp-border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+}
+
+.fp-store-address-box p {
+    margin: 0 0 6px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--fp-ink);
+    line-height: 1.4;
+}
+
+.fp-store-hours {
+    font-size: 0.78rem;
+    color: #667085;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.fp-store-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.fp-btn-directions {
+    flex: 1;
+    background: var(--fp-primary);
+    color: #ffffff !important;
+    border: 0;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: background 0.15s ease;
+}
+
+.fp-btn-directions:hover {
+    background: var(--fp-primary-hover);
+}
+
+.fp-btn-call {
+    background: #ecfdf3;
+    color: #027a48 !important;
+    border: 1px solid #abefc6;
+    border-radius: 10px;
+    padding: 10px 16px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+}
+
+.fp-btn-call:hover {
+    background: #027a48;
+    color: #ffffff !important;
+}
+
+/* Rider Card (for Delivery Orders) */
 .fp-rider-card {
     background: var(--fp-card);
     border: 1px solid var(--fp-border);
@@ -601,27 +771,7 @@ include 'includes/header.php';
     gap: 4px;
 }
 
-.fp-btn-call {
-    background: #ecfdf3;
-    color: #027a48 !important;
-    border: 1px solid #abefc6;
-    border-radius: 12px;
-    padding: 8px 16px;
-    font-size: 0.88rem;
-    font-weight: 700;
-    text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    transition: all 0.2s ease;
-}
-
-.fp-btn-call:hover {
-    background: #027a48;
-    color: #ffffff !important;
-}
-
-/* Route Timeline Card (Store -> Customer) */
+/* Route Timeline Card */
 .fp-timeline-card {
     background: var(--fp-card);
     border: 1px solid var(--fp-border);
@@ -801,7 +951,6 @@ include 'includes/header.php';
     margin-top: 2px;
 }
 
-/* Quick Response Chips */
 .fp-chat-chips {
     display: flex;
     gap: 6px;
@@ -867,7 +1016,7 @@ include 'includes/header.php';
     background: var(--fp-primary-hover);
 }
 
-/* Order Summary Details Accordion / Card */
+/* Order Summary Details */
 .fp-order-summary-card {
     background: var(--fp-card);
     border: 1px solid var(--fp-border);
@@ -1049,16 +1198,16 @@ include 'includes/header.php';
 <section class="fp-tracking-page">
     <div class="fp-tracking-container">
         
-        <!-- Live Alert Notification Banner (Rider departure / arrival chime) -->
+        <!-- Live Alert Notification Banner -->
         <div id="fpNotificationToast" style="display:none; background:#101828; color:#ffffff; padding:16px 20px; border-radius:14px; margin-bottom:18px; box-shadow:0 6px 20px rgba(16,24,40,0.14);">
             <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
                 <div style="display:flex; align-items:center; gap:14px;">
                     <div style="width:42px; height:42px; border-radius:50%; background:var(--fp-primary); display:flex; align-items:center; justify-content:center; color:#fff; font-size:1.15rem; flex-shrink:0;">
-                        <i class="fas fa-motorcycle"></i>
+                        <i class="<?php echo $is_pickup ? 'fas fa-store' : 'fas fa-motorcycle'; ?>"></i>
                     </div>
                     <div>
-                        <strong id="fpToastTitle" style="display:block; font-size:1rem; color:#fff; font-weight:800; font-family:'Outfit',sans-serif;">Rider En Route!</strong>
-                        <span id="fpToastMessage" style="font-size:0.86rem; color:#cbd5e1; line-height:1.4;">Your rider has picked up your order and is on the way.</span>
+                        <strong id="fpToastTitle" style="display:block; font-size:1rem; color:#fff; font-weight:800; font-family:'Outfit',sans-serif;">Status Update!</strong>
+                        <span id="fpToastMessage" style="font-size:0.86rem; color:#cbd5e1; line-height:1.4;">Your order status has been updated.</span>
                     </div>
                 </div>
                 <button onclick="document.getElementById('fpNotificationToast').style.display='none'" style="background:transparent; border:0; color:#94a3b8; font-size:1.4rem; cursor:pointer; padding:0 6px;">&times;</button>
@@ -1069,19 +1218,31 @@ include 'includes/header.php';
         <div class="fp-status-hero-card">
             <div class="fp-hero-header-row">
                 <div class="fp-hero-left">
-                    <div class="fp-live-badge">
-                        <span class="fp-live-dot"></span> Live Order Tracking
+                    <div class="fp-live-badge <?php echo $is_pickup ? 'pickup-mode' : ''; ?>">
+                        <span class="fp-live-dot"></span> <?php echo $is_pickup ? 'Store Pick-up Order' : 'Live Order Tracking'; ?>
                     </div>
-                    <h1 class="fp-hero-title" id="fpHeroTitle">Preparing your delicious order</h1>
-                    <p class="fp-hero-subtitle" id="fpHeroSubtitle">The kitchen is preparing your freshly roasted lechon with care.</p>
+                    <h1 class="fp-hero-title" id="fpHeroTitle">
+                        <?php echo $is_pickup ? 'Store is preparing your pick-up order' : 'Preparing your delicious order'; ?>
+                    </h1>
+                    <p class="fp-hero-subtitle" id="fpHeroSubtitle">
+                        <?php echo $is_pickup ? 'Your dishes are being cooked fresh and packed for collection at the store counter.' : 'The kitchen is preparing your freshly roasted lechon with care.'; ?>
+                    </p>
                 </div>
 
                 <div class="fp-hero-right">
-                    <div class="fp-eta-pill" id="fpEtaPill">
-                        <i class="fas fa-stopwatch"></i>
+                    <div class="fp-eta-pill <?php echo $is_pickup ? 'pickup' : ''; ?>" id="fpEtaPill">
+                        <i class="<?php echo $is_pickup ? 'fas fa-calendar-check' : 'fas fa-stopwatch'; ?>"></i>
                         <div>
-                            <span class="fp-eta-label">Estimated Delivery</span>
-                            <span class="fp-eta-value" id="fpEtaValue">20 - 35 mins</span>
+                            <span class="fp-eta-label"><?php echo $is_pickup ? 'Pick-up Schedule' : 'Estimated Delivery'; ?></span>
+                            <span class="fp-eta-value" id="fpEtaValue">
+                                <?php 
+                                if ($is_pickup) {
+                                    echo !empty($order['delivery_time']) ? htmlspecialchars($order['delivery_time']) : 'Today, Ready Soon';
+                                } else {
+                                    echo '20 - 35 mins';
+                                }
+                                ?>
+                            </span>
                         </div>
                     </div>
                     <div class="fp-order-number-pill">Order #<?php echo htmlspecialchars($order['order_number']); ?></div>
@@ -1110,16 +1271,18 @@ include 'includes/header.php';
 
                     <!-- Step 3 -->
                     <div class="fp-step-item" id="fpStep3">
-                        <div class="fp-step-icon-wrap"><i class="fas fa-motorcycle"></i></div>
-                        <span class="fp-step-label">On the Way</span>
-                        <span class="fp-step-sub" id="fpStep3Time">Delivery</span>
+                        <div class="fp-step-icon-wrap">
+                            <i class="<?php echo $is_pickup ? 'fas fa-bag-shopping' : 'fas fa-motorcycle'; ?>"></i>
+                        </div>
+                        <span class="fp-step-label" id="fpStep3Label"><?php echo $is_pickup ? 'Ready for Pick-up' : 'On the Way'; ?></span>
+                        <span class="fp-step-sub" id="fpStep3Time"><?php echo $is_pickup ? 'At Store' : 'Delivery'; ?></span>
                     </div>
 
                     <!-- Step 4 -->
                     <div class="fp-step-item" id="fpStep4">
-                        <div class="fp-step-icon-wrap"><i class="fas fa-house-chimney"></i></div>
-                        <span class="fp-step-label">Delivered</span>
-                        <span class="fp-step-sub" id="fpStep4Time">Enjoy!</span>
+                        <div class="fp-step-icon-wrap"><i class="fas fa-circle-check"></i></div>
+                        <span class="fp-step-label" id="fpStep4Label"><?php echo $is_pickup ? 'Picked Up' : 'Delivered'; ?></span>
+                        <span class="fp-step-sub" id="fpStep4Time">Completed</span>
                     </div>
                 </div>
             </div>
@@ -1133,19 +1296,22 @@ include 'includes/header.php';
                 <div class="fp-map-floating-bar">
                     <div class="fp-map-pill-stat">
                         <div class="stat-item">
-                            <i class="fas fa-route" style="color:var(--fp-primary);"></i>
-                            <span>Dist: <strong id="mapDistStat">Calculating...</strong></span>
+                            <i class="<?php echo $is_pickup ? 'fas fa-store' : 'fas fa-route'; ?>" style="color:var(--fp-primary);"></i>
+                            <span><?php echo $is_pickup ? 'Store:' : 'Dist:'; ?> <strong id="mapDistStat"><?php echo htmlspecialchars($store_details['store_name'] ?? 'Lechon Delights'); ?></strong></span>
                         </div>
                         <div class="stat-item">
                             <i class="fas fa-clock" style="color:#027a48;"></i>
-                            <span>ETA: <strong id="mapEtaStat">--</strong></span>
+                            <span>Status: <strong id="mapEtaStat"><?php echo ucfirst(htmlspecialchars((string)$order['status'])); ?></strong></span>
                         </div>
                     </div>
 
                     <div class="fp-map-actions">
+                        <button type="button" class="fp-map-btn" id="btnFocusStore" title="Focus Store Location"><i class="fas fa-store"></i></button>
+                        <?php if (!$is_pickup): ?>
                         <button type="button" class="fp-map-btn" id="btnFocusRider" title="Focus Rider"><i class="fas fa-motorcycle"></i></button>
                         <button type="button" class="fp-map-btn" id="btnFocusHome" title="Focus Delivery Location"><i class="fas fa-house"></i></button>
-                        <button type="button" class="fp-map-btn" id="btnFitRoute" title="Fit Entire Route"><i class="fas fa-expand"></i></button>
+                        <?php endif; ?>
+                        <button type="button" class="fp-map-btn" id="btnFitRoute" title="Fit Map View"><i class="fas fa-expand"></i></button>
                     </div>
                 </div>
 
@@ -1155,7 +1321,54 @@ include 'includes/header.php';
             <!-- Right Column: Foodpanda Style Details Sheet -->
             <div class="fp-side-panel">
 
-                <!-- 1. Rider Profile Card (Live when assigned) -->
+                <?php if ($is_pickup): ?>
+                <!-- Pick-up Order: Claim Pass Card -->
+                <div class="fp-claim-pass-card">
+                    <div class="fp-claim-header">
+                        <i class="fas fa-qrcode"></i> Store Pick-up Pass
+                    </div>
+                    <div class="fp-claim-code-box">
+                        <span class="fp-claim-code-text">#<?php echo htmlspecialchars($order['order_number']); ?></span>
+                    </div>
+                    <p class="fp-claim-hint">Please present this order number to the cashier or store staff when collecting your food.</p>
+                </div>
+
+                <!-- Pick-up Order: Store Details & Directions Card -->
+                <div class="fp-store-card">
+                    <div class="fp-store-header">
+                        <h4><i class="fas fa-store" style="color:var(--fp-primary);"></i> Pick-up Location</h4>
+                    </div>
+
+                    <div class="fp-store-address-box">
+                        <p><?php echo htmlspecialchars($store_details['store_name'] ?? 'Lechon Delights Store'); ?></p>
+                        <span style="font-size:0.84rem; color:#475467; display:block; line-height:1.4; margin-bottom:8px;">
+                            <?php echo htmlspecialchars($store_details['address'] ?? 'Cavite, Philippines'); ?>
+                        </span>
+                        <div class="fp-store-hours">
+                            <i class="fas fa-clock" style="color:#b54708;"></i>
+                            <span>Hours: <?php echo htmlspecialchars($store_details['opening_hours'] ?? '8:00 AM - 8:00 PM'); ?></span>
+                        </div>
+                    </div>
+
+                    <div class="fp-store-actions">
+                        <?php 
+                        $dest_lat = $store_details['latitude'] ?? '14.4167';
+                        $dest_lng = $store_details['longitude'] ?? '120.9333';
+                        $gmaps_url = "https://www.google.com/maps/dir/?api=1&destination=" . urlencode($dest_lat . ',' . $dest_lng);
+                        ?>
+                        <a href="<?php echo $gmaps_url; ?>" target="_blank" class="fp-btn-directions">
+                            <i class="fas fa-diamond-turn-right"></i> Open Navigation
+                        </a>
+                        <?php if (!empty($store_details['phone'])): ?>
+                        <a href="tel:<?php echo htmlspecialchars($store_details['phone']); ?>" class="fp-btn-call">
+                            <i class="fas fa-phone-alt"></i> Call Store
+                        </a>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <?php else: ?>
+                <!-- Delivery Order: 1. Rider Profile Card (Live when assigned) -->
                 <div class="fp-rider-card" id="fpRiderCard" style="<?php echo empty($tracking_info['driver_name']) ? 'display:none;' : ''; ?>">
                     <div class="fp-rider-row">
                         <div class="fp-rider-meta">
@@ -1182,7 +1395,7 @@ include 'includes/header.php';
                     </div>
                 </div>
 
-                <!-- 2. Store & Delivery Route Timeline Card -->
+                <!-- Delivery Order: 2. Store & Delivery Route Timeline Card -->
                 <div class="fp-timeline-card">
                     <div class="fp-timeline-title">
                         <i class="fas fa-location-arrow" style="color:var(--fp-primary);"></i> Delivery Route
@@ -1207,7 +1420,7 @@ include 'includes/header.php';
                     </div>
                 </div>
 
-                <!-- 3. In-App Live Rider Chat -->
+                <!-- Delivery Order: 3. In-App Live Rider Chat -->
                 <div class="fp-chat-card">
                     <div class="fp-chat-header">
                         <h4><i class="fas fa-comments" style="color:var(--fp-primary);"></i> Chat with Rider</h4>
@@ -1230,8 +1443,9 @@ include 'includes/header.php';
                         <button type="submit" id="deliveryChatSendBtn" class="fp-chat-send-btn"><i class="fas fa-paper-plane"></i></button>
                     </form>
                 </div>
+                <?php endif; ?>
 
-                <!-- 4. Order Summary Accordion Card -->
+                <!-- Order Summary Accordion Card (Both Delivery and Pick-up) -->
                 <div class="fp-order-summary-card">
                     <div class="fp-summary-header" onclick="toggleOrderSummary()">
                         <h4><i class="fas fa-bag-shopping" style="color:var(--fp-primary);"></i> Order Summary (<?php echo count($order_items); ?> items)</h4>
@@ -1266,8 +1480,8 @@ include 'includes/header.php';
                                 <strong>&#8369;<?php echo number_format((float)($order['subtotal'] ?? $order['total_amount']), 2); ?></strong>
                             </div>
                             <div class="fp-cost-row">
-                                <span>Delivery Fee</span>
-                                <strong>&#8369;<?php echo number_format((float)($order['delivery_fee'] ?? 0), 2); ?></strong>
+                                <span><?php echo $is_pickup ? 'Pick-up Fee' : 'Delivery Fee'; ?></span>
+                                <strong><?php echo $is_pickup ? 'FREE (Store Pick-up)' : '&#8369;' . number_format((float)($order['delivery_fee'] ?? 0), 2); ?></strong>
                             </div>
                             <?php if (!empty($order['voucher_discount']) && (float)$order['voucher_discount'] > 0): ?>
                             <div class="fp-cost-row" style="color:#027a48;">
@@ -1303,6 +1517,9 @@ include 'includes/header.php';
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
 <script>
+    const isPickupOrder = <?php echo json_encode($is_pickup); ?>;
+    const orderId = <?php echo (int)$order_id; ?>;
+
     let map = null;
     let driverMarker = null;
     let customerMarker = null;
@@ -1324,14 +1541,13 @@ include 'includes/header.php';
     let chatAvailable = false;
     let previousDeliveryStatus = '';
 
-    const orderId = <?php echo (int)$order_id; ?>;
     const customerLat = <?php echo json_encode(isset($order['latitude']) ? (is_numeric($order['latitude']) ? (float)$order['latitude'] : null) : null); ?>;
     const customerLng = <?php echo json_encode(isset($order['longitude']) ? (is_numeric($order['longitude']) ? (float)$order['longitude'] : null) : null); ?>;
     const customerAddress = <?php echo json_encode((string)($order['delivery_address'] ?? '')); ?>;
 
-    const storeLat = <?php echo json_encode(isset($store_details['latitude']) ? (is_numeric($store_details['latitude']) ? (float)$store_details['latitude'] : null) : null); ?>;
-    const storeLng = <?php echo json_encode(isset($store_details['longitude']) ? (is_numeric($store_details['longitude']) ? (float)$store_details['longitude'] : null) : null); ?>;
-    const storeName = <?php echo json_encode((string)($store_details['store_name'] ?? 'Lechon Delights')); ?>;
+    const storeLat = <?php echo json_encode(isset($store_details['latitude']) ? (is_numeric($store_details['latitude']) ? (float)$store_details['latitude'] : 14.4167) : 14.4167); ?>;
+    const storeLng = <?php echo json_encode(isset($store_details['longitude']) ? (is_numeric($store_details['longitude']) ? (float)$store_details['longitude'] : 120.9333) : 120.9333); ?>;
+    const storeName = <?php echo json_encode((string)($store_details['store_name'] ?? 'Lechon Delights Store')); ?>;
 
     // Custom Foodpanda Map Icon Definitions
     const riderIcon = L.divIcon({
@@ -1355,8 +1571,8 @@ include 'includes/header.php';
             </div>
         `,
         className: 'fp-custom-store-marker',
-        iconSize: [40, 40],
-        iconAnchor: [20, 20]
+        iconSize: [44, 44],
+        iconAnchor: [22, 22]
     });
 
     const customerIcon = L.divIcon({
@@ -1408,9 +1624,8 @@ include 'includes/header.php';
     }
 
     function initMap() {
-        // Center Cavite default
-        const defaultCenter = [14.4167, 120.9333];
-        map = L.map('map', { zoomControl: false }).setView(defaultCenter, 13);
+        const centerPoint = (Number.isFinite(storeLat) && Number.isFinite(storeLng)) ? [storeLat, storeLng] : [14.4167, 120.9333];
+        map = L.map('map', { zoomControl: false }).setView(centerPoint, 14);
         L.control.zoom({ position: 'bottomright' }).addTo(map);
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -1418,6 +1633,44 @@ include 'includes/header.php';
             attribution: '© OpenStreetMap'
         }).addTo(map);
 
+        // Add Store Marker
+        if (Number.isFinite(storeLat) && Number.isFinite(storeLng)) {
+            storeLocationObj = [storeLat, storeLng];
+            storeMarker = L.marker(storeLocationObj, { icon: storeIcon }).addTo(map);
+            storeMarker.bindPopup(`<strong>${storeName}</strong><br>Pick-up Counter`).openPopup();
+        }
+
+        if (isPickupOrder) {
+            // For Pick-up Orders: Center and highlight the Store location
+            map.setView(centerPoint, 15);
+            L.circle(centerPoint, {
+                radius: 200,
+                color: '#b3261e',
+                weight: 2,
+                fillColor: '#b3261e',
+                fillOpacity: 0.1
+            }).addTo(map);
+
+            const btnFocusStore = document.getElementById('btnFocusStore');
+            if (btnFocusStore) {
+                btnFocusStore.addEventListener('click', () => {
+                    if (storeMarker) map.setView(storeMarker.getLatLng(), 16);
+                });
+            }
+
+            const btnFitRoute = document.getElementById('btnFitRoute');
+            if (btnFitRoute) {
+                btnFitRoute.addEventListener('click', () => {
+                    if (storeMarker) map.setView(storeMarker.getLatLng(), 15);
+                });
+            }
+
+            fetchTrackingData();
+            trackingPollTimer = setInterval(fetchTrackingData, 4000);
+            return;
+        }
+
+        // For Delivery Orders: Set up Route Lines & Customer Marker
         routePolyline = L.polyline([], {
             color: '#b3261e',
             weight: 5,
@@ -1432,12 +1685,6 @@ include 'includes/header.php';
             opacity: 0.9,
             dashArray: '6, 8'
         }).addTo(map);
-
-        // Add Store Marker
-        if (Number.isFinite(storeLat) && Number.isFinite(storeLng)) {
-            storeLocationObj = [storeLat, storeLng];
-            storeMarker = L.marker(storeLocationObj, { icon: storeIcon }).addTo(map);
-        }
 
         // Add Customer Marker
         if (Number.isFinite(customerLat) && Number.isFinite(customerLng)) {
@@ -1457,16 +1704,32 @@ include 'includes/header.php';
             });
         }
 
-        // Attach Map Action Buttons
-        document.getElementById('btnFocusRider').addEventListener('click', () => {
-            if (driverMarker) map.setView(driverMarker.getLatLng(), 16);
-        });
+        // Attach Map Action Buttons for Delivery
+        const btnFocusRider = document.getElementById('btnFocusRider');
+        if (btnFocusRider) {
+            btnFocusRider.addEventListener('click', () => {
+                if (driverMarker) map.setView(driverMarker.getLatLng(), 16);
+            });
+        }
 
-        document.getElementById('btnFocusHome').addEventListener('click', () => {
-            if (customerMarker) map.setView(customerMarker.getLatLng(), 16);
-        });
+        const btnFocusHome = document.getElementById('btnFocusHome');
+        if (btnFocusHome) {
+            btnFocusHome.addEventListener('click', () => {
+                if (customerMarker) map.setView(customerMarker.getLatLng(), 16);
+            });
+        }
 
-        document.getElementById('btnFitRoute').addEventListener('click', fitMapAllMarkers);
+        const btnFocusStore = document.getElementById('btnFocusStore');
+        if (btnFocusStore) {
+            btnFocusStore.addEventListener('click', () => {
+                if (storeMarker) map.setView(storeMarker.getLatLng(), 16);
+            });
+        }
+
+        const btnFitRoute = document.getElementById('btnFitRoute');
+        if (btnFitRoute) {
+            btnFitRoute.addEventListener('click', fitMapAllMarkers);
+        }
 
         fetchTrackingData();
         trackingPollTimer = setInterval(fetchTrackingData, 3500);
@@ -1508,7 +1771,7 @@ include 'includes/header.php';
         } catch (e) {}
     }
 
-    function triggerRiderToast(title, message) {
+    function triggerToast(title, message) {
         const toast = document.getElementById('fpNotificationToast');
         const tTitle = document.getElementById('fpToastTitle');
         const tMsg = document.getElementById('fpToastMessage');
@@ -1530,28 +1793,91 @@ include 'includes/header.php';
             
             // Check for status changes to notify customer
             if (previousDeliveryStatus && previousDeliveryStatus !== status) {
-                if (['picked_up', 'on_the_way'].includes(status) && !['picked_up', 'on_the_way'].includes(previousDeliveryStatus)) {
-                    triggerRiderToast('Rider En Route!', `${data.driver_name || 'Your rider'} has picked up your order and is on the way.`);
-                } else if (status === 'arriving' && previousDeliveryStatus !== 'arriving') {
-                    triggerRiderToast('Rider Arriving Soon!', 'Your rider is right near your doorstep. Please get ready to receive your order.');
-                } else if (status === 'delivered') {
-                    triggerRiderToast('Order Delivered!', 'Your order has been delivered successfully. Enjoy your meal!');
+                if (isPickupOrder) {
+                    if (['preparing', 'confirmed'].includes(status)) {
+                        triggerToast('Kitchen is Cooking!', 'The store is now preparing your pick-up order.');
+                    } else if (['ready', 'on_the_way'].includes(status)) {
+                        triggerToast('Ready for Pick-up!', 'Your lechon order is ready at the store counter! You can head over now to collect it.');
+                    } else if (status === 'delivered') {
+                        triggerToast('Order Picked Up!', 'Thank you for picking up your order. Enjoy your meal!');
+                    }
+                } else {
+                    if (['picked_up', 'on_the_way'].includes(status) && !['picked_up', 'on_the_way'].includes(previousDeliveryStatus)) {
+                        triggerToast('Rider En Route!', `${data.driver_name || 'Your rider'} has picked up your order and is on the way.`);
+                    } else if (status === 'arriving' && previousDeliveryStatus !== 'arriving') {
+                        triggerToast('Rider Arriving Soon!', 'Your rider is right near your doorstep. Please get ready to receive your order.');
+                    } else if (status === 'delivered') {
+                        triggerToast('Order Delivered!', 'Your order has been delivered successfully. Enjoy your meal!');
+                    }
                 }
             }
             previousDeliveryStatus = status;
 
-            updateFoodpandaStatusUI(status, data);
-            updateDriverMarker(data.latitude, data.longitude, data.driver_name || 'Driver', status);
+            if (isPickupOrder) {
+                updateFoodpandaPickupStatusUI(status, data);
+            } else {
+                updateFoodpandaDeliveryStatusUI(status, data);
+                updateDriverMarker(data.latitude, data.longitude, data.driver_name || 'Driver', status);
 
-            if (['assigned', 'picked_up', 'on_the_way', 'arriving'].includes(status) && data.latitude && data.longitude) {
-                updateRouteAndEta(data.latitude, data.longitude);
+                if (['assigned', 'picked_up', 'on_the_way', 'arriving'].includes(status) && data.latitude && data.longitude) {
+                    updateRouteAndEta(data.latitude, data.longitude);
+                }
             }
         } catch (err) {
             console.error('Error fetching live tracking:', err);
         }
     }
 
-    function updateFoodpandaStatusUI(status, data) {
+    // Status UI for Pick-up Orders
+    function updateFoodpandaPickupStatusUI(status, data) {
+        const heroTitle = document.getElementById('fpHeroTitle');
+        const heroSubtitle = document.getElementById('fpHeroSubtitle');
+        const stepperFill = document.getElementById('fpStepperFill');
+        const step1 = document.getElementById('fpStep1');
+        const step2 = document.getElementById('fpStep2');
+        const step3 = document.getElementById('fpStep3');
+        const step4 = document.getElementById('fpStep4');
+        const mapEtaStat = document.getElementById('mapEtaStat');
+
+        [step1, step2, step3, step4].forEach(s => s.classList.remove('is-active', 'is-completed'));
+
+        if (status === 'pending') {
+            heroTitle.textContent = "Pick-up Order Received";
+            heroSubtitle.textContent = "The store has received your order and will begin preparing it shortly.";
+            stepperFill.style.width = "20%";
+            step1.classList.add('is-active');
+            if (mapEtaStat) mapEtaStat.textContent = "Pending";
+        } else if (status === 'preparing' || status === 'confirmed') {
+            heroTitle.textContent = "Kitchen is Roasting Your Lechon";
+            heroSubtitle.textContent = "Your delicious dishes are being cooked fresh and packed for store pick-up.";
+            stepperFill.style.width = "50%";
+            step1.classList.add('is-completed');
+            step2.classList.add('is-active');
+            if (mapEtaStat) mapEtaStat.textContent = "Cooking";
+        } else if (status === 'ready' || status === 'assigned' || status === 'on_the_way' || status === 'arriving') {
+            heroTitle.textContent = "Ready for Pick-up at Store!";
+            heroSubtitle.textContent = "Your order is packed and waiting at the counter. Present your Claim Code to the cashier.";
+            stepperFill.style.width = "75%";
+            step1.classList.add('is-completed');
+            step2.classList.add('is-completed');
+            step3.classList.add('is-active');
+            document.getElementById('fpEtaValue').textContent = "Ready Now!";
+            if (mapEtaStat) mapEtaStat.textContent = "Ready for Pick-up";
+        } else if (status === 'delivered') {
+            heroTitle.textContent = "Order Picked Up & Completed";
+            heroSubtitle.textContent = "Thank you for collecting your order at Lechon Delights! Enjoy your meal.";
+            stepperFill.style.width = "100%";
+            step1.classList.add('is-completed');
+            step2.classList.add('is-completed');
+            step3.classList.add('is-completed');
+            step4.classList.add('is-completed');
+            document.getElementById('fpEtaValue').textContent = "Picked Up";
+            if (mapEtaStat) mapEtaStat.textContent = "Completed";
+        }
+    }
+
+    // Status UI for Delivery Orders
+    function updateFoodpandaDeliveryStatusUI(status, data) {
         const heroTitle = document.getElementById('fpHeroTitle');
         const heroSubtitle = document.getElementById('fpHeroSubtitle');
         const stepperFill = document.getElementById('fpStepperFill');
@@ -1564,7 +1890,6 @@ include 'includes/header.php';
         const phoneWrap = document.getElementById('fpDriverPhoneWrap');
         const phoneLink = document.getElementById('fpDriverPhoneLink');
 
-        // Reset step classes
         [step1, step2, step3, step4].forEach(s => s.classList.remove('is-active', 'is-completed'));
 
         if (status === 'pending') {
@@ -1614,17 +1939,19 @@ include 'includes/header.php';
 
         // Update Driver Card
         if (data.driver_name) {
-            riderCard.style.display = 'block';
-            driverName.textContent = data.driver_name;
+            if (riderCard) riderCard.style.display = 'block';
+            if (driverName) driverName.textContent = data.driver_name;
             if (data.driver_phone) {
-                phoneWrap.style.display = 'block';
-                phoneLink.style.display = 'inline-flex';
-                phoneLink.href = `tel:${data.driver_phone}`;
+                if (phoneWrap) phoneWrap.style.display = 'block';
+                if (phoneLink) {
+                    phoneLink.style.display = 'inline-flex';
+                    phoneLink.href = `tel:${data.driver_phone}`;
+                }
             } else {
-                phoneWrap.style.display = 'none';
+                if (phoneWrap) phoneWrap.style.display = 'none';
             }
         } else {
-            riderCard.style.display = 'none';
+            if (riderCard) riderCard.style.display = 'none';
         }
     }
 
@@ -1723,7 +2050,7 @@ include 'includes/header.php';
         }
     }
 
-    // In-App Rider Chat Controller
+    // In-App Rider Chat Controller (for Delivery)
     function initDeliveryChat() {
         const form = document.getElementById('deliveryChatForm');
         if (form) {
@@ -1754,6 +2081,7 @@ include 'includes/header.php';
 
             chatAvailable = !!data.chat_available;
             const container = document.getElementById('deliveryChatMessages');
+            if (!container) return;
 
             if (initialLoad) {
                 container.innerHTML = '';
@@ -1804,6 +2132,7 @@ include 'includes/header.php';
 
     function appendChatMessage(msg, forceScroll = false) {
         const container = document.getElementById('deliveryChatMessages');
+        if (!container) return;
         if (container.querySelector('div[style*="text-align:center"]')) {
             container.innerHTML = '';
         }
