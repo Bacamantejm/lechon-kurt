@@ -700,8 +700,8 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
             <?php else: ?>
                 <?php if ($current_page !== 'register' && $current_page !== 'login'): ?>
                 <div class="auth-buttons">
-                    <a href="<?php echo $path_prefix; ?>login.php" class="btn-signin">Log in</a>
-                    <a href="<?php echo $path_prefix; ?>register.php" class="btn-register">Create account</a>
+                    <a href="<?php echo $path_prefix; ?>register.php?mode=login#login" class="btn-signin">Log in</a>
+                    <a href="<?php echo $path_prefix; ?>register.php?mode=register#register" class="btn-register">Create account</a>
                 </div>
                 <?php endif; ?>
             <?php endif; ?>
@@ -864,8 +864,8 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
             <?php else: ?>
                 <?php if ($current_page !== 'register' && $current_page !== 'login'): ?>
                 <div class="auth-buttons">
-                    <a href="<?php echo $path_prefix; ?>login.php" class="btn-signin">Log in</a>
-                    <a href="<?php echo $path_prefix; ?>register.php" class="btn-register">Create account</a>
+                    <a href="<?php echo $path_prefix; ?>register.php?mode=login#login" class="btn-signin">Log in</a>
+                    <a href="<?php echo $path_prefix; ?>register.php?mode=register#register" class="btn-register">Create account</a>
                 </div>
                 <?php endif; ?>
             <?php endif; ?>
@@ -917,8 +917,8 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
     </ul>
     <?php if (!$is_logged_in_user && $current_page !== 'register' && $current_page !== 'login'): ?>
     <div class="mobile-auth">
-        <a href="<?php echo $path_prefix; ?>login.php" class="btn-signin" style="text-align:center;">Log in</a>
-        <a href="<?php echo $path_prefix; ?>register.php" class="btn-register" style="text-align:center;">Create account</a>
+        <a href="<?php echo $path_prefix; ?>register.php?mode=login#login" class="btn-signin" style="text-align:center;">Log in</a>
+        <a href="<?php echo $path_prefix; ?>register.php?mode=register#register" class="btn-register" style="text-align:center;">Create account</a>
     </div>
     <?php endif; ?>
 </aside>

@@ -4685,7 +4685,8 @@ document.getElementById('checkoutForm').addEventListener('submit', function(e) {
             });
             
             // Submit checkout without refreshing the page
-            await submitCheckoutAjax(this);
+            const formElement = document.getElementById('checkoutForm');
+            await submitCheckoutAjax(formElement);
         }
     });
 });

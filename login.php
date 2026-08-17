@@ -228,8 +228,37 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
         } else {
             $error = $result['message'];
             $form_data['email'] = $email;
+            
+            $is_ajax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest';
+            $is_ajax = $is_ajax || (isset($_POST['ajax']) && $_POST['ajax'] == 'true');
+            if ($is_ajax) {
+                header('Content-Type: application/json');
+                echo json_encode([
+                    'success' => false,
+                    'message' => $error
+                ]);
+                exit();
+            }
         }
     }
+
+    $is_ajax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest';
+    $is_ajax = $is_ajax || (isset($_POST['ajax']) && $_POST['ajax'] == 'true');
+    if ($is_ajax && !empty($error)) {
+        header('Content-Type: application/json');
+        echo json_encode([
+            'success' => false,
+            'message' => $error
+        ]);
+        exit();
+    }
+}
+
+// Redirect standard GET visits to the sliding auth layout in login mode
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    $queryString = !empty($_SERVER['QUERY_STRING']) ? ('?' . $_SERVER['QUERY_STRING'] . '&mode=login#login') : '?mode=login#login';
+    header("Location: register.php" . $queryString);
+    exit();
 }
 
 $page_title = "Login to Your Account | Lechon Delights";

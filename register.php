@@ -1382,7 +1382,7 @@ body {
     display: none !important;
 }
 
-/* Full-screen split layout styling */
+/* Full-screen split layout styling with smooth sliding animation */
 .registration-page {
     background: #ffffff !important;
     display: flex;
@@ -1392,6 +1392,7 @@ body {
     max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
     overflow: hidden !important;
     padding: 0 !important;
+    position: relative;
 }
 
 .registration-container {
@@ -1404,11 +1405,13 @@ body {
     border: none;
     box-shadow: none !important;
     display: flex;
-    flex-direction: row; /* Image left, form right */
+    flex-direction: row;
     margin: 0 !important;
     overflow: hidden;
+    position: relative;
 }
 
+/* Left Hero Side */
 .registration-image-side {
     width: 50%;
     background: linear-gradient(145deg, #fff7f2 0%, #ffede5 45%, #fedecf 100%) !important;
@@ -1423,6 +1426,143 @@ body {
     overflow: hidden;
     height: calc(100vh - var(--site-header-offset, 64px)) !important;
     max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    transition: transform 0.85s cubic-bezier(0.68, -0.4, 0.265, 1.35), border 0.75s ease;
+    z-index: 2;
+    transform: translateX(0);
+}
+
+/* Right Form Side */
+.registration-form-side {
+    width: 50%;
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 44px 24px 36px !important;
+    height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    overflow-y: auto !important;
+    box-sizing: border-box;
+    transition: transform 0.85s cubic-bezier(0.68, -0.4, 0.265, 1.35);
+    z-index: 1;
+    transform: translateX(0);
+}
+
+/* Desktop Sliding State (Login Mode) */
+@media (min-width: 851px) {
+    .registration-container.is-login-mode .registration-image-side {
+        transform: translateX(100%);
+        border-right: none;
+        border-left: 1px solid #efddcd;
+    }
+
+    .registration-container.is-login-mode .registration-form-side {
+        transform: translateX(-100%);
+    }
+}
+
+/* Water Waves Ambient Layer in Hero Section */
+.hero-water-waves {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 200%;
+    height: 140px;
+    pointer-events: none;
+    z-index: 2;
+    opacity: 0.45;
+}
+
+.hero-water-wave-1 {
+    animation: waterWaveFlow1 12s linear infinite;
+}
+
+.hero-water-wave-2 {
+    animation: waterWaveFlow2 18s linear infinite reverse;
+    opacity: 0.6;
+}
+
+.hero-water-wave-3 {
+    animation: waterWaveFlow3 14s ease-in-out infinite alternate;
+    opacity: 0.35;
+}
+
+@keyframes waterWaveFlow1 {
+    0% { transform: translateX(0) translateZ(0) scaleY(1); }
+    50% { transform: translateX(-25%) translateZ(0) scaleY(1.18); }
+    100% { transform: translateX(-50%) translateZ(0) scaleY(1); }
+}
+
+@keyframes waterWaveFlow2 {
+    0% { transform: translateX(0) translateZ(0) scaleY(1.1); }
+    50% { transform: translateX(-30%) translateZ(0) scaleY(0.9); }
+    100% { transform: translateX(-50%) translateZ(0) scaleY(1.1); }
+}
+
+@keyframes waterWaveFlow3 {
+    0% { transform: translateY(0) scaleY(1); }
+    100% { transform: translateY(-14px) scaleY(1.25); }
+}
+
+/* Liquid Ripple Wave Overlay on Transition */
+.liquid-ripple-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 99;
+    overflow: hidden;
+}
+
+.liquid-ripple-surge {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(179, 38, 30, 0.22) 0%, rgba(254, 222, 207, 0.35) 45%, rgba(255, 255, 255, 0) 70%);
+    transform: scale(0);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.liquid-ripple-surge.is-animating {
+    animation: liquidSurgeWave 1.1s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+@keyframes liquidSurgeWave {
+    0% {
+        transform: scale(1);
+        opacity: 0.9;
+    }
+    50% {
+        opacity: 0.55;
+    }
+    100% {
+        transform: scale(140);
+        opacity: 0;
+    }
+}
+
+/* Water Droplet Wave Border along Divider */
+.liquid-wave-seam {
+    position: absolute;
+    top: 0;
+    right: -20px;
+    width: 40px;
+    height: 100%;
+    z-index: 5;
+    pointer-events: none;
+    opacity: 0.7;
+    transition: opacity 0.4s ease;
+}
+
+.registration-container.is-login-mode .liquid-wave-seam {
+    right: auto;
+    left: -20px;
+    transform: scaleX(-1);
 }
 
 .brand-title {
@@ -1442,6 +1582,80 @@ body {
     max-width: 340px;
     font-weight: 600;
     line-height: 1.5;
+}
+
+/* Hero Content Switcher */
+.hero-content-view {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    z-index: 10;
+    transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    width: 100%;
+    max-width: 420px;
+}
+
+.hero-auth-cta {
+    margin-top: 36px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.hero-auth-cta .cta-label {
+    font-size: 0.95rem;
+    color: #564840;
+    font-weight: 600;
+}
+
+.btn-slide-auth {
+    background: #ffffff;
+    color: #b3261e;
+    border: 2px solid #b3261e;
+    border-radius: 9999px;
+    padding: 10px 30px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 14px rgba(179, 38, 30, 0.08);
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    text-decoration: none;
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-slide-auth:hover {
+    background: #b3261e;
+    color: #ffffff;
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 8px 22px rgba(179, 38, 30, 0.28);
+}
+
+.btn-slide-auth:active {
+    transform: translateY(0) scale(0.98);
+}
+
+/* Water Ripple on Button Click */
+.btn-slide-auth .water-drop-ripple {
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.7);
+    transform: scale(0);
+    animation: waterDropRipple 0.6s linear;
+    pointer-events: none;
+}
+
+@keyframes waterDropRipple {
+    to {
+        transform: scale(4);
+        opacity: 0;
+    }
 }
 
 .floating-pigs-container {
@@ -1493,26 +1707,17 @@ body {
     object-fit: contain;
 }
 
-.registration-form-side {
-    width: 50%;
-    background: #ffffff;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    padding: 44px 24px 36px !important;
-    height: calc(100vh - var(--site-header-offset, 64px)) !important;
-    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
-    overflow-y: auto !important;
-    box-sizing: border-box;
-}
-
 .registration-form-side-container {
     max-width: 440px;
     width: 100%;
     margin: auto 0;
     display: flex;
     flex-direction: column;
+}
+
+.auth-view-wrapper {
+    transition: opacity 0.35s ease, transform 0.4s ease;
+    width: 100%;
 }
 
 @media (max-width: 850px) {
@@ -1523,6 +1728,7 @@ body {
         width: 100%;
         height: auto;
         min-height: calc(100vh - 64px);
+        transform: none !important;
     }
     .registration-image-side {
         display: none !important;
@@ -1547,11 +1753,35 @@ body {
     margin-top: 0 !important;
 }
 </style>
-
 <div class="registration-page">
-    <div class="registration-container">
-        <!-- Left Side: Branding Panel with Floating Mascot Pigs -->
-        <div class="registration-image-side">
+    <!-- Liquid Ripple Surge Overlay -->
+    <div class="liquid-ripple-container" id="liquidRippleContainer">
+        <div class="liquid-ripple-surge" id="liquidRippleSurge"></div>
+    </div>
+
+    <div class="registration-container" id="authSplitLayout">
+        <!-- Left Side: Branding Panel with Floating Mascot Pigs & Dynamic Auth Switcher -->
+        <div class="registration-image-side" id="authHeroPanel">
+            <!-- Animated Water Wave Layers (Bottom Ambient Liquid) -->
+            <div class="hero-water-waves">
+                <svg class="hero-water-wave-1" viewBox="0 0 1200 120" preserveAspectRatio="none" style="position: absolute; bottom: 0; left: 0; width: 100%; height: 100%;">
+                    <path d="M0,0 C150,90 350,-40 500,60 C650,160 900,10 1200,40 L1200,120 L0,120 Z" fill="rgba(179, 38, 30, 0.08)"></path>
+                </svg>
+                <svg class="hero-water-wave-2" viewBox="0 0 1200 120" preserveAspectRatio="none" style="position: absolute; bottom: 0; left: 0; width: 100%; height: 85%;">
+                    <path d="M0,40 C300,120 450,10 700,70 C950,130 1050,30 1200,60 L1200,120 L0,120 Z" fill="rgba(254, 222, 207, 0.45)"></path>
+                </svg>
+                <svg class="hero-water-wave-3" viewBox="0 0 1200 120" preserveAspectRatio="none" style="position: absolute; bottom: 0; left: 0; width: 100%; height: 60%;">
+                    <path d="M0,20 C200,80 400,0 600,50 C800,100 1000,20 1200,40 L1200,120 L0,120 Z" fill="rgba(179, 38, 30, 0.05)"></path>
+                </svg>
+            </div>
+
+            <!-- Vertical Liquid Wave Seam Edge -->
+            <div class="liquid-wave-seam">
+                <svg viewBox="0 0 40 800" preserveAspectRatio="none" style="width: 100%; height: 100%; display: block;">
+                    <path d="M 0,0 C 25,100 -10,200 20,300 C 50,400 -5,500 25,600 C 45,700 5,750 0,800 L 0,800 Z" fill="rgba(254, 222, 207, 0.3)"></path>
+                </svg>
+            </div>
+
             <div class="floating-pigs-container">
                 <div class="floating-pig pig-1">🐷</div>
                 <div class="floating-pig pig-2">🐷</div>
@@ -1559,430 +1789,403 @@ body {
                 <div class="floating-pig pig-4">🐷</div>
                 <div class="floating-pig pig-5">🐷</div>
             </div>
-            <div class="brand-content" style="position: relative; z-index: 10;">
+
+            <!-- Hero View for Register Mode (Default: on left side) -->
+            <div class="hero-content-view" id="heroRegisterView">
                 <h1 class="brand-title">Lechon Delights</h1>
                 <p class="brand-subtitle">Cavite's Finest Lechon at Your Doorsteps</p>
+                <div class="hero-auth-cta">
+                    <div class="cta-label">Already have an account?</div>
+                    <button type="button" class="btn-slide-auth js-trigger-slide-login" id="heroBtnToLogin">
+                        <i class="fas fa-sign-in-alt"></i> Sign in here
+                    </button>
+                </div>
+            </div>
+
+            <!-- Hero View for Login Mode (When Slid to right side) -->
+            <div class="hero-content-view" id="heroLoginView" style="display: none; opacity: 0;">
+                <h1 class="brand-title">Welcome Back!</h1>
+                <p class="brand-subtitle">Join us to order Cavite's finest lechon dishes.</p>
+                <div class="hero-auth-cta">
+                    <div class="cta-label">Don't have an account yet?</div>
+                    <button type="button" class="btn-slide-auth js-trigger-slide-register" id="heroBtnToRegister">
+                        <i class="fas fa-user-plus"></i> Create an Account
+                    </button>
+                </div>
             </div>
         </div>
 
-        <!-- Right Side: Registration Form Panel -->
-        <div class="registration-form-side">
+        <!-- Right Side: Forms Container Panel (Register & Login) -->
+        <div class="registration-form-side" id="authFormsPanel">
             <div class="registration-form-side-container">
-                <div class="registration-header" style="background:#fff; text-align:center; margin-bottom:24px; padding:0 0 10px;">
-                    <div style="display:inline-flex; align-items:center; justify-content:center; gap:10px; margin-bottom:12px;">
-                        <img src="assets/images/logo.jpg" alt="Lechon Delights Logo" style="width:48px; height:48px; object-fit:cover; border-radius:12px; display:block; border:1px solid #efddcd; box-shadow:0 4px 12px rgba(0,0,0,0.06);">
-                        <span style="font-size:1.6rem; font-weight:800; color:#171922; font-family:'Outfit', sans-serif;">Lechon Delights</span>
-                    </div>
-                    <h2 style="font-size:1.8rem; font-weight:700; color:#333; margin-bottom:10px;">Create Account</h2>
-                    <p style="font-size:1rem; color:#666; margin:0;">Join us to order Cavite's finest lechon dishes.</p>
-                </div>
                 
-                <div class="registration-body">
+                <!-- View 1: Register Form Wizard -->
+                <div id="registerViewWrapper" class="auth-view-wrapper">
+                    <div class="registration-header" style="background:#fff; text-align:center; margin-bottom:24px; padding:0 0 10px;">
+                        <div style="display:inline-flex; align-items:center; justify-content:center; gap:10px; margin-bottom:12px;">
+                            <img src="assets/images/logo.jpg" alt="Lechon Delights Logo" style="width:48px; height:48px; object-fit:cover; border-radius:12px; display:block; border:1px solid #efddcd; box-shadow:0 4px 12px rgba(0,0,0,0.06);">
+                            <span style="font-size:1.6rem; font-weight:800; color:#171922; font-family:'Outfit', sans-serif;">Lechon Delights</span>
+                        </div>
+                        <h2 style="font-size:1.8rem; font-weight:700; color:#333; margin-bottom:10px;">Create Account</h2>
+                        <p style="font-size:1rem; color:#666; margin:0;">Join us to order Cavite's finest lechon dishes.</p>
+                    </div>
+                    
+                    <div class="registration-body">
 
-                    <!-- Progress Steps -->
-                    <div class="progress-steps">
-                        <div class="step active" id="step1">
-                            <div class="step-label">Personal Info (Step 1 of 4)</div>
-                        </div>
-                        <div class="step" id="step2">
-                            <div class="step-label">Verification (Step 2 of 4)</div>
-                        </div>
-                        <div class="step" id="step3">
-                            <div class="step-label" id="step3NavLabel">Address Info (Step 3 of 4)</div>
-                        </div>
-                        <div class="step" id="step4">
-                            <div class="step-label">Create Account (Step 4 of 4)</div>
-                        </div>
-                        <div class="progress-container" style="width: 100%; height: 6px; background: #efddcd; border-radius: 3px; margin-top: 15px; overflow: visible; position: relative;">
-                            <div class="progress-bar" id="progressBar" style="position: absolute; left: 0; top: 0; height: 100%; width: 25%; background: #b3261e; transition: width 0.3s ease; display: block !important; overflow: visible;">
-                                <div class="running-pig" style="position: absolute; right: -14px; top: -20px; font-size: 22px; user-select: none; line-height: 1; animation: pigRun 0.4s infinite alternate ease-in-out;">🐖</div>
+                        <!-- Progress Steps -->
+                        <div class="progress-steps">
+                            <div class="step active" id="step1">
+                                <div class="step-label">Personal Info (Step 1 of 4)</div>
                             </div>
-                        </div>
-                    </div>
-                    
-                    <form method="POST" action="" id="registrationForm" data-swal-validate="off" enctype="multipart/form-data" novalidate>
-                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['registration_csrf_token']); ?>">
-
-                        <input type="hidden" name="account_type" id="accountType" value="<?php echo htmlspecialchars($form_data['account_type'] ?? 'individual'); ?>">
-                        <input type="hidden" name="psgc_region_code" id="psgcRegionCode" value="<?php echo htmlspecialchars($form_data['psgc_region_code'] ?? ''); ?>">
-                        <input type="hidden" name="psgc_region_name" id="psgcRegionName" value="<?php echo htmlspecialchars($form_data['psgc_region_name'] ?? ''); ?>">
-                        <input type="hidden" name="psgc_province_code" id="psgcProvinceCode" value="<?php echo htmlspecialchars($form_data['psgc_province_code'] ?? ''); ?>">
-                        <input type="hidden" name="psgc_province_name" id="psgcProvinceName" value="<?php echo htmlspecialchars($form_data['psgc_province_name'] ?? ''); ?>">
-                        <input type="hidden" name="psgc_city_code" id="psgcCityCode" value="<?php echo htmlspecialchars($form_data['psgc_city_code'] ?? ''); ?>">
-                        <input type="hidden" name="psgc_city_name" id="psgcCityName" value="<?php echo htmlspecialchars($form_data['psgc_city_name'] ?? ''); ?>">
-                        <input type="hidden" name="psgc_barangay_code" id="psgcBarangayCode" value="<?php echo htmlspecialchars($form_data['psgc_barangay_code'] ?? ''); ?>">
-                        <input type="hidden" name="psgc_barangay_name" id="psgcBarangayName" value="<?php echo htmlspecialchars($form_data['psgc_barangay_name'] ?? ''); ?>">
-                    
-
-                
-                <!-- Step 1: Personal Information -->
-                <div class="form-step active" id="step1Form">
-                    <h2 style="color: #333; margin-bottom: 25px; font-size: 1.5rem;">Tell us about you</h2>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="firstName">First Name *</label>
-                            <input type="text" id="firstName" name="first_name" class="form-control" required 
-                                placeholder="Enter your first name"
-                                value="<?php echo htmlspecialchars($form_data['first_name'] ?? ''); ?>"
-                                autocomplete="given-name">
-                        </div>
-                        <div class="form-group">
-                            <label for="lastName">Last Name *</label>
-                            <input type="text" id="lastName" name="last_name" class="form-control" required 
-                                placeholder="Enter your last name"
-                                value="<?php echo htmlspecialchars($form_data['last_name'] ?? ''); ?>"
-                                autocomplete="family-name">
-                        </div>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="middleName">Middle Name</label>
-                            <input type="text" id="middleName" name="middle_name" class="form-control"
-                                placeholder="Optional"
-                                value="<?php echo htmlspecialchars($form_data['middle_name'] ?? ''); ?>"
-                                autocomplete="additional-name">
-                        </div>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="birthDate">Date of Birth</label>
-                            <input type="date" id="birthDate" name="birth_date" class="form-control"
-                                value="<?php echo htmlspecialchars($form_data['birth_date'] ?? ''); ?>">
-                        </div>
-                        <div class="form-group">
-                            <label for="gender">Gender</label>
-                            <select id="gender" name="gender" class="form-control">
-                                <option value="" <?php echo (($form_data['gender'] ?? '') === '') ? 'selected' : ''; ?>>Prefer not to say</option>
-                                <option value="male" <?php echo (($form_data['gender'] ?? '') === 'male') ? 'selected' : ''; ?>>Male</option>
-                                <option value="female" <?php echo (($form_data['gender'] ?? '') === 'female') ? 'selected' : ''; ?>>Female</option>
-                                <option value="other" <?php echo (($form_data['gender'] ?? '') === 'other') ? 'selected' : ''; ?>>Other</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="form-actions">
-                        <button type="button" class="btn-secondary" id="prevStep1">
-                            <i class="fas fa-arrow-left"></i>
-                            Back to Login
-                        </button>
-                        <button type="button" class="btn-primary" id="nextStep1">
-                            Continue
-                            <i class="fas fa-arrow-right"></i>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Step 2: Contact & ID Verification -->
-                <div class="form-step" id="step2Form">
-                    <h2 style="color: #333; margin-bottom: 25px; font-size: 1.5rem;">Contact & Verification</h2>
-
-                    <div class="form-group">
-                        <label for="email">Email Address *</label>
-                        <div class="input-with-icon">
-                            <i class="fas fa-envelope"></i>
-                            <input type="email" id="email" name="email" class="form-control" required 
-                                placeholder="Enter your email address"
-                                value="<?php echo htmlspecialchars($form_data['email'] ?? ''); ?>"
-                                autocomplete="email"
-                                inputmode="email">
-                        </div>
-                        <small style="display:block; margin-top:5px; color:#666; font-size:0.85rem;">
-                            We will use this email for account notifications and sign-in.
-                        </small>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="phone">Mobile Number *</label>
-                        <div class="input-with-icon">
-                            <i class="fas fa-phone"></i>
-                            <input type="tel" id="phone" name="phone" class="form-control" required 
-                                placeholder="e.g., 09171234567 or +639171234567"
-                                value="<?php echo htmlspecialchars($form_data['phone'] ?? ''); ?>"
-                                autocomplete="tel"
-                                inputmode="tel">
-                        </div>
-                        <small style="display: block; margin-top: 5px; color: #666; font-size: 0.85rem;">
-                            Enter your 11-digit mobile number (starting with 09) or with country code (+63)
-                        </small>
-                    </div>
-
-                    <div class="form-group" style="margin-top:20px;">
-                        <label for="validIdType">Type of Valid ID *</label>
-                        <select id="validIdType" name="valid_id_type" class="form-control" required style="margin-bottom:15px;">
-                            <option value="">Select ID Type</option>
-                            <option value="umid">Unified Multi-Purpose ID (UMID)</option>
-                            <option value="drivers_license">Driver's License</option>
-                            <option value="passport">Philippine Passport</option>
-                            <option value="sss">SSS ID</option>
-                            <option value="gsis">GSIS ID</option>
-                            <option value="prc">PRC ID</option>
-                            <option value="postal">Postal ID</option>
-                            <option value="voters">Voter's ID</option>
-                            <option value="national_id">Philippine National ID (PhilSys)</option>
-                            <option value="tin">TIN ID</option>
-                            <option value="pag_ibig">Pag-IBIG ID</option>
-                            <option value="philhealth">PhilHealth ID</option>
-                        </select>
-                    </div>
-
-                    <div class="form-row" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 20px;">
-                        <div class="form-group">
-                            <label style="display:block; margin-bottom:8px; font-weight:600; color:#333; font-size:0.9rem;">Front of ID Card *</label>
-                            <div class="id-upload-zone" id="zoneFront" style="border: 2px dashed #cbd5e1; border-radius: 12px; padding: 20px 15px; text-align: center; cursor: pointer; transition: all 0.2s ease; background: #f8fafc; position: relative;">
-                                <input type="file" id="validIdFront" name="valid_id_front" accept="image/*" style="display:none;">
-                                <div class="upload-zone-content" id="zoneContentFront">
-                                    <i class="fas fa-id-card" style="font-size: 2.2rem; color: #b3261e; margin-bottom: 10px; display: block;"></i>
-                                    <span style="font-size: 0.85rem; font-weight:700; color: #475569; display: block; margin-bottom: 4px;">Capture Front Side</span>
-                                    <span style="font-size: 0.72rem; color: #94a3b8; display: block; margin-bottom: 8px;">Tap to open camera</span>
-                                    <button type="button" class="direct-upload-btn" data-side="Front" style="display: inline-block; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 5px 12px; font-size: 0.75rem; font-weight: 700; color: #475569; cursor: pointer; transition: all 0.2s ease;">Or upload file</button>
-                                </div>
-                                <div class="upload-preview" id="previewFront" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius: 10px; background: #fff; z-index: 2; overflow: hidden; padding: 4px;">
-                                    <img src="" style="width: 100%; height: 100%; object-fit: contain;">
-                                    <button type="button" class="remove-preview" id="removeFront" style="position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border-radius: 50%; background: rgba(0,0,0,0.6); border: none; color: #fff; font-size: 0.75rem; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 3;"><i class="fas fa-times"></i></button>
+                            <div class="step" id="step2">
+                                <div class="step-label">Verification (Step 2 of 4)</div>
+                            </div>
+                            <div class="step" id="step3">
+                                <div class="step-label" id="step3NavLabel">Address Info (Step 3 of 4)</div>
+                            </div>
+                            <div class="step" id="step4">
+                                <div class="step-label">Create Account (Step 4 of 4)</div>
+                            </div>
+                            <div class="progress-container" style="width: 100%; height: 6px; background: #efddcd; border-radius: 3px; margin-top: 15px; overflow: visible; position: relative;">
+                                <div class="progress-bar" id="progressBar" style="position: absolute; left: 0; top: 0; height: 100%; width: 25%; background: #b3261e; transition: width 0.3s ease; display: block !important; overflow: visible;">
+                                    <div class="running-pig" style="position: absolute; right: -14px; top: -20px; font-size: 22px; user-select: none; line-height: 1; animation: pigRun 0.4s infinite alternate ease-in-out;">🐖</div>
                                 </div>
                             </div>
                         </div>
+                        
+                        <form method="POST" action="" id="registrationForm" data-swal-validate="off" enctype="multipart/form-data" novalidate>
+                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['registration_csrf_token']); ?>">
 
-                        <div class="form-group">
-                            <label style="display:block; margin-bottom:8px; font-weight:600; color:#333; font-size:0.9rem;">Back of ID Card *</label>
-                            <div class="id-upload-zone" id="zoneBack" style="border: 2px dashed #cbd5e1; border-radius: 12px; padding: 20px 15px; text-align: center; cursor: pointer; transition: all 0.2s ease; background: #f8fafc; position: relative;">
-                                <input type="file" id="validIdBack" name="valid_id_back" accept="image/*" style="display:none;">
-                                <div class="upload-zone-content" id="zoneContentBack">
-                                    <i class="fas fa-id-card-clip" style="font-size: 2.2rem; color: #b3261e; margin-bottom: 10px; display: block;"></i>
-                                    <span style="font-size: 0.85rem; font-weight:700; color: #475569; display: block; margin-bottom: 4px;">Capture Back Side</span>
-                                    <span style="font-size: 0.72rem; color: #94a3b8; display: block; margin-bottom: 8px;">Tap to open camera</span>
-                                    <button type="button" class="direct-upload-btn" data-side="Back" style="display: inline-block; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 5px 12px; font-size: 0.75rem; font-weight: 700; color: #475569; cursor: pointer; transition: all 0.2s ease;">Or upload file</button>
-                                </div>
-                                <div class="upload-preview" id="previewBack" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius: 10px; background: #fff; z-index: 2; overflow: hidden; padding: 4px;">
-                                    <img src="" style="width: 100%; height: 100%; object-fit: contain;">
-                                    <button type="button" class="remove-preview" id="removeBack" style="position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border-radius: 50%; background: rgba(0,0,0,0.6); border: none; color: #fff; font-size: 0.75rem; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 3;"><i class="fas fa-times"></i></button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                            <input type="hidden" name="account_type" id="accountType" value="<?php echo htmlspecialchars($form_data['account_type'] ?? 'individual'); ?>">
+                            <input type="hidden" name="psgc_region_code" id="psgcRegionCode" value="<?php echo htmlspecialchars($form_data['psgc_region_code'] ?? ''); ?>">
+                            <input type="hidden" name="psgc_region_name" id="psgcRegionName" value="<?php echo htmlspecialchars($form_data['psgc_region_name'] ?? ''); ?>">
+                            <input type="hidden" name="psgc_province_code" id="psgcProvinceCode" value="<?php echo htmlspecialchars($form_data['psgc_province_code'] ?? ''); ?>">
+                            <input type="hidden" name="psgc_province_name" id="psgcProvinceName" value="<?php echo htmlspecialchars($form_data['psgc_province_name'] ?? ''); ?>">
+                            <input type="hidden" name="psgc_city_code" id="psgcCityCode" value="<?php echo htmlspecialchars($form_data['psgc_city_code'] ?? ''); ?>">
+                            <input type="hidden" name="psgc_city_name" id="psgcCityName" value="<?php echo htmlspecialchars($form_data['psgc_city_name'] ?? ''); ?>">
+                            <input type="hidden" name="psgc_barangay_code" id="psgcBarangayCode" value="<?php echo htmlspecialchars($form_data['psgc_barangay_code'] ?? ''); ?>">
+                            <input type="hidden" name="psgc_barangay_name" id="psgcBarangayName" value="<?php echo htmlspecialchars($form_data['psgc_barangay_name'] ?? ''); ?>">
+                        
 
-                    <div class="form-actions">
-                        <button type="button" class="btn-secondary" id="prevStep2">
-                            <i class="fas fa-arrow-left"></i>
-                            Back
-                        </button>
-                        <button type="button" class="btn-primary" id="nextStep2">
-                            Continue
-                            <i class="fas fa-arrow-right"></i>
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Step 3: Address + Business Partner Information -->
-                <div class="form-step" id="step3Form">
-                    <h2 id="step3Title" style="color: #333; margin-bottom: 10px; font-size: 1.5rem;">Add your delivery details</h2>
-                    <p id="step3Subtitle" style="margin: 0 0 18px; color: #666; font-size: 0.92rem;">
-                        Provide your address so we can help you get your orders delivered smoothly.
-                    </p>
                     
-                        <div id="organizationFields">
+                    <!-- Step 1: Personal Information -->
+                    <div class="form-step active" id="step1Form">
+                        <h2 style="color: #333; margin-bottom: 25px; font-size: 1.5rem;">Tell us about you</h2>
+                        
+                        <div class="form-row">
                             <div class="form-group">
-                            <label for="businessName">Restaurant Name *</label>
-                            <input type="text" id="businessName" name="business_name" class="form-control" 
-                                placeholder="Enter your restaurant name"
-                                value="<?php echo htmlspecialchars($form_data['business_name'] ?? ''); ?>">
+                                <label for="firstName">First Name *</label>
+                                <input type="text" id="firstName" name="first_name" class="form-control" required 
+                                    placeholder="Enter your first name"
+                                    value="<?php echo htmlspecialchars($form_data['first_name'] ?? ''); ?>"
+                                    autocomplete="given-name">
+                            </div>
+                            <div class="form-group">
+                                <label for="lastName">Last Name *</label>
+                                <input type="text" id="lastName" name="last_name" class="form-control" required 
+                                    placeholder="Enter your last name"
+                                    value="<?php echo htmlspecialchars($form_data['last_name'] ?? ''); ?>"
+                                    autocomplete="family-name">
+                            </div>
                         </div>
                         
                         <div class="form-row">
                             <div class="form-group">
-                                <label for="businessType">Business Type</label>
-                                <select id="businessType" name="business_type" class="form-control">
-                                    <option value="restaurant" selected>Restaurant</option>
-                                </select>
+                                <label for="middleName">Middle Name</label>
+                                <input type="text" id="middleName" name="middle_name" class="form-control"
+                                    placeholder="Optional"
+                                    value="<?php echo htmlspecialchars($form_data['middle_name'] ?? ''); ?>"
+                                    autocomplete="additional-name">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="dob">Date of Birth</label>
+                                <input type="date" id="dob" name="dob" class="form-control"
+                                    value="<?php echo htmlspecialchars($form_data['dob'] ?? ''); ?>">
                             </div>
                             <div class="form-group">
-                                <label for="businessRegistration">Business Registration Number</label>
-                                <input type="text" id="businessRegistration" name="business_registration" class="form-control" 
-                                    placeholder="Enter registration number"
-                                    value="<?php echo htmlspecialchars($form_data['business_registration'] ?? ''); ?>">
+                                <label for="gender">Gender</label>
+                                <select id="gender" name="gender" class="form-control">
+                                    <option value="" <?php echo empty($form_data['gender']) ? 'selected' : ''; ?>>Prefer not to say</option>
+                                    <option value="male" <?php echo ($form_data['gender'] ?? '') === 'male' ? 'selected' : ''; ?>>Male</option>
+                                    <option value="female" <?php echo ($form_data['gender'] ?? '') === 'female' ? 'selected' : ''; ?>>Female</option>
+                                    <option value="other" <?php echo ($form_data['gender'] ?? '') === 'other' ? 'selected' : ''; ?>>Other</option>
+                                </select>
                             </div>
                         </div>
                         
-                        <div class="form-group">
-                            <label for="taxId">Tax ID Number</label>
-                            <input type="text" id="taxId" name="tax_id" class="form-control" 
-                                placeholder="Enter TIN"
-                                value="<?php echo htmlspecialchars($form_data['tax_id'] ?? ''); ?>">
+                        <div class="button-group">
+                            <button type="button" class="btn btn-primary" id="nextStep1" style="width: 100%;">Continue <i class="fas fa-arrow-right ms-1"></i></button>
                         </div>
                     </div>
                     
-                    <div class="form-group" style="margin-bottom: 14px;">
-                        <label for="homeAddressInput" id="addressSectionLabel" style="font-weight: 700; color: #1e293b; font-size: 0.95rem; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
-                            <span><i class="fas fa-location-dot" style="color: #b3261e; margin-right: 6px;"></i> Enter Home Address *</span>
-                            <span style="font-size: 0.78rem; font-weight: 700; color: #b3261e; background: #fff1f0; padding: 3px 10px; border-radius: 12px; border: 1px solid #fee4e2;">Cavite Only</span>
-                        </label>
-                        <div class="input-with-icon" style="position: relative;">
-                            <i class="fas fa-search" style="color: #94a3b8;"></i>
-                            <input type="text" id="homeAddressInput" class="form-control"
-                                placeholder="Type your street, subdivision, barangay, or landmark in Cavite..."
-                                value="<?php echo htmlspecialchars($form_data['address'] ?? ''); ?>"
-                                autocomplete="street-address"
-                                style="padding-left: 46px; padding-right: 40px;">
-                            <button type="button" id="clearRegAddressBtn" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 1rem; padding: 4px; display: none;">
-                                <i class="fas fa-times-circle"></i>
-                            </button>
+                    <!-- Step 2: Verification (Upload Government ID / Business Proof) -->
+                    <div class="form-step" id="step2Form">
+                        <div class="mb-4">
+                            <h2 style="color: #333; margin-bottom: 8px; font-size: 1.5rem;" id="step2Title">Upload Valid ID</h2>
+                            <p style="color: #666; font-size: 0.95rem;" id="step2Subtitle">Please upload front and back of a valid government-issued ID for identity verification.</p>
                         </div>
-                    </div>
+                        
+                        <div class="form-group mb-4">
+                            <label for="validIdType" id="idTypeLabel">Select ID Type *</label>
+                            <select id="validIdType" name="valid_id_type" class="form-control" required>
+                                <option value="" disabled <?php echo empty($form_data['valid_id_type']) ? 'selected' : ''; ?>>Select a valid ID type</option>
+                                <option value="national_id" <?php echo ($form_data['valid_id_type'] ?? '') === 'national_id' ? 'selected' : ''; ?>>Philippine National ID (PhilSys)</option>
+                                <option value="passport" <?php echo ($form_data['valid_id_type'] ?? '') === 'passport' ? 'selected' : ''; ?>>Philippine Passport</option>
+                                <option value="drivers_license" <?php echo ($form_data['valid_id_type'] ?? '') === 'drivers_license' ? 'selected' : ''; ?>>Driver's License (LTO)</option>
+                                <option value="umid" <?php echo ($form_data['valid_id_type'] ?? '') === 'umid' ? 'selected' : ''; ?>>UMID Card</option>
+                                <option value="sss" <?php echo ($form_data['valid_id_type'] ?? '') === 'sss' ? 'selected' : ''; ?>>SSS ID</option>
+                                <option value="postal" <?php echo ($form_data['valid_id_type'] ?? '') === 'postal' ? 'selected' : ''; ?>>Postal ID</option>
+                                <option value="prc" <?php echo ($form_data['valid_id_type'] ?? '') === 'prc' ? 'selected' : ''; ?>>PRC ID</option>
+                                <option value="senior_citizen" <?php echo ($form_data['valid_id_type'] ?? '') === 'senior_citizen' ? 'selected' : ''; ?>>Senior Citizen ID</option>
+                                <option value="ofw" <?php echo ($form_data['valid_id_type'] ?? '') === 'ofw' ? 'selected' : ''; ?>>OFW ID</option>
+                            </select>
+                        </div>
 
-                    <!-- Interactive Leaflet Map for Pinning Exact Cavite Location -->
-                    <div class="form-group" style="margin-bottom: 16px;">
-                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
-                            <span style="font-size: 0.88rem; font-weight: 600; color: #475569;">
-                                <i class="fas fa-map-pin" style="color: #b3261e; margin-right: 4px;"></i> Pin exact location on map:
-                            </span>
-                            <button type="button" id="useCurrentLocationBtn" style="background: none; border: none; color: #b3261e; font-size: 0.82rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px;">
-                                <i class="fas fa-crosshairs"></i> Use My Current Location
-                            </button>
-                        </div>
-                        <div id="registerMapWrapper" style="position: relative; border-radius: 14px; overflow: hidden; border: 2px solid #e2e8f0; box-shadow: 0 4px 14px rgba(0,0,0,0.06); transition: border-color 0.2s;">
-                            <div id="registerMapCanvas" style="width: 100%; height: 260px; background: #f8fafc; z-index: 1;"></div>
-                            
-                            <!-- Map Overlay Controls -->
-                            <div style="position: absolute; top: 10px; right: 10px; z-index: 400; background: rgba(255,255,255,0.95); backdrop-filter: blur(4px); padding: 4px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; color: #1e293b; border: 1px solid #e2e8f0; pointer-events: none; box-shadow: 0 2px 6px rgba(0,0,0,0.08);">
-                                <i class="fas fa-hand-pointer" style="color: #b3261e; margin-right: 4px;"></i> Drag pin or click map
+                        <!-- ID Upload Controls Container -->
+                        <div style="display: flex; flex-direction: column; gap: 20px;">
+                            <!-- Front Side Upload -->
+                            <div class="id-card-panel" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                    <label style="margin: 0; font-weight: 700; color: #1e293b; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
+                                        <i class="fas fa-id-card-clip" style="color: #b3261e;"></i> <span id="frontDocLabel">Front Side of Valid ID</span> *
+                                    </label>
+                                    <span class="badge" id="frontStatusBadge" style="background: #f1f5f9; color: #64748b; font-size: 0.75rem; padding: 4px 8px; border-radius: 6px;">Pending</span>
+                                </div>
+                                <div style="display: flex; gap: 12px; margin-bottom: 12px;">
+                                    <button type="button" class="btn trigger-camera-btn" data-target="front" style="flex: 1; height: 42px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; color: #334155; font-weight: 600; font-size: 0.88rem; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;">
+                                        <i class="fas fa-camera" style="color: #b3261e;"></i> Take Photo
+                                    </button>
+                                    <button type="button" class="btn direct-upload-btn" data-target="validIdFront" style="flex: 1; height: 42px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; color: #334155; font-weight: 600; font-size: 0.88rem; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;">
+                                        <i class="fas fa-cloud-arrow-up" style="color: #b3261e;"></i> Upload File
+                                    </button>
+                                </div>
+                                <input type="file" id="validIdFront" name="valid_id_front" accept="image/*" style="display: none;">
+                                <div id="previewContainerFront" style="display: none; position: relative; border-radius: 8px; overflow: hidden; max-height: 180px; background: #000; border: 1px solid #cbd5e1;">
+                                    <img id="imagePreviewFront" src="#" alt="Front Preview" style="width: 100%; height: 180px; object-fit: contain; display: block;">
+                                    <button type="button" class="remove-preview-btn" data-target="front" style="position: absolute; top: 8px; right: 8px; background: rgba(15, 23, 42, 0.75); color: #fff; border: none; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 0.8rem; backdrop-filter: blur(4px);"><i class="fas fa-times"></i></button>
+                                </div>
                             </div>
-                        </div>
 
-                        <!-- Real-time Cavite Status Banner -->
-                        <div id="caviteAreaStatusBadge" style="margin-top: 10px; padding: 10px 14px; border-radius: 10px; font-size: 0.88rem; display: flex; align-items: center; gap: 10px; transition: all 0.2s; background: #fff8f6; border: 1px solid #fed7c7; color: #b3261e;">
-                            <i id="caviteStatusIcon" class="fas fa-info-circle" style="font-size: 1.1rem; flex-shrink: 0;"></i>
-                            <span id="caviteStatusText">Drag the map pin or type your address to verify your location inside Cavite.</span>
-                        </div>
-                    </div>
-
-                    <!-- Hidden Form Inputs for verified address payload -->
-                    <input type="hidden" id="regAddress" name="address" value="<?php echo htmlspecialchars($form_data['address'] ?? ''); ?>">
-                    <input type="hidden" id="regStreetAddress" name="street_address" value="<?php echo htmlspecialchars($form_data['street_address'] ?? ''); ?>">
-                    <input type="hidden" id="regLatitude" name="latitude" value="<?php echo htmlspecialchars($form_data['latitude'] ?? ''); ?>">
-                    <input type="hidden" id="regLongitude" name="longitude" value="<?php echo htmlspecialchars($form_data['longitude'] ?? ''); ?>">
-                    <input type="hidden" id="regCityName" name="city_name" value="<?php echo htmlspecialchars($form_data['city_name'] ?? ''); ?>">
-                    <input type="hidden" id="regProvinceName" name="province_name" value="Cavite">
-                    
-                    <div class="form-actions">
-                        <button type="button" class="btn-secondary" id="prevStep3">
-                            <i class="fas fa-arrow-left"></i>
-                            Back
-                        </button>
-                        <button type="button" class="btn-primary" id="nextStep3">
-                            Continue
-                            <i class="fas fa-arrow-right"></i>
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Step 4: Create Account -->
-                <div class="form-step" id="step4Form">
-                    <h2 style="color: #333; margin-bottom: 25px; font-size: 1.5rem;">Secure your account</h2>
-                    
-                    <div class="form-group">
-                        <label for="password">Password *</label>
-                        <div class="password-wrapper input-with-icon">
-                            <i class="fas fa-lock"></i>
-                            <input type="password" id="password" name="password" class="form-control" required 
-                                placeholder="Create a strong password"
-                                autocomplete="new-password"
-                                minlength="8"
-                                maxlength="72"
-                                pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,72}"
-                                title="Use at least 8 characters with uppercase, lowercase, number, and symbol.">
-                            <button type="button" class="toggle-password" aria-label="Toggle password visibility">
-                                <i class="fas fa-eye"></i>
-                            </button>
-                        </div>
-                        <div class="password-strength">
-                            <div class="strength-indicator">
-                                <span class="strength-text" id="strengthText">Weak</span>
-                                <div class="strength-bars">
-                                    <div class="strength-bar" id="strengthBar1"></div>
-                                    <div class="strength-bar" id="strengthBar2"></div>
-                                    <div class="strength-bar" id="strengthBar3"></div>
-                                    <div class="strength-bar" id="strengthBar4"></div>
+                            <!-- Back Side Upload -->
+                            <div class="id-card-panel" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                    <label style="margin: 0; font-weight: 700; color: #1e293b; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
+                                        <i class="fas fa-id-card" style="color: #b3261e;"></i> <span id="backDocLabel">Back Side of Valid ID</span> *
+                                    </label>
+                                    <span class="badge" id="backStatusBadge" style="background: #f1f5f9; color: #64748b; font-size: 0.75rem; padding: 4px 8px; border-radius: 6px;">Pending</span>
+                                </div>
+                                <div style="display: flex; gap: 12px; margin-bottom: 12px;">
+                                    <button type="button" class="btn trigger-camera-btn" data-target="back" style="flex: 1; height: 42px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; color: #334155; font-weight: 600; font-size: 0.88rem; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;">
+                                        <i class="fas fa-camera" style="color: #b3261e;"></i> Take Photo
+                                    </button>
+                                    <button type="button" class="btn direct-upload-btn" data-target="validIdBack" style="flex: 1; height: 42px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; color: #334155; font-weight: 600; font-size: 0.88rem; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;">
+                                        <i class="fas fa-cloud-arrow-up" style="color: #b3261e;"></i> Upload File
+                                    </button>
+                                </div>
+                                <input type="file" id="validIdBack" name="valid_id_back" accept="image/*" style="display: none;">
+                                <div id="previewContainerBack" style="display: none; position: relative; border-radius: 8px; overflow: hidden; max-height: 180px; background: #000; border: 1px solid #cbd5e1;">
+                                    <img id="imagePreviewBack" src="#" alt="Back Preview" style="width: 100%; height: 180px; object-fit: contain; display: block;">
+                                    <button type="button" class="remove-preview-btn" data-target="back" style="position: absolute; top: 8px; right: 8px; background: rgba(15, 23, 42, 0.75); color: #fff; border: none; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 0.8rem; backdrop-filter: blur(4px);"><i class="fas fa-times"></i></button>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="confirmPassword">Confirm Password *</label>
-                        <div class="password-wrapper input-with-icon">
-                            <i class="fas fa-lock"></i>
-                            <input type="password" id="confirmPassword" name="confirm_password" class="form-control" required 
-                                placeholder="Confirm your password"
-                                autocomplete="new-password">
-                            <button type="button" class="toggle-password" aria-label="Toggle password visibility">
-                                <i class="fas fa-eye"></i>
-                            </button>
+
+                        <!-- Organization Additional Fields -->
+                        <div id="organizationFields" style="display: none; margin-top: 20px;">
+                            <div class="form-group mb-4">
+                                <label for="businessName">Business / Company Name *</label>
+                                <input type="text" id="businessName" name="business_name" class="form-control" 
+                                    placeholder="Enter registered business name"
+                                    value="<?php echo htmlspecialchars($form_data['business_name'] ?? ''); ?>">
+                            </div>
+                            <div class="form-group mb-4">
+                                <label for="businessType">Business Type *</label>
+                                <select id="businessType" name="business_type" class="form-control">
+                                    <option value="" disabled <?php echo empty($form_data['business_type']) ? 'selected' : ''; ?>>Select business structure</option>
+                                    <option value="sole_proprietorship" <?php echo ($form_data['business_type'] ?? '') === 'sole_proprietorship' ? 'selected' : ''; ?>>Sole Proprietorship</option>
+                                    <option value="partnership" <?php echo ($form_data['business_type'] ?? '') === 'partnership' ? 'selected' : ''; ?>>Partnership</option>
+                                    <option value="corporation" <?php echo ($form_data['business_type'] ?? '') === 'corporation' ? 'selected' : ''; ?>>Corporation</option>
+                                    <option value="cooperative" <?php echo ($form_data['business_type'] ?? '') === 'cooperative' ? 'selected' : ''; ?>>Cooperative</option>
+                                </select>
+                            </div>
+                            <div class="form-group mb-4">
+                                <label for="tinNumber">Tax Identification Number (TIN)</label>
+                                <input type="text" id="tinNumber" name="tin_number" class="form-control" 
+                                    placeholder="000-000-000-000"
+                                    value="<?php echo htmlspecialchars($form_data['tin_number'] ?? ''); ?>">
+                            </div>
+                        </div>
+                        
+                        <div class="button-group" style="margin-top: 25px;">
+                            <button type="button" class="btn btn-secondary" id="prevStep2"><i class="fas fa-arrow-left me-1"></i> Back</button>
+                            <button type="button" class="btn btn-primary" id="nextStep2">Continue <i class="fas fa-arrow-right ms-1"></i></button>
                         </div>
                     </div>
                     
-                    <div class="verification-note">
-                        <i class="fas fa-envelope-open-text"></i>
-                        <div>
-                            <strong>What happens next?</strong><br>
-                            After you create your account, we’ll send a confirmation email so you can verify your address and start using your account.
+                    <!-- Step 3: Address Information (Cavite-only with Leaflet Interactive Map) -->
+                    <div class="form-step" id="step3Form">
+                        <h2 style="color: #333; margin-bottom: 8px; font-size: 1.5rem;" id="step3Title">Enter Home Address</h2>
+                        <p style="color: #666; font-size: 0.95rem; margin-bottom: 20px;" id="step3Subtitle">Please provide your home address. Registrations are strictly limited to the Cavite area.</p>
+
+                        <!-- Single Home Address Input -->
+                        <div class="form-group mb-3">
+                            <label for="homeAddressInput" style="font-weight: 700; color: #1e293b;">Home Address (Cavite Only) *</label>
+                            <div style="position: relative;">
+                                <input type="text" id="homeAddressInput" class="form-control" required
+                                    placeholder="House/Unit No., Street, Barangay, City/Municipality, Cavite"
+                                    value="<?php echo htmlspecialchars($form_data['address'] ?? ''); ?>"
+                                    autocomplete="street-address"
+                                    style="padding-right: 40px;">
+                                <i class="fas fa-location-dot" style="position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: #b3261e; font-size: 1.1rem; pointer-events: none;"></i>
+                            </div>
+                            <small class="text-muted" style="display: block; margin-top: 5px; font-size: 0.82rem;">
+                                Type your home address or click/drag the pin on the map inside Cavite.
+                            </small>
+                        </div>
+
+                        <!-- Hidden Address Payload Fields for Backend Submission -->
+                        <input type="hidden" id="regAddress" name="address" value="<?php echo htmlspecialchars($form_data['address'] ?? ''); ?>">
+                        <input type="hidden" id="regStreetAddress" name="street_address" value="<?php echo htmlspecialchars($form_data['street_address'] ?? ''); ?>">
+                        <input type="hidden" id="regLatitude" name="latitude" value="<?php echo htmlspecialchars($form_data['latitude'] ?? ''); ?>">
+                        <input type="hidden" id="regLongitude" name="longitude" value="<?php echo htmlspecialchars($form_data['longitude'] ?? ''); ?>">
+                        <input type="hidden" id="regCityName" name="city_name" value="<?php echo htmlspecialchars($form_data['city_name'] ?? ''); ?>">
+                        <input type="hidden" id="regProvinceName" name="province_name" value="<?php echo htmlspecialchars($form_data['province_name'] ?? 'Cavite'); ?>">
+
+                        <!-- Cavite Geofence Status Indicator Card -->
+                        <div id="caviteAreaStatusBadge" style="margin-bottom: 15px; padding: 12px 14px; border-radius: 10px; font-size: 0.88rem; display: flex; align-items: center; gap: 10px; background: #fff8f6; border: 1px solid #ffdcd6; color: #8c201a; transition: all 0.3s ease;">
+                            <i class="fas fa-map-pin" id="caviteStatusIcon" style="font-size: 1.1rem;"></i>
+                            <span id="caviteStatusText">Please search your address or pin your location in Cavite.</span>
+                        </div>
+
+                        <!-- Leaflet Interactive Cavite Map -->
+                        <div style="position: relative; margin-bottom: 20px;">
+                            <div id="registerMapWrapper" style="width: 100%; height: 260px; border-radius: 12px; border: 1px solid #cbd5e1; overflow: hidden; background: #f1f5f9;">
+                                <div id="registerMap" style="width: 100%; height: 100%;"></div>
+                            </div>
+                            <button type="button" id="useCurrentLocationBtn" style="position: absolute; bottom: 12px; right: 12px; z-index: 500; background: #ffffff; color: #1e293b; border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px 12px; font-size: 0.8rem; font-weight: 700; box-shadow: 0 2px 8px rgba(0,0,0,0.12); cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                                <i class="fas fa-crosshairs" style="color: #b3261e;"></i> Locate Me
+                            </button>
+                        </div>
+                        
+                        <div class="button-group">
+                            <button type="button" class="btn btn-secondary" id="prevStep3"><i class="fas fa-arrow-left me-1"></i> Back</button>
+                            <button type="button" class="btn btn-primary" id="nextStep3">Continue <i class="fas fa-arrow-right ms-1"></i></button>
+                        </div>
+                    </div>
+                    
+                    <!-- Step 4: Create Account (Email, Phone, Password) -->
+                    <div class="form-step" id="step4Form">
+                        <h2 style="color: #333; margin-bottom: 25px; font-size: 1.5rem;">Account Security</h2>
+                        
+                        <div class="form-group mb-4">
+                            <label for="email">Email Address *</label>
+                            <input type="email" id="email" name="email" class="form-control" required 
+                                placeholder="name@example.com"
+                                value="<?php echo htmlspecialchars($form_data['email'] ?? ''); ?>"
+                                autocomplete="email">
+                        </div>
+                        
+                        <div class="form-group mb-4">
+                            <label for="phone">Mobile Phone Number *</label>
+                            <input type="tel" id="phone" name="phone" class="form-control" required 
+                                placeholder="09123456789"
+                                value="<?php echo htmlspecialchars($form_data['phone'] ?? ''); ?>"
+                                autocomplete="tel">
+                        </div>
+                        
+                        <div class="form-group mb-4">
+                            <label for="password">Password *</label>
+                            <div class="password-input-group">
+                                <input type="password" id="password" name="password" class="form-control" required 
+                                    placeholder="At least 8 characters"
+                                    autocomplete="new-password">
+                                <button type="button" class="toggle-password" data-target="password"><i class="fas fa-eye"></i></button>
+                            </div>
+                            <div class="password-strength" id="passwordStrength"></div>
+                        </div>
+                        
+                        <div class="form-group mb-4">
+                            <label for="confirmPassword">Confirm Password *</label>
+                            <div class="password-input-group">
+                                <input type="password" id="confirmPassword" name="confirm_password" class="form-control" required 
+                                    placeholder="Re-enter password"
+                                    autocomplete="new-password">
+                                <button type="button" class="toggle-password" data-target="confirmPassword"><i class="fas fa-eye"></i></button>
+                            </div>
+                        </div>
+
+                        <!-- Terms & Conditions Checkbox -->
+                        <div class="terms-group mb-4">
+                            <label class="checkbox-label" style="font-size: 0.9rem; color: #555;">
+                                <input type="checkbox" id="terms" name="terms" required style="accent-color: #b3261e; margin-right: 8px;">
+                                I agree to the <a href="terms_of_service.php" target="_blank" style="color: #b3261e; text-decoration: underline;">Terms & Conditions</a> and <a href="privacy_policy.php" target="_blank" style="color: #b3261e; text-decoration: underline;">Privacy Policy</a>.
+                            </label>
+                        </div>
+                        
+                        <div class="button-group">
+                            <button type="button" class="btn btn-secondary" id="prevStep4"><i class="fas fa-arrow-left me-1"></i> Back</button>
+                            <button type="submit" class="btn btn-primary" id="submitBtn">Create Account <i class="fas fa-check ms-1"></i></button>
                         </div>
                     </div>
 
-                    <div class="terms-agreement">
-                        <input type="checkbox" id="acceptTerms" name="accept_terms" required>
-                        <label for="acceptTerms">
-                            I agree to the <a href="terms_of_service.php" data-policy-modal="terms">Terms of Service</a> and 
-                            <a href="privacy_policy.php" data-policy-modal="privacy">Privacy Policy</a>
-                        </label>
-                    </div>
-                    
-                    <div class="form-actions">
-                        <button type="button" class="btn-secondary" id="prevStep4">
-                            <i class="fas fa-arrow-left"></i>
-                            Back
-                        </button>
-                        <button type="submit" class="btn-primary" id="submitRegistration">
-                            <i class="fas fa-user-plus"></i>
-                            <span>Create Account</span>
-                        </button>
-                    </div>
+                    </form>
                 </div>
-            </form>
-            
-            <!-- Social Registration Divider -->
-            <div class="social-divider">
-                <span>Or register with</span>
+                </div>
+
+                <!-- View 2: Login Form (Smooth Slide Transition) -->
+                <div id="loginViewWrapper" class="auth-view-wrapper" style="display: none; opacity: 0;">
+                    <div class="registration-header" style="background:#fff; text-align:center; margin-bottom:24px; padding:0 0 10px;">
+                        <div style="display:inline-flex; align-items:center; justify-content:center; gap:10px; margin-bottom:12px;">
+                            <img src="assets/images/logo.jpg" alt="Lechon Delights Logo" style="width:48px; height:48px; object-fit:cover; border-radius:12px; display:block; border:1px solid #efddcd; box-shadow:0 4px 12px rgba(0,0,0,0.06);">
+                            <span style="font-size:1.6rem; font-weight:800; color:#171922; font-family:'Outfit', sans-serif;">Lechon Delights</span>
+                        </div>
+                        <h2 style="font-size:1.8rem; font-weight:700; color:#333; margin-bottom:10px;">Welcome Back!</h2>
+                        <p style="font-size:1rem; color:#666; margin:0;">Sign in to continue to your account.</p>
+                    </div>
+
+                    <form method="POST" action="login.php" id="ajaxLoginForm" novalidate>
+                        <input type="hidden" name="login" value="1">
+                        <input type="hidden" name="ajax" value="true">
+
+                        <div class="form-group" style="margin-bottom: 20px;">
+                            <label for="loginEmail" style="display:block; margin-bottom:8px; color:#333; font-weight:600; font-size:0.95rem;">Email Address *</label>
+                            <div class="input-with-icon" style="position: relative;">
+                                <input type="email" id="loginEmail" name="email" class="form-control" required placeholder="Enter your email address" autocomplete="email" style="padding-left: 44px;">
+                                <i class="fas fa-envelope" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: #94a3b8;"></i>
+                            </div>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 20px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                <label for="loginPassword" style="margin:0; color:#333; font-weight:600; font-size:0.95rem;">Password *</label>
+                                <a href="reset_password_request.php" style="font-size:0.85rem; color:#b3261e; text-decoration:none; font-weight:600;">Forgot Password?</a>
+                            </div>
+                            <div class="input-with-icon" style="position: relative;">
+                                <input type="password" id="loginPassword" name="password" class="form-control" required placeholder="Enter your password" autocomplete="current-password" style="padding-left: 44px; padding-right: 44px;">
+                                <i class="fas fa-lock" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: #94a3b8;"></i>
+                                <button type="button" id="toggleLoginPasswordBtn" style="position: absolute; right: 14px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #94a3b8; cursor: pointer; padding: 4px;">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:24px;">
+                            <label style="display:flex; align-items:center; gap:8px; font-size:0.9rem; color:#475467; cursor:pointer; margin:0;">
+                                <input type="checkbox" name="remember" value="1" style="accent-color:#b3261e; width:16px; height:16px;">
+                                <span>Remember me</span>
+                            </label>
+                        </div>
+
+                        <button type="submit" id="loginSubmitBtn" class="btn btn-primary" style="width:100%; height:48px; font-size:1rem; font-weight:700; border-radius:10px; background:#b3261e; color:#fff; border:none; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; box-shadow: 0 4px 14px rgba(179, 38, 30, 0.25); transition: all 0.25s;">
+                            <span>Sign In</span> <i class="fas fa-arrow-right"></i>
+                        </button>
+                    </form>
+                </div>
+
             </div>
-            
-            <!-- Social Login Buttons -->
-            <div class="social-login-buttons">
-                <button type="button" class="social-btn google-btn" id="googleRegisterBtn" title="Register with Google">
-                    <i class="fab fa-google"></i>
-                    <span>Google</span>
-                </button>
-                <button type="button" class="social-btn facebook-btn" id="facebookRegisterBtn" title="Register with Facebook">
-                    <i class="fab fa-facebook-f"></i>
-                    <span>Facebook</span>
-                </button>
-                <button type="button" class="social-btn twitter-btn" id="twitterRegisterBtn" title="Register with X">
-                    <i class="fab fa-x-twitter"></i>
-                    <span>X</span>
-                </button>
-                <button type="button" class="social-btn instagram-btn" id="instagramRegisterBtn" title="Register with Instagram">
-                    <i class="fab fa-instagram"></i>
-                    <span>Instagram</span>
-                </button>
-            </div>
-            
-            <div class="auth-link">
-                Already have an account? 
-                <a href="login.php">Sign in here</a>
-            </div>
-        </div>
-        </div>
         </div>
     </div>
 </div>
@@ -2055,6 +2258,244 @@ document.addEventListener('DOMContentLoaded', function() {
     let regMarker = null;
     let isAddressInCavite = false;
     let addressDebounceTimer = null;
+
+    // Sliding Auth Panel Controller
+    const authSplitLayout = document.getElementById('authSplitLayout');
+    const heroRegisterView = document.getElementById('heroRegisterView');
+    const heroLoginView = document.getElementById('heroLoginView');
+    const registerViewWrapper = document.getElementById('registerViewWrapper');
+    const loginViewWrapper = document.getElementById('loginViewWrapper');
+    const liquidRippleSurge = document.getElementById('liquidRippleSurge');
+
+    function triggerLiquidSurge(originX, originY) {
+        if (!liquidRippleSurge) return;
+        liquidRippleSurge.classList.remove('is-animating');
+        
+        const x = originX !== undefined ? originX : window.innerWidth / 2;
+        const y = originY !== undefined ? originY : window.innerHeight / 2;
+        
+        liquidRippleSurge.style.left = (x - 10) + 'px';
+        liquidRippleSurge.style.top = (y - 10) + 'px';
+        
+        // Trigger reflow
+        void liquidRippleSurge.offsetWidth;
+        liquidRippleSurge.classList.add('is-animating');
+    }
+
+    function createWaterDropRipple(e, targetBtn) {
+        if (!targetBtn) return;
+        const rect = targetBtn.getBoundingClientRect();
+        const ripple = document.createElement('span');
+        ripple.className = 'water-drop-ripple';
+        const size = Math.max(rect.width, rect.height);
+        ripple.style.width = ripple.style.height = size + 'px';
+        ripple.style.left = (e.clientX - rect.left - size / 2) + 'px';
+        ripple.style.top = (e.clientY - rect.top - size / 2) + 'px';
+        targetBtn.appendChild(ripple);
+        setTimeout(() => ripple.remove(), 650);
+    }
+
+    function switchAuthMode(mode, animate = true, clickEvent = null) {
+        if (animate) {
+            const clickX = clickEvent ? clickEvent.clientX : (window.innerWidth / 2);
+            const clickY = clickEvent ? clickEvent.clientY : (window.innerHeight / 2);
+            triggerLiquidSurge(clickX, clickY);
+        }
+
+        if (mode === 'login') {
+            if (authSplitLayout) authSplitLayout.classList.add('is-login-mode');
+            
+            // Fade out register views with fluid staggered delay
+            if (heroRegisterView) {
+                heroRegisterView.style.opacity = '0';
+                heroRegisterView.style.transform = 'translateY(15px) scale(0.96)';
+                setTimeout(() => {
+                    heroRegisterView.style.display = 'none';
+                    if (heroLoginView) {
+                        heroLoginView.style.display = 'flex';
+                        heroLoginView.style.transform = 'translateY(-15px) scale(0.96)';
+                        setTimeout(() => { 
+                            heroLoginView.style.opacity = '1'; 
+                            heroLoginView.style.transform = 'translateY(0) scale(1)';
+                        }, 30);
+                    }
+                }, animate ? 280 : 0);
+            }
+
+            if (registerViewWrapper) {
+                registerViewWrapper.style.opacity = '0';
+                registerViewWrapper.style.transform = 'translateX(-20px)';
+                setTimeout(() => {
+                    registerViewWrapper.style.display = 'none';
+                    if (loginViewWrapper) {
+                        loginViewWrapper.style.display = 'block';
+                        loginViewWrapper.style.transform = 'translateX(20px)';
+                        setTimeout(() => {
+                            loginViewWrapper.style.opacity = '1';
+                            loginViewWrapper.style.transform = 'translateX(0)';
+                            const loginEmailInput = document.getElementById('loginEmail');
+                            if (loginEmailInput) loginEmailInput.focus();
+                        }, 30);
+                    }
+                }, animate ? 280 : 0);
+            }
+
+            history.replaceState(null, '', '#login');
+        } else {
+            if (authSplitLayout) authSplitLayout.classList.remove('is-login-mode');
+            
+            // Fade out login views with fluid staggered delay
+            if (heroLoginView) {
+                heroLoginView.style.opacity = '0';
+                heroLoginView.style.transform = 'translateY(15px) scale(0.96)';
+                setTimeout(() => {
+                    heroLoginView.style.display = 'none';
+                    if (heroRegisterView) {
+                        heroRegisterView.style.display = 'flex';
+                        heroRegisterView.style.transform = 'translateY(-15px) scale(0.96)';
+                        setTimeout(() => { 
+                            heroRegisterView.style.opacity = '1'; 
+                            heroRegisterView.style.transform = 'translateY(0) scale(1)';
+                        }, 30);
+                    }
+                }, animate ? 280 : 0);
+            }
+
+            if (loginViewWrapper) {
+                loginViewWrapper.style.opacity = '0';
+                loginViewWrapper.style.transform = 'translateX(20px)';
+                setTimeout(() => {
+                    loginViewWrapper.style.display = 'none';
+                    if (registerViewWrapper) {
+                        registerViewWrapper.style.display = 'block';
+                        registerViewWrapper.style.transform = 'translateX(-20px)';
+                        setTimeout(() => {
+                            registerViewWrapper.style.opacity = '1';
+                            registerViewWrapper.style.transform = 'translateX(0)';
+                            if (regMap && typeof regMap.invalidateSize === 'function') {
+                                setTimeout(() => regMap.invalidateSize(), 300);
+                            }
+                        }, 30);
+                    }
+                }, animate ? 280 : 0);
+            }
+
+            history.replaceState(null, '', '#register');
+        }
+    }
+
+    // Attach click triggers to all switch buttons and links
+    document.querySelectorAll('.js-trigger-slide-login').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            createWaterDropRipple(e, this);
+            switchAuthMode('login', true, e);
+        });
+    });
+
+    document.querySelectorAll('.js-trigger-slide-register').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            createWaterDropRipple(e, this);
+            switchAuthMode('register', true, e);
+        });
+    });
+
+    // Check URL query param or hash on initial load
+    const urlParams = new URLSearchParams(window.location.search);
+    if (window.location.hash === '#login' || urlParams.get('mode') === 'login') {
+        switchAuthMode('login', false);
+    }
+
+    // Password Visibility Toggle for Login
+    const toggleLoginPasswordBtn = document.getElementById('toggleLoginPasswordBtn');
+    const loginPasswordInput = document.getElementById('loginPassword');
+    if (toggleLoginPasswordBtn && loginPasswordInput) {
+        toggleLoginPasswordBtn.addEventListener('click', function() {
+            const isPass = loginPasswordInput.type === 'password';
+            loginPasswordInput.type = isPass ? 'text' : 'password';
+            const icon = this.querySelector('i');
+            if (icon) {
+                icon.className = isPass ? 'fas fa-eye-slash' : 'fas fa-eye';
+            }
+        });
+    }
+
+    // AJAX Login Handler
+    const ajaxLoginForm = document.getElementById('ajaxLoginForm');
+    const loginSubmitBtn = document.getElementById('loginSubmitBtn');
+    if (ajaxLoginForm) {
+        ajaxLoginForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const emailInput = document.getElementById('loginEmail');
+            const passInput = document.getElementById('loginPassword');
+
+            if (!emailInput || !emailInput.value.trim()) {
+                Toast.fire({ icon: 'warning', title: 'Please enter your email address' });
+                if (emailInput) emailInput.focus();
+                return;
+            }
+            if (!passInput || !passInput.value) {
+                Toast.fire({ icon: 'warning', title: 'Please enter your password' });
+                if (passInput) passInput.focus();
+                return;
+            }
+
+            const origBtnHtml = loginSubmitBtn ? loginSubmitBtn.innerHTML : 'Sign In';
+            if (loginSubmitBtn) {
+                loginSubmitBtn.disabled = true;
+                loginSubmitBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> <span>Signing In...</span>';
+            }
+
+            try {
+                const formData = new FormData(ajaxLoginForm);
+                formData.append('ajax', 'true');
+                formData.append('login', '1');
+
+                const response = await fetch('login.php', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    Toast.fire({
+                        icon: 'success',
+                        title: 'Signed in successfully! Redirecting...'
+                    });
+                    setTimeout(() => {
+                        window.location.href = data.redirect || 'index.php';
+                    }, 800);
+                } else {
+                    if (loginSubmitBtn) {
+                        loginSubmitBtn.disabled = false;
+                        loginSubmitBtn.innerHTML = origBtnHtml;
+                    }
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Sign In Failed',
+                        text: data.message || 'Invalid email or password. Please try again.',
+                        confirmButtonColor: '#b3261e'
+                    });
+                }
+            } catch (err) {
+                console.error('AJAX Login error:', err);
+                if (loginSubmitBtn) {
+                    loginSubmitBtn.disabled = false;
+                    loginSubmitBtn.innerHTML = origBtnHtml;
+                }
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Sign In Error',
+                    text: 'Unable to connect to login server. Please try again.',
+                    confirmButtonColor: '#b3261e'
+                });
+            }
+        });
+    }
 
     const homeAddressInput = document.getElementById('homeAddressInput');
     const regAddress = document.getElementById('regAddress');
