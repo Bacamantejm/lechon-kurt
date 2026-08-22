@@ -2511,6 +2511,47 @@ body {
 .bestseller-card:hover .market-store-row-thumb {
     transform: scale(1.06);
 }
+@media (max-width: 768px) {
+    .market-sidebar {
+        border-radius: 14px !important;
+        padding: 12px 16px !important;
+        margin-bottom: 14px !important;
+        max-width: 100% !important;
+        border: 1px solid #eaecf0 !important;
+        background: #ffffff !important;
+    }
+    .market-sidebar-toggle-btn {
+        display: flex !important;
+        align-items: center;
+        justify-content: space-between;
+        font-weight: 800;
+        font-size: 0.92rem;
+        color: #1e293b;
+        cursor: pointer;
+        padding: 4px 0;
+        user-select: none;
+    }
+    .market-sidebar-toggle-btn i.fa-sliders {
+        color: #b3261e;
+        margin-right: 6px;
+    }
+    .market-sidebar.is-collapsed-mobile .market-sidebar-section {
+        display: none !important;
+    }
+    .market-sidebar.is-collapsed-mobile .toggle-icon {
+        transform: rotate(-90deg);
+        transition: transform 0.2s ease;
+    }
+    .market-sidebar:not(.is-collapsed-mobile) .toggle-icon {
+        transform: rotate(0deg);
+        transition: transform 0.2s ease;
+    }
+}
+@media (min-width: 769px) {
+    .market-sidebar-toggle-btn {
+        display: none !important;
+    }
+}
 <?php endif; ?>
 </style>
 
@@ -2518,7 +2559,11 @@ body {
     <section class="market-section" id="marketplaceStores">
         <div class="container">
             <div class="market-explorer">
-                <aside class="market-sidebar">
+                <aside class="market-sidebar is-collapsed-mobile" id="marketSidebar">
+                    <div class="market-sidebar-toggle-btn" id="marketSidebarToggleBtn" onclick="document.getElementById('marketSidebar').classList.toggle('is-collapsed-mobile')">
+                        <span><i class="fas fa-sliders"></i> Filters & Sort</span>
+                        <i class="fas fa-chevron-down toggle-icon"></i>
+                    </div>
 
                     <div class="market-sidebar-section">
                         <h3>Filters</h3>

@@ -228,8 +228,37 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
         } else {
             $error = $result['message'];
             $form_data['email'] = $email;
+            
+            $is_ajax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest';
+            $is_ajax = $is_ajax || (isset($_POST['ajax']) && $_POST['ajax'] == 'true');
+            if ($is_ajax) {
+                header('Content-Type: application/json');
+                echo json_encode([
+                    'success' => false,
+                    'message' => $error
+                ]);
+                exit();
+            }
         }
     }
+
+    $is_ajax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest';
+    $is_ajax = $is_ajax || (isset($_POST['ajax']) && $_POST['ajax'] == 'true');
+    if ($is_ajax && !empty($error)) {
+        header('Content-Type: application/json');
+        echo json_encode([
+            'success' => false,
+            'message' => $error
+        ]);
+        exit();
+    }
+}
+
+// Redirect standard GET visits to the sliding auth layout in login mode
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    $queryString = !empty($_SERVER['QUERY_STRING']) ? ('?' . $_SERVER['QUERY_STRING'] . '&mode=login#login') : '?mode=login#login';
+    header("Location: register.php" . $queryString);
+    exit();
 }
 
 $page_title = "Login to Your Account | Lechon Delights";
@@ -276,7 +305,8 @@ include 'includes/header.php';
 /* Left Side - Brand/Info */
 .login-left {
     width: 50%;
-    background: linear-gradient(135deg, #b3261e 0%, #8f261a 100%) !important;
+    background: linear-gradient(145deg, #fff7f2 0%, #ffede5 45%, #fedecf 100%) !important;
+    border-right: 1px solid #efddcd;
     display: flex !important;
     flex-direction: column;
     align-items: center;
@@ -295,21 +325,21 @@ include 'includes/header.php';
 
 .brand-title {
     font-family: 'Outfit', sans-serif;
-    font-size: 3.8rem;
+    font-size: 3.4rem;
     font-weight: 900;
     letter-spacing: -1.5px;
     margin: 0;
-    color: #ffffff !important;
-    text-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+    color: #b3261e !important;
+    text-shadow: 0 2px 10px rgba(179, 38, 30, 0.12);
 }
 
 .brand-subtitle {
-    font-size: 1.25rem;
-    color: rgba(255, 255, 255, 0.9) !important;
-    margin-top: 15px;
+    font-size: 1.2rem;
+    color: #564840 !important;
+    margin-top: 14px;
     max-width: 340px;
     font-weight: 600;
-    line-height: 1.6;
+    line-height: 1.5;
 }
 
 .floating-pigs-container {
@@ -880,63 +910,63 @@ include 'includes/header.php';
 /* Modern Food Auth Refresh */
 :root {
     --auth-red: #b3261e;
+    --auth-hover: #981b15;
     --auth-orange: #ef6b2e;
-    --auth-cream: #fff8ef;
-    --auth-ink: #2a211d;
-    --auth-muted: #7b6d64;
-    --auth-border: #efddcc;
+    --auth-cream: #fff9f6;
+    --auth-ink: #1e293b;
+    --auth-muted: #64748b;
+    --auth-border: #eaecf0;
 }
 
 body {
-    background:
-        radial-gradient(circle at 0% 0%, rgba(239, 107, 46, 0.12), transparent 34%),
-        radial-gradient(circle at 100% 12%, rgba(179, 38, 30, 0.1), transparent 30%),
-        var(--auth-cream);
+    background: #ffffff;
 }
 
 .login-page-container {
-    background: transparent;
+    background: #ffffff !important;
 }
 
 .login-wrapper {
-    border: 1px solid var(--auth-border);
-    border-radius: 22px;
-    box-shadow: 0 20px 40px rgba(74, 32, 20, 0.14);
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
 }
 
 .login-left {
-    background:
-        linear-gradient(130deg, rgba(22, 14, 10, 0.9), rgba(65, 30, 20, 0.78)),
-        url('images/about-us-bg.jpg') center/cover no-repeat;
+    background: linear-gradient(145deg, #fff7f2 0%, #ffede5 45%, #fedecf 100%) !important;
 }
 
-.login-header h2,
-.login-header p,
-.form-group label {
-    color: var(--auth-ink);
+.login-header h2 {
+    color: #1e293b;
+}
+
+.login-header p {
+    color: #64748b;
 }
 
 .form-group label {
+    color: #334155;
     font-weight: 700;
 }
 
 .form-control {
-    border: 1px solid #e8d4c3;
-    background: #fffdfb;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
 }
 
 .form-control:focus {
-    border-color: #d06d44;
-    box-shadow: 0 0 0 3px rgba(239, 107, 46, 0.15);
+    border-color: var(--auth-red);
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.1);
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, var(--auth-red), var(--auth-orange));
-    box-shadow: 0 12px 28px rgba(179, 38, 30, 0.26);
+    background: var(--auth-red);
+    box-shadow: 0 4px 14px rgba(179, 38, 30, 0.2);
 }
 
 .btn-primary:hover:not(:disabled) {
-    box-shadow: 0 15px 34px rgba(179, 38, 30, 0.34);
+    background: var(--auth-hover);
+    box-shadow: 0 6px 18px rgba(179, 38, 30, 0.28);
 }
 
 .remember-checkbox span,
@@ -948,21 +978,21 @@ body {
 
 .forgot-link:hover,
 .auth-link a:hover {
-    color: #8f2f1f;
+    color: var(--auth-red);
 }
 
 .social-divider span {
-    color: #8a7a70;
+    color: #94a3b8;
 }
 
 .social-btn {
-    border: 1px solid #ecd8c7;
-    background: #fffaf5;
+    border: 1px solid #eaecf0;
+    background: #ffffff;
 }
 
 .social-btn:hover {
-    border-color: #d7a37f;
-    background: #fff2e6;
+    border-color: #d0d5dd;
+    background: #f8fafc;
 }
 .footer {
     margin-top: 0 !important;

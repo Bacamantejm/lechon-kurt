@@ -1381,7 +1381,9 @@ include 'includes/header.php';
 
                             <!-- Footer Links -->
                             <div style="text-align: center; margin-top: 8px; font-size: 0.82rem; color: #667085; line-height: 1.6;">
+                                <?php if (!isset($_SESSION['user_id'])): ?>
                                 Already have an account? <a href="login.php" style="color: #b3261e; font-weight: 700; text-decoration: none;">Login</a><br>
+                                <?php endif; ?>
                                 Do you want to be a delivery rider? <a href="locations.php" style="color: #b3261e; font-weight: 700; text-decoration: none;">Click here</a>
                             </div>
                             <p style="font-size: 0.7rem; color: #98a2b3; text-align: center; margin: 4px 0 0 0; line-height: 1.3;">

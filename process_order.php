@@ -1,4 +1,5 @@
 <?php
+ob_start();
 session_start();
 require_once 'includes/config.php';
 require_once 'paymongo_integration.php';
@@ -14,25 +15,60 @@ $is_ajax_request =
 
 function checkoutJsonResponse(array $payload, int $statusCode = 200): void
 {
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
     http_response_code($statusCode);
-    header('Content-Type: application/json');
+    header('Content-Type: application/json; charset=utf-8');
     echo json_encode($payload);
     exit;
 }
 
 function checkoutRenderErrorScript(string $title, string $message): void
 {
-    echo '<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>';
-    echo '<script>
-        Swal.fire({
-            title: "' . addslashes($title) . '",
-            text: "' . addslashes($message) . '",
-            icon: "error",
-            confirmButtonText: "Go Back"
-        }).then(() => {
-            window.location.href = "checkout.php";
-        });
-    </script>';
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    http_response_code(400);
+    echo '<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . ' - Lechon Delights</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        body { background-color: #f8f9fa; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; }
+        .error-card { background: #ffffff; border: 1px solid #eaecf0; border-radius: 12px; max-width: 480px; width: 100%; padding: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.06); text-align: center; }
+        .error-icon { width: 56px; height: 56px; line-height: 56px; border-radius: 50%; background: #fee4e2; color: #b3261e; font-size: 24px; margin: 0 auto 16px; }
+        .btn-brand { background: #b3261e; color: #ffffff; border: none; font-weight: 600; padding: 10px 24px; border-radius: 8px; text-decoration: none; display: inline-block; }
+        .btn-brand:hover { background: #981b15; color: #ffffff; }
+    </style>
+</head>
+<body>
+    <div class="error-card">
+        <div class="error-icon"><i class="fas fa-exclamation-triangle"></i></div>
+        <h4 style="color:#101828; font-weight:700; margin-bottom:8px;">' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '</h4>
+        <p style="color:#475467; font-size:0.95rem; margin-bottom:20px;">' . htmlspecialchars($message, ENT_QUOTES, 'UTF-8') . '</p>
+        <a href="checkout.php" class="btn-brand"><i class="fas fa-arrow-left me-2"></i> Return to Checkout</a>
+    </div>
+    <script>
+        if (typeof Swal !== "undefined") {
+            Swal.fire({
+                title: ' . json_encode($title) . ',
+                text: ' . json_encode($message) . ',
+                icon: "error",
+                confirmButtonColor: "#b3261e",
+                confirmButtonText: "Return to Checkout"
+            }).then(() => {
+                window.location.href = "checkout.php";
+            });
+        }
+    </script>
+</body>
+</html>';
     exit;
 }
 
@@ -61,7 +97,38 @@ function checkoutRedirectTo(string $url, array $extra = []): void
         ], $extra));
     }
 
-    header('Location: ' . $url);
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+
+    if (!headers_sent()) {
+        header('Location: ' . $url);
+    }
+    echo '<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="refresh" content="0;url=' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '">
+    <title>Redirecting to Payment Gateway - Lechon Delights</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8f9fa; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+        .redirect-box { background: #fff; border: 1px solid #eaecf0; border-radius: 12px; padding: 32px; text-align: center; max-width: 440px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .spinner { width: 40px; height: 40px; border: 3px solid #f3f4f6; border-top: 3px solid #b3261e; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+    <script>
+        window.location.href = ' . json_encode($url) . ';
+    </script>
+</head>
+<body>
+    <div class="redirect-box">
+        <div class="spinner"></div>
+        <h4 style="color:#101828; margin-bottom:8px;">Connecting to Secure Payment</h4>
+        <p style="color:#667085; font-size:0.9rem; margin-bottom:16px;">Please wait while we redirect you to the payment gateway...</p>
+        <p style="font-size:0.85rem;"><a href="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '" style="color:#b3261e; text-decoration:none; font-weight:600;">Click here if not redirected automatically</a></p>
+    </div>
+</body>
+</html>';
     exit;
 }
 
@@ -74,7 +141,7 @@ if (empty($_SESSION['cart'])) {
             'redirect_url' => 'menu.php'
         ], 400);
     }
-    header('Location: menu.php');
+    checkoutRedirectTo('menu.php');
     exit;
 }
 
@@ -87,7 +154,7 @@ if (!isset($_SESSION['user_id'])) {
             'redirect_url' => 'login.php'
         ], 401);
     }
-    header('Location: login.php');
+    checkoutRedirectTo('login.php');
     exit;
 }
 

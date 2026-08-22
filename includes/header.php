@@ -283,10 +283,183 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
         ::-webkit-scrollbar-thumb:hover {
             background: #94a3b8;
         }
-        * {
-            scrollbar-width: thin;
-            scrollbar-color: #cbd5e1 #f8fafc;
+        /* Professional SweetAlert2 Modal & Toast Design System Theme */
+        .swal2-container {
+            backdrop-filter: blur(4px) !important;
+            -webkit-backdrop-filter: blur(4px) !important;
+            background: rgba(16, 24, 40, 0.5) !important;
+            z-index: 999999 !important;
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
         }
+        .swal2-popup {
+            background: #ffffff !important;
+            border-radius: 18px !important;
+            border: 1px solid #eaecf0 !important;
+            box-shadow: 0 20px 25px -5px rgba(16, 24, 40, 0.1), 0 8px 10px -6px rgba(16, 24, 40, 0.04) !important;
+            padding: 28px 24px 24px !important;
+            max-width: 440px !important;
+            width: 90vw !important;
+        }
+        .swal2-title {
+            font-family: 'Outfit', 'Plus Jakarta Sans', sans-serif !important;
+            font-size: 1.25rem !important;
+            font-weight: 800 !important;
+            color: #101828 !important;
+            letter-spacing: -0.01em !important;
+            margin: 8px 0 0 !important;
+            padding: 0 !important;
+        }
+        .swal2-html-container {
+            font-family: 'Plus Jakarta Sans', sans-serif !important;
+            font-size: 0.92rem !important;
+            color: #475467 !important;
+            line-height: 1.55 !important;
+            margin: 8px 0 0 !important;
+            padding: 0 4px !important;
+        }
+        .swal2-icon {
+            width: 58px !important;
+            height: 58px !important;
+            margin: 0 auto 10px !important;
+            border-width: 2.5px !important;
+            border-style: solid !important;
+        }
+        .swal2-icon .swal2-icon-content {
+            font-size: 2.2rem !important;
+            font-weight: 800 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+        /* Error / Danger Icon */
+        .swal2-icon.swal2-error {
+            border-color: #fee4e2 !important;
+            background-color: #fff1f0 !important;
+            color: #b3261e !important;
+        }
+        .swal2-icon.swal2-error [class^=swal2-x-mark-line] {
+            background-color: #b3261e !important;
+            height: 3px !important;
+            border-radius: 2px !important;
+            top: 28px !important;
+        }
+        /* Warning Icon */
+        .swal2-icon.swal2-warning {
+            border-color: #fedf89 !important;
+            background-color: #fffaeb !important;
+            color: #b54708 !important;
+        }
+        .swal2-icon.swal2-warning .swal2-icon-content {
+            color: #b54708 !important;
+        }
+        /* Success Icon */
+        .swal2-icon.swal2-success {
+            border-color: #abefc6 !important;
+            background-color: #ecfdf3 !important;
+            color: #027a48 !important;
+        }
+        .swal2-icon.swal2-success [class^=swal2-success-line] {
+            background-color: #027a48 !important;
+            height: 3px !important;
+            border-radius: 2px !important;
+        }
+        .swal2-icon.swal2-success .swal2-success-ring {
+            border: 3px solid rgba(2, 122, 72, 0.25) !important;
+        }
+        /* Info Icon */
+        .swal2-icon.swal2-info {
+            border-color: #b2ddff !important;
+            background-color: #eff8ff !important;
+            color: #175cd3 !important;
+        }
+        .swal2-icon.swal2-info .swal2-icon-content {
+            color: #175cd3 !important;
+        }
+        /* Question Icon */
+        .swal2-icon.swal2-question {
+            border-color: #eaecf0 !important;
+            background-color: #f8f9fa !important;
+            color: #344054 !important;
+        }
+        /* Modal Action Buttons */
+        .swal2-actions {
+            margin-top: 22px !important;
+            gap: 10px !important;
+            width: 100% !important;
+            justify-content: center !important;
+            padding: 0 !important;
+        }
+        .swal2-styled.swal2-confirm {
+            background-color: #b3261e !important;
+            color: #ffffff !important;
+            border: none !important;
+            border-radius: 10px !important;
+            font-family: 'Plus Jakarta Sans', sans-serif !important;
+            font-size: 0.88rem !important;
+            font-weight: 700 !important;
+            padding: 10px 24px !important;
+            min-width: 110px !important;
+            box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05) !important;
+            transition: all 0.15s ease !important;
+            cursor: pointer !important;
+        }
+        .swal2-styled.swal2-confirm:hover {
+            background-color: #981b15 !important;
+            transform: translateY(-1px) !important;
+            box-shadow: 0 4px 12px rgba(179, 38, 30, 0.2) !important;
+        }
+        .swal2-styled.swal2-cancel {
+            background-color: #ffffff !important;
+            color: #344054 !important;
+            border: 1px solid #d0d5dd !important;
+            border-radius: 10px !important;
+            font-family: 'Plus Jakarta Sans', sans-serif !important;
+            font-size: 0.88rem !important;
+            font-weight: 700 !important;
+            padding: 10px 22px !important;
+            min-width: 100px !important;
+            box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05) !important;
+            transition: all 0.15s ease !important;
+            cursor: pointer !important;
+        }
+        .swal2-styled.swal2-cancel:hover {
+            background-color: #f8f9fa !important;
+            border-color: #98a2b3 !important;
+            color: #101828 !important;
+        }
+        .swal2-styled.swal2-deny {
+            background-color: #fff1f0 !important;
+            color: #b3261e !important;
+            border: 1px solid #fee4e2 !important;
+            border-radius: 10px !important;
+            font-weight: 700 !important;
+            padding: 10px 20px !important;
+        }
+        /* Modern SweetAlert Toast Style */
+        .swal2-toast {
+            background: #ffffff !important;
+            border: 1px solid #eaecf0 !important;
+            border-radius: 14px !important;
+            box-shadow: 0 12px 30px -4px rgba(16, 24, 40, 0.14), 0 4px 6px -2px rgba(16, 24, 40, 0.05) !important;
+            padding: 12px 18px !important;
+        }
+        .swal2-toast .swal2-title {
+            font-size: 0.88rem !important;
+            font-weight: 700 !important;
+            color: #101828 !important;
+            margin: 0 !important;
+            text-align: left !important;
+        }
+        .swal2-toast .swal2-icon {
+            width: 28px !important;
+            height: 28px !important;
+            min-width: 28px !important;
+            margin: 0 10px 0 0 !important;
+        }
+        .swal2-close:focus {
+            box-shadow: none !important;
+        }
+
 
         /* Smooth Foodpanda Dark Backdrop Overlay */
         .market-search-backdrop {
@@ -598,8 +771,202 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
         .map-modal-btn.primary { background:linear-gradient(135deg,#e11d8f,#db2777); color:#fff; }
         .map-modal-btn.secondary:hover { background:#e5e7eb; }
         .map-modal-btn.primary:hover { filter:brightness(.96); transform:translateY(-1px); }
-        @media (max-width:768px){ .mobile-toggle{display:inline-flex !important;} .main-nav{display:none;} .header-shell,.market-header-top,.market-header-bottom{padding-left:14px;padding-right:14px;} .market-header-top{flex-wrap:wrap;} .market-home-search-wrap{order:3;flex-basis:100%;min-width:100%;margin-top:4px;} .btn-signin,.btn-register{padding:0 10px;font-size:.78rem;min-height:34px;} }
-        @media (max-width:480px){ .logo-title{font-size:1.02rem;} .logo-sub{font-size:.6rem;} }
+        /* Foodpanda Style Mobile Ready Layout */
+        @media (max-width: 768px) {
+            .site-header {
+                box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05) !important;
+                position: sticky !important;
+                top: 0 !important;
+                z-index: 1200 !important;
+            }
+            .market-header-top, .standard-top {
+                display: flex !important;
+                align-items: center !important;
+                justify-content: space-between !important;
+                gap: 8px !important;
+                min-height: 54px !important;
+                padding: 6px 12px !important;
+                flex-wrap: nowrap !important;
+            }
+            .mobile-toggle {
+                display: inline-flex !important;
+                width: 38px !important;
+                height: 38px !important;
+                border-radius: 10px !important;
+                border: 1px solid #eaecf0 !important;
+                background: #ffffff !important;
+                color: #101828 !important;
+                order: 1 !important;
+                flex-shrink: 0 !important;
+                align-items: center !important;
+                justify-content: center !important;
+            }
+            .logo-link {
+                display: none !important;
+            }
+            .market-address-wrap {
+                order: 2 !important;
+                flex: 1 !important;
+                min-width: 0 !important;
+                margin: 0 !important;
+                display: flex !important;
+                justify-content: flex-start !important;
+            }
+            .market-address-trigger {
+                width: 100% !important;
+                max-width: 100% !important;
+                min-height: 36px !important;
+                padding: 0 10px !important;
+                background: #f8fafc !important;
+                border: 1px solid #e2e8f0 !important;
+                border-radius: 999px !important;
+                font-size: 0.8rem !important;
+                font-weight: 700 !important;
+                display: flex !important;
+                align-items: center !important;
+                gap: 6px !important;
+            }
+            .market-address-trigger .address-text {
+                white-space: nowrap !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+                flex: 1 !important;
+                text-align: left !important;
+                font-size: 0.8rem !important;
+                color: #1e293b !important;
+            }
+            .header-actions {
+                order: 3 !important;
+                display: flex !important;
+                align-items: center !important;
+                gap: 6px !important;
+                flex-shrink: 0 !important;
+            }
+            .header-actions .icon-btn {
+                width: 36px !important;
+                height: 36px !important;
+                border-radius: 10px !important;
+            }
+            .main-nav, .market-home-nav {
+                display: none !important;
+            }
+            .market-header-bottom {
+                padding: 0 12px 8px !important;
+                border-top: none !important;
+            }
+            .market-home-search-wrap {
+                width: 100% !important;
+                min-width: 100% !important;
+                margin-top: 0 !important;
+            }
+            .market-home-search {
+                min-height: 40px !important;
+                background: #f1f5f9 !important;
+                border: 1px solid #e2e8f0 !important;
+                border-radius: 999px !important;
+                padding: 0 14px !important;
+            }
+            .market-home-search input {
+                font-size: 0.88rem !important;
+            }
+            .btn-signin, .btn-register {
+                padding: 0 10px !important;
+                font-size: 0.76rem !important;
+                min-height: 32px !important;
+            }
+
+            /* Foodpanda Style Slide-in Drawer */
+            .mobile-menu {
+                left: -360px !important;
+                right: auto !important;
+                transition: left var(--motion-base) var(--motion-ease) !important;
+                width: min(320px, 86vw) !important;
+                border-right: 1px solid var(--line) !important;
+                border-left: none !important;
+                box-shadow: 14px 0 34px rgba(15, 23, 42, 0.18) !important;
+            }
+            .mobile-menu.active {
+                left: 0 !important;
+                right: auto !important;
+            }
+            .mobile-profile-card {
+                padding: 16px 14px;
+                background: #f8fafc;
+                border-bottom: 1px solid #eaecf0;
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            }
+            .mobile-profile-avatar {
+                width: 44px;
+                height: 44px;
+                border-radius: 50%;
+                background: #b3261e;
+                color: #ffffff;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 1.1rem;
+                font-weight: 800;
+                overflow: hidden;
+                flex-shrink: 0;
+            }
+            .mobile-profile-avatar img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+            }
+            .mobile-profile-info {
+                min-width: 0;
+                flex: 1;
+            }
+            .mobile-profile-name {
+                font-size: 0.94rem;
+                font-weight: 800;
+                color: #101828;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            .mobile-profile-email {
+                font-size: 0.76rem;
+                color: #667085;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            .mobile-nav a {
+                font-size: 0.92rem;
+                padding: 11px 14px;
+                border-radius: 10px;
+                color: #1e293b;
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            }
+            .mobile-nav a i {
+                width: 20px;
+                text-align: center;
+                color: #b3261e;
+                font-size: 1rem;
+            }
+            .mobile-nav a:hover, .mobile-nav a.active {
+                background: #fff1f0;
+                color: #b3261e;
+            }
+            .mobile-auth {
+                padding: 14px;
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                border-top: 1px solid #eaecf0;
+                margin-top: auto;
+            }
+        }
+        @media (max-width: 480px) {
+            .logo-title { font-size: 0.98rem; }
+            .logo-sub { font-size: 0.58rem; }
+        }
     </style>
     <!-- Leaflet Map CSS and JS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
@@ -614,7 +981,7 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
             <span class="logo-copy"><span class="logo-title">Lechon Delights</span><span class="logo-sub">Marketplace</span></span>
         </a>
 
-        <?php if ($current_page !== 'register' && $current_page !== 'login' && $current_page !== 'checkout' && $current_page !== 'franchise_application'): ?>
+        <?php if (in_array($current_page, ['index', 'home'], true)): ?>
         <div class="market-address-wrap" id="marketAddressWrap">
             <button type="button" class="market-address-trigger" id="marketAddressToggle">
                 <i class="fas fa-location-dot"></i><span class="address-text" id="marketAddressDisplay"><?php echo htmlspecialchars($market_header_address_display); ?></span><i class="fas fa-chevron-down"></i>
@@ -700,8 +1067,8 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
             <?php else: ?>
                 <?php if ($current_page !== 'register' && $current_page !== 'login'): ?>
                 <div class="auth-buttons">
-                    <a href="<?php echo $path_prefix; ?>login.php" class="btn-signin">Log in</a>
-                    <a href="<?php echo $path_prefix; ?>register.php" class="btn-register">Create account</a>
+                    <a href="<?php echo $path_prefix; ?>register.php?mode=login#login" class="btn-signin">Log in</a>
+                    <a href="<?php echo $path_prefix; ?>register.php?mode=register#register" class="btn-register">Create account</a>
                 </div>
                 <?php endif; ?>
             <?php endif; ?>
@@ -781,6 +1148,23 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
             </div>
         </a>
     </div>
+    <script>
+    (function() {
+        var stickyWidget = document.getElementById('stickyOngoingOrderWidget');
+        if (stickyWidget) {
+            setTimeout(function() {
+                stickyWidget.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+                stickyWidget.style.opacity = '0';
+                stickyWidget.style.transform = 'translateY(20px)';
+                setTimeout(function() {
+                    if (stickyWidget && stickyWidget.parentNode) {
+                        stickyWidget.style.display = 'none';
+                    }
+                }, 500);
+            }, 5000);
+        }
+    })();
+    </script>
     <?php endif; ?>
     
     <div class="map-modal-overlay" id="marketMapModal" aria-hidden="true">
@@ -864,8 +1248,8 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
             <?php else: ?>
                 <?php if ($current_page !== 'register' && $current_page !== 'login'): ?>
                 <div class="auth-buttons">
-                    <a href="<?php echo $path_prefix; ?>login.php" class="btn-signin">Log in</a>
-                    <a href="<?php echo $path_prefix; ?>register.php" class="btn-register">Create account</a>
+                    <a href="<?php echo $path_prefix; ?>register.php?mode=login#login" class="btn-signin">Log in</a>
+                    <a href="<?php echo $path_prefix; ?>register.php?mode=register#register" class="btn-register">Create account</a>
                 </div>
                 <?php endif; ?>
             <?php endif; ?>
@@ -886,27 +1270,47 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
 <div class="mobile-menu-overlay" id="mobileOverlay"></div>
 <aside class="mobile-menu" id="mobileMenu">
     <div class="mobile-menu-header">
-        <a href="<?php echo $path_prefix; ?>index.php" class="logo-link">
-            <span class="logo-icon" style="width:38px;height:38px;font-size:.88rem;"><img src="<?php echo $path_prefix; ?>assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block;"></span>
-            <span class="logo-copy"><span class="logo-title" style="font-size:1.04rem;">Lechon Delights</span><span class="logo-sub">Marketplace</span></span>
+        <a href="<?php echo $path_prefix; ?>index.php" class="logo-link" style="display:flex !important;">
+            <span class="logo-icon" style="width:34px;height:34px;font-size:.88rem;"><img src="<?php echo $path_prefix; ?>assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block;"></span>
+            <span class="logo-copy"><span class="logo-title" style="font-size:0.98rem;">Lechon Delights</span><span class="logo-sub" style="font-size:0.58rem;">Marketplace</span></span>
         </a>
-        <button class="mobile-menu-close" id="mobileMenuClose"><i class="fas fa-times"></i></button>
+        <button class="mobile-menu-close" id="mobileMenuClose" aria-label="Close menu"><i class="fas fa-times"></i></button>
     </div>
+    
+    <?php if ($is_logged_in_user): ?>
+    <div class="mobile-profile-card">
+        <div class="mobile-profile-avatar">
+            <?php if ($viewer_profile_image_url !== ''): ?>
+            <img src="<?php echo htmlspecialchars($viewer_profile_image_url); ?>" alt="Profile">
+            <?php else: ?>
+            <i class="fas fa-user"></i>
+            <?php endif; ?>
+        </div>
+        <div class="mobile-profile-info">
+            <div class="mobile-profile-name"><?php echo htmlspecialchars($viewer_first_name); ?></div>
+            <?php if ($viewer_email !== ''): ?>
+            <div class="mobile-profile-email"><?php echo htmlspecialchars($viewer_email); ?></div>
+            <?php endif; ?>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <ul class="mobile-nav">
-        <li><a href="<?php echo $path_prefix; ?>index.php" class="<?php echo $current_page === 'home' ? 'active' : ''; ?>"><i class="fas fa-house"></i> Home</a></li>
+        <li><a href="<?php echo $path_prefix; ?>index.php" class="<?php echo ($current_page === 'home' || $current_page === 'index') ? 'active' : ''; ?>"><i class="fas fa-house"></i> Home</a></li>
         <li><a href="<?php echo $path_prefix; ?>menu.php" class="<?php echo $current_page === 'menu' ? 'active' : ''; ?>"><i class="fas fa-utensils"></i> Menu</a></li>
         <li><a href="<?php echo htmlspecialchars($preorder_nav_href); ?>" class="<?php echo $current_page === 'preorder' ? 'active' : ''; ?>"><i class="fas fa-calendar-check"></i> Pre-order</a></li>
         <li><a href="<?php echo $path_prefix; ?>locations.php" class="<?php echo $current_page === 'locations' ? 'active' : ''; ?>"><i class="fas fa-location-dot"></i> Stores</a></li>
         <li><a href="<?php echo $path_prefix; ?>about.php" class="<?php echo $current_page === 'about' ? 'active' : ''; ?>"><i class="fas fa-book-open"></i> Our Story</a></li>
         <li><a href="<?php echo $path_prefix; ?>faq.php" class="<?php echo $current_page === 'faq' ? 'active' : ''; ?>"><i class="fas fa-circle-question"></i> FAQ</a></li>
         <?php if ($is_logged_in_user): ?>
-        <li><a href="<?php echo $path_prefix; ?>my_account.php"><i class="fas fa-user"></i> My Profile</a></li>
+        <li><a href="<?php echo $path_prefix; ?>my_account.php"><i class="fas fa-user-circle"></i> My Profile</a></li>
         <li><a href="<?php echo $path_prefix; ?>my_account.php#addresses"><i class="fas fa-address-book"></i> Address Book</a></li>
         <li><a href="<?php echo $path_prefix; ?>my_orders.php"><i class="fas fa-bag-shopping"></i> My Orders</a></li>
         <?php if ($favorites_feature_enabled): ?>
         <li><a href="<?php echo $favorites_page_href; ?>"><i class="fas fa-heart"></i> My Favorites</a></li>
         <?php endif; ?>
-        <li><a href="<?php echo $path_prefix; ?>franchise_application.php"><i class="fas fa-briefcase"></i> Business</a></li>
+        <li><a href="<?php echo $path_prefix; ?>help_center.php"><i class="fas fa-life-ring"></i> Help Center</a></li>
+        <li><a href="<?php echo $path_prefix; ?>franchise_application.php"><i class="fas fa-briefcase"></i> Partner with Us</a></li>
         <?php if (isset($_SESSION['account_type']) && $_SESSION['account_type'] === 'organization'): ?>
         <li><a href="<?php echo $path_prefix; ?>subscription_plans.php" class="<?php echo $current_page === 'subscription_plans' ? 'active' : ''; ?>"><i class="fas fa-layer-group"></i> Subscription Plans</a></li>
         <li><a href="<?php echo $path_prefix; ?>seller_products.php"><i class="fas fa-box"></i> My Products</a></li>
@@ -917,8 +1321,8 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
     </ul>
     <?php if (!$is_logged_in_user && $current_page !== 'register' && $current_page !== 'login'): ?>
     <div class="mobile-auth">
-        <a href="<?php echo $path_prefix; ?>login.php" class="btn-signin" style="text-align:center;">Log in</a>
-        <a href="<?php echo $path_prefix; ?>register.php" class="btn-register" style="text-align:center;">Create account</a>
+        <a href="<?php echo $path_prefix; ?>register.php?mode=login#login" class="btn-signin" style="text-align:center;">Log in</a>
+        <a href="<?php echo $path_prefix; ?>register.php?mode=register#register" class="btn-register" style="text-align:center;">Create account</a>
     </div>
     <?php endif; ?>
 </aside>
@@ -1822,10 +2226,9 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    const saveMarketLocationToUserDatabase = function(payload) {
+    const saveMarketLocationToUserDatabase = async function(payload) {
         if (!payload || (!payload.street_address && !payload.full_address)) return;
         const bodyData = new URLSearchParams();
-        bodyData.append('address_action', 'save');
         bodyData.append('label', 'Saved Location');
         bodyData.append('street_address', payload.street_address || payload.full_address);
         bodyData.append('city_name', payload.city || 'Cavite');
@@ -1834,11 +2237,28 @@ document.addEventListener('DOMContentLoaded', function () {
         bodyData.append('longitude', String(payload.longitude || ''));
         bodyData.append('is_default', '1');
 
-        fetch('checkout.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: bodyData
-        }).catch(err => console.error('Header save location error:', err));
+        try {
+            const apiEndpoint = '<?php echo $path_prefix; ?>api/save_user_address.php';
+            const response = await fetch(apiEndpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: bodyData
+            });
+            const data = await response.json();
+            if (data && data.success) {
+                if (typeof window.dispatchEvent === 'function') {
+                    window.dispatchEvent(new CustomEvent('marketAddressUpdated', { 
+                        detail: {
+                            ...payload,
+                            address_id: data.saved_address_id || 0,
+                            addresses: data.addresses || []
+                        }
+                    }));
+                }
+            }
+        } catch (err) {
+            console.error('Header save location error:', err);
+        }
     };
 
     const applyQuickAddressSelection = function (street, city) {
@@ -1891,10 +2311,6 @@ document.addEventListener('DOMContentLoaded', function () {
             renderMarketAddressDisplay(stored);
             saveMarketLocationToUserDatabase(stored);
             closeAddressPopover();
-
-            if (typeof window.dispatchEvent === 'function') {
-                window.dispatchEvent(new CustomEvent('marketAddressUpdated', { detail: stored }));
-            }
         });
     }
 

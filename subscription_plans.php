@@ -923,59 +923,6 @@ include 'includes/header.php';
     }
 }
 </style>
-    flex-shrink: 0;
-    margin-top: 1px;
-}
-
-.icon-dash {
-    color: #d1d5db;
-    font-weight: 700;
-    flex-shrink: 0;
-    margin-top: 1px;
-}
-
-.text-muted {
-    color: #9ca3af;
-    text-decoration: line-through;
-}
-
-/* Responsive */
-@media (max-width: 991px) {
-    .zen-plans-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-    
-    .zen-plan-col {
-        border-bottom: 1px solid #efddcd;
-    }
-    
-    .zen-plan-col:nth-child(2n) {
-        border-right: none;
-    }
-}
-
-@media (max-width: 640px) {
-    .zen-plans-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .zen-plan-col {
-        border-right: none;
-    }
-
-    .zen-config-bar {
-        flex-direction: column;
-        gap: 20px;
-        align-items: center;
-        padding: 24px 20px;
-    }
-
-    .config-separator {
-        width: 100%;
-        height: 1px;
-    }
-}
-</style>
 
 <script>
 (function () {
