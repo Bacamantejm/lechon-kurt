@@ -75,10 +75,111 @@ body {
     height: 100vh;
     left: 0;
     z-index: 50;
-    transition: transform 0.3s ease;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     border-right: 1px solid var(--border); /* Added border */
     display: flex;
     flex-direction: column;
+}
+
+/* Sidebar Search Styling */
+.sidebar-search-container {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--white);
+    flex-shrink: 0;
+}
+
+.sidebar-search-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.sidebar-search-icon {
+    position: absolute;
+    left: 11px;
+    color: var(--text-light, #94a3b8);
+    font-size: 12px;
+    pointer-events: none;
+    transition: color 0.2s ease;
+}
+
+.sidebar-search-input {
+    width: 100%;
+    height: 36px;
+    padding: 6px 28px 6px 32px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-main, #1e293b);
+    background: #f8fafc;
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: 10px;
+    outline: none;
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+
+.sidebar-search-input:focus {
+    background: #ffffff;
+    border-color: var(--primary, #b3261e);
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.1);
+}
+
+.sidebar-search-input:focus + .sidebar-search-icon,
+.sidebar-search-wrap:focus-within .sidebar-search-icon {
+    color: var(--primary, #b3261e);
+}
+
+.sidebar-search-input::placeholder {
+    color: var(--text-light, #94a3b8);
+    font-weight: 400;
+}
+
+.sidebar-search-clear {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    border: none;
+    background: #e2e8f0;
+    color: #64748b;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    cursor: pointer;
+    padding: 0;
+    transition: all 0.15s ease;
+}
+
+.sidebar-search-clear:hover {
+    background: #cbd5e1;
+    color: #1e293b;
+}
+
+.sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    z-index: 1040;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.25s ease, visibility 0.25s ease;
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+}
+
+/* Desktop Collapsed */
+@media (min-width: 769px) {
+    .admin-container.sidebar-collapsed .admin-sidebar {
+        transform: translateX(-100%) !important;
+    }
+    .admin-container.sidebar-collapsed .admin-content {
+        margin-left: 0 !important;
+    }
 }
 
 .sidebar-header {

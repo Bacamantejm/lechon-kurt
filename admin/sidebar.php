@@ -388,7 +388,21 @@ if ($can_partner_billing) {
         <?php endif; ?>
     </div>
     
-    <ul class="sidebar-menu">
+    <div class="sidebar-search-container">
+        <div class="sidebar-search-wrap">
+            <i class="fas fa-search sidebar-search-icon"></i>
+            <input type="text" id="sidebarSearchInput" class="sidebar-search-input" placeholder="Search menu..." autocomplete="off">
+            <button type="button" id="sidebarSearchClear" class="sidebar-search-clear" title="Clear search" style="display: none;">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+    
+    <ul class="sidebar-menu" id="sidebarMenu">
+        <li class="sidebar-search-empty" id="sidebarSearchEmpty" style="display: none; padding: 22px 14px; text-align: center; color: #94a3b8; font-size: 13px;">
+            <i class="fas fa-search" style="font-size: 20px; display: block; margin: 0 auto 8px; opacity: 0.5;"></i>
+            No matching menu items
+        </li>
         <?php if ($can_dashboard): ?>
             <li class="menu-header">Main</li>
             <li>
@@ -2187,6 +2201,125 @@ if ($can_partner_billing) {
 .admin-floating-chat-btn.pulse:hover {
     animation: none;
 }
+
+/* Sidebar Search Styling */
+.sidebar-search-container {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border, #eaecf0);
+    background: var(--white, #ffffff);
+    flex-shrink: 0;
+}
+.sidebar-search-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+.sidebar-search-icon {
+    position: absolute;
+    left: 11px;
+    color: #94a3b8;
+    font-size: 12px;
+    pointer-events: none;
+    transition: color 0.2s ease;
+}
+.sidebar-search-input {
+    width: 100%;
+    height: 36px;
+    padding: 6px 28px 6px 32px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #1e293b;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    outline: none;
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+.sidebar-search-input:focus {
+    background: #ffffff;
+    border-color: #b3261e;
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.1);
+}
+.sidebar-search-wrap:focus-within .sidebar-search-icon {
+    color: #b3261e;
+}
+.sidebar-search-input::placeholder {
+    color: #94a3b8;
+    font-weight: 400;
+}
+.sidebar-search-clear {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    border: none;
+    background: #e2e8f0;
+    color: #64748b;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    cursor: pointer;
+    padding: 0;
+    transition: all 0.15s ease;
+}
+.sidebar-search-clear:hover {
+    background: #cbd5e1;
+    color: #1e293b;
+}
+
+/* Sidebar Collapsible & Mobile Transitions */
+.admin-sidebar {
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+.admin-content {
+    transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+.sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    z-index: 1040;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.25s ease, visibility 0.25s ease;
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+}
+
+/* Desktop Collapsed */
+@media (min-width: 769px) {
+    .admin-container.sidebar-collapsed .admin-sidebar {
+        transform: translateX(-100%) !important;
+    }
+    .admin-container.sidebar-collapsed .admin-content {
+        margin-left: 0 !important;
+    }
+}
+
+/* Mobile View Active */
+@media (max-width: 768px) {
+    .admin-sidebar {
+        transform: translateX(-100%) !important;
+        z-index: 1050 !important;
+        box-shadow: 0 0 25px rgba(0, 0, 0, 0.25) !important;
+    }
+    .admin-sidebar.active,
+    .admin-container.sidebar-mobile-active .admin-sidebar {
+        transform: translateX(0) !important;
+    }
+    .admin-content {
+        margin-left: 0 !important;
+    }
+    .admin-container.sidebar-mobile-active .sidebar-backdrop {
+        opacity: 1 !important;
+        visibility: visible !important;
+    }
+}
 </style>
 
 <div id="adminChatWidget" class="admin-chat-window">
@@ -2209,7 +2342,165 @@ if ($can_partner_billing) {
 </div>
 
 <script>
+(function() {
+    // Immediate check to restore desktop collapsed state without layout flash
+    try {
+        if (window.innerWidth > 768 && localStorage.getItem('admin_sidebar_collapsed') === '1') {
+            const container = document.querySelector('.admin-container');
+            if (container) container.classList.add('sidebar-collapsed');
+        }
+    } catch(e) {}
+})();
+
 document.addEventListener('DOMContentLoaded', function() {
+    // 1. Unified Sidebar Collapse & Mobile Drawer Toggle
+    const adminContainer = document.querySelector('.admin-container') || document.body;
+    const sidebar = document.getElementById('adminSidebar');
+    const togglers = document.querySelectorAll('#sidebarToggler, .sidebar-toggler');
+    
+    // Ensure state matches localStorage on load
+    try {
+        if (window.innerWidth > 768 && localStorage.getItem('admin_sidebar_collapsed') === '1') {
+            adminContainer.classList.add('sidebar-collapsed');
+        }
+    } catch(e) {}
+
+    // Ensure backdrop element exists
+    let backdrop = document.querySelector('.sidebar-backdrop');
+    if (!backdrop && adminContainer) {
+        backdrop = document.createElement('div');
+        backdrop.className = 'sidebar-backdrop';
+        adminContainer.appendChild(backdrop);
+    }
+    if (backdrop) {
+        backdrop.addEventListener('click', function() {
+            adminContainer.classList.remove('sidebar-mobile-active');
+            if (sidebar) sidebar.classList.remove('active');
+        });
+    }
+
+    // Attach click listeners to all sidebar togglers (burger buttons)
+    togglers.forEach(function(btn) {
+        if (btn.dataset.sidebarBound === '1') return;
+        btn.dataset.sidebarBound = '1';
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (window.innerWidth > 768) {
+                // Desktop: Toggle collapsed state
+                const isCollapsed = adminContainer.classList.toggle('sidebar-collapsed');
+                try {
+                    localStorage.setItem('admin_sidebar_collapsed', isCollapsed ? '1' : '0');
+                } catch(err) {}
+            } else {
+                // Mobile: Toggle slide-in drawer
+                const isActive = adminContainer.classList.toggle('sidebar-mobile-active');
+                if (sidebar) {
+                    sidebar.classList.toggle('active', isActive);
+                }
+            }
+        });
+    });
+
+    // 2. Sidebar Navigation Live Search Filter
+    const searchInput = document.getElementById('sidebarSearchInput');
+    const clearBtn = document.getElementById('sidebarSearchClear');
+    const emptyMsg = document.getElementById('sidebarSearchEmpty');
+    const menu = document.getElementById('sidebarMenu') || document.querySelector('.sidebar-menu');
+
+    if (searchInput && menu) {
+        searchInput.addEventListener('input', function() {
+            const query = this.value.trim().toLowerCase();
+            if (clearBtn) {
+                clearBtn.style.display = query ? 'flex' : 'none';
+            }
+
+            const items = menu.querySelectorAll('li:not(.sidebar-search-empty)');
+            let totalMatches = 0;
+
+            if (!query) {
+                // Reset all items to default visible state
+                items.forEach(function(li) {
+                    li.style.display = '';
+                    const subLinks = li.querySelectorAll('.submenu-item');
+                    subLinks.forEach(function(a) { a.style.display = ''; });
+                });
+                if (emptyMsg) emptyMsg.style.display = 'none';
+                return;
+            }
+
+            // Iterate section by section
+            let currentHeader = null;
+            let currentHeaderHasMatches = false;
+
+            items.forEach(function(li) {
+                if (li.classList.contains('menu-header')) {
+                    if (currentHeader) {
+                        currentHeader.style.display = currentHeaderHasMatches ? '' : 'none';
+                    }
+                    currentHeader = li;
+                    currentHeaderHasMatches = false;
+                    return;
+                }
+
+                const menuItem = li.querySelector('.menu-item');
+                const submenuItems = li.querySelectorAll('.submenu-item');
+                let matches = false;
+
+                // Match against main menu item label
+                if (menuItem) {
+                    const text = menuItem.textContent.toLowerCase();
+                    if (text.includes(query)) {
+                        matches = true;
+                    }
+                }
+
+                // Match against submenu items
+                if (submenuItems.length > 0) {
+                    let subCount = 0;
+                    submenuItems.forEach(function(sub) {
+                        const subText = sub.textContent.toLowerCase();
+                        if (subText.includes(query)) {
+                            sub.style.display = '';
+                            subCount++;
+                            matches = true;
+                        } else {
+                            sub.style.display = 'none';
+                        }
+                    });
+                    const submenu = li.querySelector('.sidebar-submenu');
+                    if (submenu && subCount > 0) {
+                        submenu.style.display = 'block';
+                    }
+                }
+
+                if (matches) {
+                    li.style.display = '';
+                    currentHeaderHasMatches = true;
+                    totalMatches++;
+                } else {
+                    li.style.display = 'none';
+                }
+            });
+
+            if (currentHeader) {
+                currentHeader.style.display = currentHeaderHasMatches ? '' : 'none';
+            }
+
+            if (emptyMsg) {
+                emptyMsg.style.display = (totalMatches === 0) ? 'block' : 'none';
+            }
+        });
+
+        if (clearBtn) {
+            clearBtn.addEventListener('click', function() {
+                searchInput.value = '';
+                searchInput.dispatchEvent(new Event('input'));
+                searchInput.focus();
+            });
+        }
+    }
+
     let lastAdminUnreadCount = -1;
     
     // Start polling for badge updates
