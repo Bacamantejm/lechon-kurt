@@ -385,9 +385,6 @@ if ($can_partner_billing) {
             <h3><?php echo htmlspecialchars($sidebar_brand_name); ?></h3>
             <p><?php echo htmlspecialchars($sidebar_role_label); ?></p>
         </a>
-        <?php if ($sidebar_logged_in_name !== ''): ?>
-            <span class="sidebar-account-badge">Logged in: <?php echo htmlspecialchars($sidebar_logged_in_name); ?></span>
-        <?php endif; ?>
     </div>
     
     <div class="sidebar-search-container">
@@ -1039,10 +1036,6 @@ if ($can_partner_billing) {
     </ul>
     
     <div class="sidebar-footer">
-        <div class="admin-user">
-            <i class="fas fa-user-circle"></i>
-            <span><?php echo htmlspecialchars($_SESSION['full_name'] ?? 'Admin'); ?></span>
-        </div>
         <?php if ($is_employee_user): ?>
             <a href="../employee/dashboard.php" class="logout-btn" style="margin-bottom: 8px; background-color: #1e88e5;">
                 <i class="fas fa-user-clock"></i>

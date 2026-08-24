@@ -19,7 +19,7 @@ $auth_pages = ['login', 'register', 'reset_password', 'reset_password_request'];
 $is_auth_page = in_array($current_page, $auth_pages, true);
 $market_header_excluded_pages = ['login', 'register', 'reset_password', 'reset_password_request'];
 $is_market_home_header = ($script_parent !== 'admin') && !in_array($current_page, $market_header_excluded_pages, true);
-$show_market_header_bottom = in_array($current_page, ['home', 'index', 'shops'], true);
+$show_market_header_bottom = in_array($current_page, ['home', 'index', 'shops', 'pickup'], true);
 $cart_count = isset($_SESSION['cart']) && is_array($_SESSION['cart']) ? count($_SESSION['cart']) : 0;
 
 $current_user_address = trim((string)($current_user_address ?? ($_SESSION['address'] ?? '')));
@@ -42,6 +42,28 @@ $preorder_nav_href = $path_prefix . 'preorder.php' . ($storefront_seller_id > 0 
 $favorites_page_href = $path_prefix . 'favorites.php';
 $favorites_api_href = $path_prefix . 'api/favorites.php';
 $favorites_feature_enabled = $is_customer_user;
+
+$is_shop_owner_or_partner = false;
+if ($is_logged_in_user) {
+    $session_account_type = strtolower(trim((string)($_SESSION['account_type'] ?? '')));
+    $session_user_type = strtolower(trim((string)($_SESSION['user_type'] ?? '')));
+    $session_role_name = strtolower(trim((string)($_SESSION['role_name'] ?? '')));
+    if ($session_account_type === 'organization' || $session_user_type === 'admin' || in_array($session_role_name, ['business_owner', 'super_admin', 'store_manager', 'partner_owner'], true)) {
+        $is_shop_owner_or_partner = true;
+    } elseif (isset($conn) && $conn instanceof mysqli && !empty($_SESSION['user_id'])) {
+        $chk_fa_stmt = mysqli_prepare($conn, "SELECT 1 FROM franchise_applications WHERE user_id = ? AND status = 'approved' LIMIT 1");
+        if ($chk_fa_stmt) {
+            $current_u_id = (int)$_SESSION['user_id'];
+            mysqli_stmt_bind_param($chk_fa_stmt, "i", $current_u_id);
+            mysqli_stmt_execute($chk_fa_stmt);
+            $chk_fa_res = mysqli_stmt_get_result($chk_fa_stmt);
+            if ($chk_fa_res && mysqli_fetch_row($chk_fa_res)) {
+                $is_shop_owner_or_partner = true;
+            }
+            mysqli_stmt_close($chk_fa_stmt);
+        }
+    }
+}
 
 $ongoing_order_id = 0;
 $ongoing_order_number = '';
@@ -981,7 +1003,7 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
             <span class="logo-copy"><span class="logo-title">Lechon Delights</span><span class="logo-sub">Marketplace</span></span>
         </a>
 
-        <?php if (in_array($current_page, ['index', 'home'], true)): ?>
+        <?php if (in_array($current_page, ['index', 'home', 'pickup'], true)): ?>
         <div class="market-address-wrap" id="marketAddressWrap">
             <button type="button" class="market-address-trigger" id="marketAddressToggle">
                 <i class="fas fa-location-dot"></i><span class="address-text" id="marketAddressDisplay"><?php echo htmlspecialchars($market_header_address_display); ?></span><i class="fas fa-chevron-down"></i>
@@ -1040,7 +1062,9 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
                     <?php if ($favorites_feature_enabled): ?>
                     <a href="<?php echo $favorites_page_href; ?>" class="user-dropdown-item"><i class="fas fa-heart"></i> My Favorites</a>
                     <?php endif; ?>
+                    <?php if (!$is_shop_owner_or_partner): ?>
                     <a href="<?php echo $path_prefix; ?>franchise_application.php" class="user-dropdown-item"><i class="fas fa-store"></i> Apply for Business</a>
+                    <?php endif; ?>
                     <?php if (isset($_SESSION['account_type']) && $_SESSION['account_type'] === 'organization'): ?>
                     <a href="<?php echo $path_prefix; ?>subscription_plans.php" class="user-dropdown-item"><i class="fas fa-layer-group"></i> Subscription Plans</a>
                     <a href="<?php echo $path_prefix; ?>seller_products.php" class="user-dropdown-item"><i class="fas fa-box"></i> My Products</a>
@@ -1233,7 +1257,9 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
                     <?php if ($favorites_feature_enabled): ?>
                     <a href="<?php echo $favorites_page_href; ?>" class="user-dropdown-item"><i class="fas fa-heart"></i> My Favorites</a>
                     <?php endif; ?>
+                    <?php if (!$is_shop_owner_or_partner): ?>
                     <a href="<?php echo $path_prefix; ?>franchise_application.php" class="user-dropdown-item"><i class="fas fa-store"></i> Apply for Business</a>
+                    <?php endif; ?>
                     <?php if (isset($_SESSION['account_type']) && $_SESSION['account_type'] === 'organization'): ?>
                     <a href="<?php echo $path_prefix; ?>subscription_plans.php" class="user-dropdown-item"><i class="fas fa-layer-group"></i> Subscription Plans</a>
                     <a href="<?php echo $path_prefix; ?>seller_products.php" class="user-dropdown-item"><i class="fas fa-box"></i> My Products</a>
@@ -1310,7 +1336,9 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
         <li><a href="<?php echo $favorites_page_href; ?>"><i class="fas fa-heart"></i> My Favorites</a></li>
         <?php endif; ?>
         <li><a href="<?php echo $path_prefix; ?>help_center.php"><i class="fas fa-life-ring"></i> Help Center</a></li>
+        <?php if (!$is_shop_owner_or_partner): ?>
         <li><a href="<?php echo $path_prefix; ?>franchise_application.php"><i class="fas fa-briefcase"></i> Partner with Us</a></li>
+        <?php endif; ?>
         <?php if (isset($_SESSION['account_type']) && $_SESSION['account_type'] === 'organization'): ?>
         <li><a href="<?php echo $path_prefix; ?>subscription_plans.php" class="<?php echo $current_page === 'subscription_plans' ? 'active' : ''; ?>"><i class="fas fa-layer-group"></i> Subscription Plans</a></li>
         <li><a href="<?php echo $path_prefix; ?>seller_products.php"><i class="fas fa-box"></i> My Products</a></li>
