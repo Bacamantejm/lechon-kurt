@@ -1576,6 +1576,7 @@ $forecast_summary = safeInventoryDssCall(function () use ($insights_service) {
         <div class="admin-content">
             <div class="admin-topbar">
                 <div class="topbar-content">
+                    <button class="sidebar-toggler" id="sidebarToggler"><i class="fas fa-bars"></i></button>
                     <h1>Inventory Management</h1>
                     <button class="theme-toggler" id="themeToggler" title="Toggle Theme" style="margin-left: auto;">
                         <i class="fas fa-moon"></i>

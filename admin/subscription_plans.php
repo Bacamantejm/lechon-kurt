@@ -340,6 +340,22 @@ $hasBranding = (int)($plan['includes_custom_branding'] ?? 0) === 1;
     line-height: 1.4;
     text-align: center;
 }
+
+@media (max-width: 768px) {
+    .plans-shell {
+        padding: 16px 12px 90px 12px;
+    }
+    .sp-minimal-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+    .sp-minimal-card {
+        padding: 22px 18px;
+    }
+    .sp-pro-card {
+        transform: none;
+    }
+}
 </style>
 <script src="../js/bootstrap.bundle.min.js"></script>
 </body>

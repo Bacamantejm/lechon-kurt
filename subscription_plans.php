@@ -901,6 +901,20 @@ include 'includes/header.php';
     }
 }
 
+@media (max-width: 768px) {
+    .sp-minimal-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+        padding: 0 10px;
+    }
+    .sp-minimal-card {
+        padding: 22px 18px;
+    }
+    .sp-pro-card {
+        transform: none;
+    }
+}
+
 @media (max-width: 640px) {
     .zen-plans-grid {
         grid-template-columns: 1fr;

@@ -372,17 +372,19 @@ if ($can_partner_billing) {
 <!-- Admin Sidebar Navigation -->
 <nav class="admin-sidebar" id="adminSidebar">
     <div class="sidebar-header">
-        <div class="sidebar-brand-mark">
-            <?php if ($sidebar_brand_logo !== ''): ?>
-                <img src="<?php echo htmlspecialchars($sidebar_brand_logo); ?>" alt="<?php echo htmlspecialchars($sidebar_brand_name); ?> logo" class="sidebar-brand-logo">
-            <?php else: ?>
-                <div class="sidebar-brand-fallback">
-                    <?php echo htmlspecialchars(strtoupper(substr($sidebar_brand_name, 0, 1))); ?>
-                </div>
-            <?php endif; ?>
-        </div>
-        <h3><?php echo htmlspecialchars($sidebar_brand_name); ?></h3>
-        <p><?php echo htmlspecialchars($sidebar_role_label); ?></p>
+        <a href="../menu.php?seller_id=<?php echo (int)($partner_scope_owner_id ?: $user_id); ?>" class="sidebar-brand-link" title="View Your Storefront" style="text-decoration: none; color: inherit; display: block;">
+            <div class="sidebar-brand-mark">
+                <?php if ($sidebar_brand_logo !== ''): ?>
+                    <img src="<?php echo htmlspecialchars($sidebar_brand_logo); ?>" alt="<?php echo htmlspecialchars($sidebar_brand_name); ?> logo" class="sidebar-brand-logo">
+                <?php else: ?>
+                    <div class="sidebar-brand-fallback">
+                        <?php echo htmlspecialchars(strtoupper(substr($sidebar_brand_name, 0, 1))); ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+            <h3><?php echo htmlspecialchars($sidebar_brand_name); ?></h3>
+            <p><?php echo htmlspecialchars($sidebar_role_label); ?></p>
+        </a>
         <?php if ($sidebar_logged_in_name !== ''): ?>
             <span class="sidebar-account-badge">Logged in: <?php echo htmlspecialchars($sidebar_logged_in_name); ?></span>
         <?php endif; ?>
@@ -2320,6 +2322,150 @@ if ($can_partner_billing) {
         visibility: visible !important;
     }
 }
+
+/* Sidebar Dark Mode Theme */
+body.dark-mode .admin-sidebar {
+    background: #181d26 !important;
+    border-right: 1px solid #27303f !important;
+    color: #e2e8f0 !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4) !important;
+}
+
+body.dark-mode .sidebar-header {
+    background: #181d26 !important;
+    border-bottom: 1px solid #27303f !important;
+}
+
+body.dark-mode .sidebar-header h3 {
+    color: #ffffff !important;
+    background: linear-gradient(45deg, #ff6b6b, #ffa07a) !important;
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+}
+
+body.dark-mode .sidebar-header p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .sidebar-account-badge {
+    background: #2a1818 !important;
+    color: #fca5a5 !important;
+    border: 1px solid #4c1d1d !important;
+}
+
+body.dark-mode .sidebar-search-container {
+    background: #181d26 !important;
+    border-bottom: 1px solid #27303f !important;
+}
+
+body.dark-mode .sidebar-search-input {
+    background: #222936 !important;
+    border: 1px solid #2e3848 !important;
+    color: #f1f5f9 !important;
+}
+
+body.dark-mode .sidebar-search-input::placeholder {
+    color: #64748b !important;
+}
+
+body.dark-mode .sidebar-search-input:focus {
+    background: #1e2430 !important;
+    border-color: #b3261e !important;
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.25) !important;
+}
+
+body.dark-mode .sidebar-search-icon {
+    color: #64748b !important;
+}
+
+body.dark-mode .sidebar-search-wrap:focus-within .sidebar-search-icon {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .sidebar-search-clear {
+    background: #2e3848 !important;
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .sidebar-search-clear:hover {
+    background: #3e4c60 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .sidebar-search-empty {
+    color: #64748b !important;
+}
+
+body.dark-mode .sidebar-menu {
+    background: #181d26 !important;
+}
+
+body.dark-mode .sidebar-menu::-webkit-scrollbar-track {
+    background: #181d26 !important;
+}
+
+body.dark-mode .sidebar-menu::-webkit-scrollbar-thumb {
+    background: #2e3848 !important;
+}
+
+body.dark-mode .sidebar-menu .menu-header {
+    color: #64748b !important;
+}
+
+body.dark-mode .sidebar-menu .menu-item {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .sidebar-menu .menu-item:hover {
+    background: #222936 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .sidebar-menu .menu-item.active {
+    background: #b3261e !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .sidebar-submenu {
+    background: #13171f !important;
+}
+
+body.dark-mode .sidebar-submenu .submenu-item {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .sidebar-submenu .submenu-item:hover {
+    background: #222936 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .sidebar-submenu .submenu-item.active {
+    color: #fca5a5 !important;
+    font-weight: 700 !important;
+}
+
+body.dark-mode .sidebar-footer {
+    background: #181d26 !important;
+    border-top: 1px solid #27303f !important;
+}
+
+body.dark-mode .sidebar-footer .admin-user {
+    background: #222936 !important;
+    color: #e2e8f0 !important;
+    border: 1px solid #2e3848 !important;
+}
+
+body.dark-mode .sidebar-footer .logout-btn {
+    background: #222936 !important;
+    border: 1px solid #2e3848 !important;
+    color: #e2e8f0 !important;
+}
+
+body.dark-mode .sidebar-footer .logout-btn:hover {
+    background: #2f1717 !important;
+    border-color: #ef4444 !important;
+    color: #fca5a5 !important;
+}
 </style>
 
 <div id="adminChatWidget" class="admin-chat-window">
@@ -2343,8 +2489,16 @@ if ($can_partner_billing) {
 
 <script>
 (function() {
-    // Immediate check to restore desktop collapsed state without layout flash
+    // Immediate check to restore theme and sidebar collapsed state without visual flash
     try {
+        const savedTheme = localStorage.getItem('theme') || (document.cookie.match(/(?:^|;\s*)theme=([^;]*)/) || [])[1];
+        if (savedTheme === 'dark') {
+            document.documentElement.classList.add('dark-mode');
+            if (document.body) document.body.classList.add('dark-mode');
+        } else if (savedTheme === 'light') {
+            document.documentElement.classList.remove('dark-mode');
+            if (document.body) document.body.classList.remove('dark-mode');
+        }
         if (window.innerWidth > 768 && localStorage.getItem('admin_sidebar_collapsed') === '1') {
             const container = document.querySelector('.admin-container');
             if (container) container.classList.add('sidebar-collapsed');
@@ -2353,9 +2507,89 @@ if ($can_partner_billing) {
 })();
 
 document.addEventListener('DOMContentLoaded', function() {
+    // 0. Universal Sticky Theme Synchronization
+    function applyAdminTheme(isDark) {
+        if (isDark) {
+            document.documentElement.classList.add('dark-mode');
+            document.body.classList.add('dark-mode');
+        } else {
+            document.documentElement.classList.remove('dark-mode');
+            document.body.classList.remove('dark-mode');
+        }
+        try {
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            document.cookie = "theme=" + (isDark ? "dark" : "light") + "; path=/; max-age=31536000; SameSite=Lax";
+        } catch(e) {}
+
+        document.querySelectorAll('#themeToggler, .theme-toggler').forEach(function(btn) {
+            const icon = btn.querySelector('i');
+            if (icon) {
+                icon.className = isDark ? 'fas fa-sun' : 'fas fa-moon';
+            }
+        });
+        window.dispatchEvent(new CustomEvent('themeChanged', { detail: { isDark: isDark } }));
+    }
+
+    const currentSavedTheme = localStorage.getItem('theme') || (document.cookie.match(/(?:^|;\s*)theme=([^;]*)/) || [])[1];
+    applyAdminTheme(currentSavedTheme === 'dark');
+
     // 1. Unified Sidebar Collapse & Mobile Drawer Toggle
     const adminContainer = document.querySelector('.admin-container') || document.body;
     const sidebar = document.getElementById('adminSidebar');
+    
+    // Ensure Burger Button & Theme Toggler are always present on ANY admin/seller/partner topbar
+    const topbars = document.querySelectorAll('.topbar-content, .admin-topbar, header.admin-topbar');
+    topbars.forEach(function(topbar) {
+        if (!topbar.querySelector('#sidebarToggler, .sidebar-toggler')) {
+            const btn = document.createElement('button');
+            btn.className = 'sidebar-toggler';
+            btn.id = 'sidebarToggler';
+            btn.type = 'button';
+            btn.title = 'Toggle Navigation';
+            btn.setAttribute('aria-label', 'Toggle Navigation');
+            btn.innerHTML = '<i class="fas fa-bars"></i>';
+            topbar.prepend(btn);
+        }
+
+        if (!topbar.querySelector('#themeToggler, .theme-toggler')) {
+            const rightWrap = topbar.querySelector('.topbar-right') || topbar.querySelector('.topbar-content') || topbar;
+            const tBtn = document.createElement('button');
+            tBtn.className = 'theme-toggler';
+            tBtn.id = 'themeToggler';
+            tBtn.type = 'button';
+            tBtn.title = 'Toggle Theme';
+            tBtn.innerHTML = (currentSavedTheme === 'dark') ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
+            const profile = topbar.querySelector('.admin-profile');
+            if (profile && profile.parentNode) {
+                profile.parentNode.insertBefore(tBtn, profile);
+            } else {
+                rightWrap.appendChild(tBtn);
+            }
+        }
+    });
+
+    // Global Event Listener for Theme Toggling
+    document.addEventListener('click', function(e) {
+        const toggler = e.target.closest('#themeToggler, .theme-toggler');
+        if (!toggler) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const isCurrentlyDark = document.body.classList.contains('dark-mode') || document.documentElement.classList.contains('dark-mode');
+        applyAdminTheme(!isCurrentlyDark);
+    });
+
+    // If no topbar exists on a custom page, create a standalone floating burger button
+    if (!document.querySelector('#sidebarToggler, .sidebar-toggler') && sidebar) {
+        const floatingBtn = document.createElement('button');
+        floatingBtn.className = 'sidebar-toggler floating-sidebar-toggler';
+        floatingBtn.id = 'sidebarToggler';
+        floatingBtn.type = 'button';
+        floatingBtn.title = 'Toggle Navigation';
+        floatingBtn.setAttribute('aria-label', 'Toggle Navigation');
+        floatingBtn.innerHTML = '<i class="fas fa-bars"></i>';
+        document.body.appendChild(floatingBtn);
+    }
+
     const togglers = document.querySelectorAll('#sidebarToggler, .sidebar-toggler');
     
     // Ensure state matches localStorage on load
@@ -2380,27 +2614,43 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Attach click listeners to all sidebar togglers (burger buttons)
+    function handleToggle(e) {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        if (window.innerWidth > 768) {
+            // Desktop: Toggle collapsed state
+            const isCollapsed = adminContainer.classList.toggle('sidebar-collapsed');
+            try {
+                localStorage.setItem('admin_sidebar_collapsed', isCollapsed ? '1' : '0');
+            } catch(err) {}
+        } else {
+            // Mobile: Toggle slide-in drawer
+            const isActive = adminContainer.classList.toggle('sidebar-mobile-active');
+            if (sidebar) {
+                sidebar.classList.toggle('active', isActive);
+            }
+        }
+    }
+
     togglers.forEach(function(btn) {
         if (btn.dataset.sidebarBound === '1') return;
         btn.dataset.sidebarBound = '1';
-        btn.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (window.innerWidth > 768) {
-                // Desktop: Toggle collapsed state
-                const isCollapsed = adminContainer.classList.toggle('sidebar-collapsed');
-                try {
-                    localStorage.setItem('admin_sidebar_collapsed', isCollapsed ? '1' : '0');
-                } catch(err) {}
-            } else {
-                // Mobile: Toggle slide-in drawer
-                const isActive = adminContainer.classList.toggle('sidebar-mobile-active');
-                if (sidebar) {
-                    sidebar.classList.toggle('active', isActive);
-                }
-            }
-        });
+        btn.addEventListener('click', handleToggle);
     });
+
+    // On mobile, clicking a navigation link inside the sidebar closes the drawer
+    if (sidebar) {
+        sidebar.querySelectorAll('a.menu-item, a.submenu-item').forEach(function(link) {
+            link.addEventListener('click', function() {
+                if (window.innerWidth <= 768) {
+                    adminContainer.classList.remove('sidebar-mobile-active');
+                    sidebar.classList.remove('active');
+                }
+            });
+        });
+    }
 
     // 2. Sidebar Navigation Live Search Filter
     const searchInput = document.getElementById('sidebarSearchInput');

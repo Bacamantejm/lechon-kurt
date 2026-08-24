@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 session_start();
 include 'auth.php';
 include '../includes/config.php';
@@ -757,6 +757,7 @@ if ($roles_query) while ($r = mysqli_fetch_assoc($roles_query)) {
         <div class="admin-content">
             <div class="admin-topbar">
                 <div class="topbar-content">
+                    <button class="sidebar-toggler" id="sidebarToggler"><i class="fas fa-bars"></i></button>
                     <h1>Employees Management</h1>
                     <button class="theme-toggler" id="themeToggler" title="Toggle Theme" style="margin-left: auto;">
                         <i class="fas fa-moon"></i>

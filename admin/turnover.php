@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 session_start();
 include 'auth.php';
 include '../includes/config.php';
@@ -159,6 +159,7 @@ $active_count = mysqli_fetch_assoc($active_emp)['count'];
         <div class="admin-content">
             <div class="admin-topbar">
                 <div class="topbar-content">
+                    <button class="sidebar-toggler" id="sidebarToggler"><i class="fas fa-bars"></i></button>
                     <h1>Employee Turnover Management</h1>
                     <div class="admin-profile">
                         <span><?php echo htmlspecialchars($admin_info['full_name']); ?></span>

@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 session_start();
 include 'auth.php';
 include '../includes/config.php';
@@ -175,6 +175,7 @@ if ($has_payroll_table && $has_payslips_table) {
         <div class="admin-content">
             <div class="admin-topbar">
                 <div class="topbar-content">
+                    <button class="sidebar-toggler" id="sidebarToggler"><i class="fas fa-bars"></i></button>
                     <h1>Payslip Generation</h1>
                     <div class="admin-profile">
                         <span><?php echo htmlspecialchars($admin_info['full_name']); ?></span>

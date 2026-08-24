@@ -3,7 +3,43 @@ session_start();
 $current_page = 'menu';
 $page_title = "Menu & Order | Lechon Delights";
 
-$requested_seller_id = isset($_GET['seller_id']) ? (int)$_GET['seller_id'] : 0;
+require_once 'includes/config.php';
+
+$scoped_partner_seller_id = 0;
+if (!empty($_SESSION['user_id']) && isset($conn) && $conn) {
+    $logged_user_id = (int)$_SESSION['user_id'];
+    $is_super_admin = (strtolower(trim((string)($_SESSION['role_name'] ?? ''))) === 'super_admin' || strtolower(trim((string)($_SESSION['user_type'] ?? ''))) === 'super_admin');
+    if (!$is_super_admin) {
+        $check_scope_stmt = mysqli_prepare($conn, "SELECT u.id FROM users u WHERE u.id = ? AND (u.account_type = 'organization' OR EXISTS (SELECT 1 FROM franchise_applications fa WHERE fa.user_id = u.id AND fa.status = 'approved')) LIMIT 1");
+        if ($check_scope_stmt) {
+            mysqli_stmt_bind_param($check_scope_stmt, "i", $logged_user_id);
+            mysqli_stmt_execute($check_scope_stmt);
+            $check_scope_res = mysqli_stmt_get_result($check_scope_stmt);
+            if ($check_scope_row = mysqli_fetch_assoc($check_scope_res)) {
+                $scoped_partner_seller_id = (int)$check_scope_row['id'];
+            }
+            mysqli_stmt_close($check_scope_stmt);
+        }
+        if ($scoped_partner_seller_id <= 0) {
+            $staff_scope_stmt = mysqli_prepare($conn, "SELECT pmu.partner_user_id FROM partner_managed_users pmu WHERE pmu.managed_user_id = ? LIMIT 1");
+            if ($staff_scope_stmt) {
+                mysqli_stmt_bind_param($staff_scope_stmt, "i", $logged_user_id);
+                mysqli_stmt_execute($staff_scope_stmt);
+                $staff_scope_res = mysqli_stmt_get_result($staff_scope_stmt);
+                if ($staff_scope_row = mysqli_fetch_assoc($staff_scope_res)) {
+                    $scoped_partner_seller_id = (int)$staff_scope_row['partner_user_id'];
+                }
+                mysqli_stmt_close($staff_scope_stmt);
+            }
+        }
+    }
+}
+
+if ($scoped_partner_seller_id > 0) {
+    $requested_seller_id = $scoped_partner_seller_id;
+} else {
+    $requested_seller_id = isset($_GET['seller_id']) ? (int)$_GET['seller_id'] : 0;
+}
 $requested_branch_id = isset($_GET['branch_id']) ? (int)$_GET['branch_id'] : 0;
 if ($requested_seller_id > 0) {
     $_SESSION['storefront_seller_id'] = $requested_seller_id;
@@ -157,9 +193,10 @@ if (isset($_SESSION['user_id'])) {
 
 // Store locations for pickup (database-driven, with static fallback)
 $store_locations = [];
+$store_scope_filter = ($scoped_partner_seller_id > 0) ? " AND owner_user_id = " . (int)$scoped_partner_seller_id : "";
 $store_query = "SELECT store_id, owner_user_id, store_name, address, city, province, phone, opening_hours, latitude, longitude
                 FROM store_locations
-                WHERE is_active = 1
+                WHERE is_active = 1 {$store_scope_filter}
                 ORDER BY store_name";
 $store_result = mysqli_query($conn, $store_query);
 
