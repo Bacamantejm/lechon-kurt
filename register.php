@@ -2918,11 +2918,17 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
+        const backInput = document.getElementById('validIdBack');
+        const backFile = backInput && backInput.files ? backInput.files[0] : null;
+
         const verifyData = new FormData();
         verifyData.append('first_name', firstName);
         verifyData.append('last_name', lastName);
         verifyData.append('valid_id_type', validIdType);
         verifyData.append('valid_id', frontFile);
+        if (backFile) {
+            verifyData.append('valid_id_back', backFile);
+        }
         verifyData.append('csrf_token', csrfToken);
 
         const progressHtml = `
@@ -3071,8 +3077,6 @@ document.addEventListener('DOMContentLoaded', function() {
     function validateStep2() {
         const firstName = ((document.getElementById('firstName') || {}).value || '').trim();
         const lastName = ((document.getElementById('lastName') || {}).value || '').trim();
-        const email = ((document.getElementById('email') || {}).value || '').trim();
-        const phone = ((document.getElementById('phone') || {}).value || '').trim();
         const validIdType = ((document.getElementById('validIdType') || {}).value || '').trim();
         const validIdFrontInput = document.getElementById('validIdFront');
         const validIdBackInput = document.getElementById('validIdBack');
@@ -3080,38 +3084,18 @@ document.addEventListener('DOMContentLoaded', function() {
         const validIdFrontFile = validIdFrontInput && validIdFrontInput.files ? validIdFrontInput.files[0] : null;
         const validIdBackFile = validIdBackInput && validIdBackInput.files ? validIdBackInput.files[0] : null;
 
-        if (!email || !phone) {
-            showError('Missing Information', 'Please fill in all required personal details.');
-            return false;
-        }
-
-        if (!isValidName(firstName) || !isValidName(lastName)) {
-            showError('Invalid Name', 'Please use letters, spaces, apostrophes, or hyphens only.');
-            return false;
-        }
-
-        if (!isValidEmail(email)) {
-            showError('Invalid Email', 'Please enter a valid email address.');
-            return false;
-        }
-
-        if (!isValidPhone(phone)) {
-            showError('Invalid Phone', 'Please enter a valid Philippine mobile number.');
-            return false;
-        }
-
         if (!validIdType) {
             showError('Valid ID Type Required', 'Please select what kind of ID you will upload.');
             return false;
         }
 
         if (!validIdFrontFile) {
-            showError('Front ID Photo Required', 'Please upload a photo of the front side of your ID.');
+            showError('Front ID Photo Required', 'Please upload or capture a photo of the front side of your ID.');
             return false;
         }
 
         if (!validIdBackFile) {
-            showError('Back ID Photo Required', 'Please upload a photo of the back side of your ID.');
+            showError('Back ID Photo Required', 'Please upload or capture a photo of the back side of your ID.');
             return false;
         }
 
@@ -3124,8 +3108,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 showError('Invalid ID Format', 'Please upload a JPG, PNG, or WEBP image for ' + label + '.');
                 return false;
             }
-            if (file.size > (5 * 1024 * 1024)) {
-                showError('File Too Large', 'Your ' + label + ' file size must be 5MB or smaller.');
+            if (file.size > (10 * 1024 * 1024)) {
+                showError('File Too Large', 'Your ' + label + ' file size must be 10MB or smaller.');
                 return false;
             }
             return true;
@@ -3167,11 +3151,33 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function validateStep4() {
+        const email = ((document.getElementById('email') || {}).value || '').trim();
+        const phone = ((document.getElementById('phone') || {}).value || '').trim();
         const passwordInput = document.getElementById('password');
         const confirmPasswordInput = document.getElementById('confirmPassword');
-        const termsInput = document.getElementById('acceptTerms');
+        const termsInput = document.getElementById('terms') || document.getElementById('acceptTerms');
         const password = passwordInput ? passwordInput.value : '';
         const confirmPassword = confirmPasswordInput ? confirmPasswordInput.value : '';
+
+        if (!email) {
+            showError('Email Required', 'Please enter your email address.');
+            return false;
+        }
+
+        if (!isValidEmail(email)) {
+            showError('Invalid Email', 'Please enter a valid email address.');
+            return false;
+        }
+
+        if (!phone) {
+            showError('Phone Required', 'Please enter your mobile phone number.');
+            return false;
+        }
+
+        if (!isValidPhone(phone)) {
+            showError('Invalid Phone', 'Please enter a valid Philippine mobile number (e.g., 09123456789).');
+            return false;
+        }
 
         if (!password || !confirmPassword) {
             showError('Password Required', 'Please enter and confirm your password.');
@@ -3483,27 +3489,33 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function handleFileSelection(side) {
-        const fileInput = document.getElementById(side === 'Front' ? 'validIdFront' : 'validIdBack');
-        const previewContainer = document.getElementById(side === 'Front' ? 'previewFront' : 'previewBack');
-        const zoneContent = document.getElementById(side === 'Front' ? 'zoneContentFront' : 'zoneContentBack');
+        const isFront = (side || '').toLowerCase() === 'front';
+        const fileInput = document.getElementById(isFront ? 'validIdFront' : 'validIdBack');
+        const previewContainer = document.getElementById(isFront ? 'previewContainerFront' : 'previewContainerBack') || document.getElementById(isFront ? 'previewFront' : 'previewBack');
+        const previewImg = document.getElementById(isFront ? 'imagePreviewFront' : 'imagePreviewBack') || (previewContainer ? previewContainer.querySelector('img') : null);
+        const statusBadge = document.getElementById(isFront ? 'frontStatusBadge' : 'backStatusBadge');
 
         if (fileInput && fileInput.files && fileInput.files[0]) {
             const file = fileInput.files[0];
             const reader = new FileReader();
             reader.onload = function(e) {
-                if (previewContainer) {
-                    const img = previewContainer.querySelector('img');
-                    if (img) img.src = e.target.result;
-                    previewContainer.style.display = 'block';
+                if (previewImg) previewImg.src = e.target.result;
+                if (previewContainer) previewContainer.style.display = 'block';
+                if (statusBadge) {
+                    statusBadge.textContent = 'Selected';
+                    statusBadge.style.background = '#ecfdf3';
+                    statusBadge.style.color = '#027a48';
                 }
-                if (zoneContent) zoneContent.style.visibility = 'hidden';
             };
             reader.readAsDataURL(file);
+            idVerified = false;
         }
     }
 
-    document.getElementById('validIdFront').addEventListener('change', () => handleFileSelection('Front'));
-    document.getElementById('validIdBack').addEventListener('change', () => handleFileSelection('Back'));
+    const frontFileInput = document.getElementById('validIdFront');
+    const backFileInput = document.getElementById('validIdBack');
+    if (frontFileInput) frontFileInput.addEventListener('change', () => handleFileSelection('front'));
+    if (backFileInput) backFileInput.addEventListener('change', () => handleFileSelection('back'));
 
     function stopCamera() {
         if (cameraStream) {
@@ -3516,10 +3528,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function openModal(side) {
-        activeCameraSide = side;
+        activeCameraSide = (side || 'front').toLowerCase() === 'back' ? 'back' : 'front';
         const title = document.getElementById('cameraModalTitle');
-        if (title) title.textContent = 'Capture Front of ID';
-        if (side === 'Back' && title) title.textContent = 'Capture Back of ID';
+        if (title) title.textContent = activeCameraSide === 'back' ? 'Capture Back of ID' : 'Capture Front of ID';
         if (cameraModal) cameraModal.style.display = 'flex';
         startCamera();
     }
@@ -3529,46 +3540,54 @@ document.addEventListener('DOMContentLoaded', function() {
         stopCamera();
     }
 
-    if (zoneFront) zoneFront.addEventListener('click', (e) => {
-        if (e.target.closest('.direct-upload-btn') || e.target.closest('.remove-preview')) return;
-        openModal('Front');
+    // Trigger Camera Buttons
+    document.querySelectorAll('.trigger-camera-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const target = (this.getAttribute('data-target') || 'front').toLowerCase();
+            openModal(target);
+        });
     });
-    if (zoneBack) zoneBack.addEventListener('click', (e) => {
-        if (e.target.closest('.direct-upload-btn') || e.target.closest('.remove-preview')) return;
-        openModal('Back');
-    });
+
     if (closeCameraBtn) closeCameraBtn.addEventListener('click', closeModal);
 
-    // "Or upload file" buttons — bypass camera, go straight to file picker
+    // Direct upload buttons — open file picker immediately
     document.querySelectorAll('.direct-upload-btn').forEach(btn => {
         btn.addEventListener('click', function(e) {
+            e.preventDefault();
             e.stopPropagation();
-            const side = this.getAttribute('data-side');
-            const inputId = side === 'Front' ? 'validIdFront' : 'validIdBack';
+            const target = this.getAttribute('data-target');
+            const inputId = target ? target : ((this.getAttribute('data-side') || '').toLowerCase() === 'back' ? 'validIdBack' : 'validIdFront');
             const fileInput = document.getElementById(inputId);
-            if (fileInput) fileInput.click();
+            if (fileInput) {
+                fileInput.value = '';
+                fileInput.click();
+            }
         });
     });
 
-    if (removeFront) {
-        removeFront.addEventListener('click', function(e) {
+    // Remove Preview Buttons
+    document.querySelectorAll('.remove-preview-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
             e.stopPropagation();
-            document.getElementById('validIdFront').value = '';
-            document.getElementById('previewFront').style.display = 'none';
-            document.getElementById('zoneContentFront').style.visibility = 'visible';
-            idVerified = false;
-        });
-    }
+            const target = (this.getAttribute('data-target') || 'front').toLowerCase();
+            const isFront = target === 'front';
+            const fileInput = document.getElementById(isFront ? 'validIdFront' : 'validIdBack');
+            const previewContainer = document.getElementById(isFront ? 'previewContainerFront' : 'previewContainerBack') || document.getElementById(isFront ? 'previewFront' : 'previewBack');
+            const statusBadge = document.getElementById(isFront ? 'frontStatusBadge' : 'backStatusBadge');
 
-    if (removeBack) {
-        removeBack.addEventListener('click', function(e) {
-            e.stopPropagation();
-            document.getElementById('validIdBack').value = '';
-            document.getElementById('previewBack').style.display = 'none';
-            document.getElementById('zoneContentBack').style.visibility = 'visible';
+            if (fileInput) fileInput.value = '';
+            if (previewContainer) previewContainer.style.display = 'none';
+            if (statusBadge) {
+                statusBadge.textContent = 'Pending';
+                statusBadge.style.background = '#f1f5f9';
+                statusBadge.style.color = '#64748b';
+            }
             idVerified = false;
         });
-    }
+    });
 
     if (flipCameraBtn) {
         flipCameraBtn.addEventListener('click', function() {
@@ -3597,20 +3616,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 context.drawImage(webcamVideo, 0, 0, videoWidth, videoHeight);
                 const dataUrl = canvasHolder.toDataURL('image/jpeg', 0.95);
 
-                const previewContainer = document.getElementById(activeCameraSide === 'Front' ? 'previewFront' : 'previewBack');
-                const zoneContent = document.getElementById(activeCameraSide === 'Front' ? 'zoneContentFront' : 'zoneContentBack');
-                const inputElement = document.getElementById(activeCameraSide === 'Front' ? 'validIdFront' : 'validIdBack');
+                const isFront = activeCameraSide.toLowerCase() === 'front';
+                const previewContainer = document.getElementById(isFront ? 'previewContainerFront' : 'previewContainerBack') || document.getElementById(isFront ? 'previewFront' : 'previewBack');
+                const previewImg = document.getElementById(isFront ? 'imagePreviewFront' : 'imagePreviewBack') || (previewContainer ? previewContainer.querySelector('img') : null);
+                const statusBadge = document.getElementById(isFront ? 'frontStatusBadge' : 'backStatusBadge');
+                const inputElement = document.getElementById(isFront ? 'validIdFront' : 'validIdBack');
 
-                if (previewContainer) {
-                    const img = previewContainer.querySelector('img');
-                    if (img) img.src = dataUrl;
-                    previewContainer.style.display = 'block';
+                if (previewImg) previewImg.src = dataUrl;
+                if (previewContainer) previewContainer.style.display = 'block';
+                if (statusBadge) {
+                    statusBadge.textContent = 'Captured';
+                    statusBadge.style.background = '#ecfdf3';
+                    statusBadge.style.color = '#027a48';
                 }
-                if (zoneContent) zoneContent.style.visibility = 'hidden';
 
                 try {
                     const blob = dataURLtoBlob(dataUrl);
-                    const file = new File([blob], 'captured_id_' + activeCameraSide.toLowerCase() + '.jpg', { type: 'image/jpeg' });
+                    const file = new File([blob], 'captured_id_' + (isFront ? 'front' : 'back') + '.jpg', { type: 'image/jpeg' });
                     const dt = new DataTransfer();
                     dt.items.add(file);
                     if (inputElement) {
@@ -3621,6 +3643,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     console.error('File injection error:', e);
                 }
 
+                idVerified = false;
                 closeModal();
             }
         });
