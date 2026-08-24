@@ -419,7 +419,7 @@ function getAllRoles($conn, $active_only = true) {
     if ($active_only) {
         $query .= " WHERE is_active = 1";
     }
-    $query .= " ORDER BY level DESC";
+    $query .= " ORDER BY name ASC";
     
     $result = mysqli_query($conn, $query);
     if (!$result) {

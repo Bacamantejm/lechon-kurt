@@ -77,16 +77,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Also create a role for this department
                 $role_name = 'dept_' . strtolower(preg_replace('/[^a-zA-Z0-9]+/', '_', trim($department_name)));
                 $role_desc = 'Role for members of the ' . $department_name . ' department.';
-                $role_level = 20; // Standard employee-level role
 
                 $role_sql = ($is_partner_scoped_hr && departmentsRoleOwnerColumnExists($conn))
-                    ? "INSERT INTO roles (name, description, level, department_id, owner_user_id) VALUES (?, ?, ?, ?, ?)"
-                    : "INSERT INTO roles (name, description, level, department_id) VALUES (?, ?, ?, ?)";
+                    ? "INSERT INTO roles (name, description, department_id, owner_user_id) VALUES (?, ?, ?, ?)"
+                    : "INSERT INTO roles (name, description, department_id) VALUES (?, ?, ?)";
                 $role_stmt = mysqli_prepare($conn, $role_sql);
                 if ($is_partner_scoped_hr && departmentsRoleOwnerColumnExists($conn)) {
-                    mysqli_stmt_bind_param($role_stmt, "ssiii", $role_name, $role_desc, $role_level, $new_dept_id, $partner_scope_owner_id);
+                    mysqli_stmt_bind_param($role_stmt, "ssii", $role_name, $role_desc, $new_dept_id, $partner_scope_owner_id);
                 } else {
-                    mysqli_stmt_bind_param($role_stmt, "ssii", $role_name, $role_desc, $role_level, $new_dept_id);
+                    mysqli_stmt_bind_param($role_stmt, "ssi", $role_name, $role_desc, $new_dept_id);
                 }
                 if (mysqli_stmt_execute($role_stmt)) {
                     $_SESSION['success'] = "Department and associated role created.";
