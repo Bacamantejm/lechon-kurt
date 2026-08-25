@@ -24,14 +24,11 @@ class OrderResource extends Resource
                 Forms\Components\TextInput::make('order_number')
                     ->disabled()
                     ->required(),
-                Forms\Components\Select::make('store_id')
-                    ->relationship('store', 'store_name')
-                    ->required(),
                 Forms\Components\Select::make('status')
                     ->options([
                         'pending' => 'Pending',
+                        'confirmed' => 'Confirmed',
                         'preparing' => 'Preparing',
-                        'on_the_way' => 'On The Way',
                         'delivered' => 'Delivered',
                         'cancelled' => 'Cancelled',
                     ])
@@ -59,13 +56,12 @@ class OrderResource extends Resource
                     ->weight('bold'),
                 Tables\Columns\TextColumn::make('customer_name')
                     ->searchable(),
-                Tables\Columns\TextColumn::make('store.store_name')
-                    ->sortable(),
-                Tables\Columns\BadgeColumn::make('status')
+                Tables\Columns\TextColumn::make('status')
+                    ->badge()
                     ->colors([
                         'warning' => 'pending',
                         'primary' => 'preparing',
-                        'info' => 'on_the_way',
+                        'info' => 'confirmed',
                         'success' => 'delivered',
                         'danger' => 'cancelled',
                     ]),

@@ -84,4 +84,39 @@ class AuthController extends Controller
 
         return redirect()->route('home')->with('info', 'You have been signed out.');
     }
+
+    public function showForgotPassword()
+    {
+        return view('auth.forgot-password');
+    }
+
+    public function sendResetLink(Request $request)
+    {
+        $request->validate(['email' => 'required|email']);
+        return redirect()->route('login')->with('success', 'If an account exists for this email, password reset instructions have been sent.');
+    }
+
+    public function showResetPassword(string $token)
+    {
+        return view('auth.reset-password', ['token' => $token]);
+    }
+
+    public function resetPassword(Request $request)
+    {
+        $request->validate([
+            'token' => 'required',
+            'email' => 'required|email',
+            'password' => 'required|min:8|confirmed',
+        ]);
+
+        $user = User::where('email', $request->email)->first();
+        if ($user) {
+            $user->password = Hash::make($request->password);
+            $user->save();
+            Auth::login($user);
+            return redirect()->route('home')->with('success', 'Password updated successfully!');
+        }
+
+        return back()->withErrors(['email' => 'Unable to reset password for this email.']);
+    }
 }

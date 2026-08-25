@@ -21,25 +21,27 @@ class ProductResource extends Resource
     {
         return $form
             ->schema([
-                Forms\Components\TextInput::make('product_name')
+                Forms\Components\TextInput::make('name')
+                    ->label('Product Name')
                     ->required()
-                    ->maxLength(200),
-                Forms\Components\Select::make('store_id')
-                    ->relationship('store', 'store_name')
-                    ->required(),
-                Forms\Components\Select::make('category_id')
-                    ->relationship('category', 'category_name')
-                    ->required(),
+                    ->maxLength(100),
+                Forms\Components\TextInput::make('category')
+                    ->label('Category')
+                    ->required()
+                    ->placeholder('e.g. Whole Lechon, Lechon Belly, Sisig')
+                    ->maxLength(50),
                 Forms\Components\TextInput::make('price')
                     ->required()
                     ->numeric()
                     ->prefix('₱'),
+                Forms\Components\TextInput::make('stock')
+                    ->numeric()
+                    ->default(0),
                 Forms\Components\Textarea::make('description')
                     ->columnSpanFull(),
-                Forms\Components\Toggle::make('is_available')
+                Forms\Components\Toggle::make('is_active')
+                    ->label('Active on Storefront')
                     ->default(true),
-                Forms\Components\Toggle::make('is_bestseller')
-                    ->default(false),
             ]);
     }
 
@@ -47,17 +49,21 @@ class ProductResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('product_name')
+                Tables\Columns\TextColumn::make('name')
+                    ->label('Product')
                     ->searchable()
-                    ->sortable(),
-                Tables\Columns\TextColumn::make('store.store_name')
+                    ->sortable()
+                    ->weight('bold'),
+                Tables\Columns\TextColumn::make('category')
+                    ->searchable()
                     ->sortable(),
                 Tables\Columns\TextColumn::make('price')
                     ->money('PHP')
                     ->sortable(),
-                Tables\Columns\IconColumn::make('is_available')
-                    ->boolean(),
-                Tables\Columns\IconColumn::make('is_bestseller')
+                Tables\Columns\TextColumn::make('stock')
+                    ->sortable(),
+                Tables\Columns\IconColumn::make('is_active')
+                    ->label('Active')
                     ->boolean(),
             ])
             ->filters([

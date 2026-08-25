@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Storefront;
 
 use App\Http\Controllers\Controller;
 use App\Models\Product;
-use App\Models\ProductCategory;
 use App\Models\StoreLocation;
 use Illuminate\Http\Request;
 
@@ -12,26 +11,26 @@ class MenuController extends Controller
 {
     public function index(Request $request)
     {
-        $categories = ProductCategory::where('is_active', true)->orderBy('sort_order')->get();
+        $categories = Product::whereNotNull('category')
+            ->where('category', '!=', '')
+            ->distinct()
+            ->pluck('category');
+
         $stores = StoreLocation::where('is_active', true)->get();
 
-        $selectedStoreId = $request->query('store_id', session('selected_store_id', $stores->first()?->id));
-        $selectedCategoryId = $request->query('category_id');
+        $selectedStoreId = $request->query('store_id', session('selected_store_id', $stores->first()?->store_id));
+        $selectedCategory = $request->query('category');
         $search = $request->query('q');
 
-        $productsQuery = Product::with(['store', 'category'])->where('is_available', true);
+        $productsQuery = Product::where('is_active', true)->where('is_archived', false);
 
-        if ($selectedStoreId) {
-            $productsQuery->where('store_id', $selectedStoreId);
-        }
-
-        if ($selectedCategoryId) {
-            $productsQuery->where('category_id', $selectedCategoryId);
+        if ($selectedCategory) {
+            $productsQuery->where('category', $selectedCategory);
         }
 
         if ($search) {
             $productsQuery->where(function ($q) use ($search) {
-                $q->where('product_name', 'like', "%{$search}%")
+                $q->where('name', 'like', "%{$search}%")
                   ->orWhere('description', 'like', "%{$search}%");
             });
         }
@@ -39,7 +38,7 @@ class MenuController extends Controller
         $products = $productsQuery->get();
         $cart = session()->get('cart', []);
 
-        return view('storefront.menu', compact('categories', 'stores', 'products', 'selectedStoreId', 'cart'));
+        return view('storefront.menu', compact('categories', 'stores', 'products', 'selectedStoreId', 'selectedCategory', 'cart'));
     }
 
     public function addToCart(Request $request)
@@ -54,15 +53,15 @@ class MenuController extends Controller
 
         $id = $product->id;
         if (isset($cart[$id])) {
-            $cart[$id]['quantity'] += $request->quantity;
+            $cart[$id]['quantity'] += (int)$request->quantity;
         } else {
             $cart[$id] = [
                 'id' => $product->id,
-                'name' => $product->product_name,
+                'name' => $product->name,
                 'price' => (float)$product->price,
                 'quantity' => (int)$request->quantity,
-                'image' => $product->image_url,
-                'store_id' => $product->store_id,
+                'image' => $product->image,
+                'store_id' => $product->seller_id,
             ];
         }
 
@@ -71,13 +70,13 @@ class MenuController extends Controller
         if ($request->wantsJson()) {
             return response()->json([
                 'success' => true,
-                'message' => "{$product->product_name} added to order!",
+                'message' => "{$product->name} added to order!",
                 'cart_count' => count($cart),
                 'cart' => $cart,
             ]);
         }
 
-        return redirect()->back()->with('success', "{$product->product_name} added to cart!");
+        return redirect()->back()->with('success', "{$product->name} added to cart!");
     }
 
     public function updateCart(Request $request)
@@ -118,5 +117,14 @@ class MenuController extends Controller
             'cart_count' => count($cart),
             'cart' => $cart,
         ]);
+    }
+
+    public function show(string $slug)
+    {
+        $product = Product::where('id', $slug)
+            ->orWhere('name', 'like', "%{$slug}%")
+            ->firstOrFail();
+
+        return redirect()->route('menu', ['q' => $product->name]);
     }
 }

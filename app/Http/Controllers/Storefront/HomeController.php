@@ -19,9 +19,8 @@ class HomeController extends Controller
         }
         $stores = $storesQuery->get();
 
-        $bestsellers = Product::with('store')
-            ->where('is_available', true)
-            ->where('is_bestseller', true)
+        $bestsellers = Product::where('is_active', true)
+            ->where('is_archived', false)
             ->take(8)
             ->get();
 

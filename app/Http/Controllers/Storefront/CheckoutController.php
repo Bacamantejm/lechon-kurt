@@ -42,7 +42,7 @@ class CheckoutController extends Controller
             'delivery_type' => 'required|in:delivery,pickup',
             'payment_method' => 'required|in:cod,gcash,maya,card',
             'delivery_address' => 'required_if:delivery_type,delivery',
-            'store_id' => 'required|exists:store_locations,id',
+            'store_id' => 'required|exists:store_locations,store_id',
         ]);
 
         $cart = session()->get('cart', []);
@@ -61,29 +61,31 @@ class CheckoutController extends Controller
             $order = Order::create([
                 'order_number' => $orderNumber,
                 'user_id' => auth()->id(),
-                'store_id' => $request->store_id,
+                'pickup_location' => $request->store_id,
                 'status' => 'pending',
                 'payment_method' => $request->payment_method,
                 'payment_status' => ($request->payment_method === 'cod') ? 'pending' : 'paid',
                 'subtotal' => $subtotal,
                 'delivery_fee' => $deliveryFee,
-                'discount_amount' => 0.00,
+                'voucher_discount' => 0.00,
                 'total_amount' => $totalAmount,
-                'delivery_type' => $request->delivery_type,
+                'delivery_option' => $request->delivery_type,
+                'delivery_date' => now()->toDateString(),
                 'delivery_address' => $request->delivery_address ?? 'Store Pick-up',
                 'customer_name' => $request->customer_name,
                 'customer_phone' => $request->customer_phone,
-                'customer_notes' => $request->customer_notes,
+                'customer_email' => auth()->user()?->email ?? 'guest@lechondelights.com',
+                'special_instructions' => $request->customer_notes,
             ]);
 
             foreach ($cart as $item) {
                 OrderItem::create([
                     'order_id' => $order->id,
-                    'product_id' => $item['id'],
+                    'product_id' => (string)$item['id'],
                     'product_name' => $item['name'],
-                    'quantity' => $item['quantity'],
-                    'unit_price' => $item['price'],
-                    'subtotal' => $item['price'] * $item['quantity'],
+                    'quantity' => (int)$item['quantity'],
+                    'price' => $item['price'],
+                    'total' => $item['price'] * $item['quantity'],
                 ]);
             }
 

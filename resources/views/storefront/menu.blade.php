@@ -39,12 +39,12 @@
         <div>
             <!-- Category Pills -->
             <div style="display: flex; gap: 10px; overflow-x: auto; padding-bottom: 12px; margin-bottom: 20px; scrollbar-width: none;">
-                <a href="{{ route('menu', ['store_id' => $selectedStoreId]) }}" style="padding: 8px 18px; border-radius: 30px; font-size: 0.85rem; font-weight: 700; white-space: nowrap; {{ !request('category_id') ? 'background: #b3261e; color: #ffffff;' : 'background: #ffffff; color: #475467; border: 1px solid #d0d5dd;' }}">
+                <a href="{{ route('menu') }}" style="padding: 8px 18px; border-radius: 30px; font-size: 0.85rem; font-weight: 700; white-space: nowrap; {{ !request('category') ? 'background: #b3261e; color: #ffffff;' : 'background: #ffffff; color: #475467; border: 1px solid #d0d5dd;' }}">
                     All Items
                 </a>
                 @foreach($categories as $category)
-                    <a href="{{ route('menu', ['store_id' => $selectedStoreId, 'category_id' => $category->id]) }}" style="padding: 8px 18px; border-radius: 30px; font-size: 0.85rem; font-weight: 700; white-space: nowrap; {{ request('category_id') == $category->id ? 'background: #b3261e; color: #ffffff;' : 'background: #ffffff; color: #475467; border: 1px solid #d0d5dd;' }}">
-                        {{ $category->category_name }}
+                    <a href="{{ route('menu', ['category' => $category]) }}" style="padding: 8px 18px; border-radius: 30px; font-size: 0.85rem; font-weight: 700; white-space: nowrap; {{ request('category') == $category ? 'background: #b3261e; color: #ffffff;' : 'background: #ffffff; color: #475467; border: 1px solid #d0d5dd;' }}">
+                        {{ $category }}
                     </a>
                 @endforeach
             </div>

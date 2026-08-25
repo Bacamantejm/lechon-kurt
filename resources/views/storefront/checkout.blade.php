@@ -46,7 +46,7 @@
                         <label style="display: block; font-size: 0.85rem; font-weight: 700; color: #344054; margin-bottom: 6px;">Roaster Branch</label>
                         <select name="store_id" required style="width: 100%; padding: 12px 14px; border: 1px solid #d0d5dd; border-radius: 10px; font-size: 0.95rem; outline: none; background: #ffffff;">
                             @foreach($stores as $store)
-                                <option value="{{ $store->id }}">{{ $store->store_name }} — {{ $store->address ?? $store->city }}</option>
+                                <option value="{{ $store->store_id }}">{{ $store->store_name }} — {{ $store->address ?? $store->city }}</option>
                             @endforeach
                         </select>
                     </div>

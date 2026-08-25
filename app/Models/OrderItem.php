@@ -10,24 +10,36 @@ class OrderItem extends Model
     use HasFactory;
 
     protected $table = 'order_items';
+    public $timestamps = false;
 
     protected $fillable = [
         'order_id',
         'product_id',
         'product_name',
+        'price',
         'quantity',
-        'unit_price',
-        'subtotal',
-        'special_instructions',
-        'options_json',
+        'size',
+        'addons',
+        'total',
+        'is_reviewed',
     ];
 
     protected $casts = [
+        'price' => 'decimal:2',
+        'total' => 'decimal:2',
         'quantity' => 'integer',
-        'unit_price' => 'decimal:2',
-        'subtotal' => 'decimal:2',
-        'options_json' => 'array',
+        'is_reviewed' => 'boolean',
     ];
+
+    public function getUnitPriceAttribute(): float
+    {
+        return (float)($this->price ?? 0);
+    }
+
+    public function getSubtotalAttribute(): float
+    {
+        return (float)($this->total ?? 0);
+    }
 
     public function order()
     {
@@ -36,6 +48,6 @@ class OrderItem extends Model
 
     public function product()
     {
-        return $this->belongsTo(Product::class, 'product_id');
+        return $this->belongsTo(Product::class, 'product_id', 'product_id');
     }
 }
