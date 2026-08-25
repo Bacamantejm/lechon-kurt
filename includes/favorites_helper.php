@@ -254,3 +254,61 @@ if (!function_exists('favoritesToggleProduct')) {
         return ['success' => (bool)$ok, 'is_favorite' => (bool)$ok];
     }
 }
+
+if (!function_exists('favoritesFetchUserInStockFavorites')) {
+    function favoritesFetchUserInStockFavorites(mysqli $conn, $user_id) {
+        $user_id = (int)$user_id;
+        if ($user_id <= 0 || !favoritesEnsureTable($conn)) {
+            return [];
+        }
+
+        $sql = "SELECT
+                    p.id,
+                    p.name,
+                    p.price,
+                    p.image,
+                    p.category,
+                    p.avg_rating,
+                    p.seller_id,
+                    COALESCE(i.current_stock, p.stock, 0) AS current_stock,
+                    COALESCE(NULLIF(TRIM(u.business_name), ''), 'Lechon Delights Kitchen') AS store_name
+                FROM customer_favorites cf
+                INNER JOIN products p ON cf.product_id = p.id
+                LEFT JOIN inventory i ON (i.product_id = p.id AND i.date = CURRENT_DATE())
+                LEFT JOIN users u ON p.seller_id = u.id
+                WHERE cf.user_id = ?
+                  AND cf.favorite_type = 'product'
+                  AND p.is_archived = 0
+                  AND p.is_active = 1
+                  AND COALESCE(i.current_stock, p.stock, 0) > 0
+                ORDER BY cf.created_at DESC";
+
+        $stmt = mysqli_prepare($conn, $sql);
+        if (!$stmt) {
+            return [];
+        }
+
+        mysqli_stmt_bind_param($stmt, "i", $user_id);
+        mysqli_stmt_execute($stmt);
+        $result = mysqli_stmt_get_result($stmt);
+        $items = [];
+        if ($result) {
+            while ($row = mysqli_fetch_assoc($result)) {
+                $items[] = [
+                    'id' => (int)$row['id'],
+                    'name' => trim((string)$row['name']),
+                    'price' => (float)$row['price'],
+                    'image' => (string)$row['image'],
+                    'category' => (string)$row['category'],
+                    'seller_id' => (int)$row['seller_id'],
+                    'current_stock' => (int)$row['current_stock'],
+                    'store_name' => (string)$row['store_name']
+                ];
+            }
+            mysqli_free_result($result);
+        }
+        mysqli_stmt_close($stmt);
+
+        return $items;
+    }
+}

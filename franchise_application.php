@@ -1403,6 +1403,277 @@ include 'includes/header.php';
         <div class="alert alert-error" style="background-color: #f8d7da; border: 2px solid #dc3545; border-radius: 12px; padding: 20px; color: #721c24; font-size: 1.05rem; margin-bottom: 24px;">
             <i class="fas fa-exclamation-circle" style="color: #dc3545; margin-right: 10px;"></i> <?php echo $error_msg; ?>
         </div>
+        <?php endif; ?>
+
+        <div class="application-container">
+            <div class="application-form-container">
+
+                <!-- Workflow status header pill row -->
+                <div class="application-workflow-card">
+                    <div class="workflow-pill-row">
+                        <span class="workflow-pill"><i class="fas fa-layer-group"></i> Total Attempts: <?php echo (int)$franchise_workflow['total_attempts']; ?>/2</span>
+                        <span class="workflow-pill"><i class="fas fa-hourglass-half"></i> Remaining Attempts: <?php echo (int)$franchise_workflow['remaining_attempts']; ?></span>
+                        <?php if (!empty($franchise_workflow['approved_trial_ends_at'])): ?>
+                            <span class="workflow-pill"><i class="fas fa-calendar-check"></i> Trial Ends: <?php echo date('F j, Y', strtotime((string)$franchise_workflow['approved_trial_ends_at'])); ?></span>
+                        <?php elseif (!empty($franchise_workflow['next_eligible_at'])): ?>
+                            <span class="workflow-pill"><i class="fas fa-clock"></i> Reapply On: <?php echo date('F j, Y g:i A', strtotime((string)$franchise_workflow['next_eligible_at'])); ?></span>
+                        <?php endif; ?>
+                    </div>
+                    <p class="workflow-summary"><?php echo htmlspecialchars((string)($franchise_workflow['message'] ?? '')); ?></p>
+                </div>
+
+                <?php if (!$franchise_workflow['can_submit'] && !$success_msg): ?>
+                <div class="alert" style="background:#fff8e1;border:1px solid #ffd54f;color:#8a6d3b;border-radius:12px;padding:20px;margin-bottom:22px;">
+                    <i class="fas fa-info-circle" style="margin-right:8px;color:#f57f17;font-size:1.2rem;"></i>
+                    <?php echo htmlspecialchars((string)($franchise_workflow['message'] ?? 'Application workflow is currently restricted.')); ?>
+                    <?php if (!empty($latest_application['application_number'])): ?>
+                        <br>Latest Application: <strong><?php echo htmlspecialchars((string)$latest_application['application_number']); ?></strong>
+                    <?php endif; ?>
+                    <?php if (!empty($latest_application['created_at'])): ?>
+                        <br>Submitted on: <?php echo date('F j, Y g:i a', strtotime((string)$latest_application['created_at'])); ?>.
+                    <?php endif; ?>
+                </div>
+                <div class="form-actions" style="margin-top:20px;">
+                    <a href="my_account.php" class="btn-primary btn-large" style="text-decoration:none;">
+                        <i class="fas fa-user-circle"></i> Go to My Account
+                    </a>
+                    <?php if (in_array($franchise_workflow['stage'], ['approved_partner', 'already_registered_partner'], true)): ?>
+                        <a href="admin/index.php" class="btn-secondary btn-large" style="text-decoration:none;">
+                            <i class="fas fa-store"></i> Open Partner Dashboard
+                        </a>
+                    <?php endif; ?>
+                </div>
+                <?php else: ?>
+
+                <!-- WIZARD STEPPER PROGRESS BAR -->
+                <div class="wizard-stepper" id="wizardStepper">
+                    <div class="stepper-track">
+                        <div class="stepper-progress" id="stepperProgress"></div>
+                    </div>
+                    <div class="stepper-item active" data-step="1">
+                        <div class="stepper-icon"><i class="fas fa-building"></i></div>
+                        <div class="stepper-label">1. Business Info</div>
+                    </div>
+                    <div class="stepper-item" data-step="2">
+                        <div class="stepper-icon"><i class="fas fa-file-upload"></i></div>
+                        <div class="stepper-label">2. Documents</div>
+                    </div>
+                    <div class="stepper-item" data-step="3">
+                        <div class="stepper-icon"><i class="fas fa-check-circle"></i></div>
+                        <div class="stepper-label">3. Review & Submit</div>
+                    </div>
+                </div>
+
+                <form method="POST" action="" enctype="multipart/form-data" class="application-form" id="franchiseForm">
+                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token, ENT_QUOTES, 'UTF-8'); ?>">
+
+                    <!-- ========================================== -->
+                    <!-- WIZARD STEP 1: Business & Contact Info     -->
+                    <!-- ========================================== -->
+                    <div class="wizard-pane active" id="wizardStep1">
+                        <div class="form-section">
+                            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                                <h3 style="margin:0;"><i class="fas fa-building"></i> Business Profile</h3>
+                                <button type="button" class="btn-outline btn-sm" id="btnAutoFillProfile" style="padding:6px 14px;font-size:0.82rem;border-radius:999px;">
+                                    <i class="fas fa-wand-magic-sparkles" style="color:#ef6b2e;"></i> Auto-Fill From Profile
+                                </button>
+                            </div>
+                            <p class="section-description">Provide your registered business name. Business partner applications default to Partnership structure.</p>
+
+                            <div style="display:inline-flex;align-items:center;gap:8px;padding:8px 16px;border-radius:999px;background:#fff8ef;border:1px solid #efddcd;color:#b3261e;font-weight:700;font-size:0.88rem;margin-bottom:18px;">
+                                <i class="fas fa-handshake" style="color:#ef6b2e;"></i> Business Structure: <strong>Partnership</strong>
+                            </div>
+
+                            <input type="hidden" name="business_type" id="business_type" value="partnership">
+
+                            <div class="form-row">
+                                <div class="form-group" style="grid-column: 1 / -1;">
+                                    <label for="business_name">Business Name *</label>
+                                    <input type="text" id="business_name" name="business_name" required
+                                        value="<?php echo oldFormValue('business_name', $franchise_prefill['business_name'] ?? ''); ?>"
+                                        placeholder="Enter registered business name">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Business Location & PSGC -->
+                        <div class="form-section">
+                            <h3><i class="fas fa-location-dot"></i> Business Location (Cavite Scope)</h3>
+                            <p class="section-description">Select your PSGC location fields. Franchise applications are currently accepted for Cavite locations.</p>
+
+                            <input type="hidden" name="psgc_region_name" id="psgcRegionName" value="<?php echo oldFormValue('psgc_region_name', $franchise_prefill['psgc_region_name'] ?? ''); ?>">
+                            <input type="hidden" name="psgc_province_name" id="psgcProvinceName" value="<?php echo oldFormValue('psgc_province_name', $franchise_prefill['psgc_province_name'] ?? ''); ?>">
+                            <input type="hidden" name="psgc_city_name" id="psgcCityName" value="<?php echo oldFormValue('psgc_city_name', $franchise_prefill['psgc_city_name'] ?? ''); ?>">
+                            <input type="hidden" name="psgc_barangay_name" id="psgcBarangayName" value="<?php echo oldFormValue('psgc_barangay_name', $franchise_prefill['psgc_barangay_name'] ?? ''); ?>">
+                            <input type="hidden" name="psgc_manual_mode" id="psgcManualMode" value="<?php echo oldFormValue('psgc_manual_mode', $franchise_prefill['psgc_manual_mode'] ?? '0'); ?>">
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="business_address_street">Street Address / Landmark *</label>
+                                    <textarea id="business_address_street" name="business_address_street" rows="2" required
+                                            placeholder="House/Bldg No., Street, Subdivision, Landmark"><?php echo oldFormValue('business_address_street', $franchise_prefill['business_address_street'] ?? ''); ?></textarea>
+                                </div>
+                            </div>
+
+                            <div class="form-row psgc-row">
+                                <div class="form-group">
+                                    <label for="psgcRegion">Region *</label>
+                                    <select id="psgcRegion" name="psgc_region_code" required data-selected="<?php echo oldFormValue('psgc_region_code', $franchise_prefill['psgc_region_code'] ?? '040000000'); ?>">
+                                        <option value="">Select region</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="psgcProvince">Province (Strictly Cavite Only) *</label>
+                                    <select id="psgcProvince" name="psgc_province_code" required data-selected="<?php echo oldFormValue('psgc_province_code', $franchise_prefill['psgc_province_code'] ?? '042100000'); ?>" disabled>
+                                        <option value="">Select province</option>
+                                    </select>
+                                    <small style="color: #ef6b2e; font-weight: 700; display: block; margin-top: 4px;"><i class="fas fa-location-dot"></i> Partnership scope is strictly restricted to Cavite</small>
+                                </div>
+                            </div>
+
+                            <div class="form-row psgc-row">
+                                <div class="form-group">
+                                    <label for="psgcCity">City / Municipality *</label>
+                                    <select id="psgcCity" name="psgc_city_code" required data-selected="<?php echo oldFormValue('psgc_city_code', $franchise_prefill['psgc_city_code'] ?? ''); ?>" disabled>
+                                        <option value="">Select city / municipality</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="psgcBarangay">Barangay *</label>
+                                    <select id="psgcBarangay" name="psgc_barangay_code" required data-selected="<?php echo oldFormValue('psgc_barangay_code', $franchise_prefill['psgc_barangay_code'] ?? ''); ?>" disabled>
+                                        <option value="">Select barangay</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <p class="psgc-help" id="psgcAddressHelp">PSGC location selector helps speed up site verification.</p>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="business_address">Composed Business Address *</label>
+                                    <textarea id="business_address" name="business_address" rows="2" required readonly
+                                            placeholder="Generated complete address"><?php echo oldFormValue('business_address', $franchise_prefill['business_address'] ?? ''); ?></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Contact & Investment -->
+                        <div class="form-section">
+                            <h3><span class="step-tag">Contact & Investment</span></h3>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="contact_person">Contact Person *</label>
+                                    <input type="text" id="contact_person" name="contact_person" required
+                                        value="<?php echo oldFormValue('contact_person', $franchise_prefill['contact_person'] ?? ($_SESSION['full_name'] ?? '')); ?>">
+                                </div>
+                                <div class="form-group">
+                                    <label for="contact_phone">Contact Phone *</label>
+                                    <input type="tel" id="contact_phone" name="contact_phone" required
+                                        value="<?php echo oldFormValue('contact_phone', $franchise_prefill['contact_phone'] ?? ''); ?>"
+                                        placeholder="0912-345-6789">
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="contact_email">Contact Email *</label>
+                                    <input type="email" id="contact_email" name="contact_email" required
+                                        value="<?php echo oldFormValue('contact_email', $franchise_prefill['contact_email'] ?? ($_SESSION['email'] ?? '')); ?>">
+                                </div>
+                                <div class="form-group">
+                                    <label for="capital_investment">Capital Investment (PHP) *</label>
+                                    <input type="number" id="capital_investment" name="capital_investment" required
+                                        value="<?php echo oldFormValue('capital_investment', $franchise_prefill['capital_investment'] ?? ''); ?>"
+                                        min="100000" step="10000" placeholder="500000">
+                                    <div class="quick-chip-row" style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">
+                                        <button type="button" class="chip-btn" data-capital="100000">₱100K</button>
+                                        <button type="button" class="chip-btn" data-capital="250000">₱250K</button>
+                                        <button type="button" class="chip-btn" data-capital="500000">₱500K</button>
+                                        <button type="button" class="chip-btn" data-capital="1000000">₱1M</button>
+                                    </div>
+                                    <small class="form-text">Minimum investment: PHP 100,000</small>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="business_experience">Business Experience *</label>
+                                <textarea id="business_experience" name="business_experience" rows="3" required
+                                        placeholder="Describe your relevant business experience"><?php echo oldFormValue('business_experience', $franchise_prefill['business_experience'] ?? ''); ?></textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="marketing_plan">Marketing Strategy *</label>
+                                <textarea id="marketing_plan" name="marketing_plan" rows="3" required
+                                        placeholder="How do you plan to promote your store?"><?php echo oldFormValue('marketing_plan', $franchise_prefill['marketing_plan'] ?? ''); ?></textarea>
+                            </div>
+                        </div>
+
+                        <div class="wizard-nav-bar">
+                            <div></div>
+                            <button type="button" class="btn-primary" id="btnGoToStep2">
+                                Next: Upload Documents <i class="fas fa-arrow-right"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- ========================================== -->
+                    <!-- WIZARD STEP 2: Document Uploads            -->
+                    <!-- ========================================== -->
+                    <div class="wizard-pane" id="wizardStep2">
+                        <div class="form-section">
+                            <h3><i class="fas fa-file-upload"></i> Essential Documents (5 Required Files)</h3>
+                            <p class="section-description">Drag and drop or click to upload your core business documents. Accepted formats: PDF, JPG, PNG (Max size: <?php echo htmlspecialchars($max_document_size_label); ?>).</p>
+                            
+                            <div id="docRequirementStatus" class="doc-requirement-status info">Waiting for required documents upload...</div>
+
+                            <div class="documents-grid">
+                                <div class="document-item required-highlight logo-featured-item" style="border: 2px solid #b3261e; background: #fff8ef;">
+                                    <label class="document-label">
+                                        <span style="color:#b3261e;font-weight:800;font-size:0.95rem;display:flex;align-items:center;gap:6px;">
+                                            <i class="fas fa-store" style="color:#ef6b2e;"></i> Store Business Logo *
+                                        </span>
+                                        <input type="file" name="business_logo" id="business_logo_input" accept="image/png,image/jpeg,image/jpg,.pdf" required>
+                                        <small style="color:#7b6d64;font-weight:600;">Official store logo image (PNG/JPG/PDF)</small>
+                                        <div id="logoPreviewContainer" style="margin-top:8px;display:none;text-align:center;">
+                                            <img id="logoPreviewImg" src="" alt="Store Logo Preview" style="max-height:80px;max-width:100%;border-radius:8px;border:1px solid #efddcd;box-shadow:0 4px 10px rgba(0,0,0,0.06);">
+                                        </div>
+                                    </label>
+                                </div>
+
+                                <div class="document-item required-highlight">
+                                    <label class="document-label">
+                                        <span>DTI / SEC Certificate *</span>
+                                        <input type="file" name="dti_doc" accept=".pdf,.jpg,.jpeg,.png" required>
+                                        <small>Business registration cert</small>
+                                    </label>
+                                </div>
+
+                                <div class="document-item required-highlight">
+                                    <label class="document-label">
+                                        <span>BIR Registration (Form 2303) *</span>
+                                        <input type="file" name="bir_doc" accept=".pdf,.jpg,.jpeg,.png" required>
+                                        <small>Tax registration certificate</small>
+                                    </label>
+                                </div>
+
+                                <div class="document-item required-highlight">
+                                    <label class="document-label">
+                                        <span>Valid ID of Owner *</span>
+                                        <input type="file" name="valid_id" accept=".pdf,.jpg,.jpeg,.png" required>
+                                        <small>Driver's License, Passport, PhilID</small>
+                                    </label>
+                                </div>
+
+                                <div class="document-item required-highlight">
+                                    <label class="document-label">
+                                        <span>Proof of Address *</span>
+                                        <input type="file" name="address_proof" accept=".pdf,.jpg,.jpeg,.png" required>
+                                        <small>Utility bill or barangay clearance</small>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
                         <!-- Expandable Optional Compliance Files -->
                         <div class="form-section">
                             <div class="accordion-header" id="toggleOptionalDocs">
@@ -3115,10 +3386,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 const opt = document.createElement('option');
                 opt.value = r.code;
                 opt.textContent = r.name;
-                if (r.code === psgcRegion.dataset.selected) opt.selected = true;
+                if (r.code === psgcRegion.dataset.selected || r.code === '040000000') opt.selected = true;
                 psgcRegion.appendChild(opt);
             });
 
+            if (!psgcRegion.value) {
+                psgcRegion.value = '040000000';
+            }
             if (psgcRegion.value) {
                 await loadProvinces(psgcRegion.value);
             }
@@ -3134,11 +3408,13 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!rCode) return;
 
         const provinces = await fetchPsgc('/regions/' + rCode + '/provinces');
-        provinces.forEach(p => {
+        const caviteOnly = provinces.filter(p => p.code === '042100000' || p.name.toLowerCase() === 'cavite');
+
+        caviteOnly.forEach(p => {
             const opt = document.createElement('option');
             opt.value = p.code;
-            opt.textContent = p.name;
-            if (p.code === psgcProvince.dataset.selected) opt.selected = true;
+            opt.textContent = p.name + ' (Partnership Scope)';
+            opt.selected = true;
             psgcProvince.appendChild(opt);
         });
         psgcProvince.disabled = false;

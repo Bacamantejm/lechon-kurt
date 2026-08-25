@@ -1129,6 +1129,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const isLoggedInUser = <?php echo $is_logged_in_user ? 'true' : 'false'; ?>;
     const marketSearchBaseUrl = <?php echo json_encode($path_prefix . 'index.php'); ?>;
     const favoritesApiUrl = <?php echo json_encode($favorites_api_href); ?>;
+    const favoritesPageUrl = <?php echo json_encode($favorites_page_href); ?>;
     const favoritesFeatureEnabled = <?php echo $favorites_feature_enabled ? 'true' : 'false'; ?>;
     const favoritesBadge = document.getElementById('favoritesBadge');
     const googleMapsApiKey = <?php echo json_encode((string)$google_maps_api_key); ?>;
@@ -2206,6 +2207,44 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     };
 
+    const checkStockReminders = async function () {
+        if (!favoritesFeatureEnabled || !favoritesApiUrl) return;
+        if (sessionStorage.getItem('fav_stock_reminder_shown') === '1') return;
+        try {
+            const response = await fetch(favoritesApiUrl + '?action=in_stock_reminders', {
+                method: 'GET',
+                headers: { 'Accept': 'application/json' }
+            });
+            if (!response.ok) return;
+            const payload = await response.json();
+            if (payload && payload.success && payload.count > 0) {
+                sessionStorage.setItem('fav_stock_reminder_shown', '1');
+                if (typeof Swal !== 'undefined' && Swal) {
+                    const firstItem = payload.items[0];
+                    const itemText = payload.count === 1
+                        ? `"${firstItem.name}" is back in stock!`
+                        : `${payload.count} of your favorite dishes are back in stock!`;
+                    Swal.fire({
+                        toast: true,
+                        position: 'top-end',
+                        icon: 'success',
+                        title: '⚡ Favorite Stock Alert',
+                        text: itemText,
+                        showConfirmButton: true,
+                        confirmButtonText: 'View Favorites',
+                        confirmButtonColor: '#15803d',
+                        timer: 8000,
+                        timerProgressBar: true
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            window.location.href = favoritesPageUrl;
+                        }
+                    });
+                }
+            }
+        } catch (e) {}
+    };
+
     const requestFavoritesCount = async function () {
         if (!favoritesFeatureEnabled || !favoritesApiUrl) return;
         try {
@@ -2217,6 +2256,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const payload = await response.json();
             if (!payload || !payload.success) return;
             updateFavoritesBadge(payload.count || 0);
+            checkStockReminders();
         } catch (error) {
             // Ignore transient count fetch failures.
         }
