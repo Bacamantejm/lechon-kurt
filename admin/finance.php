@@ -2279,6 +2279,7 @@ $audit_reset_url = 'finance.php?' . http_build_query($audit_base_params) . '#dec
         <div class="admin-content">
             <div class="admin-topbar">
                 <div class="topbar-content">
+                    <button class="sidebar-toggler" id="sidebarToggler"><i class="fas fa-bars"></i></button>
                     <h1>Finance Management</h1>
                     <span class="finance-scope-badge <?php echo htmlspecialchars($finance_scope_badge_class); ?>">
                         <i class="fas <?php echo htmlspecialchars($finance_scope_badge_icon); ?>"></i>

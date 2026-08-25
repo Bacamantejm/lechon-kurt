@@ -4,6 +4,7 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 require_once __DIR__ . '/includes/config.php';
+require_once __DIR__ . '/includes/security.php';
 require_once __DIR__ . '/includes/PlatformMonetizationService.php';
 require_once __DIR__ . '/admin/auth.php';
 
@@ -11,6 +12,7 @@ $current_page = 'subscription_plans';
 $page_title = 'Subscription Plans';
 
 $current_user_id = (int)($_SESSION['user_id'] ?? 0);
+$csrf_token = generateCSRFToken();
 $normalized_user_type = strtolower(trim((string)($_SESSION['user_type'] ?? '')));
 $account_type = strtolower(trim((string)($_SESSION['account_type'] ?? '')));
 $is_super_admin_user = $current_user_id > 0 && function_exists('isSuperAdmin')
@@ -27,6 +29,42 @@ $plans = array_values(array_filter($monetizationService->getPlans(), static func
     return (int)($plan['is_active'] ?? 0) === 1;
 }));
 
+$seller_scope_id = $is_partner_admin ? getFranchiseSellerScopeOwnerId($conn, $current_user_id) : $current_user_id;
+
+// Handle Subscription Cancellation
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'cancel_active_subscription') {
+    if (!validateCSRFToken($_POST['csrf_token'] ?? '')) {
+        $_SESSION['error'] = 'Invalid request token. Please refresh and try again.';
+        header('Location: subscription_plans.php');
+        exit;
+    }
+
+    if ($seller_scope_id <= 0) {
+        $_SESSION['error'] = 'No authorized partner shop found for this account.';
+        header('Location: subscription_plans.php');
+        exit;
+    }
+
+    $cancelResult = $monetizationService->cancelActiveSubscription((int)$seller_scope_id, $current_user_id);
+    if (!empty($cancelResult['success'])) {
+        $_SESSION['success'] = (string)$cancelResult['message'];
+    } else {
+        $_SESSION['error'] = (string)($cancelResult['message'] ?? 'Unable to cancel subscription right now.');
+    }
+    header('Location: subscription_plans.php');
+    exit;
+}
+
+$active_partner_subscription = null;
+$activeSubPlanId = 0;
+if ($seller_scope_id > 0) {
+    $partnerPortal = $monetizationService->getPartnerBillingPortalData((int)$seller_scope_id);
+    if (!empty($partnerPortal['subscription']) && in_array(strtolower((string)($partnerPortal['subscription']['subscription_status'] ?? '')), ['active', 'trial'], true)) {
+        $active_partner_subscription = $partnerPortal['subscription'];
+        $activeSubPlanId = (int)($active_partner_subscription['plan_id'] ?? 0);
+    }
+}
+
 $primary_cta_href = 'franchise_application.php';
 $primary_cta_label = 'Apply as a Business Partner';
 $secondary_cta_href = 'help_center.php';
@@ -40,11 +78,11 @@ if ($is_super_admin_user) {
     $secondary_cta_label = 'Review Subscription Requests';
     $hero_note = 'You are viewing the live partner-facing plans page while signed in as system owner.';
 } elseif ($is_partner_admin) {
-    $primary_cta_href = 'admin/partner_billing.php';
-    $primary_cta_label = 'Open Partner Billing';
+    $primary_cta_href = 'admin/subscription_plans.php';
+    $primary_cta_label = 'Manage Subscription';
     $secondary_cta_href = 'admin/partner_billing.php';
-    $secondary_cta_label = 'Request a Plan Change';
-    $hero_note = 'Your shop can compare plans here, then request upgrades, renewals, or billing-cycle changes from Partner Billing.';
+    $secondary_cta_label = 'Partner Invoices';
+    $hero_note = 'Your shop can compare plans and manage instant renewals or tier upgrades directly.';
 } elseif ($normalized_user_type === 'admin') {
     $primary_cta_href = 'admin/index.php';
     $primary_cta_label = 'Open Admin Panel';
@@ -72,17 +110,60 @@ include 'includes/header.php';
             <p class="zen-plans-subtitle">Select your subscription term and store count below to customize your plan. All plans include 24/7 customer support and full marketplace access.</p>
         </div>
 
+        <?php if ($active_partner_subscription): ?>
+        <?php
+            $activePlanName = (string)($active_partner_subscription['plan_name'] ?? 'Partner Plan');
+            $activeCycle = ucfirst((string)($active_partner_subscription['billing_cycle'] ?? 'monthly'));
+            $subStarted = !empty($active_partner_subscription['started_at']) ? date('M d, Y', strtotime((string)$active_partner_subscription['started_at'])) : 'Recently';
+            $subRenews = !empty($active_partner_subscription['renews_at']) ? date('M d, Y', strtotime((string)$active_partner_subscription['renews_at'])) : 'N/A';
+            $daysLeft = !empty($active_partner_subscription['renews_at']) ? (int)ceil((strtotime($active_partner_subscription['renews_at']) - time()) / 86400) : 0;
+        ?>
+        <div class="zen-active-plan-banner">
+            <div class="active-banner-left">
+                <div class="active-banner-icon"><i class="fas fa-crown"></i></div>
+                <div>
+                    <div class="active-banner-title">
+                        <h2>Your Current Active Plan: <?php echo htmlspecialchars($activePlanName); ?></h2>
+                        <span class="active-pill-status"><i class="fas fa-check-circle"></i> ACTIVE (<?php echo htmlspecialchars($activeCycle); ?>)</span>
+                    </div>
+                    <p class="active-banner-dates">
+                        <span><i class="fas fa-calendar-check"></i> Subscribed: <strong><?php echo htmlspecialchars($subStarted); ?></strong></span>
+                        <span class="dates-divider">&bull;</span>
+                        <span><i class="fas fa-credit-card"></i> Next Renewal / Due Date: <strong style="color:#b3261e;"><?php echo htmlspecialchars($subRenews); ?></strong></span>
+                    </p>
+                </div>
+            </div>
+            <div class="active-banner-right">
+                <?php if ($daysLeft >= 0): ?>
+                    <div class="active-countdown-chip">
+                        <i class="fas fa-hourglass-half"></i> <strong><?php echo $daysLeft; ?></strong> days left in cycle
+                    </div>
+                <?php endif; ?>
+                <a href="admin/subscription_plans.php" class="btn-manage-sub">
+                    <i class="fas fa-sliders-h"></i> Dashboard
+                </a>
+                <form method="POST" action="subscription_plans.php" style="display:inline-block;" onsubmit="return confirmSubscriptionCancellation('<?php echo htmlspecialchars($activePlanName, ENT_QUOTES, 'UTF-8'); ?>', '<?php echo htmlspecialchars($subRenews, ENT_QUOTES, 'UTF-8'); ?>');">
+                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+                    <input type="hidden" name="action" value="cancel_active_subscription">
+                    <button type="submit" class="btn-cancel-sub">
+                        <i class="fas fa-ban"></i> Cancel Subscription
+                    </button>
+                </form>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <!-- Top Configuration Control Bar -->
         <div class="zen-config-bar">
             <div class="config-item term-item">
                 <span class="config-label">Subscription term</span>
                 <div class="term-toggle-container">
-                    <span class="term-option" id="termMonthlyLabel">Monthly</span>
+                    <span class="term-option active" id="termMonthlyLabel">Monthly</span>
                     <label class="switch-control">
-                        <input type="checkbox" id="billingCycleToggle" checked>
+                        <input type="checkbox" id="billingCycleToggle">
                         <span class="slider-round"></span>
                     </label>
-                    <span class="term-option active" id="termAnnualLabel">Annual</span>
+                    <span class="term-option" id="termAnnualLabel">Annual</span>
                     <span class="savings-pill">Save with annual</span>
                 </div>
             </div>
@@ -101,6 +182,7 @@ include 'includes/header.php';
                 $planCode = strtolower(trim((string)($plan['plan_code'] ?? '')));
                 $isPro = $planCode === 'pro';
                 $isFeatured = $planCode === $featured_plan_code;
+                $isCurrentActivePlan = ($activeSubPlanId > 0 && (int)$plan['id'] === $activeSubPlanId);
                 $monthlyPrice = (float)($plan['monthly_price'] ?? 0);
                 $annualPrice = (float)($plan['annual_price'] ?? 0);
                 $annualEquivalent = $annualPrice > 0 ? round($annualPrice / 12, 2) : 0;
@@ -108,10 +190,10 @@ include 'includes/header.php';
                 
                 $requestType = $isFeatured ? 'upgrade' : 'change_plan';
                 $monthlyHref = $is_partner_ready_for_deeplink
-                    ? 'admin/partner_billing.php?plan_id=' . (int)($plan['id'] ?? 0) . '&billing_cycle=monthly&request_type=' . urlencode($requestType)
+                    ? 'admin/subscription_plans.php?plan_id=' . (int)($plan['id'] ?? 0) . '&billing_cycle=monthly'
                     : $primary_cta_href;
                 $annualHref = $is_partner_ready_for_deeplink
-                    ? 'admin/partner_billing.php?plan_id=' . (int)($plan['id'] ?? 0) . '&billing_cycle=annual&request_type=' . urlencode($requestType)
+                    ? 'admin/subscription_plans.php?plan_id=' . (int)($plan['id'] ?? 0) . '&billing_cycle=annual'
                     : $primary_cta_href;
 
                 $staffAccounts = (int)($plan['max_staff_accounts'] ?? 1);
@@ -122,9 +204,11 @@ include 'includes/header.php';
                 $hasFeatured = (int)($plan['includes_featured_placement'] ?? 0) === 1;
                 $hasBranding = (int)($plan['includes_custom_branding'] ?? 0) === 1;
             ?>
-            <article class="sp-minimal-card <?php echo $isPro ? 'sp-pro-card' : ($isFeatured ? 'sp-featured-card' : ''); ?>">
+            <article class="sp-minimal-card <?php echo $isCurrentActivePlan ? 'is-current-active-plan' : ($isPro ? 'sp-pro-card' : ($isFeatured ? 'sp-featured-card' : '')); ?>">
                 <div class="sp-badge-wrap">
-                    <?php if ($isPro): ?>
+                    <?php if ($isCurrentActivePlan): ?>
+                        <span class="sp-top-pill sp-current-plan-badge"><i class="fas fa-check-circle"></i> YOUR CURRENT ACTIVE PLAN</span>
+                    <?php elseif ($isPro): ?>
                         <span class="sp-top-pill sp-pro-badge" id="badgePill_<?php echo $index; ?>"><i class="fas fa-fire"></i> MOST POPULAR &amp; BEST VALUE</span>
                     <?php else: ?>
                         <span class="sp-top-pill <?php echo $isFeatured ? 'sp-pill-featured' : ''; ?>" id="badgePill_<?php echo $index; ?>">
@@ -144,41 +228,108 @@ include 'includes/header.php';
                               data-annual-base="<?php echo $annualEquivalent; ?>"
                               data-annual-full="<?php echo $annualPrice; ?>"
                               id="priceAmount_<?php echo $index; ?>">
-                            <?php echo number_format($annualEquivalent, 0); ?>
+                            <?php echo number_format($monthlyPrice, 0); ?>
                         </span>
                     </div>
-                    <div class="sp-price-sub">per month</div>
+                    <div class="sp-price-sub" id="priceSubLabel_<?php echo $index; ?>">per month</div>
                     <div class="sp-price-annual" id="priceSub_<?php echo $index; ?>">Annual: PHP <?php echo number_format($annualPrice, 0); ?></div>
                 </div>
 
                 <div class="sp-divider"></div>
 
                 <ul class="sp-bullet-list">
-                    <li><span class="bullet-dot">&bull;</span> <strong><?php echo $staffAccounts > 99 ? 'Unlimited' : $staffAccounts; ?></strong> staff accounts</li>
-                    <li><span class="bullet-dot">&bull;</span> Fee rate: <strong><?php echo number_format($feePercent, 2); ?>%</strong> per order</li>
-                    <li><span class="bullet-dot">&bull;</span> Flat fee per order: <strong>PHP <?php echo number_format($feeFlat, 2); ?></strong></li>
-                    <li><span class="bullet-dot">&bull;</span> AI support automation: <strong><?php echo $hasAi ? 'Included' : 'Not included'; ?></strong></li>
-                    <li><span class="bullet-dot">&bull;</span> Priority 24/7 support: <strong><?php echo $hasPriority ? 'Included' : 'Not included'; ?></strong></li>
-                    <li><span class="bullet-dot">&bull;</span> Featured placement: <strong><?php echo $hasFeatured ? 'Included' : 'Not included'; ?></strong></li>
-                    <li><span class="bullet-dot">&bull;</span> Custom branding: <strong><?php echo $hasBranding ? 'Included' : 'Not included'; ?></strong></li>
-                    <li><span class="bullet-dot">&bull;</span> Real-time POS & Inventory Dashboard</li>
-                    <li><span class="bullet-dot">&bull;</span> Cancel or switch plan anytime</li>
+                    <?php if ($planCode === 'starter'): ?>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Marketplace Storefront</strong> &amp; Online Orders</li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Real-time POS</strong> &amp; Delivery Tracking</li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Product Catalog</strong> &amp; Stock Alerts</li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Customer Live Chat</strong> Messaging</li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Up to <?php echo $staffAccounts; ?> Staff</strong> / Cashier Accounts</li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> Fee Rate: <strong><?php echo number_format($feePercent, 2); ?>% + ₱<?php echo number_format($feeFlat, 2); ?></strong> / order</li>
+                        <li style="color:#94a3b8;"><span class="bullet-dot" style="color:#cbd5e1;"><i class="fas fa-times"></i></span> MRP Batch Yield Calculator</li>
+                        <li style="color:#94a3b8;"><span class="bullet-dot" style="color:#cbd5e1;"><i class="fas fa-times"></i></span> AI Demand Forecasting</li>
+                    <?php elseif ($planCode === 'growth'): ?>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Everything in Starter</strong>, plus:</li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Up to <?php echo $staffAccounts; ?> Staff</strong> &amp; Kitchen Accounts</li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>MRP Batch Roasting</strong> &amp; Yield Calculator</li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>AI Demand Forecasting</strong> &amp; Trends</li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Automated Chatbot</strong> FAQ Replies</li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>DSS Financial</strong> &amp; Sales Reports</li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> Lower Fee: <strong><?php echo number_format($feePercent, 2); ?>% + ₱<?php echo number_format($feeFlat, 2); ?></strong> / order</li>
+                        <li style="color:#94a3b8;"><span class="bullet-dot" style="color:#cbd5e1;"><i class="fas fa-times"></i></span> HR &amp; Automated Payroll</li>
+                    <?php else: ?>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Everything in Growth</strong>, plus:</li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Up to <?php echo $staffAccounts; ?> Staff</strong> &amp; Admin Accounts</li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Full HR &amp; Automated Payroll</strong> Module</li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Featured Homepage</strong> Marketplace Placement</li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Custom Receipt Logo</strong> &amp; Branding</li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Priority 24/7 Hotline</strong> Support</li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> Lowest Fee: <strong><?php echo number_format($feePercent, 2); ?>% + ₱<?php echo number_format($feeFlat, 2); ?></strong> / order</li>
+                    <?php endif; ?>
                 </ul>
 
                 <div class="sp-card-action">
-                    <a href="<?php echo htmlspecialchars($annualHref); ?>" 
-                       class="sp-pill-button <?php echo $isPro ? 'sp-pro-button' : ($isFeatured ? 'btn-highlight' : ''); ?>"
-                       data-monthly-url="<?php echo htmlspecialchars($monthlyHref); ?>"
-                       data-annual-url="<?php echo htmlspecialchars($annualHref); ?>"
-                       id="ctaMain_<?php echo $index; ?>">
-                        Get This Plan
-                    </a>
+                    <?php if ($isCurrentActivePlan): ?>
+                        <div style="display:flex; flex-direction:column; gap:8px; width:100%;">
+                            <a href="admin/subscription_plans.php" class="sp-pill-button sp-btn-current-active">
+                                <i class="fas fa-check-circle"></i> Current Active Plan
+                            </a>
+                            <form method="POST" action="subscription_plans.php" style="width:100%; text-align:center;" onsubmit="return confirmSubscriptionCancellation('<?php echo htmlspecialchars((string)$plan['plan_name'], ENT_QUOTES, 'UTF-8'); ?>', '<?php echo htmlspecialchars($subRenews, ENT_QUOTES, 'UTF-8'); ?>');">
+                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+                                <input type="hidden" name="action" value="cancel_active_subscription">
+                                <button type="submit" class="btn-card-cancel">
+                                    <i class="fas fa-times-circle"></i> Cancel Subscription
+                                </button>
+                            </form>
+                        </div>
+                    <?php else: ?>
+                        <a href="<?php echo htmlspecialchars($monthlyHref); ?>" 
+                           class="sp-pill-button <?php echo $isPro ? 'sp-pro-button' : ($isFeatured ? 'btn-highlight' : ''); ?>"
+                           data-monthly-url="<?php echo htmlspecialchars($monthlyHref); ?>"
+                           data-annual-url="<?php echo htmlspecialchars($annualHref); ?>"
+                           id="ctaMain_<?php echo $index; ?>">
+                            <?php echo $activeSubPlanId > 0 ? 'Switch to this Plan' : 'Get This Plan'; ?>
+                        </a>
+                    <?php endif; ?>
                     <p class="sp-fineprint">
-                        Cancel or switch plans anytime in Partner Billing. Terms apply.
+                        Subscription payments are non-refundable. Upon cancellation, you retain full plan access until your paid 1-month cycle ends. <a href="javascript:void(0);" onclick="openLegalPolicyModal('terms')" style="color: #b3261e; font-weight: 600; text-decoration: underline;">Terms Apply</a>.
                     </p>
                 </div>
             </article>
             <?php endforeach; ?>
+        </div>
+
+        <!-- Subscription Terms & Cancellation Agreement Callout -->
+        <div class="sp-terms-agreement-box">
+            <div class="sp-terms-header">
+                <i class="fas fa-shield-alt sp-terms-icon"></i>
+                <h3 class="sp-terms-title">Subscription &amp; Cancellation Agreement</h3>
+            </div>
+            <p class="sp-terms-desc">
+                By selecting and subscribing to any Lechon Delights business partner tier, you agree to the following billing terms:
+            </p>
+            <div class="sp-terms-grid">
+                <div class="sp-term-point">
+                    <i class="fas fa-ban text-danger"></i>
+                    <div>
+                        <strong>Non-Refundable Policy</strong>
+                        <span>Subscription payments are final and non-refundable once invoiced or charged. No cash refunds or prorated amounts are provided upon cancellation.</span>
+                    </div>
+                </div>
+                <div class="sp-term-point">
+                    <i class="fas fa-clock text-primary"></i>
+                    <div>
+                        <strong>Full Access Retained Through End of Month</strong>
+                        <span>If you choose to cancel your subscription, you will continue to have 100% active access to all features and commission discounts of your plan until your paid 1-month billing cycle ends.</span>
+                    </div>
+                </div>
+                <div class="sp-term-point">
+                    <i class="fas fa-check-circle text-success"></i>
+                    <div>
+                        <strong>Automatic Termination</strong>
+                        <span>After your 1-month active period concludes, no further charges will occur and your subscription will safely end.</span>
+                    </div>
+                </div>
+            </div>
         </div>
 
     </div>
@@ -190,6 +341,138 @@ include 'includes/header.php';
     background-color: #fff9f2;
     font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     color: #2a211d;
+}
+
+/* Active Plan Banner */
+.zen-active-plan-banner {
+    background: #ffffff;
+    border: 1.5px solid #abefc6;
+    border-radius: 18px;
+    padding: 22px 28px;
+    margin-bottom: 36px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+    background: linear-gradient(135deg, #ffffff 0%, #f6fef9 100%);
+    box-shadow: 0 4px 20px rgba(2, 122, 72, 0.08);
+}
+.active-banner-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+.active-banner-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 14px;
+    background: #ecfdf3;
+    color: #027a48;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    border: 1px solid #abefc6;
+    flex-shrink: 0;
+}
+.active-banner-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+}
+.active-banner-title h2 {
+    margin: 0;
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #101828;
+}
+.active-pill-status {
+    background: #ecfdf3;
+    color: #027a48;
+    font-size: 0.72rem;
+    font-weight: 800;
+    padding: 3px 10px;
+    border-radius: 999px;
+    border: 1px solid #abefc6;
+}
+.active-banner-dates {
+    font-size: 0.86rem;
+    color: #475467;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.active-banner-dates strong {
+    color: #101828;
+}
+.dates-divider {
+    color: #d0d5dd;
+}
+.active-banner-right {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+.active-countdown-chip {
+    padding: 8px 14px;
+    background: #ecfdf3;
+    border: 1px solid #abefc6;
+    border-radius: 10px;
+    font-size: 0.82rem;
+    color: #027a48;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.btn-manage-sub {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 18px;
+    background: #ffffff;
+    border: 1.5px solid #d0d5dd;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: #344054;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+.btn-manage-sub:hover {
+    background: #f8f9fa;
+    border-color: #101828;
+    color: #101828;
+    text-decoration: none;
+}
+
+/* Active Plan Card Styles */
+.is-current-active-plan {
+    border: 2.5px solid #027a48 !important;
+    background: linear-gradient(180deg, #ffffff 0%, #f6fef9 100%) !important;
+    box-shadow: 0 10px 30px rgba(2, 122, 72, 0.14) !important;
+}
+.sp-current-plan-badge {
+    background: #027a48 !important;
+    color: #ffffff !important;
+    font-size: 0.78rem !important;
+    font-weight: 800 !important;
+    padding: 6px 12px !important;
+    border-radius: 6px !important;
+    box-shadow: 0 2px 8px rgba(2, 122, 72, 0.25);
+}
+.sp-btn-current-active {
+    background: #ecfdf3 !important;
+    color: #027a48 !important;
+    border: 1.5px solid #abefc6 !important;
+    cursor: default !important;
+    box-shadow: none !important;
+    transform: none !important;
 }
 
 .zen-plans-container {
@@ -537,6 +820,77 @@ include 'includes/header.php';
     margin-bottom: 0;
     line-height: 1.4;
     text-align: center;
+}
+
+.sp-terms-agreement-box {
+    margin-top: 48px;
+    background: #ffffff;
+    border: 1px solid #eaecf0;
+    border-radius: 16px;
+    padding: 28px 32px;
+    box-shadow: 0 4px 16px rgba(16, 24, 40, 0.04);
+}
+
+.sp-terms-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.sp-terms-icon {
+    font-size: 1.4rem;
+    color: #b3261e;
+}
+
+.sp-terms-title {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: #101828;
+    margin: 0;
+}
+
+.sp-terms-desc {
+    color: #475467;
+    font-size: 0.92rem;
+    line-height: 1.5;
+    margin: 0 0 20px 0;
+}
+
+.sp-terms-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 18px;
+}
+
+.sp-term-point {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 16px;
+    background: #f8f9fa;
+    border: 1px solid #eaecf0;
+    border-radius: 12px;
+}
+
+.sp-term-point i {
+    font-size: 1.2rem;
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+.sp-term-point strong {
+    display: block;
+    font-size: 0.95rem;
+    color: #101828;
+    margin-bottom: 4px;
+}
+
+.sp-term-point span {
+    font-size: 0.85rem;
+    color: #475467;
+    line-height: 1.45;
+    display: block;
 }
 
 .zen-plans-container {
@@ -901,6 +1255,69 @@ include 'includes/header.php';
     }
 }
 
+@media (max-width: 768px) {
+    .sp-minimal-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+        padding: 0 10px;
+    }
+    .sp-minimal-card {
+        padding: 22px 18px;
+    }
+    .sp-pro-card {
+        transform: none;
+    }
+}
+
+@media (max-width: 640px) {
+    .zen-plans-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .zen-plan-col {
+        border-right: none;
+    }
+
+    .zen-config-bar {
+        flex-direction: column;
+        gap: 16px;
+        align-items: center;
+        padding: 20px;
+    }
+
+.btn-cancel-sub {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 16px;
+    background: #fff1f0;
+    border: 1.5px solid #fee4e2;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: #b3261e;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.btn-cancel-sub:hover {
+    background: #fee4e2;
+    border-color: #b3261e;
+}
+.btn-card-cancel {
+    background: none;
+    border: none;
+    color: #b3261e;
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-decoration: underline;
+    cursor: pointer;
+    padding: 4px;
+    transition: color 0.15s ease;
+}
+.btn-card-cancel:hover {
+    color: #931e18;
+}
+
 @media (max-width: 640px) {
     .zen-plans-grid {
         grid-template-columns: 1fr;
@@ -925,15 +1342,25 @@ include 'includes/header.php';
 </style>
 
 <script>
+function confirmSubscriptionCancellation(planName, renewsDate) {
+    return confirm(
+        "Are you sure you want to cancel your " + planName + " subscription?\n\n" +
+        "• Non-Refundable: In accordance with our Terms of Agreement, subscription payments are non-refundable.\n" +
+        "• Continued Access: Your shop will retain 100% full active access to all " + planName + " features and discounts until " + renewsDate + ".\n" +
+        "• Auto-Termination: After " + renewsDate + ", recurring charges will stop and your plan will conclude.\n\n" +
+        "Click OK to confirm cancellation."
+    );
+}
+
 (function () {
     const cycleToggle = document.getElementById('billingCycleToggle');
     const branchInput = document.getElementById('branchCountInput');
     const termMonthlyLabel = document.getElementById('termMonthlyLabel');
     const termAnnualLabel = document.getElementById('termAnnualLabel');
-    const planColumns = document.querySelectorAll('.zen-plan-col');
+    const cards = document.querySelectorAll('.sp-minimal-card');
 
     function updateMatrixPricing() {
-        const isAnnual = cycleToggle ? cycleToggle.checked : true;
+        const isAnnual = cycleToggle ? cycleToggle.checked : false;
         const branchCount = Math.max(1, parseInt(branchInput?.value || 1, 10));
 
         if (termMonthlyLabel && termAnnualLabel) {
@@ -941,11 +1368,11 @@ include 'includes/header.php';
             termAnnualLabel.classList.toggle('active', isAnnual);
         }
 
-        planColumns.forEach((col, idx) => {
+        cards.forEach((col, idx) => {
             const priceEl = document.getElementById('priceAmount_' + idx);
+            const subLabel = document.getElementById('priceSubLabel_' + idx);
             const subEl = document.getElementById('priceSub_' + idx);
             const ctaMain = document.getElementById('ctaMain_' + idx);
-            const ctaSub = document.getElementById('ctaSub_' + idx);
 
             if (!priceEl) return;
 
@@ -953,17 +1380,18 @@ include 'includes/header.php';
             const annualBase = parseFloat(priceEl.getAttribute('data-annual-base') || 0);
             const annualFull = parseFloat(priceEl.getAttribute('data-annual-full') || 0);
 
-            const activePricePerBranch = isAnnual ? annualBase : monthlyBase;
-            const totalMonthly = activePricePerBranch * branchCount;
-            const totalAnnualFull = (isAnnual ? annualFull : monthlyBase * 12) * branchCount;
+            const activePrice = isAnnual ? annualFull : monthlyBase;
+            priceEl.textContent = new Intl.NumberFormat('en-PH').format(activePrice * branchCount);
 
-            priceEl.textContent = new Intl.NumberFormat('en-PH').format(totalMonthly);
+            if (subLabel) {
+                subLabel.textContent = isAnnual ? 'per year' : 'per month';
+            }
 
             if (subEl) {
                 if (isAnnual) {
-                    subEl.textContent = `PHP ${new Intl.NumberFormat('en-PH').format(totalAnnualFull)}/year for ${branchCount} ${branchCount === 1 ? 'store' : 'stores'}`;
+                    subEl.textContent = `Equivalent to PHP ${new Intl.NumberFormat('en-PH').format(annualBase * branchCount)} / mo`;
                 } else {
-                    subEl.textContent = `Billed monthly for ${branchCount} ${branchCount === 1 ? 'store' : 'stores'}`;
+                    subEl.textContent = `Annual: PHP ${new Intl.NumberFormat('en-PH').format(annualFull * branchCount)}`;
                 }
             }
 
@@ -971,10 +1399,6 @@ include 'includes/header.php';
             if (ctaMain) {
                 const targetUrl = ctaMain.getAttribute(urlAttr);
                 if (targetUrl) ctaMain.setAttribute('href', targetUrl);
-            }
-            if (ctaSub) {
-                const targetUrl = ctaSub.getAttribute(urlAttr);
-                if (targetUrl) ctaSub.setAttribute('href', targetUrl);
             }
         });
     }

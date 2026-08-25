@@ -186,7 +186,7 @@ if ($has_roles) {
         "SELECT id, name
          FROM roles
          WHERE is_active = 1
-         ORDER BY level DESC, name ASC"
+         ORDER BY name ASC"
     );
 }
 

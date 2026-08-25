@@ -367,28 +367,54 @@ if ($can_partner_billing) {
 } elseif ($is_super_admin_user) {
     $topbar_billing_link = '../super_admin/platform_monetization.php';
 }
+
+$sidebar_active_plan_name = '';
+if ($is_partner_scoped_admin && $partner_scope_owner_id > 0) {
+    $plan_sub_query = mysqli_query($conn, "SELECT p.plan_name FROM partner_plan_subscriptions s JOIN platform_subscription_plans p ON p.id = s.plan_id WHERE s.partner_user_id = {$partner_scope_owner_id} AND s.subscription_status IN ('active', 'trial') LIMIT 1");
+    if ($plan_sub_query && ($plan_row = mysqli_fetch_assoc($plan_sub_query))) {
+        $sidebar_active_plan_name = (string)($plan_row['plan_name'] ?? '');
+    }
+}
 ?>
 
 <!-- Admin Sidebar Navigation -->
 <nav class="admin-sidebar" id="adminSidebar">
     <div class="sidebar-header">
-        <div class="sidebar-brand-mark">
-            <?php if ($sidebar_brand_logo !== ''): ?>
-                <img src="<?php echo htmlspecialchars($sidebar_brand_logo); ?>" alt="<?php echo htmlspecialchars($sidebar_brand_name); ?> logo" class="sidebar-brand-logo">
-            <?php else: ?>
-                <div class="sidebar-brand-fallback">
-                    <?php echo htmlspecialchars(strtoupper(substr($sidebar_brand_name, 0, 1))); ?>
-                </div>
-            <?php endif; ?>
-        </div>
-        <h3><?php echo htmlspecialchars($sidebar_brand_name); ?></h3>
-        <p><?php echo htmlspecialchars($sidebar_role_label); ?></p>
-        <?php if ($sidebar_logged_in_name !== ''): ?>
-            <span class="sidebar-account-badge">Logged in: <?php echo htmlspecialchars($sidebar_logged_in_name); ?></span>
-        <?php endif; ?>
+        <a href="../menu.php?seller_id=<?php echo (int)($partner_scope_owner_id ?: $user_id); ?>" class="sidebar-brand-link" title="View Your Storefront" style="text-decoration: none; color: inherit; display: block;">
+            <div class="sidebar-brand-mark">
+                <?php if ($sidebar_brand_logo !== ''): ?>
+                    <img src="<?php echo htmlspecialchars($sidebar_brand_logo); ?>" alt="<?php echo htmlspecialchars($sidebar_brand_name); ?> logo" class="sidebar-brand-logo">
+                <?php else: ?>
+                    <div class="sidebar-brand-fallback">
+                        <?php echo htmlspecialchars(strtoupper(substr($sidebar_brand_name, 0, 1))); ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+            <h3><?php echo htmlspecialchars($sidebar_brand_name); ?></h3>
+            <p>
+                <?php echo htmlspecialchars($sidebar_role_label); ?>
+                <?php if ($sidebar_active_plan_name !== ''): ?>
+                    &bull; <span class="badge" style="background:#b3261e;color:#fff;font-size:0.68rem;font-weight:800;padding:2px 6px;border-radius:4px;letter-spacing:0.04em;"><i class="fas fa-crown"></i> <?php echo htmlspecialchars(strtoupper($sidebar_active_plan_name)); ?></span>
+                <?php endif; ?>
+            </p>
+        </a>
     </div>
     
-    <ul class="sidebar-menu">
+    <div class="sidebar-search-container">
+        <div class="sidebar-search-wrap">
+            <i class="fas fa-search sidebar-search-icon"></i>
+            <input type="text" id="sidebarSearchInput" class="sidebar-search-input" placeholder="Search menu..." autocomplete="off">
+            <button type="button" id="sidebarSearchClear" class="sidebar-search-clear" title="Clear search" style="display: none;">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+    
+    <ul class="sidebar-menu" id="sidebarMenu">
+        <li class="sidebar-search-empty" id="sidebarSearchEmpty" style="display: none; padding: 22px 14px; text-align: center; color: #94a3b8; font-size: 13px;">
+            <i class="fas fa-search" style="font-size: 20px; display: block; margin: 0 auto 8px; opacity: 0.5;"></i>
+            No matching menu items
+        </li>
         <?php if ($can_dashboard): ?>
             <li class="menu-header">Main</li>
             <li>
@@ -1023,10 +1049,6 @@ if ($can_partner_billing) {
     </ul>
     
     <div class="sidebar-footer">
-        <div class="admin-user">
-            <i class="fas fa-user-circle"></i>
-            <span><?php echo htmlspecialchars($_SESSION['full_name'] ?? 'Admin'); ?></span>
-        </div>
         <?php if ($is_employee_user): ?>
             <a href="../employee/dashboard.php" class="logout-btn" style="margin-bottom: 8px; background-color: #1e88e5;">
                 <i class="fas fa-user-clock"></i>
@@ -2187,6 +2209,269 @@ if ($can_partner_billing) {
 .admin-floating-chat-btn.pulse:hover {
     animation: none;
 }
+
+/* Sidebar Search Styling */
+.sidebar-search-container {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border, #eaecf0);
+    background: var(--white, #ffffff);
+    flex-shrink: 0;
+}
+.sidebar-search-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+.sidebar-search-icon {
+    position: absolute;
+    left: 11px;
+    color: #94a3b8;
+    font-size: 12px;
+    pointer-events: none;
+    transition: color 0.2s ease;
+}
+.sidebar-search-input {
+    width: 100%;
+    height: 36px;
+    padding: 6px 28px 6px 32px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #1e293b;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    outline: none;
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+.sidebar-search-input:focus {
+    background: #ffffff;
+    border-color: #b3261e;
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.1);
+}
+.sidebar-search-wrap:focus-within .sidebar-search-icon {
+    color: #b3261e;
+}
+.sidebar-search-input::placeholder {
+    color: #94a3b8;
+    font-weight: 400;
+}
+.sidebar-search-clear {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    border: none;
+    background: #e2e8f0;
+    color: #64748b;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    cursor: pointer;
+    padding: 0;
+    transition: all 0.15s ease;
+}
+.sidebar-search-clear:hover {
+    background: #cbd5e1;
+    color: #1e293b;
+}
+
+/* Sidebar Collapsible & Mobile Transitions */
+.admin-sidebar {
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+.admin-content {
+    transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+.sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    z-index: 1040;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.25s ease, visibility 0.25s ease;
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+}
+
+/* Desktop Collapsed */
+@media (min-width: 769px) {
+    .admin-container.sidebar-collapsed .admin-sidebar {
+        transform: translateX(-100%) !important;
+    }
+    .admin-container.sidebar-collapsed .admin-content {
+        margin-left: 0 !important;
+    }
+}
+
+/* Mobile View Active */
+@media (max-width: 768px) {
+    .admin-sidebar {
+        transform: translateX(-100%) !important;
+        z-index: 1050 !important;
+        box-shadow: 0 0 25px rgba(0, 0, 0, 0.25) !important;
+    }
+    .admin-sidebar.active,
+    .admin-container.sidebar-mobile-active .admin-sidebar {
+        transform: translateX(0) !important;
+    }
+    .admin-content {
+        margin-left: 0 !important;
+    }
+    .admin-container.sidebar-mobile-active .sidebar-backdrop {
+        opacity: 1 !important;
+        visibility: visible !important;
+    }
+}
+
+/* Sidebar Dark Mode Theme */
+body.dark-mode .admin-sidebar {
+    background: #181d26 !important;
+    border-right: 1px solid #27303f !important;
+    color: #e2e8f0 !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4) !important;
+}
+
+body.dark-mode .sidebar-header {
+    background: #181d26 !important;
+    border-bottom: 1px solid #27303f !important;
+}
+
+body.dark-mode .sidebar-header h3 {
+    color: #ffffff !important;
+    background: linear-gradient(45deg, #ff6b6b, #ffa07a) !important;
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+}
+
+body.dark-mode .sidebar-header p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .sidebar-account-badge {
+    background: #2a1818 !important;
+    color: #fca5a5 !important;
+    border: 1px solid #4c1d1d !important;
+}
+
+body.dark-mode .sidebar-search-container {
+    background: #181d26 !important;
+    border-bottom: 1px solid #27303f !important;
+}
+
+body.dark-mode .sidebar-search-input {
+    background: #222936 !important;
+    border: 1px solid #2e3848 !important;
+    color: #f1f5f9 !important;
+}
+
+body.dark-mode .sidebar-search-input::placeholder {
+    color: #64748b !important;
+}
+
+body.dark-mode .sidebar-search-input:focus {
+    background: #1e2430 !important;
+    border-color: #b3261e !important;
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.25) !important;
+}
+
+body.dark-mode .sidebar-search-icon {
+    color: #64748b !important;
+}
+
+body.dark-mode .sidebar-search-wrap:focus-within .sidebar-search-icon {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .sidebar-search-clear {
+    background: #2e3848 !important;
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .sidebar-search-clear:hover {
+    background: #3e4c60 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .sidebar-search-empty {
+    color: #64748b !important;
+}
+
+body.dark-mode .sidebar-menu {
+    background: #181d26 !important;
+}
+
+body.dark-mode .sidebar-menu::-webkit-scrollbar-track {
+    background: #181d26 !important;
+}
+
+body.dark-mode .sidebar-menu::-webkit-scrollbar-thumb {
+    background: #2e3848 !important;
+}
+
+body.dark-mode .sidebar-menu .menu-header {
+    color: #64748b !important;
+}
+
+body.dark-mode .sidebar-menu .menu-item {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .sidebar-menu .menu-item:hover {
+    background: #222936 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .sidebar-menu .menu-item.active {
+    background: #b3261e !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .sidebar-submenu {
+    background: #13171f !important;
+}
+
+body.dark-mode .sidebar-submenu .submenu-item {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .sidebar-submenu .submenu-item:hover {
+    background: #222936 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .sidebar-submenu .submenu-item.active {
+    color: #fca5a5 !important;
+    font-weight: 700 !important;
+}
+
+body.dark-mode .sidebar-footer {
+    background: #181d26 !important;
+    border-top: 1px solid #27303f !important;
+}
+
+body.dark-mode .sidebar-footer .admin-user {
+    background: #222936 !important;
+    color: #e2e8f0 !important;
+    border: 1px solid #2e3848 !important;
+}
+
+body.dark-mode .sidebar-footer .logout-btn {
+    background: #222936 !important;
+    border: 1px solid #2e3848 !important;
+    color: #e2e8f0 !important;
+}
+
+body.dark-mode .sidebar-footer .logout-btn:hover {
+    background: #2f1717 !important;
+    border-color: #ef4444 !important;
+    color: #fca5a5 !important;
+}
 </style>
 
 <div id="adminChatWidget" class="admin-chat-window">
@@ -2209,7 +2494,269 @@ if ($can_partner_billing) {
 </div>
 
 <script>
+(function() {
+    // Immediate check to restore theme and sidebar collapsed state without visual flash
+    try {
+        const savedTheme = localStorage.getItem('theme') || (document.cookie.match(/(?:^|;\s*)theme=([^;]*)/) || [])[1];
+        if (savedTheme === 'dark') {
+            document.documentElement.classList.add('dark-mode');
+            if (document.body) document.body.classList.add('dark-mode');
+        } else if (savedTheme === 'light') {
+            document.documentElement.classList.remove('dark-mode');
+            if (document.body) document.body.classList.remove('dark-mode');
+        }
+        if (window.innerWidth > 768 && localStorage.getItem('admin_sidebar_collapsed') === '1') {
+            const container = document.querySelector('.admin-container');
+            if (container) container.classList.add('sidebar-collapsed');
+        }
+    } catch(e) {}
+})();
+
 document.addEventListener('DOMContentLoaded', function() {
+    // 0. Universal Sticky Theme Synchronization
+    function applyAdminTheme(isDark) {
+        if (isDark) {
+            document.documentElement.classList.add('dark-mode');
+            document.body.classList.add('dark-mode');
+        } else {
+            document.documentElement.classList.remove('dark-mode');
+            document.body.classList.remove('dark-mode');
+        }
+        try {
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            document.cookie = "theme=" + (isDark ? "dark" : "light") + "; path=/; max-age=31536000; SameSite=Lax";
+        } catch(e) {}
+
+        document.querySelectorAll('#themeToggler, .theme-toggler').forEach(function(btn) {
+            const icon = btn.querySelector('i');
+            if (icon) {
+                icon.className = isDark ? 'fas fa-sun' : 'fas fa-moon';
+            }
+        });
+        window.dispatchEvent(new CustomEvent('themeChanged', { detail: { isDark: isDark } }));
+    }
+
+    const currentSavedTheme = localStorage.getItem('theme') || (document.cookie.match(/(?:^|;\s*)theme=([^;]*)/) || [])[1];
+    applyAdminTheme(currentSavedTheme === 'dark');
+
+    // 1. Unified Sidebar Collapse & Mobile Drawer Toggle
+    const adminContainer = document.querySelector('.admin-container') || document.body;
+    const sidebar = document.getElementById('adminSidebar');
+    
+    // Ensure Burger Button & Theme Toggler are always present on ANY admin/seller/partner topbar
+    const topbars = document.querySelectorAll('.topbar-content, .admin-topbar, header.admin-topbar');
+    topbars.forEach(function(topbar) {
+        if (!topbar.querySelector('#sidebarToggler, .sidebar-toggler')) {
+            const btn = document.createElement('button');
+            btn.className = 'sidebar-toggler';
+            btn.id = 'sidebarToggler';
+            btn.type = 'button';
+            btn.title = 'Toggle Navigation';
+            btn.setAttribute('aria-label', 'Toggle Navigation');
+            btn.innerHTML = '<i class="fas fa-bars"></i>';
+            topbar.prepend(btn);
+        }
+
+        if (!topbar.querySelector('#themeToggler, .theme-toggler')) {
+            const rightWrap = topbar.querySelector('.topbar-right') || topbar.querySelector('.topbar-content') || topbar;
+            const tBtn = document.createElement('button');
+            tBtn.className = 'theme-toggler';
+            tBtn.id = 'themeToggler';
+            tBtn.type = 'button';
+            tBtn.title = 'Toggle Theme';
+            tBtn.innerHTML = (currentSavedTheme === 'dark') ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
+            const profile = topbar.querySelector('.admin-profile');
+            if (profile && profile.parentNode) {
+                profile.parentNode.insertBefore(tBtn, profile);
+            } else {
+                rightWrap.appendChild(tBtn);
+            }
+        }
+    });
+
+    // Global Event Listener for Theme Toggling
+    document.addEventListener('click', function(e) {
+        const toggler = e.target.closest('#themeToggler, .theme-toggler');
+        if (!toggler) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const isCurrentlyDark = document.body.classList.contains('dark-mode') || document.documentElement.classList.contains('dark-mode');
+        applyAdminTheme(!isCurrentlyDark);
+    });
+
+    // If no topbar exists on a custom page, create a standalone floating burger button
+    if (!document.querySelector('#sidebarToggler, .sidebar-toggler') && sidebar) {
+        const floatingBtn = document.createElement('button');
+        floatingBtn.className = 'sidebar-toggler floating-sidebar-toggler';
+        floatingBtn.id = 'sidebarToggler';
+        floatingBtn.type = 'button';
+        floatingBtn.title = 'Toggle Navigation';
+        floatingBtn.setAttribute('aria-label', 'Toggle Navigation');
+        floatingBtn.innerHTML = '<i class="fas fa-bars"></i>';
+        document.body.appendChild(floatingBtn);
+    }
+
+    const togglers = document.querySelectorAll('#sidebarToggler, .sidebar-toggler');
+    
+    // Ensure state matches localStorage on load
+    try {
+        if (window.innerWidth > 768 && localStorage.getItem('admin_sidebar_collapsed') === '1') {
+            adminContainer.classList.add('sidebar-collapsed');
+        }
+    } catch(e) {}
+
+    // Ensure backdrop element exists
+    let backdrop = document.querySelector('.sidebar-backdrop');
+    if (!backdrop && adminContainer) {
+        backdrop = document.createElement('div');
+        backdrop.className = 'sidebar-backdrop';
+        adminContainer.appendChild(backdrop);
+    }
+    if (backdrop) {
+        backdrop.addEventListener('click', function() {
+            adminContainer.classList.remove('sidebar-mobile-active');
+            if (sidebar) sidebar.classList.remove('active');
+        });
+    }
+
+    // Attach click listeners to all sidebar togglers (burger buttons)
+    function handleToggle(e) {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        if (window.innerWidth > 768) {
+            // Desktop: Toggle collapsed state
+            const isCollapsed = adminContainer.classList.toggle('sidebar-collapsed');
+            try {
+                localStorage.setItem('admin_sidebar_collapsed', isCollapsed ? '1' : '0');
+            } catch(err) {}
+        } else {
+            // Mobile: Toggle slide-in drawer
+            const isActive = adminContainer.classList.toggle('sidebar-mobile-active');
+            if (sidebar) {
+                sidebar.classList.toggle('active', isActive);
+            }
+        }
+    }
+
+    togglers.forEach(function(btn) {
+        if (btn.dataset.sidebarBound === '1') return;
+        btn.dataset.sidebarBound = '1';
+        btn.addEventListener('click', handleToggle);
+    });
+
+    // On mobile, clicking a navigation link inside the sidebar closes the drawer
+    if (sidebar) {
+        sidebar.querySelectorAll('a.menu-item, a.submenu-item').forEach(function(link) {
+            link.addEventListener('click', function() {
+                if (window.innerWidth <= 768) {
+                    adminContainer.classList.remove('sidebar-mobile-active');
+                    sidebar.classList.remove('active');
+                }
+            });
+        });
+    }
+
+    // 2. Sidebar Navigation Live Search Filter
+    const searchInput = document.getElementById('sidebarSearchInput');
+    const clearBtn = document.getElementById('sidebarSearchClear');
+    const emptyMsg = document.getElementById('sidebarSearchEmpty');
+    const menu = document.getElementById('sidebarMenu') || document.querySelector('.sidebar-menu');
+
+    if (searchInput && menu) {
+        searchInput.addEventListener('input', function() {
+            const query = this.value.trim().toLowerCase();
+            if (clearBtn) {
+                clearBtn.style.display = query ? 'flex' : 'none';
+            }
+
+            const items = menu.querySelectorAll('li:not(.sidebar-search-empty)');
+            let totalMatches = 0;
+
+            if (!query) {
+                // Reset all items to default visible state
+                items.forEach(function(li) {
+                    li.style.display = '';
+                    const subLinks = li.querySelectorAll('.submenu-item');
+                    subLinks.forEach(function(a) { a.style.display = ''; });
+                });
+                if (emptyMsg) emptyMsg.style.display = 'none';
+                return;
+            }
+
+            // Iterate section by section
+            let currentHeader = null;
+            let currentHeaderHasMatches = false;
+
+            items.forEach(function(li) {
+                if (li.classList.contains('menu-header')) {
+                    if (currentHeader) {
+                        currentHeader.style.display = currentHeaderHasMatches ? '' : 'none';
+                    }
+                    currentHeader = li;
+                    currentHeaderHasMatches = false;
+                    return;
+                }
+
+                const menuItem = li.querySelector('.menu-item');
+                const submenuItems = li.querySelectorAll('.submenu-item');
+                let matches = false;
+
+                // Match against main menu item label
+                if (menuItem) {
+                    const text = menuItem.textContent.toLowerCase();
+                    if (text.includes(query)) {
+                        matches = true;
+                    }
+                }
+
+                // Match against submenu items
+                if (submenuItems.length > 0) {
+                    let subCount = 0;
+                    submenuItems.forEach(function(sub) {
+                        const subText = sub.textContent.toLowerCase();
+                        if (subText.includes(query)) {
+                            sub.style.display = '';
+                            subCount++;
+                            matches = true;
+                        } else {
+                            sub.style.display = 'none';
+                        }
+                    });
+                    const submenu = li.querySelector('.sidebar-submenu');
+                    if (submenu && subCount > 0) {
+                        submenu.style.display = 'block';
+                    }
+                }
+
+                if (matches) {
+                    li.style.display = '';
+                    currentHeaderHasMatches = true;
+                    totalMatches++;
+                } else {
+                    li.style.display = 'none';
+                }
+            });
+
+            if (currentHeader) {
+                currentHeader.style.display = currentHeaderHasMatches ? '' : 'none';
+            }
+
+            if (emptyMsg) {
+                emptyMsg.style.display = (totalMatches === 0) ? 'block' : 'none';
+            }
+        });
+
+        if (clearBtn) {
+            clearBtn.addEventListener('click', function() {
+                searchInput.value = '';
+                searchInput.dispatchEvent(new Event('input'));
+                searchInput.focus();
+            });
+        }
+    }
+
     let lastAdminUnreadCount = -1;
     
     // Start polling for badge updates
@@ -2424,4 +2971,88 @@ function formatTime(str) {
     return d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
 }
 </script>
+<?php endif; ?>
+
+<?php if (!empty($_SESSION['login_success_flash'])): ?>
+<style>
+.swal2-container {
+    background: transparent !important;
+    background-color: transparent !important;
+}
+.swal2-container.swal2-backdrop-show,
+.swal2-container.swal2-no-backdrop {
+    background: transparent !important;
+    background-color: transparent !important;
+}
+.swal2-container.swal2-top-end,
+.swal2-container.swal2-top-right {
+    top: 30px !important;
+    right: 24px !important;
+    left: auto !important;
+    bottom: auto !important;
+    padding: 0 !important;
+    z-index: 99999999 !important;
+    overflow: visible !important;
+    pointer-events: none !important;
+    background: transparent !important;
+}
+.swal2-popup.swal2-toast {
+    pointer-events: auto !important;
+    background: #ffffff !important;
+    color: #101828 !important;
+    border: 1px solid #eaecf0 !important;
+    border-radius: 12px !important;
+    box-shadow: 0 10px 25px -3px rgba(16, 24, 40, 0.1), 0 4px 6px -2px rgba(16, 24, 40, 0.05) !important;
+    padding: 12px 18px !important;
+    min-width: 280px !important;
+    max-width: 420px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+}
+.swal2-popup.swal2-toast .swal2-title {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Outfit', sans-serif !important;
+    font-size: 0.92rem !important;
+    font-weight: 600 !important;
+    color: #101828 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    line-height: 1.4 !important;
+}
+.swal2-popup.swal2-toast .swal2-icon {
+    margin: 0 !important;
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 24px !important;
+    border-color: #027a48 !important;
+    color: #027a48 !important;
+}
+.swal2-popup.swal2-toast .swal2-timer-progress-bar {
+    background: #b3261e !important;
+    height: 3px !important;
+}
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof Swal !== 'undefined') {
+        const Toast = Swal.mixin({
+            toast: true,
+            position: 'top-end',
+            backdrop: false,
+            showConfirmButton: false,
+            timer: 4000,
+            timerProgressBar: true,
+            didOpen: (toast) => {
+                toast.addEventListener('mouseenter', Swal.stopTimer);
+                toast.addEventListener('mouseleave', Swal.resumeTimer);
+            }
+        });
+        Toast.fire({
+            icon: 'success',
+            title: <?php echo json_encode($_SESSION['login_success_flash']); ?>
+        });
+    }
+});
+</script>
+<?php unset($_SESSION['login_success_flash']); ?>
 <?php endif; ?>

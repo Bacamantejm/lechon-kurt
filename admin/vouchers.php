@@ -182,6 +182,7 @@ unset($_SESSION['success'], $_SESSION['error']);
     <div class="admin-content">
         <div class="admin-topbar">
             <div class="topbar-content">
+                <button class="sidebar-toggler" id="sidebarToggler"><i class="fas fa-bars"></i></button>
                 <h1>Vouchers &amp; Discounts</h1>
                 <div class="admin-profile">
                     <span><?php echo htmlspecialchars((string)($admin_info['full_name'] ?? 'Partner Admin')); ?></span>

@@ -363,7 +363,7 @@ if ($seller_scope_id === null) {
     $top_query = "SELECT p.name AS product_name, COALESCE(SUM(oi.quantity), 0) AS quantity
                   FROM products p
                   LEFT JOIN order_items oi
-                    ON (oi.product_id = p.product_id OR oi.product_id = CAST(p.id AS CHAR))
+                    ON (oi.product_id COLLATE utf8mb4_general_ci = p.product_id COLLATE utf8mb4_general_ci OR oi.product_id COLLATE utf8mb4_general_ci = CAST(p.id AS CHAR) COLLATE utf8mb4_general_ci)
                   LEFT JOIN orders o
                     ON oi.order_id = o.id
                    AND o.is_archived = 0
@@ -375,13 +375,15 @@ if ($seller_scope_id === null) {
                   ORDER BY quantity DESC
                   LIMIT 5";
     $top_stmt = mysqli_prepare($conn, $top_query);
-    mysqli_stmt_bind_param($top_stmt, "i", $seller_scope_id);
-    mysqli_stmt_execute($top_stmt);
-    $top_result = mysqli_stmt_get_result($top_stmt);
-    while ($top_result && ($top_row = mysqli_fetch_assoc($top_result))) {
-        $dss_top_products[] = $top_row;
+    if ($top_stmt) {
+        mysqli_stmt_bind_param($top_stmt, "i", $seller_scope_id);
+        mysqli_stmt_execute($top_stmt);
+        $top_result = mysqli_stmt_get_result($top_stmt);
+        while ($top_result && ($top_row = mysqli_fetch_assoc($top_result))) {
+            $dss_top_products[] = $top_row;
+        }
+        mysqli_stmt_close($top_stmt);
     }
-    mysqli_stmt_close($top_stmt);
 
     $pressure_query = "SELECT p.name AS product_name,
                               COALESCE(i.current_stock, 0) AS stock,
@@ -809,6 +811,7 @@ if (empty($product_decisions)) {
         <div class="admin-content">
             <div class="admin-topbar">
                 <div class="topbar-content">
+                    <button class="sidebar-toggler" id="sidebarToggler"><i class="fas fa-bars"></i></button>
                     <h1>Products Management</h1>
                     <button class="theme-toggler" id="themeToggler" title="Toggle Theme" style="margin-left: auto;">
                         <i class="fas fa-moon"></i>

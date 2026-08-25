@@ -3,7 +3,43 @@ session_start();
 $current_page = 'menu';
 $page_title = "Menu & Order | Lechon Delights";
 
-$requested_seller_id = isset($_GET['seller_id']) ? (int)$_GET['seller_id'] : 0;
+require_once 'includes/config.php';
+
+$scoped_partner_seller_id = 0;
+if (!empty($_SESSION['user_id']) && isset($conn) && $conn) {
+    $logged_user_id = (int)$_SESSION['user_id'];
+    $is_super_admin = (strtolower(trim((string)($_SESSION['role_name'] ?? ''))) === 'super_admin' || strtolower(trim((string)($_SESSION['user_type'] ?? ''))) === 'super_admin');
+    if (!$is_super_admin) {
+        $check_scope_stmt = mysqli_prepare($conn, "SELECT u.id FROM users u WHERE u.id = ? AND (u.account_type = 'organization' OR EXISTS (SELECT 1 FROM franchise_applications fa WHERE fa.user_id = u.id AND fa.status = 'approved')) LIMIT 1");
+        if ($check_scope_stmt) {
+            mysqli_stmt_bind_param($check_scope_stmt, "i", $logged_user_id);
+            mysqli_stmt_execute($check_scope_stmt);
+            $check_scope_res = mysqli_stmt_get_result($check_scope_stmt);
+            if ($check_scope_row = mysqli_fetch_assoc($check_scope_res)) {
+                $scoped_partner_seller_id = (int)$check_scope_row['id'];
+            }
+            mysqli_stmt_close($check_scope_stmt);
+        }
+        if ($scoped_partner_seller_id <= 0) {
+            $staff_scope_stmt = mysqli_prepare($conn, "SELECT pmu.partner_user_id FROM partner_managed_users pmu WHERE pmu.managed_user_id = ? LIMIT 1");
+            if ($staff_scope_stmt) {
+                mysqli_stmt_bind_param($staff_scope_stmt, "i", $logged_user_id);
+                mysqli_stmt_execute($staff_scope_stmt);
+                $staff_scope_res = mysqli_stmt_get_result($staff_scope_stmt);
+                if ($staff_scope_row = mysqli_fetch_assoc($staff_scope_res)) {
+                    $scoped_partner_seller_id = (int)$staff_scope_row['partner_user_id'];
+                }
+                mysqli_stmt_close($staff_scope_stmt);
+            }
+        }
+    }
+}
+
+if ($scoped_partner_seller_id > 0) {
+    $requested_seller_id = $scoped_partner_seller_id;
+} else {
+    $requested_seller_id = isset($_GET['seller_id']) ? (int)$_GET['seller_id'] : 0;
+}
 $requested_branch_id = isset($_GET['branch_id']) ? (int)$_GET['branch_id'] : 0;
 if ($requested_seller_id > 0) {
     $_SESSION['storefront_seller_id'] = $requested_seller_id;
@@ -157,9 +193,10 @@ if (isset($_SESSION['user_id'])) {
 
 // Store locations for pickup (database-driven, with static fallback)
 $store_locations = [];
+$store_scope_filter = ($scoped_partner_seller_id > 0) ? " AND owner_user_id = " . (int)$scoped_partner_seller_id : "";
 $store_query = "SELECT store_id, owner_user_id, store_name, address, city, province, phone, opening_hours, latitude, longitude
                 FROM store_locations
-                WHERE is_active = 1
+                WHERE is_active = 1 {$store_scope_filter}
                 ORDER BY store_name";
 $store_result = mysqli_query($conn, $store_query);
 
@@ -2517,33 +2554,32 @@ document.addEventListener('click', function(e) {
 }
 
 .page-header {
-    background: linear-gradient(135deg, rgba(0,0,0,0.85), rgba(0,0,0,0.7)), url('images/menu-bg.jpg');
-    background-size: cover;
-    background-position: center;
-    background-attachment: fixed;
-    color: white;
+    background: #ffffff;
+    border-bottom: 1px solid #eaecf0;
+    color: #101828;
     text-align: center;
-    padding: 160px 20px 100px;
-    position: relative;
-    margin-bottom: -50px; /* Overlap effect */
-    z-index: 1;
+    padding: 36px 20px 28px;
+    position: static;
+    margin-bottom: 0;
 }
 
 .page-header h1 {
-    font-size: 3.5rem;
+    font-family: 'Outfit', sans-serif;
+    font-size: 2.2rem;
     font-weight: 800;
-    margin-bottom: 15px;
-    color: white;
-    text-shadow: 0 2px 10px rgba(0,0,0,0.3);
-    letter-spacing: -1px;
+    margin-bottom: 6px;
+    color: #101828;
+    text-shadow: none;
+    letter-spacing: -0.02em;
 }
 
 .page-header p {
-    font-size: 1.2rem;
-    opacity: 0.9;
+    font-size: 0.95rem;
+    color: #475467;
     max-width: 600px;
     margin: 0 auto;
-    font-weight: 300;
+    font-weight: 400;
+    opacity: 1;
 }
 
 /* Foodpanda Unified Sticky Category Navigation Bar */
@@ -4201,23 +4237,23 @@ body {
 
 .page-header {
     margin-bottom: 0;
-    padding: 132px 20px 88px;
-    background:
-        linear-gradient(128deg, rgba(17, 11, 8, 0.86), rgba(45, 22, 14, 0.72)),
-        url('images/faq-bg.jpg') center/cover no-repeat;
+    padding: 36px 20px 28px;
+    background: #ffffff;
+    border-bottom: 1px solid #eaecf0;
 }
 
 .page-header h1 {
-    letter-spacing: -0.03em;
+    letter-spacing: -0.02em;
+    color: #101828;
 }
 
 .page-header p {
-    color: #f7e6d7;
+    color: #475467;
 }
 
 .menu-section {
-    background: linear-gradient(180deg, #fffaf3 0%, #fff 100%);
-    padding-top: 45px;
+    background: #f8f9fa;
+    padding-top: 32px;
 }
 
 .category-nav {

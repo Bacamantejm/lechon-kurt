@@ -347,6 +347,7 @@ $page_title = $po_id > 0 ? "Edit PO #" . htmlspecialchars($po['po_number']) : "C
         <div class="admin-content">
             <div class="admin-topbar">
                 <div class="topbar-content">
+                    <button class="sidebar-toggler" id="sidebarToggler"><i class="fas fa-bars"></i></button>
                     <h1><?php echo $page_title; ?></h1>
                     <div class="admin-profile">
                         <span><?php echo htmlspecialchars($admin_info['full_name']); ?></span>

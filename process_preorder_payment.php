@@ -358,25 +358,37 @@ try {
         $item_downpayment = ($payment_type === 'downpayment') ? $item_total_with_vat * 0.30 : $item_total_with_vat;
         $item_remaining = $item_total_with_vat - $item_downpayment;
         
-        // Note: Using special_instructions to store transaction ref if needed, or just rely on paymongo_session_id later
-        $preorder_query = "INSERT INTO pre_orders (user_id, product_id, product_name, quantity, unit_price, total_price, delivery_address, delivery_method, payment_type, downpayment_amount, remaining_amount, preferred_pickup_date, preferred_pickup_time, latitude, longitude, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'delivery', ?, ?, ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), NOW())";
+        // Store pre-order with delivery_method = pickup
+        $preorder_query = "INSERT INTO pre_orders (
+            user_id, product_id, product_name, quantity, unit_price, total_price, 
+            reservation_date, preferred_pickup_date, preferred_pickup_time, pickup_location, 
+            delivery_address, delivery_method, payment_type, downpayment_amount, remaining_amount, 
+            latitude, longitude, created_at
+        ) VALUES (
+            ?, ?, ?, ?, ?, ?, 
+            ?, ?, ?, ?, 
+            ?, 'pickup', ?, ?, ?, 
+            NULLIF(?, ''), NULLIF(?, ''), NOW()
+        )";
         
         $preorder_stmt = mysqli_prepare($conn, $preorder_query);
-        if (!$preorder_stmt) throw new Exception('DB Prepare Error');
+        if (!$preorder_stmt) throw new Exception('DB Prepare Error: ' . mysqli_error($conn));
         
-        mysqli_stmt_bind_param($preorder_stmt, "iisiddssddssss", 
+        mysqli_stmt_bind_param($preorder_stmt, "iisiddssssssddss", 
             $user_id, 
             $item['id'], 
             $item['name'],
             $item['quantity'], 
             $item['price'], 
             $item_total_with_vat, 
+            $pickup_date,
+            $pickup_date,
+            $pickup_time,
+            $address,
             $address,
             $payment_type, 
             $item_downpayment,
             $item_remaining,
-            $pickup_date,
-            $pickup_time,
             $latitude_value,
             $longitude_value
         );

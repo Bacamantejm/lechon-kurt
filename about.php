@@ -68,97 +68,121 @@ include 'includes/header.php';
 </section>
 
 <?php include 'includes/footer.php'; ?>
-
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
 :root {
-    --primary-color: #c62828;
-    --primary-dark: #b71c1c;
-    --text-main: #2d3436;
-    --text-light: #636e72;
+    --primary-color: #b3261e;
+    --primary-dark: #981b15;
+    --about-red: #b3261e;
+    --about-ink: #101828;
+    --about-muted: #475467;
+    --about-border: #eaecf0;
+    --about-bg: #f8f9fa;
+    --about-card: #ffffff;
+    --text-main: #101828;
+    --text-light: #475467;
     --bg-light: #f8f9fa;
     --card-radius: 16px;
-    --transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-    --shadow-sm: 0 4px 6px rgba(0,0,0,0.05);
-    --shadow-md: 0 10px 20px rgba(0,0,0,0.08);
+    --transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+    --shadow-sm: 0 1px 3px rgba(16, 24, 40, 0.04);
+    --shadow-md: 0 1px 3px rgba(16, 24, 40, 0.04);
+}
+
+body {
+    background: var(--about-bg) !important;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    color: var(--about-ink);
 }
 
 /* Page Header */
 .page-header {
-    background: linear-gradient(135deg, rgba(0,0,0,0.85), rgba(0,0,0,0.7)), url('images/about-us-bg.jpg');
-    background-size: cover;
-    background-position: center;
-    background-attachment: fixed;
-    color: white;
+    background: #ffffff;
+    border-bottom: 1px solid var(--about-border);
+    padding: 36px 20px 28px;
     text-align: center;
-    padding: 160px 20px 100px;
+    margin-bottom: 0;
 }
 
 .page-header h1 {
-    font-size: 3.5rem;
+    font-family: 'Outfit', sans-serif;
+    font-size: 2.2rem;
     font-weight: 800;
-    margin-bottom: 15px;
-    text-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    color: var(--about-ink);
+    margin-bottom: 6px;
+    letter-spacing: -0.02em;
 }
 
 .page-header p {
-    font-size: 1.2rem;
-    opacity: 0.9;
+    font-size: 0.95rem;
+    color: var(--about-muted);
     max-width: 600px;
     margin: 0 auto;
-    font-weight: 300;
+    font-weight: 400;
 }
 
 /* About Content */
 .about-content-section {
-    padding: 80px 0;
-    background: #fff;
+    padding: 48px 0;
+    background: var(--about-bg);
 }
 
 .about-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 50px;
+    gap: 40px;
     align-items: center;
+    background: #ffffff;
+    border: 1px solid var(--about-border);
+    border-radius: 18px;
+    padding: 32px;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
 }
 
 .about-text h2 {
-    font-size: 2.2rem;
-    color: var(--text-main);
-    margin-bottom: 20px;
-    font-weight: 700;
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.85rem;
+    color: var(--about-ink);
+    margin-bottom: 16px;
+    font-weight: 800;
 }
 
 .about-text h3 {
-    font-size: 1.5rem;
-    color: var(--primary-color);
-    margin-top: 30px;
-    margin-bottom: 15px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.3rem;
+    color: var(--about-red);
+    margin-top: 24px;
+    margin-bottom: 10px;
+    font-weight: 700;
 }
 
 .about-text p {
-    line-height: 1.8;
-    margin-bottom: 15px;
-    color: var(--text-light);
+    line-height: 1.7;
+    margin-bottom: 14px;
+    color: var(--about-muted);
+    font-size: 0.92rem;
 }
 
 .about-image img {
     width: 100%;
-    border-radius: var(--card-radius);
-    box-shadow: var(--shadow-md);
+    border-radius: 14px;
+    border: 1px solid var(--about-border);
+    box-shadow: 0 4px 14px rgba(16, 24, 40, 0.06);
 }
 
 /* Milestones Section */
 .milestones-section {
-    padding: 80px 0;
-    background: var(--bg-light);
+    padding: 48px 0 80px;
+    background: var(--about-bg);
 }
 
 .section-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.85rem;
+    font-weight: 800;
     text-align: center;
-    font-size: 2.5rem;
-    color: var(--text-main);
-    margin-bottom: 60px;
-    font-weight: 700;
+    color: var(--about-ink);
+    margin-bottom: 40px;
 }
 
 .timeline {
@@ -171,18 +195,18 @@ include 'includes/header.php';
     content: '';
     position: absolute;
     width: 4px;
-    background-color: var(--primary-color);
+    background: #eaecf0;
     top: 0;
     bottom: 0;
     left: 50%;
     margin-left: -2px;
-    border-radius: 2px;
 }
 
 .timeline-item {
     padding: 10px 40px;
     position: relative;
     width: 50%;
+    box-sizing: border-box;
 }
 
 .timeline-item::after {
@@ -190,131 +214,49 @@ include 'includes/header.php';
     position: absolute;
     width: 20px;
     height: 20px;
-    background-color: white;
-    border: 4px solid var(--primary-color);
+    right: -10px;
+    background-color: #ffffff;
+    border: 4px solid var(--about-red);
     top: 15px;
     border-radius: 50%;
     z-index: 1;
 }
 
-.timeline-item:nth-child(odd) { left: 0; text-align: right; }
-.timeline-item:nth-child(even) { left: 50%; }
-.timeline-item:nth-child(odd)::after { right: -10px; }
-.timeline-item:nth-child(even)::after { left: -10px; }
+.left { left: 0; }
+.right { left: 50%; }
 
-.timeline-year {
-    font-size: 1.5rem;
-    font-weight: bold;
-    color: var(--primary-color);
-    margin-bottom: 10px;
-}
+.right::after { left: -10px; }
 
 .timeline-content {
-    padding: 20px 30px;
-    background-color: white;
+    padding: 20px;
+    background-color: #ffffff;
     position: relative;
-    border-radius: 12px;
-    box-shadow: var(--shadow-sm);
-}
-
-.timeline-content h3 { font-size: 1.2rem; margin-bottom: 5px; color: var(--text-main); }
-.timeline-content p { color: var(--text-light); margin: 0; }
-
-@media (max-width: 768px) {
-    .about-grid { grid-template-columns: 1fr; }
-    .about-image { order: -1; margin-bottom: 30px; }
-    .timeline::after { left: 10px; }
-    .timeline-item { width: 100%; padding-left: 50px; padding-right: 0; text-align: left !important; }
-    .timeline-item:nth-child(even) { left: 0; }
-    .timeline-item::after { left: 1px; }
-}
-
-/* Modern Food Story Refresh */
-:root {
-    --about-red: #b3261e;
-    --about-orange: #ef6b2e;
-    --about-cream: #fff8ef;
-    --about-ink: #2a211d;
-    --about-muted: #7c6e64;
-    --about-border: #efddcd;
-}
-
-body {
-    background:
-        radial-gradient(circle at 2% 0%, rgba(239, 107, 46, 0.12), transparent 32%),
-        radial-gradient(circle at 98% 12%, rgba(179, 38, 30, 0.1), transparent 30%),
-        var(--about-cream);
-}
-
-.page-header {
-    padding: 134px 20px 90px;
-    background:
-        linear-gradient(128deg, rgba(16, 10, 8, 0.86), rgba(43, 20, 13, 0.75)),
-        url('images/about-us-bg.jpg') center/cover no-repeat;
-}
-
-.page-header h1 {
-    letter-spacing: -0.03em;
-}
-
-.page-header p {
-    color: #f8e8da;
-}
-
-.about-content-section {
-    background: linear-gradient(180deg, #fff9f3 0%, #fff 100%);
-}
-
-.about-grid {
-    background: #fff;
+    border-radius: 14px;
     border: 1px solid var(--about-border);
-    border-radius: 24px;
-    padding: 30px;
-    box-shadow: 0 18px 38px rgba(74, 32, 20, 0.1);
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
 }
 
-.about-text h2,
-.section-title {
-    color: var(--about-ink);
-    letter-spacing: -0.01em;
-}
-
-.about-text h3,
 .timeline-year {
-    color: #9e3222;
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: var(--about-red);
+    margin-bottom: 6px;
 }
 
-.about-text p,
 .timeline-content p {
+    margin: 0;
     color: var(--about-muted);
-}
-
-.about-image img {
-    border: 1px solid #ecd7c5;
-    box-shadow: 0 16px 34px rgba(74, 32, 20, 0.14);
-}
-
-.milestones-section {
-    background: linear-gradient(180deg, #fff 0%, #fff8ef 100%);
-}
-
-.timeline::after {
-    background: linear-gradient(180deg, var(--about-red), var(--about-orange));
-}
-
-.timeline-item::after {
-    border-color: #cd5b35;
-}
-
-.timeline-content {
-    border: 1px solid #eedccc;
-    border-radius: 16px;
-    box-shadow: 0 12px 26px rgba(74, 32, 20, 0.1);
+    font-size: 0.88rem;
+    line-height: 1.6;
 }
 
 @media (max-width: 768px) {
-    .about-grid {
-        padding: 22px;
-    }
+    .page-header h1 { font-size: 1.75rem; }
+    .about-grid { grid-template-columns: 1fr; padding: 20px; gap: 24px; }
+    .timeline::after { left: 31px; }
+    .timeline-item { width: 100%; padding-left: 70px; padding-right: 20px; }
+    .timeline-item::after { left: 21px; }
+    .right { left: 0; }
 }
 </style>

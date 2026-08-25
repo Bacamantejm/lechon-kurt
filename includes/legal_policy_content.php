@@ -53,20 +53,27 @@ if (!function_exists('renderTermsOfServiceSections')) {
             <li>Chargeback abuse, fraudulent claims, or policy misuse may lead to account restrictions.</li>
         </ul>
 
-        <h2>8. User Responsibilities</h2>
+        <h2>8. Business Partner Subscription Plans & Cancellation Policy</h2>
+        <ul>
+            <li><strong>Non-Refundable Policy:</strong> All subscription fee payments (monthly and annual terms) are strictly non-refundable once invoiced or charged. No cash refunds, chargeback reimbursements, or prorated partial refunds will be issued upon subscription cancellation or downgrade.</li>
+            <li><strong>Full Access Retained Through End of Paid Term:</strong> Upon cancellation of a subscription, the partner shop will continue to have complete, uninterrupted access to all features, commission discounts, staff limits, and capabilities of their chosen plan until the end of their current active paid billing period (e.g. 1 month from the billing/renewal date).</li>
+            <li><strong>Automatic Concluding of Services:</strong> Once the 1-month paid period reaches its expiration date, recurring charges will stop completely and subscription tier benefits will conclude without penalty.</li>
+        </ul>
+
+        <h2>9. User Responsibilities</h2>
         <ul>
             <li>Provide accurate account, payment, and delivery information.</li>
             <li>Do not misuse promos, payment channels, support tools, or dispute flows.</li>
             <li>Keep login credentials confidential and report unauthorized access immediately.</li>
         </ul>
 
-        <h2>9. Limitation of Liability</h2>
+        <h2>10. Limitation of Liability</h2>
         <p>To the maximum extent allowed by law, Lechon Delights is not liable for indirect, incidental, or consequential losses arising from service interruptions, delays, partner-store actions, or third-party gateway failures.</p>
 
-        <h2>10. Changes to Terms</h2>
+        <h2>11. Changes to Terms</h2>
         <p>We may update these terms from time to time. Continued use of the service after updates means you accept the revised terms.</p>
 
-        <h2>11. Contact</h2>
+        <h2>12. Contact</h2>
         <p>
             Lechon Delights<br>
             orders@lechondelights.com<br>

@@ -291,17 +291,48 @@ if (!empty($branch_owner_ids)) {
         }
     }
 }
+$scoped_partner_seller_id = 0;
+if (!empty($_SESSION['user_id']) && isset($conn) && $conn) {
+    $logged_user_id = (int)$_SESSION['user_id'];
+    $is_super_admin = (strtolower(trim((string)($_SESSION['role_name'] ?? ''))) === 'super_admin' || strtolower(trim((string)($_SESSION['user_type'] ?? ''))) === 'super_admin');
+    if (!$is_super_admin) {
+        $check_scope_stmt = mysqli_prepare($conn, "SELECT u.id FROM users u WHERE u.id = ? AND (u.account_type = 'organization' OR EXISTS (SELECT 1 FROM franchise_applications fa WHERE fa.user_id = u.id AND fa.status = 'approved')) LIMIT 1");
+        if ($check_scope_stmt) {
+            mysqli_stmt_bind_param($check_scope_stmt, "i", $logged_user_id);
+            mysqli_stmt_execute($check_scope_stmt);
+            $check_scope_res = mysqli_stmt_get_result($check_scope_stmt);
+            if ($check_scope_row = mysqli_fetch_assoc($check_scope_res)) {
+                $scoped_partner_seller_id = (int)$check_scope_row['id'];
+            }
+            mysqli_stmt_close($check_scope_stmt);
+        }
+        if ($scoped_partner_seller_id <= 0) {
+            $staff_scope_stmt = mysqli_prepare($conn, "SELECT pmu.partner_user_id FROM partner_managed_users pmu WHERE pmu.managed_user_id = ? LIMIT 1");
+            if ($staff_scope_stmt) {
+                mysqli_stmt_bind_param($staff_scope_stmt, "i", $logged_user_id);
+                mysqli_stmt_execute($staff_scope_stmt);
+                $staff_scope_res = mysqli_stmt_get_result($staff_scope_stmt);
+                if ($staff_scope_row = mysqli_fetch_assoc($staff_scope_res)) {
+                    $scoped_partner_seller_id = (int)$staff_scope_row['partner_user_id'];
+                }
+                mysqli_stmt_close($staff_scope_stmt);
+            }
+        }
+    }
+}
 
 $stores = [];
 $latest_approved_partner_sql = "SELECT fa1.* FROM franchise_applications fa1 INNER JOIN (SELECT user_id, MAX(id) AS latest_id FROM franchise_applications WHERE status = 'approved' GROUP BY user_id) latest ON latest.latest_id = fa1.id";
 $seller_media_fields = '';
 $seller_media_fields .= $has_business_logo_column ? ", u.business_logo" : ", NULL AS business_logo";
 $seller_media_fields .= $has_profile_image_column ? ", u.profile_image" : ", NULL AS profile_image";
+$seller_scope_filter = ($scoped_partner_seller_id > 0) ? " AND u.id = " . (int)$scoped_partner_seller_id : "";
 $seller_result = mysqli_query($conn, "SELECT u.id, u.full_name, u.email, u.phone, u.address, u.business_name, u.business_type, u.created_at{$seller_media_fields}, fa.business_address, fa.city_name, fa.province_name, fa.barangay_name
                                       FROM users u
                                       INNER JOIN ({$latest_approved_partner_sql}) fa ON fa.user_id = u.id
                                       WHERE u.account_type = 'organization'
                                         AND u.is_active = 1
+                                        {$seller_scope_filter}
                                       ORDER BY COALESCE(NULLIF(TRIM(u.business_name), ''), u.full_name)");
 if ($seller_result) {
     while ($row = mysqli_fetch_assoc($seller_result)) {
@@ -392,9 +423,10 @@ $global_min = null;
 $global_rating_sum = 0;
 $global_rating_count = 0;
 $global_reviews = 0;
+$product_scope_filter = ($scoped_partner_seller_id > 0) ? " AND p.seller_id = " . (int)$scoped_partner_seller_id : "";
 $product_sql = "SELECT p.id, p.seller_id, p.name, p.category, p.price, p.image, p.avg_rating, p.review_count, COALESCE(NULLIF(TRIM(u.business_name), ''), 'Lechon Delights Kitchen') seller_name
                 FROM products p LEFT JOIN users u ON p.seller_id = u.id
-                WHERE p.is_archived = 0 AND p.is_active = 1
+                WHERE p.is_archived = 0 AND p.is_active = 1 {$product_scope_filter}
                 ORDER BY p.created_at DESC, p.id DESC";
 $product_result = mysqli_query($conn, $product_sql);
 if ($product_result) {
@@ -2511,6 +2543,47 @@ body {
 .bestseller-card:hover .market-store-row-thumb {
     transform: scale(1.06);
 }
+@media (max-width: 768px) {
+    .market-sidebar {
+        border-radius: 14px !important;
+        padding: 12px 16px !important;
+        margin-bottom: 14px !important;
+        max-width: 100% !important;
+        border: 1px solid #eaecf0 !important;
+        background: #ffffff !important;
+    }
+    .market-sidebar-toggle-btn {
+        display: flex !important;
+        align-items: center;
+        justify-content: space-between;
+        font-weight: 800;
+        font-size: 0.92rem;
+        color: #1e293b;
+        cursor: pointer;
+        padding: 4px 0;
+        user-select: none;
+    }
+    .market-sidebar-toggle-btn i.fa-sliders {
+        color: #b3261e;
+        margin-right: 6px;
+    }
+    .market-sidebar.is-collapsed-mobile .market-sidebar-section {
+        display: none !important;
+    }
+    .market-sidebar.is-collapsed-mobile .toggle-icon {
+        transform: rotate(-90deg);
+        transition: transform 0.2s ease;
+    }
+    .market-sidebar:not(.is-collapsed-mobile) .toggle-icon {
+        transform: rotate(0deg);
+        transition: transform 0.2s ease;
+    }
+}
+@media (min-width: 769px) {
+    .market-sidebar-toggle-btn {
+        display: none !important;
+    }
+}
 <?php endif; ?>
 </style>
 
@@ -2518,7 +2591,11 @@ body {
     <section class="market-section" id="marketplaceStores">
         <div class="container">
             <div class="market-explorer">
-                <aside class="market-sidebar">
+                <aside class="market-sidebar is-collapsed-mobile" id="marketSidebar">
+                    <div class="market-sidebar-toggle-btn" id="marketSidebarToggleBtn" onclick="document.getElementById('marketSidebar').classList.toggle('is-collapsed-mobile')">
+                        <span><i class="fas fa-sliders"></i> Filters & Sort</span>
+                        <i class="fas fa-chevron-down toggle-icon"></i>
+                    </div>
 
                     <div class="market-sidebar-section">
                         <h3>Filters</h3>
@@ -2644,6 +2721,11 @@ body {
 
                     <?php 
                     $featured_ads = paGetActiveAdvertisements($conn, 6);
+                    if ($scoped_partner_seller_id > 0 && !empty($featured_ads)) {
+                        $featured_ads = array_values(array_filter($featured_ads, function($ad) use ($scoped_partner_seller_id) {
+                            return (int)($ad['seller_id'] ?? 0) === (int)$scoped_partner_seller_id;
+                        }));
+                    }
                     if (!empty($featured_ads)): 
                     ?>
                     <!-- Partner Promos & Advertisements Section -->

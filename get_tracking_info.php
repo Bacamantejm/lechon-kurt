@@ -161,6 +161,7 @@ if ($tracking_info) {
 
     echo json_encode([
         'success' => true,
+        'is_pickup' => false,
         'status' => $tracking_info['current_status'],
         'driver_name' => $tracking_info['driver_name'],
         'driver_phone' => $tracking_info['driver_phone'] ?? null,
@@ -176,7 +177,53 @@ if ($tracking_info) {
         'delivery_review_exists' => $delivery_review_exists
     ]);
 } else {
-    echo json_encode(['success' => false, 'message' => 'Tracking information not yet available for this order.']);
+    // Check if it's a pick-up order or pending order without logistics driver
+    $ord_stmt = $conn->prepare("SELECT o.status, o.delivery_option, o.pickup_location, o.delivery_date, o.delivery_time, o.estimated_delivery_time, o.created_at, sl.latitude, sl.longitude, sl.store_name, sl.address, sl.phone FROM orders o LEFT JOIN store_locations sl ON (sl.store_id = o.pickup_location OR sl.id = o.pickup_location) WHERE o.id = ? LIMIT 1");
+    $ord_stmt->bind_param("i", $order_id);
+    $ord_stmt->execute();
+    $ord_data = $ord_stmt->get_result()->fetch_assoc();
+    $ord_stmt->close();
+
+    if ($ord_data) {
+        $is_pickup = ($ord_data['delivery_option'] === 'pickup');
+        $store_lat = (isset($ord_data['latitude']) && is_numeric($ord_data['latitude'])) ? (float)$ord_data['latitude'] : null;
+        $store_lng = (isset($ord_data['longitude']) && is_numeric($ord_data['longitude'])) ? (float)$ord_data['longitude'] : null;
+
+        // If store has no coords, fallback to first active store
+        if ($store_lat === null || $store_lng === null) {
+            $def_s = $conn->query("SELECT latitude, longitude FROM store_locations WHERE is_active = 1 AND latitude IS NOT NULL AND longitude IS NOT NULL LIMIT 1");
+            if ($def_s && $def_row = $def_s->fetch_assoc()) {
+                $store_lat = (float)$def_row['latitude'];
+                $store_lng = (float)$def_row['longitude'];
+            }
+        }
+
+        echo json_encode([
+            'success' => true,
+            'is_pickup' => $is_pickup,
+            'status' => $ord_data['status'] ?? 'pending',
+            'delivery_option' => $ord_data['delivery_option'],
+            'driver_name' => null,
+            'driver_phone' => null,
+            'driver_id' => 0,
+            'tracking_id' => 0,
+            'latitude' => $store_lat,
+            'longitude' => $store_lng,
+            'store_name' => $ord_data['store_name'] ?? 'Lechon Delights Store',
+            'store_address' => $ord_data['address'] ?? 'Cavite, Philippines',
+            'store_phone' => $ord_data['phone'] ?? null,
+            'last_location_update' => date('Y-m-d H:i:s'),
+            'location_source' => 'store_pickup',
+            'estimated_delivery' => $ord_data['estimated_delivery_time'] ?? null,
+            'delivery_date' => $ord_data['delivery_date'],
+            'delivery_time' => $ord_data['delivery_time'],
+            'status_timestamp' => $ord_data['created_at'],
+            'proof_path' => null,
+            'delivery_review_exists' => $delivery_review_exists
+        ]);
+    } else {
+        echo json_encode(['success' => false, 'message' => 'Tracking information not yet available for this order.']);
+    }
 }
 
 mysqli_close($conn);
