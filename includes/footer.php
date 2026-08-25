@@ -1713,6 +1713,77 @@
 
     <!-- Global SweetAlert2 & Flash Notifications -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+    .swal2-container {
+        background: transparent !important;
+        background-color: transparent !important;
+    }
+    .swal2-container.swal2-backdrop-show,
+    .swal2-container.swal2-no-backdrop {
+        background: transparent !important;
+        background-color: transparent !important;
+    }
+    .swal2-container.swal2-top-end,
+    .swal2-container.swal2-top-right {
+        top: 90px !important;
+        right: 24px !important;
+        left: auto !important;
+        bottom: auto !important;
+        padding: 0 !important;
+        z-index: 99999999 !important;
+        overflow: visible !important;
+        pointer-events: none !important;
+        background: transparent !important;
+    }
+    .swal2-popup.swal2-toast {
+        pointer-events: auto !important;
+        background: #ffffff !important;
+        color: #101828 !important;
+        border: 1px solid #eaecf0 !important;
+        border-radius: 12px !important;
+        box-shadow: 0 10px 25px -3px rgba(16, 24, 40, 0.1), 0 4px 6px -2px rgba(16, 24, 40, 0.05) !important;
+        padding: 12px 18px !important;
+        min-width: 280px !important;
+        max-width: 420px !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 12px !important;
+    }
+    .swal2-popup.swal2-toast .swal2-title {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Outfit', sans-serif !important;
+        font-size: 0.92rem !important;
+        font-weight: 600 !important;
+        color: #101828 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        line-height: 1.4 !important;
+    }
+    .swal2-popup.swal2-toast .swal2-icon {
+        margin: 0 !important;
+        width: 24px !important;
+        height: 24px !important;
+        min-width: 24px !important;
+        border-color: #027a48 !important;
+        color: #027a48 !important;
+    }
+    .swal2-popup.swal2-toast .swal2-timer-progress-bar {
+        background: #b3261e !important;
+        height: 3px !important;
+    }
+    @media (max-width: 768px) {
+        .swal2-container.swal2-top-end,
+        .swal2-container.swal2-top-right {
+            top: 75px !important;
+            right: 14px !important;
+            left: 14px !important;
+            width: auto !important;
+        }
+        .swal2-popup.swal2-toast {
+            min-width: 100% !important;
+            max-width: 100% !important;
+        }
+    }
+    </style>
     <?php if (!empty($_SESSION['login_success_flash'])): ?>
     <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -1720,8 +1791,9 @@
             const Toast = Swal.mixin({
                 toast: true,
                 position: 'top-end',
+                backdrop: false,
                 showConfirmButton: false,
-                timer: 3500,
+                timer: 4000,
                 timerProgressBar: true,
                 didOpen: (toast) => {
                     toast.addEventListener('mouseenter', Swal.stopTimer);
