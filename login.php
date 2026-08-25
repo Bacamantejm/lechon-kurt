@@ -207,6 +207,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
                 }
             }
             
+            $_SESSION['login_success_flash'] = 'Welcome back, ' . htmlspecialchars($result['full_name'], ENT_QUOTES, 'UTF-8') . '!';
+            
             // Check if this is an AJAX request
             $is_ajax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest';
             $is_ajax = $is_ajax || (isset($_POST['ajax']) && $_POST['ajax'] == 'true');
@@ -217,7 +219,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
                 echo json_encode([
                     'success' => true,
                     'redirect' => $redirect,
-                    'user_type' => $user_type
+                    'user_type' => $user_type,
+                    'full_name' => $result['full_name']
                 ]);
                 exit();
             } else {

@@ -2462,13 +2462,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 const data = await response.json();
                 if (data.success) {
+                    const userName = data.full_name || 'Customer';
                     Toast.fire({
                         icon: 'success',
-                        title: 'Signed in successfully! Redirecting...'
+                        title: 'Welcome back, ' + userName + '! Redirecting...'
                     });
+                    if (loginSubmitBtn) {
+                        loginSubmitBtn.innerHTML = '<i class="fas fa-check-circle"></i> <span>Success! Redirecting...</span>';
+                        loginSubmitBtn.style.background = '#027a48';
+                    }
                     setTimeout(() => {
                         window.location.href = data.redirect || 'index.php';
-                    }, 800);
+                    }, 600);
                 } else {
                     if (loginSubmitBtn) {
                         loginSubmitBtn.disabled = false;
