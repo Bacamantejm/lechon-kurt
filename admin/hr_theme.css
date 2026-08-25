@@ -316,3 +316,35 @@ body.hr-theme.dark-mode .hr-workspace-link.active {
 body.hr-theme.dark-mode .hr-workspace-link.active::after {
     border-color: #121722;
 }
+
+@media (max-width: 768px) {
+    body.hr-theme .admin-topbar {
+        margin: 8px 8px 0;
+        border-radius: 12px;
+        padding: 8px 12px;
+    }
+
+    body.hr-theme .admin-main {
+        padding: 12px 8px 90px 8px;
+    }
+
+    body.hr-theme .hr-workspace-bar {
+        top: 60px;
+    }
+
+    body.hr-theme .hr-workspace-link {
+        width: 38px;
+        height: 38px;
+        min-width: 38px;
+        min-height: 38px;
+    }
+
+    body.hr-theme .hr-workspace-link i {
+        font-size: 14px;
+    }
+
+    body.hr-theme .table-responsive {
+        border-radius: 10px;
+    }
+}
+

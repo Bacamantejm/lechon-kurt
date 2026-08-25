@@ -961,6 +961,7 @@ unset($_SESSION['success'], $_SESSION['error']);
         <div class="admin-content">
             <div class="admin-topbar">
                 <div class="topbar-content">
+                    <button class="sidebar-toggler" id="sidebarToggler"><i class="fas fa-bars"></i></button>
                     <h1>Expenses</h1>
                     <button class="theme-toggler" id="themeToggler" title="Toggle Theme" style="margin-left: auto; margin-right: 15px;">
                         <i class="fas fa-moon"></i>

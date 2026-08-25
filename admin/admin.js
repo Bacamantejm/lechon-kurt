@@ -8,23 +8,40 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // 2. Sidebar Toggle for Mobile
+    // 2. Sidebar Toggle for Desktop and Mobile
     const sidebar = document.getElementById('adminSidebar');
     const sidebarToggler = document.getElementById('sidebarToggler');
     const adminContainer = document.querySelector('.admin-container');
 
     if (sidebar && sidebarToggler && adminContainer) {
-        sidebarToggler.addEventListener('click', () => {
-            adminContainer.classList.toggle('sidebar-mobile-active');
-        });
+        if (sidebarToggler.dataset.sidebarBound !== '1') {
+            sidebarToggler.dataset.sidebarBound = '1';
+            sidebarToggler.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (window.innerWidth > 768) {
+                    const isCollapsed = adminContainer.classList.toggle('sidebar-collapsed');
+                    try {
+                        localStorage.setItem('admin_sidebar_collapsed', isCollapsed ? '1' : '0');
+                    } catch(err) {}
+                } else {
+                    const isActive = adminContainer.classList.toggle('sidebar-mobile-active');
+                    sidebar.classList.toggle('active', isActive);
+                }
+            });
+        }
 
         // Add a backdrop to close sidebar on click outside
-        const backdrop = document.createElement('div');
-        backdrop.className = 'sidebar-backdrop';
+        let backdrop = document.querySelector('.sidebar-backdrop');
+        if (!backdrop) {
+            backdrop = document.createElement('div');
+            backdrop.className = 'sidebar-backdrop';
+            adminContainer.appendChild(backdrop);
+        }
         backdrop.addEventListener('click', () => {
             adminContainer.classList.remove('sidebar-mobile-active');
+            sidebar.classList.remove('active');
         });
-        adminContainer.appendChild(backdrop);
     }
 
     // 3. Current Date Display

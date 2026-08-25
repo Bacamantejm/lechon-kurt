@@ -363,3 +363,27 @@ body.admin-polish.dark-mode .nav-tabs .nav-link.active {
         width: 100% !important;
     }
 }
+
+@media (max-width: 768px) {
+    .admin-polish .admin-main {
+        padding: 14px 10px 90px 10px !important;
+    }
+
+    .admin-polish .admin-topbar {
+        padding: 8px 12px;
+    }
+
+    .admin-polish .stats-grid,
+    .admin-polish .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-polish .table-responsive {
+        border-radius: 12px;
+    }
+
+    .admin-polish .section-header {
+        padding: 12px 14px;
+    }
+}
+

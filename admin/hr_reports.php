@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 session_start();
 include 'auth.php';
 include '../includes/config.php';
@@ -106,6 +106,7 @@ $has_attendance_table = hrTableExists($conn, 'attendance');
         <div class="admin-content">
             <div class="admin-topbar">
                 <div class="topbar-content">
+                    <button class="sidebar-toggler" id="sidebarToggler"><i class="fas fa-bars"></i></button>
                     <h1>HR Reports</h1>
                     <button class="theme-toggler" id="themeToggler" title="Toggle Theme" style="margin-left: auto;">
                         <i class="fas fa-moon"></i>

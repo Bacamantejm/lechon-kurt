@@ -63,6 +63,7 @@ $materials = mysqli_query($conn, "SELECT * FROM materials ORDER BY name");
         <div class="admin-content">
             <div class="admin-topbar">
                 <div class="topbar-content">
+                    <button class="sidebar-toggler" id="sidebarToggler"><i class="fas fa-bars"></i></button>
                     <h1>Raw Materials (Inventory)</h1>
                     <div class="admin-profile">
                         <span><?php echo htmlspecialchars($admin_info['full_name']); ?></span>

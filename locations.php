@@ -180,13 +180,44 @@ foreach ($branches as $branch) {
     $branch_by_name[locationsNormalizeKey($branch['name'])] = $branch;
 }
 
+$scoped_partner_seller_id = 0;
+if (!empty($_SESSION['user_id']) && isset($conn) && $conn) {
+    $logged_user_id = (int)$_SESSION['user_id'];
+    $is_super_admin = (strtolower(trim((string)($_SESSION['role_name'] ?? ''))) === 'super_admin' || strtolower(trim((string)($_SESSION['user_type'] ?? ''))) === 'super_admin');
+    if (!$is_super_admin) {
+        $check_scope_stmt = mysqli_prepare($conn, "SELECT u.id FROM users u WHERE u.id = ? AND (u.account_type = 'organization' OR EXISTS (SELECT 1 FROM franchise_applications fa WHERE fa.user_id = u.id AND fa.status = 'approved')) LIMIT 1");
+        if ($check_scope_stmt) {
+            mysqli_stmt_bind_param($check_scope_stmt, "i", $logged_user_id);
+            mysqli_stmt_execute($check_scope_stmt);
+            $check_scope_res = mysqli_stmt_get_result($check_scope_stmt);
+            if ($check_scope_row = mysqli_fetch_assoc($check_scope_res)) {
+                $scoped_partner_seller_id = (int)$check_scope_row['id'];
+            }
+            mysqli_stmt_close($check_scope_stmt);
+        }
+        if ($scoped_partner_seller_id <= 0) {
+            $staff_scope_stmt = mysqli_prepare($conn, "SELECT pmu.partner_user_id FROM partner_managed_users pmu WHERE pmu.managed_user_id = ? LIMIT 1");
+            if ($staff_scope_stmt) {
+                mysqli_stmt_bind_param($staff_scope_stmt, "i", $logged_user_id);
+                mysqli_stmt_execute($staff_scope_stmt);
+                $staff_scope_res = mysqli_stmt_get_result($staff_scope_stmt);
+                if ($staff_scope_row = mysqli_fetch_assoc($staff_scope_res)) {
+                    $scoped_partner_seller_id = (int)$staff_scope_row['partner_user_id'];
+                }
+                mysqli_stmt_close($staff_scope_stmt);
+            }
+        }
+    }
+}
+
 $stores = [];
 $latest_approved_partner_sql = "SELECT fa1.* FROM franchise_applications fa1 INNER JOIN (SELECT user_id, MAX(id) AS latest_id FROM franchise_applications WHERE status = 'approved' GROUP BY user_id) latest ON latest.latest_id = fa1.id";
+$partner_scope_filter = ($scoped_partner_seller_id > 0) ? " AND u.id = " . (int)$scoped_partner_seller_id : "";
 $partner_sql = "SELECT u.id, u.full_name, u.email, u.phone, u.address, u.business_name, u.business_type, u.created_at,
                        fa.business_address, fa.city_name, fa.province_name, fa.barangay_name
                 FROM users u
                 INNER JOIN ({$latest_approved_partner_sql}) fa ON fa.user_id = u.id
-                WHERE u.account_type = 'organization' AND u.is_active = 1
+                WHERE u.account_type = 'organization' AND u.is_active = 1 {$partner_scope_filter}
                 ORDER BY COALESCE(NULLIF(TRIM(u.business_name), ''), u.full_name)";
 $partner_result = mysqli_query($conn, $partner_sql);
 if ($partner_result) {

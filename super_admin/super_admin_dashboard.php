@@ -546,6 +546,73 @@ $recent_applications = ownerTableExists($conn, 'franchise_applications')
     ? ownerRows($conn, "SELECT fa.application_number, COALESCE(NULLIF(fa.business_name, ''), NULLIF(u.business_name, ''), u.full_name, 'Business Partner') AS business_name, COALESCE(u.full_name, 'Unknown Applicant') AS owner_name, fa.status, fa.created_at FROM franchise_applications fa LEFT JOIN users u ON u.id = fa.user_id ORDER BY fa.created_at DESC LIMIT 5")
     : [];
 
+$has_subscriptions = ownerTableExists($conn, 'partner_plan_subscriptions');
+$active_subscribers_count = 0;
+$total_subscription_revenue_collected = 0.0;
+$partner_subscriptions_list = [];
+
+if ($has_subscriptions) {
+    $active_subscribers_count = (int)ownerScalar(
+        $conn,
+        "SELECT COUNT(DISTINCT partner_user_id) 
+         FROM partner_plan_subscriptions 
+         WHERE subscription_status IN ('active', 'trial')",
+        0
+    );
+
+    if (ownerTableExists($conn, 'partner_billing_invoices')) {
+        $total_subscription_revenue_collected = (float)ownerScalar(
+            $conn,
+            "SELECT COALESCE(SUM(total_amount), 0) 
+             FROM partner_billing_invoices 
+             WHERE invoice_status = 'paid' AND invoice_type = 'subscription'",
+            0.0
+        );
+    }
+
+    $partner_subscriptions_list = ownerRows(
+        $conn,
+        "SELECT 
+            s.id AS subscription_id,
+            s.partner_user_id,
+            COALESCE(NULLIF(u.business_name, ''), NULLIF(fa.business_name, ''), u.full_name, 'Partner Shop') AS business_name,
+            u.full_name AS owner_name,
+            u.email,
+            u.phone,
+            p.id AS plan_id,
+            p.plan_name,
+            p.plan_code,
+            s.billing_cycle,
+            s.subscription_status,
+            s.started_at,
+            s.renews_at,
+            s.ended_at,
+            CASE 
+                WHEN s.billing_cycle = 'annual' THEN p.annual_price 
+                ELSE p.monthly_price 
+            END AS plan_price,
+            COALESCE((
+                SELECT SUM(inv.total_amount) 
+                FROM partner_billing_invoices inv 
+                WHERE inv.partner_user_id = s.partner_user_id AND inv.invoice_status = 'paid'
+            ), 0) AS total_paid_to_date,
+            COALESCE((
+                SELECT inv.paid_at 
+                FROM partner_billing_invoices inv 
+                WHERE inv.partner_user_id = s.partner_user_id AND inv.invoice_status = 'paid' 
+                ORDER BY inv.id DESC LIMIT 1
+            ), NULL) AS last_payment_date
+         FROM partner_plan_subscriptions s
+         LEFT JOIN platform_subscription_plans p ON p.id = s.plan_id
+         LEFT JOIN users u ON u.id = s.partner_user_id
+         LEFT JOIN franchise_applications fa ON fa.user_id = s.partner_user_id
+         ORDER BY 
+            CASE WHEN s.subscription_status IN ('active', 'trial') THEN 0 ELSE 1 END,
+            s.id DESC
+         LIMIT 25"
+    );
+}
+
 $business_performance_rows = [];
 if ($has_applications && $has_users) {
     $partner_control_select_sql = ",
@@ -2222,6 +2289,8 @@ if ($dashboard_flash_payload === false) {
                 <div class="owner-metric-grid">
                     <div class="owner-card"><strong><?php echo number_format($pending_applications); ?></strong><span>Pending business applications</span><small>Owner-only approval queue</small></div>
                     <div class="owner-card"><strong><?php echo number_format($approved_partners); ?></strong><span>Approved partners</span><small>Active tenant businesses</small></div>
+                    <div class="owner-card"><strong><?php echo number_format($active_subscribers_count); ?></strong><span>Active Plan Subscribers</span><small>Paid partner subscription tiers</small></div>
+                    <div class="owner-card"><strong>PHP <?php echo number_format($total_subscription_revenue_collected, 2); ?></strong><span>Total Plan Revenue</span><small>Paid subscription invoices</small></div>
                     <div class="owner-card"><strong><?php echo number_format($total_customers); ?></strong><span>Customer accounts</span><small>Platform-wide registered users</small></div>
                     <div class="owner-card"><strong><?php echo number_format($total_admins); ?></strong><span>Admin accounts</span><small><?php echo number_format($total_employees); ?> employee records</small></div>
                     <div class="owner-card"><strong><?php echo number_format($active_partner_warnings_total); ?></strong><span>Active partner warnings</span><small><?php echo number_format($partners_with_active_warnings); ?> partner stores flagged</small></div>
@@ -2586,6 +2655,105 @@ if ($dashboard_flash_payload === false) {
                             <div class="owner-empty">No business applications found.</div>
                         <?php endif; ?>
                     </div>
+                </div>
+
+                <!-- Partner Plan Subscriptions & Revenue Desk -->
+                <div class="owner-section" id="partnerSubscriptionsBoard">
+                    <div class="owner-section-head">
+                        <div>
+                            <h3><i class="fas fa-crown" style="color: #b3261e; margin-right: 6px;"></i> Partner Plan Subscriptions &amp; Revenue</h3>
+                            <p>Real-time oversight of partner shops subscribed to Lechon Delights platform plans, amounts paid, and renewal schedules.</p>
+                        </div>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <a href="../super_admin/platform_monetization.php" class="owner-link">
+                                <i class="fas fa-sack-dollar"></i> Monetization Controls
+                            </a>
+                        </div>
+                    </div>
+
+                    <?php if (!empty($partner_subscriptions_list)): ?>
+                        <div class="table-responsive" style="overflow-x: auto;">
+                            <table class="table" style="width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 0; font-size: 0.88rem;">
+                                <thead>
+                                    <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0; color: #475569; font-weight: 800;">
+                                        <th style="padding: 12px 14px; border-top-left-radius: 10px;">Partner Store &amp; Owner</th>
+                                        <th style="padding: 12px 14px;">Plan Subscribed</th>
+                                        <th style="padding: 12px 14px;">Plan Rate</th>
+                                        <th style="padding: 12px 14px;">Total Paid</th>
+                                        <th style="padding: 12px 14px;">Status</th>
+                                        <th style="padding: 12px 14px;">Subscribed Date</th>
+                                        <th style="padding: 12px 14px;">Next Renewal / Expiration</th>
+                                        <th style="padding: 12px 14px; text-align: right; border-top-right-radius: 10px;">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($partner_subscriptions_list as $sub): ?>
+                                        <?php
+                                            $subStatus = strtolower(trim((string)($sub['subscription_status'] ?? 'active')));
+                                            $cycleLabel = ucfirst((string)($sub['billing_cycle'] ?? 'monthly'));
+                                            $planName = (string)($sub['plan_name'] ?? 'Partner Plan');
+                                            $planPrice = (float)($sub['plan_price'] ?? 0);
+                                            $totalPaid = (float)($sub['total_paid_to_date'] ?? 0);
+                                            $startedFormatted = !empty($sub['started_at']) ? date('M d, Y', strtotime((string)$sub['started_at'])) : '-';
+                                            $renewsRaw = (string)($sub['renews_at'] ?? '');
+                                            $renewsFormatted = !empty($renewsRaw) ? date('M d, Y', strtotime($renewsRaw)) : 'N/A';
+                                            $daysLeft = !empty($renewsRaw) ? (int)ceil((strtotime($renewsRaw) - time()) / 86400) : null;
+                                            
+                                            $pillClass = ($subStatus === 'active' || $subStatus === 'trial') ? 'active' : (($subStatus === 'past_due' || $subStatus === 'paused') ? 'restricted' : 'banned');
+                                        ?>
+                                        <tr style="border-bottom: 1px solid #e2e8f0; vertical-align: middle;">
+                                            <td style="padding: 12px 14px;">
+                                                <strong style="color: #0f172a; font-size: 0.92rem;"><?php echo htmlspecialchars((string)$sub['business_name']); ?></strong>
+                                                <div style="color: #64748b; font-size: 0.78rem; margin-top: 2px;">
+                                                    <span><i class="fas fa-user"></i> <?php echo htmlspecialchars((string)$sub['owner_name']); ?></span>
+                                                    &bull; <span><i class="fas fa-envelope"></i> <?php echo htmlspecialchars((string)$sub['email']); ?></span>
+                                                </div>
+                                            </td>
+                                            <td style="padding: 12px 14px;">
+                                                <span style="font-weight: 800; color: #b3261e;"><?php echo htmlspecialchars($planName); ?></span>
+                                                <div style="font-size: 0.76rem; color: #64748b;"><?php echo htmlspecialchars($cycleLabel); ?> Billing</div>
+                                            </td>
+                                            <td style="padding: 12px 14px; font-weight: 700; color: #0f172a;">
+                                                PHP <?php echo number_format($planPrice, 2); ?>
+                                                <div style="font-size: 0.74rem; color: #64748b; font-weight: 400;"><?php echo $cycleLabel === 'Annual' ? 'per year' : 'per month'; ?></div>
+                                            </td>
+                                            <td style="padding: 12px 14px;">
+                                                <strong style="color: #027a48; font-size: 0.95rem;">PHP <?php echo number_format($totalPaid, 2); ?></strong>
+                                                <?php if (!empty($sub['last_payment_date'])): ?>
+                                                    <div style="font-size: 0.74rem; color: #64748b;">Paid: <?php echo date('M d, Y', strtotime($sub['last_payment_date'])); ?></div>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td style="padding: 12px 14px;">
+                                                <span class="owner-status-pill <?php echo htmlspecialchars($pillClass); ?>">
+                                                    <?php echo htmlspecialchars(strtoupper($subStatus)); ?>
+                                                </span>
+                                            </td>
+                                            <td style="padding: 12px 14px; color: #475569;">
+                                                <?php echo htmlspecialchars($startedFormatted); ?>
+                                            </td>
+                                            <td style="padding: 12px 14px;">
+                                                <strong style="color: #b3261e;"><?php echo htmlspecialchars($renewsFormatted); ?></strong>
+                                                <?php if ($daysLeft !== null && $daysLeft >= 0): ?>
+                                                    <div style="font-size: 0.74rem; color: #027a48; font-weight: 600;"><i class="fas fa-clock"></i> <?php echo $daysLeft; ?> days remaining</div>
+                                                <?php elseif ($daysLeft !== null && $daysLeft < 0): ?>
+                                                    <div style="font-size: 0.74rem; color: #b3261e; font-weight: 600;"><i class="fas fa-exclamation-triangle"></i> Ended</div>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td style="padding: 12px 14px; text-align: right;">
+                                                <a href="../super_admin/platform_monetization.php" class="btn btn-sm btn-outline-primary" style="padding: 4px 10px; font-size: 0.78rem; border-radius: 8px;">
+                                                    <i class="fas fa-file-invoice"></i> Invoices
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php else: ?>
+                        <div class="owner-empty">
+                            No partner subscriptions recorded yet. Partners can subscribe from their admin portal or storefront plans page.
+                        </div>
+                    <?php endif; ?>
                 </div>
 
                 <div class="owner-section" id="businessPerformanceBoard">

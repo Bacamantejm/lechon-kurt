@@ -72,6 +72,112 @@
             </div>
         </div>
     </footer>
+
+    <!-- Foodpanda Style Mobile Bottom Navigation Bar -->
+    <nav class="mobile-bottom-nav" aria-label="Mobile Navigation">
+        <a href="<?php echo $footer_path_prefix; ?>index.php" class="mob-nav-item <?php echo in_array($current_page ?? '', ['home', 'index', ''], true) ? 'active' : ''; ?>">
+            <div class="mob-nav-icon"><i class="fas fa-house"></i></div>
+            <span class="mob-nav-label">Home</span>
+        </a>
+        <a href="<?php echo $footer_path_prefix; ?>menu.php" class="mob-nav-item <?php echo ($current_page ?? '') === 'menu' ? 'active' : ''; ?>">
+            <div class="mob-nav-icon"><i class="fas fa-utensils"></i></div>
+            <span class="mob-nav-label">Menu</span>
+        </a>
+        <a href="<?php echo $footer_path_prefix; ?>preorder.php" class="mob-nav-item <?php echo ($current_page ?? '') === 'preorder' ? 'active' : ''; ?>">
+            <div class="mob-nav-icon"><i class="fas fa-calendar-check"></i></div>
+            <span class="mob-nav-label">Pre-Order</span>
+        </a>
+        <a href="<?php echo $footer_path_prefix; ?><?php echo $is_customer_user_footer ? 'my_orders.php' : 'register.php?mode=login'; ?>" class="mob-nav-item <?php echo in_array($current_page ?? '', ['my_orders', 'orders'], true) ? 'active' : ''; ?>">
+            <div class="mob-nav-icon">
+                <i class="fas fa-receipt"></i>
+                <?php if (isset($ongoing_order_id) && $ongoing_order_id > 0): ?>
+                <span class="mob-nav-dot"></span>
+                <?php endif; ?>
+            </div>
+            <span class="mob-nav-label">Orders</span>
+        </a>
+        <a href="<?php echo $footer_path_prefix; ?><?php echo $is_customer_user_footer ? 'my_account.php' : 'register.php?mode=login'; ?>" class="mob-nav-item <?php echo in_array($current_page ?? '', ['my_account', 'account', 'profile'], true) ? 'active' : ''; ?>">
+            <div class="mob-nav-icon"><i class="fas fa-user"></i></div>
+            <span class="mob-nav-label">Account</span>
+        </a>
+    </nav>
+
+    <style>
+    /* Foodpanda Style Mobile Bottom Navigation Styles */
+    .mobile-bottom-nav {
+        display: none;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 60px;
+        background: #ffffff;
+        border-top: 1px solid #eaecf0;
+        z-index: 1250;
+        box-shadow: 0 -4px 16px rgba(16, 24, 40, 0.06);
+        padding: 4px 8px max(4px, env(safe-area-inset-bottom));
+        justify-content: space-around;
+        align-items: center;
+    }
+    .mob-nav-item {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-decoration: none;
+        color: #64748b;
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        padding: 4px 0;
+        gap: 2px;
+        transition: color 0.2s ease, transform 0.2s ease;
+        -webkit-tap-highlight-color: transparent;
+        position: relative;
+    }
+    .mob-nav-icon {
+        position: relative;
+        font-size: 1.15rem;
+        height: 22px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .mob-nav-label {
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+    }
+    .mob-nav-item.active {
+        color: #b3261e;
+    }
+    .mob-nav-item.active .mob-nav-icon {
+        transform: scale(1.08);
+    }
+    .mob-nav-dot {
+        position: absolute;
+        top: -1px;
+        right: -4px;
+        width: 8px;
+        height: 8px;
+        background: #b3261e;
+        border-radius: 50%;
+        border: 1.5px solid #ffffff;
+    }
+    @media (max-width: 768px) {
+        .mobile-bottom-nav {
+            display: flex;
+        }
+        .site-main, main, .main-content {
+            padding-bottom: 84px !important;
+        }
+        .floating-chat-btn, .floating-order-btn, #backToTopBtn {
+            bottom: 72px !important;
+        }
+        .footer {
+            padding-bottom: 90px !important;
+        }
+    }
+    </style>
     
     <!-- Back to Top Button -->
     <button id="backToTopBtn" title="Go to top" data-tooltip="Back to Top"><i class="fas fa-arrow-up"></i></button>
@@ -637,7 +743,7 @@
         .footer {
             background: #171922;
             color: #94a3b8;
-            margin-top: 36px;
+            margin-top: 0;
             border-top: 1px solid #2b3144;
             font-size: 0.82rem;
         }
@@ -1603,6 +1709,105 @@
         }
     });
     </script>
+    <?php endif; ?>
+
+    <!-- Global SweetAlert2 & Flash Notifications -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+    .swal2-container {
+        background: transparent !important;
+        background-color: transparent !important;
+    }
+    .swal2-container.swal2-backdrop-show,
+    .swal2-container.swal2-no-backdrop {
+        background: transparent !important;
+        background-color: transparent !important;
+    }
+    .swal2-container.swal2-top-end,
+    .swal2-container.swal2-top-right {
+        top: 90px !important;
+        right: 24px !important;
+        left: auto !important;
+        bottom: auto !important;
+        padding: 0 !important;
+        z-index: 99999999 !important;
+        overflow: visible !important;
+        pointer-events: none !important;
+        background: transparent !important;
+    }
+    .swal2-popup.swal2-toast {
+        pointer-events: auto !important;
+        background: #ffffff !important;
+        color: #101828 !important;
+        border: 1px solid #eaecf0 !important;
+        border-radius: 12px !important;
+        box-shadow: 0 10px 25px -3px rgba(16, 24, 40, 0.1), 0 4px 6px -2px rgba(16, 24, 40, 0.05) !important;
+        padding: 12px 18px !important;
+        min-width: 280px !important;
+        max-width: 420px !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 12px !important;
+    }
+    .swal2-popup.swal2-toast .swal2-title {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Outfit', sans-serif !important;
+        font-size: 0.92rem !important;
+        font-weight: 600 !important;
+        color: #101828 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        line-height: 1.4 !important;
+    }
+    .swal2-popup.swal2-toast .swal2-icon {
+        margin: 0 !important;
+        width: 24px !important;
+        height: 24px !important;
+        min-width: 24px !important;
+        border-color: #027a48 !important;
+        color: #027a48 !important;
+    }
+    .swal2-popup.swal2-toast .swal2-timer-progress-bar {
+        background: #b3261e !important;
+        height: 3px !important;
+    }
+    @media (max-width: 768px) {
+        .swal2-container.swal2-top-end,
+        .swal2-container.swal2-top-right {
+            top: 75px !important;
+            right: 14px !important;
+            left: 14px !important;
+            width: auto !important;
+        }
+        .swal2-popup.swal2-toast {
+            min-width: 100% !important;
+            max-width: 100% !important;
+        }
+    }
+    </style>
+    <?php if (!empty($_SESSION['login_success_flash'])): ?>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        if (typeof Swal !== 'undefined') {
+            const Toast = Swal.mixin({
+                toast: true,
+                position: 'top-end',
+                backdrop: false,
+                showConfirmButton: false,
+                timer: 4000,
+                timerProgressBar: true,
+                didOpen: (toast) => {
+                    toast.addEventListener('mouseenter', Swal.stopTimer);
+                    toast.addEventListener('mouseleave', Swal.resumeTimer);
+                }
+            });
+            Toast.fire({
+                icon: 'success',
+                title: <?php echo json_encode($_SESSION['login_success_flash']); ?>
+            });
+        }
+    });
+    </script>
+    <?php unset($_SESSION['login_success_flash']); ?>
     <?php endif; ?>
 </body>
 </html>

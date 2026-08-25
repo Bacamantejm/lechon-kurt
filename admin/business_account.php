@@ -508,9 +508,70 @@ unset($_SESSION['success'], $_SESSION['error']);
             .biz-grid { grid-template-columns: 1fr; }
         }
         @media (max-width: 768px) {
-            .biz-shell { padding: 16px; }
+            .biz-shell { padding: 16px 12px 90px 12px; }
             .biz-form-grid { grid-template-columns: 1fr; }
             .biz-logo-row { flex-direction: column; }
+        }
+
+        /* Business Account Dark Mode */
+        body.dark-mode .biz-card {
+            background: #1e2430 !important;
+            border-color: #2d3748 !important;
+            box-shadow: 0 14px 30px rgba(0, 0, 0, 0.3) !important;
+            color: #e2e8f0 !important;
+        }
+        body.dark-mode .biz-title {
+            color: #ffffff !important;
+        }
+        body.dark-mode .biz-subtitle {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode .biz-logo-preview {
+            background: #171c26 !important;
+            border-color: #2d3748 !important;
+            color: #ffffff !important;
+        }
+        body.dark-mode .biz-summary-list li {
+            background: #171c26 !important;
+            border-color: #2d3748 !important;
+        }
+        body.dark-mode .biz-summary-list span {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode .biz-summary-list strong {
+            color: #f1f5f9 !important;
+        }
+        body.dark-mode .form-label {
+            color: #e2e8f0 !important;
+        }
+        body.dark-mode .form-control,
+        body.dark-mode .form-select {
+            background: #171c26 !important;
+            border-color: #2d3748 !important;
+            color: #f1f5f9 !important;
+        }
+        body.dark-mode .form-control:focus,
+        body.dark-mode .form-select:focus {
+            background: #141821 !important;
+            border-color: #b3261e !important;
+            box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.25) !important;
+            color: #ffffff !important;
+        }
+        body.dark-mode .text-muted {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode .form-check-label {
+            color: #cbd5e1 !important;
+        }
+        body.dark-mode .biz-status.success {
+            background: #064e3b !important;
+            border-color: #059669 !important;
+            color: #a7f3d0 !important;
+        }
+        body.dark-mode .biz-status.error {
+            background: #450a0a !important;
+            border-color: #dc2626 !important;
+            color: #fecaca !important;
         }
     </style>
 </head>

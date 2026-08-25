@@ -1,81 +1,54 @@
-# Gemini CLI Project Rules (General Web & Software Applications)
+# Gemini CLI Project Rules — Lechon System (Native PHP & MySQL)
 
 > **Zero Fluff:** Provide direct, concise answers. Eliminate all flowery language, AI clichés, and robotic pleasantries. Keep comments professional, technical, and focused on the "why".
 
-## 1. Architecture & Scalability
-- **System Design:** Prioritize high cohesion and loose coupling suitable for modern modular architectures.
-- **Naming:** Use strict functional/semantic naming. No redundant suffixes (e.g., use `inventory` not `inventory_module`).
-- **Structure (Backend):** Maintain logical separation of concerns (routes, controllers, services/actions, data models). Encapsulate complex business logic in dedicated Domain Services or Single-Responsibility Action classes, keeping Controllers strictly as slim request/response orchestrators. Ban inline database calculations, aggregation queries, and raw metric gathering inside controllers.
-- **Form Requests & Validation:** Mandate dedicated Form Requests or schema validators for complex write, update, or multi-field validation logic instead of inline controller/route handler validation.
-- **Audit & Activity Logging:** Ban manual, verbose activity logging arrays inside handler methods. Decouple audit trails by using Model Observers, Event Listeners, Middleware, or background jobs.
-- **Structure (Frontend):** Enforce strict modular componentization. Avoid large monolithic files (e.g., pages exceeding 500 lines). Decompose dashboard views and large page templates into granular, focused UI and state components grouped by feature/domain for maximum maintainability and testing scope.
-- **Form Orchestration:** For complex settings dashboards or large wizard interfaces, avoid using a single monolithic form state hook containing all settings variables. Split form hooks and state logic into localized child components for isolation.
-- **Componentization (Reusability):** Decompose structural UI elements (e.g., Sidebars, Headers, Navigation, Modals) into unified, global reusable components. Never bundle layout concerns directly in page templates; maintain them as single, independent files.
-- **Feature Encapsulation (Structural Reorganization):** Restructure directories strictly by functional domain under component and page structures (e.g., `Components/Admin/Catalog/`, `Pages/Dashboard/`). Avoid leaving feature orchestrators sitting loose at domain roots. Enforce clean, decoupled type and utility imports using strict absolute path aliases (e.g., `@/types`, `@/lib`, `@/components`).
+## 1. Stack & Architecture
+- **Tech Stack:** Native PHP (Procedural/Modular MVC pattern), MySQLi database driver with prepared statements, HTML5, Vanilla JavaScript, and FontAwesome SVG icons.
+- **Environment:** Laragon local server environment (`c:\laragon\www\lechonsystem`).
+- **File Structure:**
+  - Root pages (`index.php`, `my_orders.php`, `my_account.php`, `help_center.php`, `checkout.php`, `customer_chat.php`, etc.) handle routing and view rendering.
+  - Global includes in `includes/` (`config.php`, `security.php`, `header.php`, `footer.php`, `ChatService.php`, etc.).
+  - Database schema scripts in `database/schema_updates/`.
+- **Backend Standard:** Slim controller/page scripts with business logic extracted into helper functions or dedicated Service classes (e.g. `ChatService.php`). Mandatory SQL injection prevention using `mysqli_prepare` and parameter binding.
+- **Database Safety:** Always check column/index/table existence before performing schema alterations or running queries on optional fields.
 
 ## 2. Security & Authentication
-- **Access Control:** Mandate authorization via strict Policy rules, RBAC gates, or authorization middleware. Forbid raw, inline role strings or permissive bypasses inside application logic.
-- **Data Protection:** Sanitize user-generated rich text inputs to eliminate XSS vulnerabilities. Never expose sensitive private keys, credentials, or API secret tokens in client-side code or repositories.
+- **Session Validation:** Enforce strict session checks (`$_SESSION['user_id']` and `$_SESSION['user_type']`) at the top of protected customer pages.
+- **CSRF Protection:** Always include `getCSRFTokenField()` inside POST forms and validate tokens via `validateCSRFToken()`.
+- **Data Protection:** Sanitize all output rendered to the browser using `htmlspecialchars()`. Never expose raw password hashes, secret keys, or unescaped user input.
 
-## 3. UI/UX Design (Anti- "AI Slop")
-- **Aesthetic:** Clean, minimalist design. No decorative clutter.
-- **Visuals:** Prioritize whitespace, visual hierarchy, and clear typography. Default to refined, professional color palettes.
+## 3. UI/UX Design System & Anti- "AI Slop"
+- **Aesthetic:** Clean, modern, minimalist e-commerce design (Shopee/GrabFood style layout). No clutter or decorative fill.
 - **System Color Palette Tokens:**
-  - `Primary Red`: `#b3261e` (Main CTA buttons, active tabs, brand accents)
-  - `Brand Orange`: `#ef6b2e` (Hover states, badges, secondary accents)
-  - `Background Cream`: `#fff8ef` / `#fff9f2` (Soft warm page & container accents)
-  - `Primary Ink`: `#2a211d` / `#171922` (Titles, headers, dark text)
-  - `Muted Text`: `#7b6d64` / `#667085` (Subtitles, labels, secondary text)
-  - `Warm Border`: `#efddcd` / `#e8d4c3` (Card borders, input outlines)
-- **No Emojis:** Do not use decorative or inline emojis in the system (e.g., in headers, UI labels, sidebars, buttons, notifications) unless explicitly stated or requested by the user. Prefer clean SVG icons (such as Lucide, Heroicons, or Phosphor).
-- **Anti- "AI Slop" Visuals:** Never use multi-color gradient border accents or rainbow top stripes on card interfaces or modals. They look like generic, automated AI template styles ("AI slop") and detract from a premium, custom-built feel.
-- **Design Tokens:** Strictly use pre-configured design system theme tokens (e.g., Tailwind theme colors and spacing scales). Avoid arbitrary style values (e.g., `bg-[#f3f4f6]`) and inline styles to maintain theme consistency.
-- **Components:** Modular, reusable. Ensure clear focus, hover, active, disabled, and error states.
-- **Mobile-First:** Prioritize responsive layouts. All UI must be optimized for mobile touch-points first, then scaled gracefully for desktop and ultra-wide displays.
-- **Balanced Proportions:** Avoid oversized typography or elements that feel overwhelming. Maintain a sophisticated balance between whitespace and content.
+  - `Primary Red`: `#b3261e` (Main CTA buttons, active tabs, primary brand accents)
+  - `Brand Hover / Accent`: `#981b15` (Hover states for primary buttons, active icon accents)
+  - `Secondary Outline`: `#ffffff` background with `#d0d5dd` border and `#344054` text
+  - `Page Background`: `#f8f9fa` (Flat, clean, neutral page background — NO radial peach/orange background overlays)
+  - `Card Container`: `#ffffff` (White background cards, `border: 1px solid #eaecf0`, `border-radius: 12px` / `16px`, `box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04)`)
+  - `Primary Ink`: `#101828` / `#1d2939` (Headings, titles, main dark text)
+  - `Muted Text`: `#475467` / `#667085` (Subtitles, labels, secondary helper text)
+  - `Border Neutral`: `#eaecf0` / `#d0d5dd` (Clean card borders & input outlines)
+  - `Status Tokens`:
+    - Success: `#ecfdf3` background, `#027a48` text, `#abefc6` border
+    - Warning: `#fffaeb` background, `#b54708` text, `#fedf89` border
+    - Danger / Open: `#fff1f0` background, `#b3261e` text, `#fee4e2` border
+    - Info / Neutral: `#eff8ff` background, `#175cd3` text, `#b2ddff` border
+- **No Emojis:** Do NOT use decorative or inline emojis in UI labels, sidebars, buttons, or notifications. Use clean FontAwesome SVG icons (e.g. `<i class="fas fa-box"></i>`).
+- **Anti- "AI Slop" Directives:**
+  - NEVER use multi-color gradient border accents or glowing top stripes on cards or modals.
+  - NEVER use `border-left: 4px/5px solid ...` color stripes on callout boxes.
+  - NEVER use dual red-to-orange gradient button backgrounds. Use flat solid `#b3261e`.
+- **Mobile-First & Widget Safety:** Layouts must be responsive down to mobile viewports. Always include safe bottom padding (`padding-bottom: 140px`) on main page section containers so floating delivery tracking or live chat widgets never obscure CTA buttons or lists.
 
 ## 4. Code Quality & Best Practices
-- **Clean Code:** DRY and SOLID principles. Single-responsibility functions. Restrict any single controller method or React handler function to under 50 lines; extract complex logic block chunks to helper services or utility modules.
-- **Fail-Fast:** Implement defensive programming via guard clauses and early returns. Validate pre-conditions immediately and exit functions early to eliminate deep nesting and high cognitive load.
-- **State & Data Transport:** Optimize state management by using local component state for UI concerns, and granular data fetching or partial page updates to minimize payload sizes on dashboard updates.
-- **Testing Standard:** Enforce test coverage using unit/feature test suites for backend services, and component test frameworks for frontend interfaces.
-- **Error Handling:** Global error handling. Log errors with relevant context, and return clean, sanitized user-friendly responses.
-- **Typing:** Enforce strict static typing. Avoid `any` or ambiguous mixed types.
+- **Syntax Verification:** Always verify PHP syntax using `php -l <filename>` after editing PHP files.
+- **Fail-Fast:** Use early returns and guard clauses to handle invalid sessions, bad parameters, or DB query failures immediately.
+- **No Lazy Placeholders:** Never output `// Your logic here` or `/* TODO */`. Always provide complete, production-ready code.
 
-## 5. Performance Optimization
-- **Database:** Prevent N+1 query issues by requiring relationship eager-loading. Explicitly ban executing database queries inside loop blocks. Write migrations/schema scripts to index any database columns used in `where()` filters, search queries, or foreign keys.
-- **Caching:** Cache frequently accessed, rarely changing data using application cache facades with descriptive tags and keys.
-
-## 6. Database & Data Integrity
-- **Migrations:** All database changes must use version-controlled migrations or schema files. Never perform manual database schema edits in production.
-- **NEVER DESTROY DATA:** Destructive commands (`migrate:fresh`, `db:wipe`, raw table drops) are PERMANENTLY BANNED in non-development environments. Always use additive, non-breaking migrations to modify schemas.
-- **Transactions:** Wrap multi-step database writes in database transactions to guarantee atomic execution and automatic rollback on failure.
-- **Soft Deletes:** Default to soft deletes for critical business entities to maintain audit trails.
-
-## 7. DevOps & Environment Strategy
-- **Environment Parity:** Keep configurations stateless and compatible with containerized (Docker) or serverless deployments (Vercel, AWS, Cloudflare).
-- **Environment Variables:** Validate required env variables at startup. Fail fast if required configuration keys are missing.
-
-## 8. Strict AI Output Directives
-- **No Lazy Placeholders:** Never use `// Your logic here` or `/* TODO */`. Provide complete, production-ready implementations.
-- **Trade-offs:** Briefly state pros/cons of major architectural decisions before writing code.
-- **Diffs:** Provide clear file paths and diffs for modifications rather than full file rewrites when editing existing files.
-- **Task Focus:** Focus strictly on the assigned task. Do not make random, unrelated, or unnecessary changes to the codebase unless required to complete the task.
-- **Proactive Diagnostic & User Information Requests:** If a problem cannot be pinpointed with 100% certainty from existing codebase files alone, explicitly ask the user for exact diagnostic logs or error tracebacks. Never rely on theoretical guesses.
-- **Git Commit Message Standard:**
-  - **Subject Line:** Must be specific, easy to understand, straight to the point, and clear (e.g. `Redesign marketplace store cards and integrate Forgot Password pane into Auth modal`).
-  - **Detailed Bullet Points:** Always include clear, concise bullet points detailing exact feature additions, UI/UX refactorings, positioning fixes, or performance/transition updates.
-
-## 9. Generic Technology Stack & Integrations
-- **Backend Framework:** Modern MVC / API framework (Laravel, Express, NestJS, Django, FastAPI, Go/Gin, etc.).
-- **Frontend Framework:** Component-based UI library (React, Inertia.js, Vue, Next.js, Svelte, etc.).
-- **Build System & Styling:** Vite / Webpack build pipeline with utility-first or tokenized CSS (Tailwind CSS, CSS Modules).
-- **Database Layer:** Relational DB (PostgreSQL / MySQL) or Document Store (MongoDB) with migration tracking and ORM/Query Builder.
-- **Real-Time & Background Tasks:** WebSockets / SSE for real-time, Queue workers for background jobs (Redis, Supabase, RabbitMQ, SQS).
-- **Testing Tools:** Framework test runners (PHPUnit/Pest, Vitest, Jest, Playwright, Cypress).
-- **Integrations & Monitoring:** Standard transactional email (Resend/SendGrid/SES), error monitoring (Sentry), payment provider APIs (Stripe/PayMongo), and authentication OAuth providers.
-
-## 10. Performance & Infrastructure Rules
-- **Database Indexing:** Always add database indexes to columns frequently used in filtering, sorting, status checks, or join operations.
-- **Asynchronous Network Requests:** Offload slow external network calls (third-party APIs, email sending, PDF generation) to asynchronous background job queues.
-- **Direct-to-Storage Uploads:** For heavy file uploads (media, 3D models, large assets), generate presigned URLs and upload files directly from the browser to cloud storage buckets (S3, Cloudflare R2, Supabase Storage) to avoid API server payload limits.
+## 5. Git Commit & Branch Directives
+- **Commit Rules:**
+  - Do NOT commit changes unless explicitly requested by the user ("commit and push").
+  - Do NOT include `"REVIEW THIS FIRST"` in commit messages.
+- **Git Commit Message Format:**
+  - **Subject Line:** Specific, concise, and clear (e.g. `Redesign Help Center page with flat e-commerce design system tokens`).
+  - **Detailed Bullet Points:** Clear bullet points outlining exact UI/UX refactorings, layout adjustments, or bug fixes.

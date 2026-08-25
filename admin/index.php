@@ -74,7 +74,7 @@ if ($seller_scope_id === null) {
     $dss_top_query = "SELECT p.name AS product_name, COALESCE(SUM(oi.quantity), 0) AS quantity
                       FROM products p
                       LEFT JOIN order_items oi
-                        ON (oi.product_id = p.product_id OR oi.product_id = CAST(p.id AS CHAR))
+                        ON (oi.product_id COLLATE utf8mb4_general_ci = p.product_id COLLATE utf8mb4_general_ci OR oi.product_id COLLATE utf8mb4_general_ci = CAST(p.id AS CHAR) COLLATE utf8mb4_general_ci)
                       LEFT JOIN orders o
                         ON oi.order_id = o.id
                        AND o.is_archived = 0

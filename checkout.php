@@ -4685,7 +4685,8 @@ document.getElementById('checkoutForm').addEventListener('submit', function(e) {
             });
             
             // Submit checkout without refreshing the page
-            await submitCheckoutAjax(this);
+            const formElement = document.getElementById('checkoutForm');
+            await submitCheckoutAjax(formElement);
         }
     });
 });
@@ -4997,8 +4998,13 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    let currentEditingAddressId = null;
+    let exactSearchDebounceTimer = null;
+
     // Open Exact Location Map Modal (Screenshot 2)
-    async function openExactMapModal(initialText = '', latVal = null, lngVal = null) {
+    async function openExactMapModal(initialText = '', latVal = null, lngVal = null, editingId = null) {
+        currentEditingAddressId = editingId ? String(editingId) : null;
+
         if (changeModal) changeModal.style.display = 'none';
         if (!exactModal) return;
 
@@ -5045,6 +5051,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     reverseGeocodeExactPin(pos.lat, pos.lng);
                 });
 
+                exactMap.on('click', function(e) {
+                    const pos = e.latlng;
+                    if (exactMarker) exactMarker.setLatLng(pos);
+                    if (exactMap) exactMap.panTo(pos);
+                    reverseGeocodeExactPin(pos.lat, pos.lng);
+                });
+
                 exactMap.on('moveend', function() {
                     if (exactMarker && exactMap) {
                         const center = exactMap.getCenter();
@@ -5057,12 +5070,46 @@ document.addEventListener('DOMContentLoaded', function() {
                 exactMap.setView([initLat, initLng], 16);
                 if (exactMarker) exactMarker.setLatLng([initLat, initLng]);
             }
-        }, 100);
+        }, 120);
+    }
+
+    // Live Geocode when user enters/edits address in input box
+    if (exactInput) {
+        exactInput.addEventListener('input', function() {
+            const query = this.value.trim();
+            if (!query || query.length < 4) return;
+
+            if (exactSearchDebounceTimer) clearTimeout(exactSearchDebounceTimer);
+            exactSearchDebounceTimer = setTimeout(async function() {
+                const result = await forwardGeocodeFromNominatim(query);
+                if (result && Number.isFinite(result.lat) && Number.isFinite(result.lng)) {
+                    if (exactMap && exactMarker) {
+                        exactMap.setView([result.lat, result.lng], 16);
+                        exactMarker.setLatLng([result.lat, result.lng]);
+                    }
+                }
+            }, 600);
+        });
+
+        exactInput.addEventListener('keydown', async function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const query = this.value.trim();
+                if (!query) return;
+                const result = await forwardGeocodeFromNominatim(query);
+                if (result && Number.isFinite(result.lat) && Number.isFinite(result.lng)) {
+                    if (exactMap && exactMarker) {
+                        exactMap.setView([result.lat, result.lng], 16);
+                        exactMarker.setLatLng([result.lat, result.lng]);
+                    }
+                }
+            }
+        });
     }
 
     if (openAddAddrBtn) {
         openAddAddrBtn.addEventListener('click', function() {
-            openExactMapModal();
+            openExactMapModal('', null, null, null);
         });
     }
     if (closeExactModalBtn && exactModal) {
@@ -5233,17 +5280,137 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Modal Saved Address Card Selection (Single Click & Double Click)
-    document.querySelectorAll('.modal-saved-addr-card').forEach(card => {
-        card.addEventListener('click', function() {
-            selectAndApplyAddressCard(this);
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function bindSavedAddressCardEvents() {
+        // Modal Saved Address Card Selection (Single Click & Double Click)
+        document.querySelectorAll('.modal-saved-addr-card').forEach(card => {
+            card.addEventListener('click', function() {
+                selectAndApplyAddressCard(this);
+            });
+
+            card.addEventListener('dblclick', function() {
+                selectAndApplyAddressCard(this);
+                if (changeModal) changeModal.style.display = 'none';
+            });
         });
 
-        card.addEventListener('dblclick', function() {
-            selectAndApplyAddressCard(this);
-            if (changeModal) changeModal.style.display = 'none';
+        // Edit Saved Address (Pencil Icon)
+        document.querySelectorAll('.btn-edit-saved-addr').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const addrId = this.getAttribute('data-address-id');
+                const savedRow = findSavedAddressById(addrId);
+                const streetText = savedRow ? (savedRow.full_address || savedRow.street_address) : '';
+                const latVal = savedRow ? savedRow.latitude : null;
+                const lngVal = savedRow ? savedRow.longitude : null;
+                openExactMapModal(streetText, latVal, lngVal, addrId);
+            });
         });
-    });
+
+        // Delete Saved Address (Trash Icon)
+        document.querySelectorAll('.btn-delete-saved-addr').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const card = this.closest('.modal-saved-addr-card');
+                const addrId = this.getAttribute('data-address-id');
+
+                Swal.fire({
+                    title: 'Delete Address?',
+                    text: 'Are you sure you want to remove this saved address?',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#b3261e',
+                    cancelButtonColor: '#667085',
+                    confirmButtonText: 'Yes, delete'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        if (card) card.remove();
+
+                        // Send AJAX delete request to database
+                        const delBody = new URLSearchParams();
+                        delBody.append('address_action', 'delete');
+                        delBody.append('address_id', String(addrId));
+                        fetch('checkout.php', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: delBody })
+                            .catch(err => console.error('Delete address AJAX error:', err));
+
+                        Swal.fire({ icon: 'success', title: 'Address Removed', timer: 1200, showConfirmButton: false });
+                    }
+                });
+            });
+        });
+    }
+
+    function renderModalSavedAddressesFromData(addresses, selectedId) {
+        const container = document.getElementById('modalSavedAddressesList');
+        if (!container || !Array.isArray(addresses)) return;
+
+        let html = '';
+        addresses.forEach((saved_addr, index) => {
+            const isSelected = selectedId ? (Number(saved_addr.id) === Number(selectedId)) : (index === 0);
+            const addrId = saved_addr.id;
+            const street = saved_addr.street_address || saved_addr.full_address || '';
+            const city = saved_addr.city_name || saved_addr.full_address || '';
+            const full = saved_addr.full_address || '';
+            const lat = saved_addr.latitude || '';
+            const lng = saved_addr.longitude || '';
+            const notes = saved_addr.notes || 'none';
+
+            html += `
+                <div class="modal-saved-addr-card ${isSelected ? 'is-selected' : ''}" 
+                     data-address-id="${addrId}" 
+                     data-street="${escapeHtml(street)}"
+                     data-city="${escapeHtml(city)}"
+                     data-full-address="${escapeHtml(full)}"
+                     data-latitude="${escapeHtml(lat)}"
+                     data-longitude="${escapeHtml(lng)}"
+                     data-notes="${escapeHtml(notes)}"
+                     style="border: 1px solid ${isSelected ? '#2a211d' : '#e8d4c3'}; border-radius: 14px; padding: 16px 18px; cursor: pointer; transition: all 0.2s; background: #fff; display: flex; align-items: flex-start; justify-content: space-between; gap: 14px;">
+                    <div style="display: flex; gap: 12px; align-items: flex-start; flex: 1;">
+                        <div class="addr-radio-btn" style="width: 20px; height: 20px; border-radius: 50%; border: 2px solid ${isSelected ? '#2a211d' : '#7b6d64'}; display: flex; align-items: center; justify-content: center; margin-top: 2px; flex-shrink: 0; background: #fff;">
+                            <div class="addr-radio-inner" style="width: 10px; height: 10px; border-radius: 50%; background: ${isSelected ? '#2a211d' : 'transparent'};"></div>
+                        </div>
+                        <div style="flex: 1;">
+                            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 2px;">
+                                <i class="fas fa-location-dot" style="color: #2a211d; font-size: 14px;"></i>
+                                <span class="addr-street-line" style="font-size: 14px; font-weight: 700; color: #2a211d; line-height: 1.4;">
+                                    ${escapeHtml(street)}
+                                </span>
+                            </div>
+                            <div class="addr-city-line" style="font-size: 13px; color: #667085; padding-left: 20px;">
+                                ${escapeHtml(city)}
+                            </div>
+                            <div class="addr-rider-note" style="font-size: 12px; color: #7b6d64; padding-left: 20px; margin-top: 4px;">
+                                Note to rider: ${escapeHtml(notes)}
+                            </div>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px; flex-shrink: 0;" onclick="event.stopPropagation();">
+                        <button type="button" class="btn-edit-saved-addr" data-address-id="${addrId}" style="background: none; border: none; color: #2a211d; font-size: 16px; cursor: pointer; padding: 4px;" title="Edit address">
+                            <i class="fas fa-pencil-alt"></i>
+                        </button>
+                        <button type="button" class="btn-delete-saved-addr" data-address-id="${addrId}" style="background: none; border: none; color: #2a211d; font-size: 16px; cursor: pointer; padding: 4px;" title="Delete address">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+
+        container.innerHTML = html;
+        bindSavedAddressCardEvents();
+    }
+
+    // Initial binding of modal address cards
+    bindSavedAddressCardEvents();
 
     // Confirm Selected Address Button Click
     const confirmAddrBtn = document.getElementById('confirmSelectedAddressBtn');
@@ -5257,51 +5424,6 @@ document.addEventListener('DOMContentLoaded', function() {
             if (changeModal) changeModal.style.display = 'none';
         });
     }
-
-    // Edit Saved Address (Pencil Icon)
-    document.querySelectorAll('.btn-edit-saved-addr').forEach(btn => {
-        btn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            const addrId = this.getAttribute('data-address-id');
-            const savedRow = findSavedAddressById(addrId);
-            const streetText = savedRow ? (savedRow.full_address || savedRow.street_address) : '';
-            const latVal = savedRow ? savedRow.latitude : null;
-            const lngVal = savedRow ? savedRow.longitude : null;
-            openExactMapModal(streetText, latVal, lngVal);
-        });
-    });
-
-    // Delete Saved Address (Trash Icon)
-    document.querySelectorAll('.btn-delete-saved-addr').forEach(btn => {
-        btn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            const card = this.closest('.modal-saved-addr-card');
-            const addrId = this.getAttribute('data-address-id');
-
-            Swal.fire({
-                title: 'Delete Address?',
-                text: 'Are you sure you want to remove this saved address?',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#b3261e',
-                cancelButtonColor: '#667085',
-                confirmButtonText: 'Yes, delete'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    if (card) card.remove();
-
-                    // Send AJAX delete request to database
-                    const delBody = new URLSearchParams();
-                    delBody.append('address_action', 'delete');
-                    delBody.append('address_id', String(addrId));
-                    fetch('checkout.php', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: delBody })
-                        .catch(err => console.error('Delete address AJAX error:', err));
-
-                    Swal.fire({ icon: 'success', title: 'Address Removed', timer: 1200, showConfirmButton: false });
-                }
-            });
-        });
-    });
 
     // SUBMIT Exact Location Map Modal (Screenshot 2)
     if (submitExactBtn) {
@@ -5330,10 +5452,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     lng = fallback.lng;
                 }
 
-                // Automatically save address to database for future orders
+                // Automatically save or update address in database
                 const saveBody = new URLSearchParams();
-                saveBody.append('address_action', 'save');
-                saveBody.append('label', 'Saved Address');
+                if (currentEditingAddressId) {
+                    saveBody.append('address_id', String(currentEditingAddressId));
+                }
+                saveBody.append('label', 'Saved Location');
                 saveBody.append('street_address', streetPart);
                 saveBody.append('city_name', cityPart);
                 saveBody.append('full_address', queryText);
@@ -5341,23 +5465,88 @@ document.addEventListener('DOMContentLoaded', function() {
                 saveBody.append('longitude', String(lng));
                 saveBody.append('is_default', '1');
 
-                fetch('checkout.php', {
+                fetch('api/save_user_address.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                     body: saveBody
                 }).then(r => r.json()).then(data => {
                     if (data.success && Array.isArray(data.addresses)) {
                         savedAddressesData = data.addresses;
+                        renderModalSavedAddressesFromData(data.addresses, data.saved_address_id || currentEditingAddressId);
+
+                        const targetCard = document.querySelector(`.modal-saved-addr-card[data-address-id="${data.saved_address_id || currentEditingAddressId}"]`);
+                        if (targetCard) {
+                            selectAndApplyAddressCard(targetCard);
+                        }
                     }
                 }).catch(err => console.error('Auto-save address error:', err));
 
                 await calculateDeliveryFee(lat, lng);
             }
 
+            currentEditingAddressId = null;
             if (exactModal) exactModal.style.display = 'none';
             if (changeModal) changeModal.style.display = 'none';
         });
     }
+
+    // Real-time synchronization when user saves a location from the Header Navbar popover
+    window.addEventListener('marketAddressUpdated', function (e) {
+        const payload = e.detail;
+        if (!payload) return;
+
+        const street = (payload.street_address || payload.street || payload.full_address || '').trim();
+        const city = (payload.city_name || payload.city || 'Cavite').trim();
+        const full = (payload.full_address || `${street}, ${city}`).trim();
+        const lat = parseFloat(payload.latitude || '');
+        const lng = parseFloat(payload.longitude || '');
+        const addrId = payload.address_id || '';
+
+        // 1. Update Checkout UI Address Card Text
+        const parts = full.split(',').map(p => p.trim()).filter(Boolean);
+        let displayStreet = street;
+        let displayCity = city;
+        if (parts.length >= 2) {
+            if (parts.length >= 3 && (parts[0].length <= 10 || /^\d/.test(parts[0]) || /^blk\s/i.test(parts[0]))) {
+                displayStreet = parts.slice(0, 2).join(', ');
+                displayCity = parts.slice(2).join(', ');
+            } else {
+                displayStreet = parts[0];
+                displayCity = parts.slice(1).join(', ');
+            }
+        }
+        updateDisplayAddressText(displayStreet, displayCity);
+
+        // 2. Update hidden form fields
+        const streetInput = document.getElementById('street_address');
+        const deliveryAddressInput = document.getElementById('delivery_address');
+        const latitudeInput = document.getElementById('latitude');
+        const longitudeInput = document.getElementById('longitude');
+        const savedAddressIdInput = document.getElementById('saved_address_id');
+
+        if (streetInput) streetInput.value = displayStreet;
+        if (deliveryAddressInput) deliveryAddressInput.value = full;
+        if (savedAddressIdInput && addrId) savedAddressIdInput.value = String(addrId);
+
+        if (!Number.isNaN(lat) && !Number.isNaN(lng) && lat !== 0 && lng !== 0) {
+            if (latitudeInput) latitudeInput.value = String(lat);
+            if (longitudeInput) longitudeInput.value = String(lng);
+
+            if (typeof map !== 'undefined' && map && typeof marker !== 'undefined' && marker) {
+                map.setView([lat, lng], 17);
+                marker.setLatLng([lat, lng]);
+            }
+            if (typeof calculateDeliveryFee === 'function') {
+                calculateDeliveryFee(lat, lng);
+            }
+        }
+
+        // 3. If fresh address list was returned, update modalSavedAddressesList and savedAddressesData
+        if (Array.isArray(payload.addresses) && payload.addresses.length > 0) {
+            savedAddressesData = payload.addresses;
+            renderModalSavedAddressesFromData(payload.addresses, addrId);
+        }
+    });
 
     // Update display address on initial load
     setTimeout(function() {

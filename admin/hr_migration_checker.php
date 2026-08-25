@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 session_start();
 include 'auth.php';
 include '../includes/config.php';
@@ -299,6 +299,7 @@ $last_checked = date('M d, Y h:i A');
         <div class="admin-content">
             <div class="admin-topbar">
                 <div class="topbar-content">
+                    <button class="sidebar-toggler" id="sidebarToggler"><i class="fas fa-bars"></i></button>
                     <h1>HR DB Migration Checker</h1>
                     <div class="admin-profile">
                         <span><?php echo htmlspecialchars($admin_info['full_name'] ?? 'Admin'); ?></span>

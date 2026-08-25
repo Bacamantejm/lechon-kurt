@@ -73,7 +73,9 @@ if (empty($verification['success']) || empty($verification['verified'])) {
     echo json_encode([
         'success' => false,
         'verified' => false,
-        'message' => (string)($verification['message'] ?? 'Unable to verify government ID.')
+        'is_philippine_id' => !empty($verification['is_philippine_id']),
+        'message' => (string)($verification['message'] ?? 'Unable to verify government ID.'),
+        'checks' => $verification['checks'] ?? null
     ]);
     exit;
 }
@@ -94,9 +96,13 @@ $_SESSION['registration_id_verification'] = [
 echo json_encode([
     'success' => true,
     'verified' => true,
-    'message' => (string)($verification['message'] ?? 'Government ID verified successfully.'),
+    'is_philippine_id' => true,
+    'detected_type' => (string)($verification['detected_type'] ?? $valid_id_type),
+    'detected_number' => (string)($verification['detected_number'] ?? ''),
+    'detected_agencies' => $verification['detected_agencies'] ?? [],
+    'message' => (string)($verification['message'] ?? 'Philippine Government ID verified successfully.'),
     'provider' => (string)($verification['provider'] ?? getGovernmentVerificationProviderChoice()),
     'score' => (float)($verification['score'] ?? 0),
-    'threshold' => (float)($verification['threshold'] ?? 0.75),
-    'address_score' => (float)($verification['address_score'] ?? 0)
+    'threshold' => (float)($verification['threshold'] ?? 0.65),
+    'checks' => $verification['checks'] ?? null
 ]);

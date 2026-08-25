@@ -554,66 +554,59 @@ foreach ($orders as &$order) {
 unset($order);
 ?>
 
-<section class="page-header">
+<section class="orders-page-container">
     <div class="container">
-        <h1>My Orders</h1>
-        <p>View your order history and track current orders</p>
-    </div>
-</section>
+        <!-- Page Header -->
+        <div class="orders-header">
+            <div class="header-text">
+                <h1>My Orders</h1>
+                <p>Manage your orders, track active deliveries, and view purchase receipts</p>
+            </div>
+        </div>
 
-<section class="orders-section">
-    <div class="container">
-        <!-- Tab Navigation -->
-        <div class="orders-tabs" style="margin-bottom: 30px;">
-            <a href="my_orders.php?tab=orders" class="tab-link <?php echo $current_tab === 'orders' ? 'active' : ''; ?>">
-                <i class="fas fa-shopping-bag"></i> Regular Orders
+        <!-- Flat E-Commerce Tab Navigation -->
+        <div class="orders-nav-tabs">
+            <a href="my_orders.php?tab=orders" class="nav-tab-item <?php echo $current_tab === 'orders' ? 'active' : ''; ?>">
+                <i class="fas fa-shopping-bag"></i>
+                <span>Regular Orders</span>
+                <?php if (!empty($orders_stats['total_orders'])): ?>
+                    <span class="tab-count"><?php echo (int)$orders_stats['total_orders']; ?></span>
+                <?php endif; ?>
             </a>
-            <a href="my_orders.php?tab=preorders" class="tab-link <?php echo $current_tab === 'preorders' ? 'active' : ''; ?>">
-                <i class="fas fa-calendar-check"></i> Pre-Orders
+            <a href="my_orders.php?tab=preorders" class="nav-tab-item <?php echo $current_tab === 'preorders' ? 'active' : ''; ?>">
+                <i class="fas fa-calendar-alt"></i>
+                <span>Pre-Orders</span>
             </a>
         </div>
         
         <?php if (isset($_SESSION['success_msg'])): ?>
             <div class="alert alert-success">
-                <?php echo $_SESSION['success_msg']; unset($_SESSION['success_msg']); ?>
+                <i class="fas fa-check-circle"></i> <?php echo $_SESSION['success_msg']; unset($_SESSION['success_msg']); ?>
             </div>
         <?php endif; ?>
         
         <?php if (isset($_SESSION['error_msg'])): ?>
             <div class="alert alert-danger">
-                <?php echo $_SESSION['error_msg']; unset($_SESSION['error_msg']); ?>
+                <i class="fas fa-exclamation-circle"></i> <?php echo $_SESSION['error_msg']; unset($_SESSION['error_msg']); ?>
             </div>
         <?php endif; ?>
 
         <!-- REGULAR ORDERS TAB -->
         <?php if ($current_tab === 'orders'): ?>
-
-        <!-- TOTAL ORDERS HERO STAT CARD -->
-        <div class="total-orders-wrapper" style="display: flex; justify-content: center; margin-bottom: 28px;">
-            <div class="total-orders-hero-card">
-                <div class="total-orders-icon-wrap">
-                    <i class="fas fa-receipt"></i>
-                </div>
-                <div class="total-orders-meta">
-                    <span class="total-orders-label">Total Orders</span>
-                    <strong class="total-orders-value animated-counter" data-target="<?php echo (int)($orders_stats['total_orders'] ?? 0); ?>">0</strong>
-                </div>
-            </div>
-        </div>
         
         <?php if (empty($orders)): ?>
-            <div class="empty-state">
-                <div class="empty-icon">
+            <div class="empty-orders-state">
+                <div class="empty-icon-wrap">
                     <i class="fas fa-shopping-bag"></i>
                 </div>
-                <h2>No Orders Yet</h2>
-                <p>You haven't placed any orders yet. Start shopping now!</p>
-                <a href="menu.php" class="btn-primary">
-                    <i class="fas fa-utensils"></i> Browse Menu
+                <h3>No orders placed yet</h3>
+                <p>When you place orders, they will appear here with real-time status tracking.</p>
+                <a href="menu.php" class="btn-browse-menu">
+                    Browse Menu
                 </a>
             </div>
         <?php else: ?>
-            <div class="orders-list">
+            <div class="orders-card-list">
                 <?php foreach ($orders as $order): ?>
                     <?php
                     $status_key = strtolower(trim((string)$order['status']));
@@ -621,52 +614,52 @@ unset($order);
                         'pending' => 1,
                         'confirmed' => 2,
                         'preparing' => 3,
+                        'assigned' => 3,
+                        'on_the_way' => 3,
+                        'arriving' => 3,
                         'delivered' => 4,
                         'completed' => 4,
                         'cancelled' => 0
                     ];
                     $order_progress = $progress_map[$status_key] ?? 1;
-                    $delivery_label = ucfirst((string)($order['delivery_option'] ?? 'delivery'));
+                    $delivery_option = strtolower((string)($order['delivery_option'] ?? 'delivery'));
                     
                     $status_display_map = [
-                        'pending' => 'Pending',
-                        'confirmed' => 'Confirmed',
+                        'pending' => 'Pending Confirmation',
+                        'confirmed' => 'Order Confirmed',
                         'preparing' => 'In Preparation',
-                        'assigned' => 'In - Transit',
-                        'on_the_way' => 'In - Transit',
+                        'assigned' => 'In Transit',
+                        'on_the_way' => 'In Transit',
                         'arriving' => 'Arriving Soon',
                         'delivered' => 'Delivered',
-                        'completed' => 'Delivered',
+                        'completed' => 'Completed',
                         'cancelled' => 'Cancelled'
                     ];
                     $status_display_text = $status_display_map[$status_key] ?? ucfirst($order['status']);
+                    $item_count = count($order['items']);
                     ?>
-                    <div class="clean-order-card" data-status="<?php echo htmlspecialchars($status_key); ?>">
-                        <!-- Header Section -->
-                        <div class="clean-card-header">
-                            <div class="clean-header-left">
-                                <span class="clean-order-badge">
-                                    Order <span class="clean-order-num">#<?php echo htmlspecialchars($order['order_number']); ?></span>
-                                </span>
-                                <span class="clean-order-date">
-                                    Order Placed: <?php echo date('D, jS M Y', strtotime($order['created_at'])); ?>
+                    <div class="ecom-order-card" data-status="<?php echo htmlspecialchars($status_key); ?>">
+                        <!-- Card Top Bar: Shop Name, Order #, Status -->
+                        <div class="ecom-card-top">
+                            <div class="ecom-shop-info">
+                                <i class="fas fa-store shop-icon"></i>
+                                <span class="shop-name">Lechon Delights</span>
+                                <span class="divider">&bull;</span>
+                                <span class="order-number">#<?php echo htmlspecialchars($order['order_number']); ?></span>
+                                <span class="divider">&bull;</span>
+                                <span class="order-date"><?php echo date('M j, Y', strtotime($order['created_at'])); ?></span>
+                                <span class="type-badge type-<?php echo htmlspecialchars($delivery_option); ?>">
+                                    <?php echo ucfirst($delivery_option); ?>
                                 </span>
                             </div>
-                            <div class="clean-header-right">
-                                <?php if (($order['delivery_option'] ?? 'delivery') !== 'pickup'): ?>
-                                    <a href="track_order.php?order_id=<?php echo (int)$order['id']; ?>" class="clean-btn-track">
-                                        <i class="fas fa-crosshairs"></i> TRACK ORDER
-                                    </a>
-                                <?php else: ?>
-                                    <a href="track_order.php?order_id=<?php echo (int)$order['id']; ?>" class="clean-btn-track" style="background: linear-gradient(135deg, #2a211d, #7b6d64);">
-                                        <i class="fas fa-store"></i> VIEW PICKUP
-                                    </a>
-                                <?php endif; ?>
+                            <div class="ecom-status-label status-<?php echo htmlspecialchars($status_key); ?>">
+                                <span class="status-dot"></span>
+                                <?php echo htmlspecialchars($status_display_text); ?>
                             </div>
                         </div>
 
-                        <!-- Items List Section -->
-                        <div class="clean-items-body">
+                        <!-- Card Middle: Item List -->
+                        <div class="ecom-card-middle">
                             <?php foreach ($order['items'] as $item): ?>
                                 <?php
                                 $item_img = !empty($item['product_image']) ? $item['product_image'] : 'assets/images/promo_lechon.jpg';
@@ -674,183 +667,152 @@ unset($order);
                                     $item_img = 'uploads/products/' . basename($item_img);
                                 }
                                 ?>
-                                <div class="clean-item-row">
-                                    <div class="clean-item-thumb-col">
-                                        <img src="<?php echo htmlspecialchars($item_img); ?>" alt="<?php echo htmlspecialchars($item['product_name']); ?>" class="clean-item-img" onError="this.onerror=null;this.src='assets/images/promo_lechon.jpg';">
-                                    </div>
-                                    <div class="clean-item-info-col">
-                                        <h4 class="clean-item-title"><?php echo htmlspecialchars($item['product_name']); ?></h4>
-                                        <span class="clean-item-seller">By: Lechon Delights</span>
-                                        <div class="clean-item-meta">
-                                            <?php if (!empty($item['size'])): ?>Size: <strong><?php echo htmlspecialchars($item['size']); ?></strong> &bull; <?php endif; ?>
-                                            Qty: <strong><?php echo (int)$item['quantity']; ?></strong>
-                                            <span class="clean-item-price">&bull; ₱<?php echo number_format($item['price'], 2); ?></span>
+                                <div class="ecom-item-row">
+                                    <img src="<?php echo htmlspecialchars($item_img); ?>" alt="<?php echo htmlspecialchars($item['product_name']); ?>" class="item-img" onError="this.onerror=null;this.src='assets/images/promo_lechon.jpg';">
+                                    <div class="item-details">
+                                        <h4 class="item-name"><?php echo htmlspecialchars($item['product_name']); ?></h4>
+                                        <div class="item-meta">
+                                            <?php if (!empty($item['size'])): ?>
+                                                <span class="meta-tag">Size: <?php echo htmlspecialchars($item['size']); ?></span>
+                                            <?php endif; ?>
+                                            <span class="meta-qty">Qty: <?php echo (int)$item['quantity']; ?></span>
                                         </div>
                                     </div>
-                                    <div class="clean-item-status-col">
-                                        <span class="clean-col-label">Status</span>
-                                        <strong class="clean-status-val status-<?php echo htmlspecialchars($status_key); ?>">
-                                            <?php echo htmlspecialchars($status_display_text); ?>
-                                        </strong>
-                                    </div>
-                                    <div class="clean-item-delivery-col">
-                                        <span class="clean-col-label">Delivery Expected by:</span>
-                                        <strong class="clean-delivery-val"><?php echo date('j F Y', strtotime($order['delivery_date'])); ?></strong>
+                                    <div class="item-price">
+                                        ₱<?php echo number_format($item['item_total'], 2); ?>
                                     </div>
                                 </div>
                             <?php endforeach; ?>
                         </div>
 
-                        <!-- Card Footer -->
-                        <div class="clean-card-footer">
-                            <div class="clean-footer-left">
-                                <?php if (in_array(strtolower($order['status']), ['pending', 'confirmed', 'preparing', 'processing'], true) && !empty($order['can_customer_cancel'])): ?>
-                                    <button type="button" class="clean-btn-cancel-action" onclick="cancelOrder(<?php echo $order['id']; ?>, <?php echo json_encode((string)$order['cancellation_policy_message']); ?>)">
-                                        &times; CANCEL ORDER
-                                    </button>
-                                <?php endif; ?>
-                                <button type="button" class="clean-btn-toggle" onclick="toggleOrderDetails(<?php echo $order['id']; ?>)">
+                        <!-- Card Bottom: Total Summary & Actions -->
+                        <div class="ecom-card-bottom">
+                            <div class="summary-line">
+                                <span class="payment-method">Paid via <strong><?php echo ucfirst(str_replace('_', ' ', (string)$order['payment_method'])); ?></strong></span>
+                                <div class="total-wrap">
+                                    <span class="total-label">Order Total (<?php echo $item_count; ?> <?php echo $item_count === 1 ? 'item' : 'items'; ?>):</span>
+                                    <span class="total-amount">₱<?php echo number_format($order['total_amount'], 2); ?></span>
+                                </div>
+                            </div>
+                            
+                            <div class="actions-line">
+                                <button type="button" class="btn-toggle-drawer" onclick="toggleOrderDetails(<?php echo $order['id']; ?>)">
                                     <i class="fas fa-chevron-down" id="toggleIcon_<?php echo $order['id']; ?>"></i>
-                                    <span id="toggleText_<?php echo $order['id']; ?>">View Details & Actions</span>
+                                    <span id="toggleText_<?php echo $order['id']; ?>">View Order Details</span>
                                 </button>
-                            </div>
-                            <div class="clean-footer-middle">
-                                <span class="clean-payment-info">
-                                    Paid using <?php echo ucfirst(str_replace('_', ' ', (string)$order['payment_method'])); ?>
-                                </span>
-                            </div>
-                            <div class="clean-footer-right">
-                                <div class="clean-total-box">
-                                    <span class="clean-total-label">Total:</span>
-                                    <strong class="clean-total-amount">₱<?php echo number_format($order['total_amount'], 2); ?></strong>
+
+                                <div class="action-buttons-group">
+                                    <?php if (in_array(strtolower($order['status']), ['pending', 'confirmed', 'preparing', 'processing'], true) && !empty($order['can_customer_cancel'])): ?>
+                                        <button type="button" class="btn-action-outline btn-cancel" onclick="cancelOrder(<?php echo $order['id']; ?>, <?php echo json_encode((string)$order['cancellation_policy_message']); ?>)">
+                                            Cancel Order
+                                        </button>
+                                    <?php endif; ?>
+
+                                    <?php if (in_array(strtolower($order['status']), ['delivered', 'completed'])): ?>
+                                        <?php if (in_array($order['id'], $orders_with_unreviewed_items)): ?>
+                                            <a href="leave_review.php?order_id=<?php echo $order['id']; ?>" class="btn-action-outline btn-review">
+                                                <i class="fas fa-star"></i> Review
+                                            </a>
+                                        <?php endif; ?>
+                                        <button type="button" class="btn-action-outline" onclick="requestRefund(<?php echo $order['id']; ?>, <?php echo !empty($order['refund_photo_required']) ? 'true' : 'false'; ?>, <?php echo json_encode((string)$order['refund_terms']); ?>)">
+                                            Request Refund
+                                        </button>
+                                    <?php endif; ?>
+
+                                    <?php if (in_array(strtolower($order['status']), ['delivered', 'completed', 'cancelled'])): ?>
+                                        <form method="POST" action="my_orders.php" style="display: inline-block;">
+                                            <input type="hidden" name="reorder_items" value="1">
+                                            <input type="hidden" name="order_id" value="<?php echo (int)$order['id']; ?>">
+                                            <button type="submit" class="btn-action-outline btn-reorder">
+                                                Re-order
+                                            </button>
+                                        </form>
+                                    <?php endif; ?>
+
+                                    <a href="receipt.php?order_id=<?php echo $order['id']; ?>" class="btn-action-outline" target="_blank">
+                                        Receipt
+                                    </a>
+
+                                    <button type="button" class="btn-action-outline btn-archive" onclick="archiveOrder(<?php echo $order['id']; ?>)" title="Archive Order">
+                                        <i class="fas fa-archive"></i>
+                                    </button>
+
+                                    <?php if ($delivery_option !== 'pickup'): ?>
+                                        <a href="track_order.php?order_id=<?php echo (int)$order['id']; ?>" class="btn-action-primary">
+                                            Track Order
+                                        </a>
+                                    <?php else: ?>
+                                        <a href="track_order.php?order_id=<?php echo (int)$order['id']; ?>" class="btn-action-primary btn-pickup">
+                                            View Pickup
+                                        </a>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Collapsible Order Details & Actions Drawer -->
-                        <div class="clean-details-drawer" id="orderDetails_<?php echo $order['id']; ?>" style="display: none; padding: 24px; background: #ffffff; border-top: 1px dashed #efddcd;">
-                            <?php if ($status_key === 'cancelled'): ?>
-                                <div class="order-progress cancelled">
-                                    <i class="fas fa-ban"></i> This order was cancelled.
-                                </div>
-                            <?php else: ?>
-                                <div class="order-progress">
-                                    <div class="progress-step <?php echo $order_progress >= 1 ? 'done' : ''; ?>">
-                                        <span class="progress-dot"></span>
-                                        <span class="progress-label">Placed</span>
+                        <!-- Collapsible Details Drawer -->
+                        <div class="ecom-details-drawer" id="orderDetails_<?php echo $order['id']; ?>" style="display: none;">
+                            <div class="drawer-inner">
+                                <?php if ($status_key === 'cancelled'): ?>
+                                    <div class="cxl-banner">
+                                        <i class="fas fa-info-circle"></i> This order was cancelled.
                                     </div>
-                                    <div class="progress-step <?php echo $order_progress >= 2 ? 'done' : ''; ?>">
-                                        <span class="progress-dot"></span>
-                                        <span class="progress-label">Confirmed</span>
-                                    </div>
-                                    <div class="progress-step <?php echo $order_progress >= 3 ? 'done' : ''; ?>">
-                                        <span class="progress-dot"></span>
-                                        <span class="progress-label">Preparing</span>
-                                    </div>
-                                    <div class="progress-step <?php echo $order_progress >= 4 ? 'done current' : ''; ?>">
-                                        <span class="progress-dot"></span>
-                                        <span class="progress-label">Delivered</span>
-                                    </div>
-                                </div>
-                            <?php endif; ?>
-                            
-                            <div class="order-details">
-                                <div class="detail-row">
-                                    <div class="detail-item">
-                                        <span class="detail-label">Customer:</span>
-                                        <span class="detail-value"><?php echo htmlspecialchars($order['customer_name']); ?></span>
-                                    </div>
-                                    <div class="detail-item">
-                                        <span class="detail-label">Phone:</span>
-                                        <span class="detail-value"><?php echo htmlspecialchars($order['customer_phone']); ?></span>
-                                    </div>
-                                </div>
-                                
-                                <div class="detail-row">
-                                    <div class="detail-item">
-                                        <span class="detail-label">Delivery/Pickup Date:</span>
-                                        <span class="detail-value"><?php echo date('F j, Y', strtotime($order['delivery_date'])); ?></span>
-                                    </div>
-                                    <div class="detail-item">
-                                        <span class="detail-label">Time:</span>
-                                        <span class="detail-value"><?php echo htmlspecialchars($order['delivery_time']); ?></span>
-                                    </div>
-                                </div>
-                                
-                                <div class="detail-row">
-                                    <div class="detail-item">
-                                        <span class="detail-label">Payment Method:</span>
-                                        <span class="detail-value"><?php echo ucfirst(str_replace('_', ' ', $order['payment_method'])); ?></span>
-                                    </div>
-                                    <div class="detail-item">
-                                        <span class="detail-label">Address/Location:</span>
-                                        <span class="detail-value"><?php echo htmlspecialchars($order['delivery_address']); ?></span>
-                                    </div>
-                                </div>
-                                
-                                <?php if (!empty($order['special_instructions'])): ?>
-                                    <div class="special-instructions">
-                                        <span class="detail-label">Special Instructions:</span>
-                                        <p><?php echo htmlspecialchars($order['special_instructions']); ?></p>
+                                <?php else: ?>
+                                    <!-- Simple Timeline -->
+                                    <div class="timeline-stepper">
+                                        <div class="step <?php echo $order_progress >= 1 ? 'active' : ''; ?>">
+                                            <div class="dot"></div>
+                                            <span>Placed</span>
+                                        </div>
+                                        <div class="line <?php echo $order_progress >= 2 ? 'active' : ''; ?>"></div>
+                                        <div class="step <?php echo $order_progress >= 2 ? 'active' : ''; ?>">
+                                            <div class="dot"></div>
+                                            <span>Confirmed</span>
+                                        </div>
+                                        <div class="line <?php echo $order_progress >= 3 ? 'active' : ''; ?>"></div>
+                                        <div class="step <?php echo $order_progress >= 3 ? 'active' : ''; ?>">
+                                            <div class="dot"></div>
+                                            <span>Preparing</span>
+                                        </div>
+                                        <div class="line <?php echo $order_progress >= 4 ? 'active' : ''; ?>"></div>
+                                        <div class="step <?php echo $order_progress >= 4 ? 'active' : ''; ?>">
+                                            <div class="dot"></div>
+                                            <span>Delivered</span>
+                                        </div>
                                     </div>
                                 <?php endif; ?>
 
-                                <div class="order-policy-box">
-                                    <div class="policy-row">
-                                        <strong><i class="fas fa-file-contract"></i> Store Cancellation Terms:</strong>
-                                        <span><?php echo htmlspecialchars((string)($order['partner_policy']['cancellation_terms'] ?? '')); ?></span>
+                                <div class="drawer-grid">
+                                    <div class="info-group">
+                                        <span class="label">Recipient Name</span>
+                                        <span class="val"><?php echo htmlspecialchars($order['customer_name']); ?> (<?php echo htmlspecialchars($order['customer_phone']); ?>)</span>
                                     </div>
-                                    <div class="policy-row">
-                                        <strong><i class="fas fa-shield-alt"></i> Refund Terms:</strong>
-                                        <span>
-                                            <?php echo htmlspecialchars((string)($order['refund_terms'] ?? '')); ?>
-                                            <?php if (!empty($order['refund_photo_required'])): ?>
-                                                Photo proof is required for damaged or broken product claims.
-                                            <?php endif; ?>
-                                        </span>
+                                    <div class="info-group">
+                                        <span class="label">Schedule</span>
+                                        <span class="val"><?php echo date('F j, Y', strtotime($order['delivery_date'])); ?> @ <?php echo htmlspecialchars($order['delivery_time']); ?></span>
                                     </div>
+                                    <div class="info-group">
+                                        <span class="label">Address / Location</span>
+                                        <span class="val"><?php echo htmlspecialchars($order['delivery_address']); ?></span>
+                                    </div>
+                                    <?php if (!empty($order['special_instructions'])): ?>
+                                        <div class="info-group full">
+                                            <span class="label">Instructions</span>
+                                            <span class="val"><?php echo htmlspecialchars($order['special_instructions']); ?></span>
+                                        </div>
+                                    <?php endif; ?>
                                 </div>
-                            </div>
-                            
-                            <div class="order-actions" style="margin-top: 20px; display: flex; flex-wrap: wrap; gap: 10px;">
-                                <?php
-                                $can_leave_review = in_array($order['id'], $orders_with_unreviewed_items);
-                                if (($order['status'] == 'delivered' || $order['status'] == 'completed') && $can_leave_review):
-                                ?>
-                                    <a href="leave_review.php?order_id=<?php echo $order['id']; ?>" class="btn-primary" style="background: #ef6b2e; border: none; color: #fff;">
-                                        <i class="fas fa-star"></i> Leave a Review
-                                    </a>
-                                <?php elseif (($order['status'] == 'delivered' || $order['status'] == 'completed') && !$can_leave_review): ?>
-                                    <button type="button" class="btn-secondary" disabled><i class="fas fa-check-circle"></i> All Items Reviewed</button>
-                                <?php endif; ?>
 
-                                <?php if (in_array(strtolower($order['status']), ['delivered', 'completed'])): ?>
-                                    <button type="button" class="btn-cancel" style="border-color: #ff9800; color: #ff9800;" onclick="requestRefund(<?php echo $order['id']; ?>, <?php echo !empty($order['refund_photo_required']) ? 'true' : 'false'; ?>, <?php echo json_encode((string)$order['refund_terms']); ?>)">
-                                        <i class="fas fa-undo"></i> Request Refund
-                                    </button>
+                                <?php if (!empty($order['partner_policy']['cancellation_terms']) || !empty($order['refund_terms'])): ?>
+                                    <div class="terms-note">
+                                        <?php if (!empty($order['partner_policy']['cancellation_terms'])): ?>
+                                            <div><strong>Cancellation Terms:</strong> <?php echo htmlspecialchars((string)$order['partner_policy']['cancellation_terms']); ?></div>
+                                        <?php endif; ?>
+                                        <?php if (!empty($order['refund_terms'])): ?>
+                                            <div><strong>Refund Terms:</strong> <?php echo htmlspecialchars((string)$order['refund_terms']); ?></div>
+                                        <?php endif; ?>
+                                    </div>
                                 <?php endif; ?>
-
-                                <?php if (in_array(strtolower($order['status']), ['delivered', 'completed', 'cancelled'])): ?>
-                                    <form method="POST" action="my_orders.php" style="display: inline-block;">
-                                        <input type="hidden" name="reorder_items" value="1">
-                                        <input type="hidden" name="order_id" value="<?php echo (int)$order['id']; ?>">
-                                        <button type="submit" class="btn-reorder">
-                                            <i class="fas fa-redo"></i> Re-order Items
-                                        </button>
-                                    </form>
-                                <?php endif; ?>
-
-                                <a href="help_center.php?category=order&order_id=<?php echo $order['id']; ?>" class="btn-details">
-                                    <i class="fas fa-life-ring"></i> Report Issue
-                                </a>
-                                
-                                <button type="button" class="btn-archive" onclick="archiveOrder(<?php echo $order['id']; ?>)">
-                                    <i class="fas fa-archive"></i> Archive
-                                </button>
-                                
-                                <a href="receipt.php?order_id=<?php echo $order['id']; ?>" class="btn-details" target="_blank">
-                                    <i class="fas fa-receipt"></i> View Receipt
-                                </a>
                             </div>
                         </div>
                     </div>
@@ -858,30 +820,23 @@ unset($order);
             </div>
             
             <?php if ($total_pages > 1): ?>
-                <div class="pagination">
+                <div class="ecom-pagination">
                     <?php if ($page > 1): ?>
-                        <a href="?page=<?php echo $page - 1; ?>" class="page-link">
-                            <i class="fas fa-chevron-left"></i> Previous
-                        </a>
+                        <a href="?page=<?php echo $page - 1; ?>" class="page-num"><i class="fas fa-chevron-left"></i> Prev</a>
                     <?php endif; ?>
                     
                     <?php for ($i = 1; $i <= $total_pages; $i++): ?>
-                        <a href="?page=<?php echo $i; ?>" class="page-link <?php echo $i == $page ? 'active' : ''; ?>">
-                            <?php echo $i; ?>
-                        </a>
+                        <a href="?page=<?php echo $i; ?>" class="page-num <?php echo $i == $page ? 'active' : ''; ?>"><?php echo $i; ?></a>
                     <?php endfor; ?>
                     
                     <?php if ($page < $total_pages): ?>
-                        <a href="?page=<?php echo $page + 1; ?>" class="page-link">
-                            Next <i class="fas fa-chevron-right"></i>
-                        </a>
+                        <a href="?page=<?php echo $page + 1; ?>" class="page-num">Next <i class="fas fa-chevron-right"></i></a>
                     <?php endif; ?>
                 </div>
-            <?php endif; ?> <!-- End of else block for empty($orders) -->
-        <?php endif; ?> <!-- End of Regular Orders Tab -->
+            <?php endif; ?>
+        <?php endif; ?>
         
-        <!-- PRE-ORDERS TAB -->
-        <?php endif; ?> <!-- End of else block for empty($orders) -->
+        <?php endif; ?> <!-- End of Regular Orders Tab -->
         
         <?php if ($current_tab === 'preorders'): ?>
             <?php include 'preorder_tab_content.php'; ?>
@@ -889,1041 +844,536 @@ unset($order);
     </div>
 </section>
 
-<!-- Add SweetAlert2 CSS & JS -->
+<!-- SweetAlert2 Assets -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-<!-- cancellation.js is included globally via footer -->
 
 <style>
-/* Total Orders Hero Stat Card */
-.total-orders-hero-card {
-    background: #ffffff;
-    border: 1px solid #efddcd;
-    border-radius: 20px;
-    padding: 16px 28px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
-    display: inline-flex;
-    align-items: center;
-    gap: 18px;
-    min-width: 230px;
-    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s ease, border-color 0.25s ease;
+/* Streamlined Production E-Commerce Orders System */
+.orders-page-container {
+    padding: 28px 0 140px;
+    background: #f8f9fa;
+    min-height: 85vh;
 }
-.total-orders-hero-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(179, 38, 30, 0.08);
-    border-color: #e8d4c3;
+
+/* Page Header */
+.orders-header {
+    margin-bottom: 12px;
 }
-.total-orders-icon-wrap {
-    width: 48px;
-    height: 48px;
-    border-radius: 14px;
-    background: linear-gradient(135deg, #fff0eb, #fff9f2);
-    border: 1px solid #efddcd;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #b3261e;
+.header-text h1 {
     font-size: 1.25rem;
-    flex-shrink: 0;
-    box-shadow: 0 4px 12px rgba(179, 38, 30, 0.08);
-}
-.total-orders-meta {
-    display: flex;
-    flex-direction: column;
-}
-.total-orders-label {
-    font-size: 0.75rem;
     font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.6px;
-    color: #7b6d64;
-    margin-bottom: 3px;
+    color: #101828;
+    margin: 0 0 2px 0;
+    letter-spacing: -0.2px;
 }
-.total-orders-value {
-    font-size: 1.85rem;
-    font-weight: 800;
-    color: #171922;
-    line-height: 1;
-}
-
-/* Clean Minimalist E-Commerce Order Card Styles */
-.clean-order-card {
-    background: #ffffff;
-    border: 1px solid #efddcd;
-    border-radius: 16px;
-    margin-bottom: 24px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
-    overflow: hidden;
-    transition: box-shadow 0.25s ease, border-color 0.25s ease;
-}
-.clean-order-card:hover {
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.06);
-    border-color: #e8d4c3;
-}
-
-.clean-card-header {
-    background: #ffffff;
-    border-bottom: 1px solid #f3e8de;
-    padding: 18px 24px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 12px;
-}
-.clean-header-left {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    flex-wrap: wrap;
-}
-.clean-order-badge {
-    background: #f4f5f7;
-    border: 1px solid #e2e8f0;
-    color: #171922;
-    padding: 6px 16px;
-    border-radius: 30px;
-    font-size: 0.88rem;
-    font-weight: 600;
-}
-.clean-order-num {
-    color: #b3261e;
-    font-weight: 800;
-    font-family: monospace;
-}
-.clean-order-date {
-    color: #7b6d64;
-    font-size: 0.88rem;
-    font-weight: 500;
-}
-.clean-btn-track {
-    background: linear-gradient(135deg, #ef6b2e, #b3261e);
-    color: #ffffff !important;
-    border: 0;
-    padding: 9px 22px;
-    border-radius: 30px;
-    font-weight: 700;
+.header-text p {
     font-size: 0.82rem;
-    letter-spacing: 0.5px;
+    color: #667085;
+    margin: 0;
+}
+
+/* Flat E-Commerce Tab Nav */
+.orders-nav-tabs {
+    display: flex;
+    align-items: center;
+    gap: 32px;
+    border-bottom: 1px solid #eaecf0;
+    margin-bottom: 24px;
+    background: transparent;
+}
+.nav-tab-item {
+    padding: 12px 0;
+    font-size: 0.98rem;
+    font-weight: 600;
+    color: #667085;
     text-decoration: none;
-    display: inline-flex;
+    display: flex;
     align-items: center;
     gap: 8px;
-    box-shadow: 0 4px 14px rgba(239, 107, 46, 0.25);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border-bottom: 2.5px solid transparent;
+    transition: all 0.2s ease;
+    margin-bottom: -1px;
 }
-.clean-btn-track:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 18px rgba(239, 107, 46, 0.35);
+.nav-tab-item:hover {
+    color: #b3261e;
+}
+.nav-tab-item.active {
+    color: #b3261e;
+    border-bottom-color: #b3261e;
+    font-weight: 700;
+}
+.tab-count {
+    background: #fee4e2;
+    color: #b3261e;
+    font-size: 0.76rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 12px;
 }
 
-.clean-items-body {
-    padding: 8px 24px;
-}
-.clean-item-row {
-    display: grid;
-    grid-template-columns: 80px 1fr 150px 180px;
-    gap: 20px;
+/* Alert Boxes */
+.alert {
+    padding: 12px 18px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-size: 0.92rem;
+    display: flex;
     align-items: center;
-    padding: 18px 0;
-    border-bottom: 1px solid #f8f1eb;
+    gap: 8px;
 }
-.clean-item-row:last-child {
-    border-bottom: 0;
+.alert-success { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
+.alert-danger { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+
+/* Empty State */
+.empty-orders-state {
+    text-align: center;
+    padding: 60px 20px;
+    background: #ffffff;
+    border: 1px solid #eaecf0;
+    border-radius: 12px;
+    max-width: 480px;
+    margin: 40px auto;
 }
-.clean-item-img {
-    width: 80px;
-    height: 85px;
-    object-fit: cover;
-    border-radius: 10px;
-    border: 1px solid #efddcd;
-    background: #fffaf5;
+.empty-icon-wrap {
+    font-size: 3rem;
+    color: #d0d5dd;
+    margin-bottom: 16px;
 }
-.clean-item-title {
-    font-size: 1.05rem;
+.empty-orders-state h3 {
+    font-size: 1.25rem;
     font-weight: 700;
-    color: #171922;
-    margin: 0 0 4px 0;
+    color: #101828;
+    margin: 0 0 6px 0;
 }
-.clean-item-seller {
-    font-size: 0.85rem;
-    color: #7b6d64;
-    display: block;
-    margin-bottom: 6px;
-}
-.clean-item-meta {
-    font-size: 0.88rem;
+.empty-orders-state p {
+    font-size: 0.92rem;
     color: #667085;
+    margin: 0 0 20px 0;
 }
-.clean-item-price {
-    font-weight: 700;
-    color: #171922;
+.btn-browse-menu {
+    background: #b3261e;
+    color: #ffffff;
+    padding: 10px 24px;
+    border-radius: 8px;
+    font-weight: 600;
+    text-decoration: none;
+    display: inline-block;
+    transition: background-color 0.2s ease;
 }
-
-.clean-col-label {
-    font-size: 0.78rem;
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
-    color: #7b6d64;
-    display: block;
-    margin-bottom: 4px;
-}
-.clean-status-val {
-    font-size: 0.98rem;
-    font-weight: 800;
-}
-.clean-status-val.status-pending { color: #f57c00; }
-.clean-status-val.status-confirmed { color: #b3261e; }
-.clean-status-val.status-preparing { color: #ef6b2e; }
-.clean-status-val.status-assigned, .clean-status-val.status-on_the_way { color: #ef6b2e; }
-.clean-status-val.status-delivered, .clean-status-val.status-completed { color: #2e7d32; }
-.clean-status-val.status-cancelled { color: #d32f2f; }
-
-.clean-delivery-val {
-    font-size: 0.95rem;
-    font-weight: 800;
-    color: #171922;
+.btn-browse-menu:hover {
+    background: #9c1f18;
 }
 
-.clean-card-footer {
-    background: #faf8f5;
-    border-top: 1px solid #f3e8de;
-    padding: 14px 24px;
+/* Orders List */
+.orders-card-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* Modern E-Commerce Order Card */
+.ecom-order-card {
+    background: #ffffff;
+    border: 1px solid #e4e7ec;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+    position: relative;
+    z-index: 1;
+}
+
+/* Card Top Header */
+.ecom-card-top {
+    padding: 14px 20px;
+    border-bottom: 1px solid #f2f4f7;
     display: flex;
     align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
-    gap: 16px;
+    gap: 10px;
+    background: #ffffff;
 }
-.clean-footer-left {
+.ecom-shop-info {
     display: flex;
     align-items: center;
-    gap: 16px;
-}
-.clean-btn-toggle {
-    background: transparent;
-    border: 0;
-    color: #7b6d64;
+    gap: 8px;
     font-size: 0.88rem;
+    color: #475467;
+    flex-wrap: wrap;
+}
+.shop-icon { color: #b3261e; font-size: 0.95rem; }
+.shop-name { font-weight: 700; color: #101828; }
+.divider { color: #d0d5dd; }
+.order-number { font-family: monospace; font-weight: 600; color: #344054; }
+.order-date { color: #667085; font-size: 0.84rem; }
+.type-badge {
+    font-size: 0.75rem;
     font-weight: 600;
-    cursor: pointer;
+    padding: 2px 8px;
+    border-radius: 4px;
+    text-transform: capitalize;
+}
+.type-delivery { background: #eff6ff; color: #1d4ed8; }
+.type-pickup { background: #fefce8; color: #854d0e; }
+
+.ecom-status-label {
+    font-size: 0.82rem;
+    font-weight: 700;
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 0;
-}
-.clean-btn-toggle:hover {
-    color: #b3261e;
-}
-.clean-btn-cancel-action {
-    background: transparent;
-    border: 0;
-    color: #b3261e;
-    font-size: 0.85rem;
-    font-weight: 700;
-    cursor: pointer;
-    padding: 0;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.3px;
 }
-.clean-btn-cancel-action:hover {
-    text-decoration: underline;
+.status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+.ecom-status-label.status-pending { color: #d97706; }
+.ecom-status-label.status-confirmed { color: #2563eb; }
+.ecom-status-label.status-preparing, .ecom-status-label.status-assigned, .ecom-status-label.status-on_the_way, .ecom-status-label.status-arriving { color: #ea580c; }
+.ecom-status-label.status-delivered, .ecom-status-label.status-completed { color: #16a34a; }
+.ecom-status-label.status-cancelled { color: #dc2626; }
+
+/* Card Middle Body */
+.ecom-card-middle {
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
 }
-.clean-payment-info {
-    font-size: 0.88rem;
-    color: #7b6d64;
+.ecom-item-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
 }
-.clean-total-box {
+.item-img {
+    width: 72px;
+    height: 72px;
+    border-radius: 8px;
+    object-fit: cover;
+    border: 1px solid #f2f4f7;
+    flex-shrink: 0;
+    background: #f8fafc;
+}
+.item-details {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.item-name {
+    font-size: 0.98rem;
+    font-weight: 700;
+    color: #101828;
+    margin: 0;
+    line-height: 1.3;
+}
+.item-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.82rem;
+    color: #667085;
+}
+.meta-tag {
+    background: #f2f4f7;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+}
+.item-price {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #101828;
+    text-align: right;
+}
+
+/* Card Bottom Footer */
+.ecom-card-bottom {
+    background: #fafafa;
+    border-top: 1px solid #f2f4f7;
+    padding: 14px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.summary-line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.payment-method {
+    font-size: 0.84rem;
+    color: #667085;
+}
+.total-wrap {
     display: flex;
     align-items: baseline;
     gap: 6px;
 }
-.clean-total-label {
-    font-size: 0.9rem;
-    color: #7b6d64;
+.total-label {
+    font-size: 0.85rem;
+    color: #475467;
 }
-.clean-total-amount {
-    font-size: 1.25rem;
+.total-amount {
+    font-size: 1.15rem;
     font-weight: 800;
-    color: #171922;
+    color: #b3261e;
 }
 
-@media (max-width: 768px) {
-    .clean-item-row {
-        grid-template-columns: 70px 1fr;
-        gap: 14px;
-    }
-    .clean-item-status-col, .clean-item-delivery-col {
-        grid-column: 2 / -1;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-    }
-}
-
-/* Modern Orders Page Styles */
-:root {
-    --primary-color: #c62828;
-    --primary-dark: #b71c1c;
-    --text-dark: #2c3e50;
-    --text-light: #6c757d;
-    --bg-light: #f8f9fa;
-    --card-shadow: 0 2px 12px rgba(0,0,0,0.04);
-    --hover-shadow: 0 12px 24px rgba(0,0,0,0.1);
-    --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.orders-section {
-    padding: 40px 0 80px;
-    background: linear-gradient(180deg, #f9fafc 0%, #f4f6f9 100%);
-    min-height: 80vh;
-}
-
-.order-policy-box {
-    margin: 18px 0 8px;
-    padding: 14px 16px;
-    border-radius: 14px;
-    border: 1px solid #fde68a;
-    background: linear-gradient(135deg, #fffdf3, #fff7ed);
-}
-
-.policy-row {
-    display: flex;
-    gap: 10px;
-    align-items: flex-start;
-    font-size: 13px;
-    color: #7c2d12;
-}
-
-.policy-row + .policy-row {
-    margin-top: 8px;
-}
-
-.policy-row strong {
-    min-width: 190px;
-    color: #9a3412;
-}
-
-.swal-policy-note {
-    text-align: left;
-    background: #fff7ed;
-    color: #9a3412;
-    border: 1px solid #fed7aa;
-    border-radius: 12px;
-    padding: 12px 14px;
-    margin-bottom: 12px;
-    font-size: 13px;
-    line-height: 1.45;
-}
-
-.swal-policy-note.refund {
-    background: #fef3c7;
-    border-color: #fcd34d;
-    color: #92400e;
-}
-
-.swal-proof-hint {
-    text-align: left;
-    font-size: 12px;
-    color: #64748b;
-    margin-top: 6px;
-}
-
-.swal-proof-hint.required {
-    color: #b91c1c;
-    font-weight: 600;
-}
-
-.orders-overview {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 14px;
-    margin-bottom: 28px;
-}
-
-.overview-card {
-    background: #fff;
-    border: 1px solid #ebedf1;
-    border-radius: 14px;
-    padding: 16px 18px;
+.actions-line {
     display: flex;
     align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
     gap: 12px;
-    box-shadow: 0 2px 10px rgba(14, 22, 33, 0.04);
+    padding-top: 6px;
+}
+.btn-toggle-drawer {
+    background: transparent;
+    border: none;
+    color: #667085;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 0;
+    transition: color 0.2s ease;
+}
+.btn-toggle-drawer:hover {
+    color: #b3261e;
 }
 
-.overview-icon {
-    width: 42px;
-    height: 42px;
-    border-radius: 12px;
+.action-buttons-group {
     display: flex;
     align-items: center;
-    justify-content: center;
-    color: #c62828;
-    background: #ffebee;
-    font-size: 1rem;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.btn-action-outline {
+    background: #ffffff;
+    border: 1px solid #d0d5dd;
+    color: #344054;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 36px;
+    transition: all 0.2s ease;
+}
+.btn-action-outline:hover {
+    background: #f8fafc;
+    border-color: #98a2b3;
+    color: #101828;
+}
+.btn-action-outline.btn-cancel {
+    color: #b3261e;
+    border-color: #fda29b;
+}
+.btn-action-outline.btn-cancel:hover {
+    background: #fef2f2;
+}
+.btn-action-outline.btn-review {
+    color: #d97706;
+    border-color: #fde68a;
+}
+.btn-action-outline.btn-review:hover {
+    background: #fffbe8;
 }
 
-.overview-icon.overview-active {
-    color: #ef6c00;
-    background: #fff3e0;
+.btn-action-primary {
+    background: #b3261e;
+    color: #ffffff !important;
+    border: 1px solid #b3261e;
+    padding: 8px 18px;
+    border-radius: 8px;
+    font-size: 0.84rem;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 36px;
+    transition: background-color 0.2s ease;
+}
+.btn-action-primary:hover {
+    background: #9c1f18;
+}
+.btn-action-primary.btn-pickup {
+    background: #171922;
+    border-color: #171922;
+}
+.btn-action-primary.btn-pickup:hover {
+    background: #2a211d;
 }
 
-.overview-icon.overview-complete {
-    color: #2e7d32;
-    background: #e8f5e9;
+/* Collapsible Drawer */
+.ecom-details-drawer {
+    border-top: 1px dashed #eaecf0;
+    background: #ffffff;
+}
+.drawer-inner {
+    padding: 20px;
+}
+.cxl-banner {
+    background: #fef2f2;
+    color: #991b1b;
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
-.overview-icon.overview-spent {
-    color: #1565c0;
-    background: #e3f2fd;
+/* Timeline Stepper */
+.timeline-stepper {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    padding: 14px 18px;
+    background: #f8fafc;
+    border: 1px solid #eaecf0;
+    border-radius: 8px;
+}
+.timeline-stepper .step {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #98a2b3;
+}
+.timeline-stepper .step.active {
+    color: #101828;
+}
+.timeline-stepper .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #d0d5dd;
+}
+.timeline-stepper .step.active .dot {
+    background: #b3261e;
+}
+.timeline-stepper .line {
+    flex: 1;
+    height: 2px;
+    background: #eaecf0;
+    margin: 0 12px;
+}
+.timeline-stepper .line.active {
+    background: #b3261e;
 }
 
-.overview-content {
+.drawer-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+    margin-bottom: 16px;
+}
+.info-group {
     display: flex;
     flex-direction: column;
     gap: 2px;
 }
-
-.overview-label {
-    color: #8892a0;
-    font-size: 0.78rem;
-    text-transform: uppercase;
-    letter-spacing: 0.45px;
+.info-group.full {
+    grid-column: 1 / -1;
+}
+.info-group .label {
+    font-size: 0.75rem;
     font-weight: 700;
+    text-transform: uppercase;
+    color: #667085;
 }
-
-.overview-value {
-    color: #1f2a37;
-    font-size: 1.18rem;
-    font-weight: 800;
-}
-
-/* Modern Tabs */
-.orders-tabs {
-    display: flex;
-    justify-content: center;
-    gap: 15px;
-    margin-bottom: 40px;
-    border-bottom: none;
-}
-
-.tab-link {
-    padding: 12px 30px;
-    font-size: 1rem;
+.info-group .val {
+    font-size: 0.9rem;
     font-weight: 600;
-    color: var(--text-light);
-    background: white;
-    border-radius: 50px;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.02);
-    cursor: pointer;
-    text-decoration: none;
-    transition: var(--transition);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    border: 2px solid transparent;
+    color: #101828;
 }
 
-.tab-link:hover {
-    transform: translateY(-2px);
-    color: var(--primary-color);
-    background: white;
-}
-
-.tab-link.active {
-    background: var(--primary-color);
-    color: white;
-    box-shadow: 0 8px 15px rgba(198, 40, 40, 0.25);
-}
-
-.tab-content {
-    display: none;
-}
-
-.tab-content.active {
-    display: block;
-}
-
-.alert {
-    padding: 15px 20px;
-    border-radius: 8px;
-    margin-bottom: 30px;
-    font-size: 1.1rem;
-}
-
-.alert-success {
-    background-color: #d4edda;
-    color: #155724;
-    border: 1px solid #c3e6cb;
-}
-
-.alert-danger {
-    background-color: #f8d7da;
-    color: #721c24;
-    border: 1px solid #f5c6cb;
-}
-
-.empty-state {
-    text-align: center;
-    padding: 60px 20px;
-    background-color: white;
-    border-radius: 20px;
-    box-shadow: var(--card-shadow);
-    animation: fadeIn 0.6s ease;
-}
-
-.empty-icon {
-    font-size: 4rem;
-    color: #e9ecef;
-    margin-bottom: 20px;
-}
-
-.empty-state h2 {
-    color: var(--text-dark);
-    margin-bottom: 15px;
-    font-size: 1.8rem;
-}
-
-.empty-state p {
-    color: var(--text-light);
-    margin-bottom: 30px;
-    font-size: 1.1rem;
-}
-
-.empty-state .btn-primary {
-    padding: 12px 35px;
-    border-radius: 50px;
-}
-
-.orders-list {
-    display: flex;
-    flex-direction: column;
-    gap: 25px;
-}
-
-/* Order Card Design */
-.order-card {
-    background-color: white;
-    border-radius: 12px;
-    box-shadow: var(--card-shadow);
-    overflow: hidden;
-    transition: var(--transition);
-    border: 1px solid rgba(0,0,0,0.03);
-    opacity: 0;
-    animation: slideUp 0.5s ease forwards;
-}
-
-.order-card[data-status="pending"] {
-    border-left: 5px solid #f59e0b;
-}
-
-.order-card[data-status="confirmed"] {
-    border-left: 5px solid #3b82f6;
-}
-
-.order-card[data-status="preparing"] {
-    border-left: 5px solid #14b8a6;
-}
-
-.order-card[data-status="delivered"],
-.order-card[data-status="completed"] {
-    border-left: 5px solid #22c55e;
-}
-
-.order-card[data-status="cancelled"] {
-    border-left: 5px solid #ef4444;
-}
-
-.order-card:hover {
-    transform: translateY(-5px);
-    box-shadow: var(--hover-shadow);
-}
-
-.order-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 20px 30px;
-    background: linear-gradient(180deg, #ffffff 0%, #fff9f9 100%);
-    border-bottom: 1px solid #f1f1f1;
-}
-
-.order-info h3 {
-    color: var(--text-dark);
-    margin-bottom: 5px;
-    font-size: 1.25rem;
-    font-weight: 700;
-}
-
-.order-date, .order-method {
-    color: var(--text-light);
-    font-size: 0.9rem;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 3px 0;
-}
-
-.order-meta-line {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 9px;
-}
-
-.meta-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 10px;
-    border-radius: 999px;
-    background: #f4f6f9;
-    border: 1px solid #e4e8ee;
-    color: #475467;
-    font-size: 0.78rem;
-    font-weight: 700;
-}
-
-.order-status {
-    text-align: right;
-}
-
-.status-badge {
-    display: inline-block;
-    padding: 6px 16px;
-    border-radius: 50px;
-    font-size: 0.8rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-/* Modern Status Colors */
-.status-pending { background-color: #fff8e1; color: #f57c00; }
-.status-confirmed { background-color: #e3f2fd; color: #1976d2; }
-.status-preparing { background-color: #e0f2f1; color: #00796b; }
-.status-delivered, .status-completed { background-color: #e8f5e9; color: #2e7d32; }
-.status-cancelled { background-color: #ffebee; color: #c62828; }
-
-.order-total {
-    color: var(--primary-color);
-    font-size: 1.4rem;
-    font-weight: 800;
-    margin-top: 5px;
-}
-
-.order-progress {
-    margin: 0 30px;
-    padding: 14px 12px 12px;
-    border-bottom: 1px solid #f0f2f5;
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 8px;
-}
-
-.order-progress.cancelled {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: #c62828;
-    font-size: 0.9rem;
-    font-weight: 700;
-    background: #fff5f5;
-    border-radius: 10px;
-    border: 1px solid #ffd9d9;
-    padding: 12px 14px;
-    margin-top: 16px;
-    margin-bottom: 0;
-}
-
-.progress-step {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    align-items: center;
-}
-
-.progress-step:not(:last-child)::after {
-    content: "";
-    position: absolute;
-    top: 5px;
-    left: calc(50% + 11px);
-    width: calc(100% - 20px);
-    height: 2px;
-    background: #dde3ea;
-}
-
-.progress-dot {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: #cbd5e1;
-    border: 2px solid #fff;
-    box-shadow: 0 0 0 2px #e2e8f0;
-    z-index: 1;
-}
-
-.progress-label {
-    font-size: 0.74rem;
-    color: #94a3b8;
-    font-weight: 700;
-    letter-spacing: 0.15px;
-}
-
-.progress-step.done .progress-dot {
-    background: #c62828;
-    box-shadow: 0 0 0 2px rgba(198, 40, 40, 0.18);
-}
-
-.progress-step.done .progress-label {
-    color: #334155;
-}
-
-.progress-step.done:not(:last-child)::after {
-    background: rgba(198, 40, 40, 0.5);
-}
-
-.progress-step.current .progress-label {
-    color: #c62828;
-}
-
-.order-details {
-    padding: 30px;
-}
-
-.detail-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 30px;
-    margin-bottom: 25px;
-}
-
-.detail-item {
+.terms-note {
+    background: #fffbeb;
+    border: 1px solid #fef08a;
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    color: #78350f;
     display: flex;
     flex-direction: column;
     gap: 4px;
 }
 
-.detail-label {
-    color: #999;
-    font-size: 0.8rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.detail-value {
-    color: var(--text-dark);
-    font-size: 1rem;
-    font-weight: 600;
-}
-
-.special-instructions {
-    margin: 20px 0 30px;
-    padding: 20px;
-    background-color: #fff8e1;
-    border-radius: 8px;
-    border-left: 4px solid #ffc107;
-}
-
-.special-instructions .detail-label {
-    color: #f57c00;
-}
-
-.special-instructions p {
-    color: #5d4037;
-    margin: 0;
-}
-
-.order-items {
-    margin-top: 20px;
-    background: #fff;
-    border: 1px solid #eee;
-    border-radius: 8px;
-    overflow: hidden;
-}
-
-.order-items h4 {
-    padding: 15px 20px;
-    background: #f8f9fa;
-    margin: 0;
-    font-size: 1rem;
-    color: var(--text-dark);
-    border-bottom: 1px solid #eee;
-}
-
-.items-table {
-    width: 100%;
-    border-collapse: collapse;
-}
-
-.items-table th {
-    padding: 12px 20px;
-    text-align: left;
-    color: #888;
-    font-weight: 600;
-    font-size: 0.85rem;
-    border-bottom: 1px solid #eee;
-    background: #fff;
-}
-
-.items-table td {
-    padding: 15px 20px;
-    border-bottom: 1px solid #f5f5f5;
-    color: var(--text-dark);
-    vertical-align: top;
-}
-
-.item-name {
-    font-weight: 600;
-    color: var(--text-dark);
-}
-
-.item-size, .item-addons {
-    font-size: 0.8rem;
-    color: var(--text-light);
-    margin-top: 2px;
-}
-
-.summary-row td {
-    border-bottom: none;
-    padding-top: 15px;
-    padding-bottom: 5px;
-}
-
-.total-row {
-    background-color: white;
-}
-
-.total-row td {
-    border-top: 1px solid #eee;
-    border-bottom: none;
-    padding-top: 20px;
-    padding-bottom: 20px;
-    font-size: 1.1rem;
-}
-
-.text-right {
-    text-align: right;
-}
-
-.total-amount {
-    color: var(--primary-color);
-}
-
-.order-actions {
-    padding: 20px 30px 25px;
-    background-color: white;
-    border-top: 1px solid #f1f1f1;
+/* Pagination */
+.ecom-pagination {
     display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-}
-
-.order-actions > * {
-    min-height: 40px;
-}
-
-.btn-cancel, .btn-archive, .btn-details, .btn-reorder, .btn-track {
-    padding: 10px 24px;
-    border-radius: 8px;
-    font-size: 0.95rem;
-    font-weight: 600;
-    text-decoration: none;
-    display: inline-flex;
+    justify-content: center;
     align-items: center;
-    gap: 8px;
-    cursor: pointer;
-    transition: var(--transition);
-    border: none;
+    gap: 6px;
+    margin-top: 28px;
 }
-
-.btn-track {
-    background-color: #17a2b8;
-    color: white;
-}
-
-.btn-track:hover {
-    background-color: #138496;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(23, 162, 184, 0.3);
-}
-
-.btn-cancel {
-    background-color: white;
-    border: 1px solid #ffcdd2;
-    color: #c62828;
-}
-
-.btn-cancel:hover {
-    background-color: #ffebee;
-    transform: translateY(-2px);
-}
-
-.btn-archive {
-    background-color: #f1f3f5;
-    color: var(--text-light);
-}
-
-.btn-archive:hover {
-    background-color: #e9ecef;
-    color: var(--text-dark);
-}
-
-.btn-details {
-    background-color: white;
-    border: 1px solid #e0e0e0;
-    color: var(--text-dark);
-}
-
-.btn-details:hover {
-    border-color: var(--text-dark);
-    transform: translateY(-2px);
-}
-
-.btn-reorder {
-    background-color: white;
-    border: 1px solid #28a745;
-    color: #28a745;
-}
-
-.btn-reorder:hover {
-    background-color: #e8f5e9;
-    transform: translateY(-2px);
-}
-
-.order-actions .btn-primary,
-.order-actions .btn-secondary {
-    padding: 10px 22px;
-    border-radius: 8px;
-    font-size: 0.95rem;
-    font-weight: 700;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    text-decoration: none;
-}
-
-.order-actions .btn-secondary {
+.page-num {
+    padding: 6px 14px;
     border: 1px solid #d0d5dd;
-    color: #667085;
-    background: #f8f9fb;
-}
-
-.pagination {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 10px;
-    margin-top: 40px;
-}
-
-.page-link {
-    width: 40px;
-    height: 40px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    background-color: white;
-    border: 1px solid #e0e0e0;
-    border-radius: 50%;
-    color: var(--text-dark);
+    border-radius: 6px;
+    background: #ffffff;
+    color: #344054;
     text-decoration: none;
+    font-size: 0.88rem;
     font-weight: 600;
-    transition: var(--transition);
+}
+.page-num:hover, .page-num.active {
+    background: #b3261e;
+    border-color: #b3261e;
+    color: #ffffff;
 }
 
-.page-link:hover {
-    background-color: var(--primary-color);
-    border-color: var(--primary-color);
-    color: white;
-    transform: scale(1.1);
+/* SweetAlert Policy Styling */
+.swal-policy-note {
+    text-align: left;
+    background: #fff7ed;
+    color: #9a3412;
+    border: 1px solid #fed7aa;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+    font-size: 13px;
 }
-
-.page-link.active {
-    background-color: var(--primary-color);
-    border-color: var(--primary-color);
-    color: white;
-    box-shadow: 0 4px 10px rgba(198, 40, 40, 0.3);
-}
-
-/* Animations */
-@keyframes slideUp {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-
-/* Stagger Animation Delays */
-.order-card:nth-child(1) { animation-delay: 0.1s; }
-.order-card:nth-child(2) { animation-delay: 0.2s; }
-.order-card:nth-child(3) { animation-delay: 0.3s; }
-.order-card:nth-child(4) { animation-delay: 0.4s; }
-.order-card:nth-child(5) { animation-delay: 0.5s; }
+.swal-proof-hint { text-align: left; font-size: 12px; color: #64748b; margin-top: 4px; }
+.swal-proof-hint.required { color: #b91c1c; font-weight: 600; }
 
 @media (max-width: 768px) {
-    .orders-overview {
-        grid-template-columns: 1fr 1fr;
-    }
-
-    .overview-card {
-        padding: 14px;
-        border-radius: 12px;
-    }
-
-    .order-header {
+    .ecom-card-top, .ecom-card-bottom, .actions-line {
         flex-direction: column;
         align-items: flex-start;
-        gap: 15px;
     }
-    
-    .order-status {
-        text-align: left;
+    .action-buttons-group {
         width: 100%;
-    }
-
-    .order-progress {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 12px 6px;
-        margin: 0 16px;
-        padding: 14px 0 10px;
-    }
-
-    .progress-step:not(:last-child)::after {
-        display: none;
-    }
-    
-    .detail-row {
-        grid-template-columns: 1fr;
-        gap: 16px;
-        margin-bottom: 16px;
-    }
-
-    .order-details {
-        padding: 20px 16px;
-    }
-    
-    .items-table {
-        display: block;
-        overflow-x: auto;
-    }
-    
-    .order-actions {
         flex-direction: column;
-        padding: 16px;
     }
-    
-    .btn-cancel, .btn-archive, .btn-details, .btn-reorder, .btn-track, .order-actions .btn-primary, .order-actions .btn-secondary {
+    .btn-action-outline, .btn-action-primary {
         width: 100%;
         justify-content: center;
     }
+    .timeline-stepper {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    .timeline-stepper .line { display: none; }
 }
 </style>
 
@@ -1931,16 +1381,14 @@ unset($order);
 function archiveOrder(orderId) {
     Swal.fire({
         title: 'Archive Order?',
-        text: "This order will be moved to archives. You can view archived orders later.",
+        text: "This order will be moved to archives.",
         icon: 'question',
         showCancelButton: true,
-        confirmButtonColor: '#3085d6',
-        cancelButtonColor: '#d33',
-        confirmButtonText: 'Yes, archive it!',
-        cancelButtonText: 'Cancel'
+        confirmButtonColor: '#b3261e',
+        cancelButtonColor: '#667085',
+        confirmButtonText: 'Yes, archive'
     }).then((result) => {
         if (result.isConfirmed) {
-            // Submit the form via AJAX
             const formData = new FormData();
             formData.append('archive_order', 'true');
             formData.append('order_id', orderId);
@@ -1951,22 +1399,9 @@ function archiveOrder(orderId) {
             })
             .then(response => response.text())
             .then(() => {
-                Swal.fire(
-                    'Archived!',
-                    'Your order has been archived.',
-                    'success'
-                ).then(() => {
-                    // Refresh the page
+                Swal.fire('Archived!', 'Order moved to archives.', 'success').then(() => {
                     location.reload();
                 });
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                Swal.fire(
-                    'Error!',
-                    'Failed to archive order. Please try again.',
-                    'error'
-                );
             });
         }
     });
@@ -1981,10 +1416,9 @@ function cancelOrder(orderId, policyMessage = '') {
             <textarea id="cancelReasonInput" class="swal2-textarea" placeholder="Reason for cancellation (optional)"></textarea>
         `,
         showCancelButton: true,
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#3085d6',
-        confirmButtonText: 'Yes, cancel it!',
-        focusConfirm: false,
+        confirmButtonColor: '#b3261e',
+        cancelButtonColor: '#667085',
+        confirmButtonText: 'Confirm Cancel',
         preConfirm: () => document.getElementById('cancelReasonInput').value.trim()
     }).then((result) => {
         if (result.isConfirmed) {
@@ -1998,27 +1432,13 @@ function cancelOrder(orderId, policyMessage = '') {
                 method: 'POST',
                 body: formData
             })
-            .then(async (response) => {
-                const raw = await response.text();
-                try {
-                    return JSON.parse(raw);
-                } catch (parseError) {
-                    throw new Error(raw && raw.trim() !== '' ? raw : 'Invalid server response.');
-                }
-            })
+            .then(res => res.json())
             .then(data => {
                 if (data.success) {
-                    Swal.fire('Cancelled!', data.message, 'success').then(() => {
-                        location.reload();
-                    });
+                    Swal.fire('Cancelled', data.message, 'success').then(() => location.reload());
                 } else {
-                    Swal.fire('Error!', data.message, 'error');
+                    Swal.fire('Error', data.message, 'error');
                 }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                const fallbackMessage = String(error && error.message ? error.message : 'An error occurred while processing your request.');
-                Swal.fire('Error!', fallbackMessage, 'error');
             });
         }
     });
@@ -2029,67 +1449,29 @@ function cancelPreOrder(preOrderId) {
         title: 'Cancel Pre-Order?',
         text: "Are you sure you want to cancel this pre-order?",
         icon: 'warning',
-        input: 'text',
-        inputPlaceholder: 'Reason for cancellation (optional)',
         showCancelButton: true,
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#3085d6',
-        confirmButtonText: 'Yes, cancel it!'
+        confirmButtonColor: '#b3261e',
+        cancelButtonColor: '#667085',
+        confirmButtonText: 'Yes, cancel it'
     }).then((result) => {
         if (result.isConfirmed) {
             const formData = new FormData();
             formData.append('cancel_preorder', 'true');
             formData.append('pre_order_id', preOrderId);
-            formData.append('reason', result.value);
             formData.append('ajax', 'true');
             
             fetch('my_orders.php', {
                 method: 'POST',
                 body: formData
             })
-            .then(response => response.json())
+            .then(res => res.json())
             .then(data => {
                 if (data.success) {
-                    Swal.fire('Cancelled!', data.message, 'success').then(() => {
-                        location.reload();
-                    });
+                    Swal.fire('Cancelled', data.message, 'success').then(() => location.reload());
                 } else {
-                    Swal.fire('Error!', data.message, 'error');
+                    Swal.fire('Error', data.message, 'error');
                 }
             });
-        }
-    });
-}
-
-function reorderOrder(orderId) {
-    Swal.fire({
-        title: 'Re-order Items?',
-        text: "This will add items from this order to your current cart.",
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonColor: '#28a745',
-        cancelButtonColor: '#6c757d',
-        confirmButtonText: 'Yes, add to cart!'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = 'my_orders.php';
-            
-            const inputReorder = document.createElement('input');
-            inputReorder.type = 'hidden';
-            inputReorder.name = 'reorder';
-            inputReorder.value = 'true';
-            form.appendChild(inputReorder);
-            
-            const inputId = document.createElement('input');
-            inputId.type = 'hidden';
-            inputId.name = 'order_id';
-            inputId.value = orderId;
-            form.appendChild(inputId);
-            
-            document.body.appendChild(form);
-            form.submit();
         }
     });
 }
@@ -2109,11 +1491,11 @@ function escapeHtml(text) {
 
 function requestRefund(orderId, proofRequired = false, refundTerms = '') {
     Swal.fire({
-        title: 'Request Refund?',
+        title: 'Request Refund',
         icon: 'question',
         html: `
-            ${refundTerms ? `<div class="swal-policy-note refund">${escapeHtml(refundTerms)}</div>` : ''}
-            <select id="refundReasonInput" class="swal2-select" style="display:block;width:100%;margin-top:8px;">
+            ${refundTerms ? `<div class="swal-policy-note">${escapeHtml(refundTerms)}</div>` : ''}
+            <select id="refundReasonInput" class="swal2-select" style="display:block;width:100%;">
                 <option value="">Select refund reason</option>
                 <option value="Damaged Product">Damaged Product</option>
                 <option value="Broken Product">Broken Product</option>
@@ -2122,28 +1504,14 @@ function requestRefund(orderId, proofRequired = false, refundTerms = '') {
                 <option value="Quality Issue">Quality Issue</option>
                 <option value="Other">Other</option>
             </select>
-            <textarea id="refundDetailsInput" class="swal2-textarea" placeholder="Tell us what happened"></textarea>
+            <textarea id="refundDetailsInput" class="swal2-textarea" placeholder="Provide additional details..."></textarea>
             <input id="refundProofInput" type="file" class="swal2-file" accept="image/png,image/jpeg,image/webp">
-            <div id="refundProofHint" class="swal-proof-hint">Upload a clear photo of the damaged or broken item when required by the store.</div>
+            <div id="refundProofHint" class="swal-proof-hint">Attach proof photo if required.</div>
         `,
         showCancelButton: true,
-        confirmButtonColor: '#ff9800',
-        cancelButtonColor: '#6c757d',
+        confirmButtonColor: '#b3261e',
+        cancelButtonColor: '#667085',
         confirmButtonText: 'Submit Request',
-        focusConfirm: false,
-        didOpen: () => {
-            const reasonSelect = document.getElementById('refundReasonInput');
-            const proofHint = document.getElementById('refundProofHint');
-            const refreshProofState = () => {
-                const proofNeeded = proofRequired && refundReasonNeedsProof(reasonSelect.value);
-                proofHint.textContent = proofNeeded
-                    ? 'This refund reason requires a proof photo before the request can be submitted.'
-                    : 'You can attach a proof photo to help the store and admin review faster.';
-                proofHint.classList.toggle('required', proofNeeded);
-            };
-            reasonSelect.addEventListener('change', refreshProofState);
-            refreshProofState();
-        },
         preConfirm: () => {
             const refundReason = document.getElementById('refundReasonInput').value;
             const refundDetails = document.getElementById('refundDetailsInput').value.trim();
@@ -2153,17 +1521,11 @@ function requestRefund(orderId, proofRequired = false, refundTerms = '') {
                 Swal.showValidationMessage('Please choose a refund reason.');
                 return false;
             }
-
             if (proofRequired && refundReasonNeedsProof(refundReason) && !proofFile) {
-                Swal.showValidationMessage('Please attach a proof photo for damaged or broken product refunds.');
+                Swal.showValidationMessage('Proof photo required for damaged product claims.');
                 return false;
             }
-
-            return {
-                refundReason,
-                refundDetails,
-                proofFile
-            };
+            return { refundReason, refundDetails, proofFile };
         }
     }).then((result) => {
         if (result.isConfirmed) {
@@ -2172,23 +1534,16 @@ function requestRefund(orderId, proofRequired = false, refundTerms = '') {
             formData.append('order_id', orderId);
             formData.append('refund_reason', result.value.refundReason);
             formData.append('refund_details', result.value.refundDetails || '');
-            if (result.value.proofFile) {
-                formData.append('refund_proof', result.value.proofFile);
-            }
+            if (result.value.proofFile) formData.append('refund_proof', result.value.proofFile);
             formData.append('ajax', 'true');
             
-            fetch('my_orders.php', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
+            fetch('my_orders.php', { method: 'POST', body: formData })
+            .then(res => res.json())
             .then(data => {
                 if (data.success) {
-                    Swal.fire('Submitted!', data.message, 'success').then(() => {
-                        location.reload();
-                    });
+                    Swal.fire('Submitted', data.message, 'success').then(() => location.reload());
                 } else {
-                    Swal.fire('Error!', data.message, 'error');
+                    Swal.fire('Error', data.message, 'error');
                 }
             });
         }
@@ -2204,57 +1559,14 @@ function toggleOrderDetails(orderId) {
         if (drawer.style.display === 'none' || drawer.style.display === '') {
             drawer.style.display = 'block';
             if (icon) icon.className = 'fas fa-chevron-up';
-            if (text) text.textContent = 'Hide Details';
+            if (text) text.textContent = 'Hide Order Details';
         } else {
             drawer.style.display = 'none';
             if (icon) icon.className = 'fas fa-chevron-down';
-            if (text) text.textContent = 'View Details & Actions';
+            if (text) text.textContent = 'View Order Details';
         }
     }
 }
-
-// Handle page load notifications & counter animations
-document.addEventListener('DOMContentLoaded', function() {
-    // Count-up animation for Total Orders
-    const counterEl = document.querySelector('.animated-counter');
-    if (counterEl) {
-        const target = parseInt(counterEl.getAttribute('data-target'), 10) || 0;
-        const duration = 900;
-        const startTime = performance.now();
-        
-        function updateCounter(currentTime) {
-            const elapsed = currentTime - startTime;
-            const progress = Math.min(elapsed / duration, 1);
-            const easeProgress = 1 - Math.pow(1 - progress, 3);
-            const currentVal = Math.floor(easeProgress * target);
-            counterEl.textContent = currentVal.toLocaleString();
-            
-            if (progress < 1) {
-                requestAnimationFrame(updateCounter);
-            } else {
-                counterEl.textContent = target.toLocaleString();
-            }
-        }
-        requestAnimationFrame(updateCounter);
-    }
-    <?php if (isset($_SESSION['success_msg'])): ?>
-        Swal.fire({
-            title: 'Success!',
-            text: '<?php echo addslashes($_SESSION['success_msg']); ?>',
-            icon: 'success',
-            confirmButtonText: 'OK'
-        });
-    <?php unset($_SESSION['success_msg']); endif; ?>
-    
-    <?php if (isset($_SESSION['error_msg'])): ?>
-        Swal.fire({
-            title: 'Error!',
-            text: '<?php echo addslashes($_SESSION['error_msg']); ?>',
-            icon: 'error',
-            confirmButtonText: 'OK'
-        });
-    <?php unset($_SESSION['error_msg']); endif; ?>
-});
 </script>
 
 <?php include 'includes/footer.php'; ?>

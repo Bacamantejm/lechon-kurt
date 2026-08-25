@@ -77,7 +77,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($result) {
             $_SESSION['success'] = 'Your subscription request has been submitted to the platform owner.';
         } else {
-            $_SESSION['error'] = 'Unable to submit the subscription request right now. You may already have a pending request.';
+            $_SESSION['error'] = 'Unable to submit the subscription request right now. You may already have an active subscription with these exact parameters.';
+        }
+    } elseif ($action === 'cancel_subscription_request') {
+        $request_id = (int)($_POST['request_id'] ?? 0);
+        $result = $monetizationService->cancelSubscriptionRequest($request_id, (int)$seller_scope_id, $current_user_id);
+        if ($result) {
+            $_SESSION['success'] = 'Subscription request has been cancelled.';
+        } else {
+            $_SESSION['error'] = 'Unable to cancel this request. It may have already been reviewed.';
         }
     }
 
@@ -761,10 +769,10 @@ $latestReminder = $billingReminders[0] ?? null;
                     <p class="billing-sub">Track plan requests you have sent to the platform owner and see their latest status.</p>
                     <div class="billing-table-wrap">
                         <table class="billing-table">
-                            <thead><tr><th>Requested Plan</th><th>Type</th><th>Cycle</th><th>Status</th><th>Requested</th><th>Review Notes</th></tr></thead>
+                            <thead><tr><th>Requested Plan</th><th>Type</th><th>Cycle</th><th>Status</th><th>Requested</th><th>Review Notes</th><th>Action</th></tr></thead>
                             <tbody>
                             <?php if (empty($subscriptionRequests)): ?>
-                                <tr><td colspan="6" style="text-align:center;color:#64748b;">No subscription requests submitted yet.</td></tr>
+                                <tr><td colspan="7" style="text-align:center;color:#64748b;">No subscription requests submitted yet.</td></tr>
                             <?php else: foreach ($subscriptionRequests as $request): ?>
                                 <?php
                                     $requestStatus = (string)($request['request_status'] ?? 'pending');
@@ -780,6 +788,20 @@ $latestReminder = $billingReminders[0] ?? null;
                                     <td><span class="billing-chip <?php echo $requestClass; ?>"><?php echo htmlspecialchars(ucfirst($requestStatus)); ?></span></td>
                                     <td><?php echo !empty($request['created_at']) ? htmlspecialchars(date('M d, Y h:i A', strtotime((string)$request['created_at']))) : '-'; ?></td>
                                     <td><?php echo htmlspecialchars(trim((string)($request['review_notes'] ?? '')) !== '' ? (string)$request['review_notes'] : ((string)($request['partner_notes'] ?? '') !== '' ? 'Partner note: ' . (string)$request['partner_notes'] : '-')); ?></td>
+                                    <td>
+                                        <?php if ($requestStatus === 'pending'): ?>
+                                        <form method="POST" style="display:inline-block;" onsubmit="return confirm('Are you sure you want to cancel this plan request?');">
+                                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+                                            <input type="hidden" name="action" value="cancel_subscription_request">
+                                            <input type="hidden" name="request_id" value="<?php echo (int)($request['id'] ?? 0); ?>">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" style="padding: 2px 8px; font-size: 0.78rem; border-radius: 6px;">
+                                                <i class="fas fa-times"></i> Cancel
+                                            </button>
+                                        </form>
+                                        <?php else: ?>
+                                            <span style="color:#94a3b8;font-size:.82rem;">-</span>
+                                        <?php endif; ?>
+                                    </td>
                                 </tr>
                             <?php endforeach; endif; ?>
                             </tbody>
