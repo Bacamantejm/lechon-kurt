@@ -5,6 +5,24 @@ includes/local_credentials.php
 .env
 .env.local
 .env.*.local
+.env.backup
+.env.production
+
+# Composer & Node
+/vendor/
+/node_modules/
+
+# Laravel Storage & Cache
+/bootstrap/cache/*
+!/bootstrap/cache/.gitignore
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/storage/logs/*
+!/storage/framework/cache/.gitignore
+!/storage/framework/sessions/.gitignore
+!/storage/framework/views/.gitignore
+!/storage/logs/.gitignore
 
 # Runtime artifacts
 logs/*.log
@@ -12,3 +30,4 @@ logs/*.txt
 *.tmp
 tmp_*.php
 .codex_write_test.txt
+.phpunit.result.cache
