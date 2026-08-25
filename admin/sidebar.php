@@ -367,6 +367,14 @@ if ($can_partner_billing) {
 } elseif ($is_super_admin_user) {
     $topbar_billing_link = '../super_admin/platform_monetization.php';
 }
+
+$sidebar_active_plan_name = '';
+if ($is_partner_scoped_admin && $partner_scope_owner_id > 0) {
+    $plan_sub_query = mysqli_query($conn, "SELECT p.plan_name FROM partner_plan_subscriptions s JOIN platform_subscription_plans p ON p.id = s.plan_id WHERE s.partner_user_id = {$partner_scope_owner_id} AND s.subscription_status IN ('active', 'trial') LIMIT 1");
+    if ($plan_sub_query && ($plan_row = mysqli_fetch_assoc($plan_sub_query))) {
+        $sidebar_active_plan_name = (string)($plan_row['plan_name'] ?? '');
+    }
+}
 ?>
 
 <!-- Admin Sidebar Navigation -->
@@ -383,7 +391,12 @@ if ($can_partner_billing) {
                 <?php endif; ?>
             </div>
             <h3><?php echo htmlspecialchars($sidebar_brand_name); ?></h3>
-            <p><?php echo htmlspecialchars($sidebar_role_label); ?></p>
+            <p>
+                <?php echo htmlspecialchars($sidebar_role_label); ?>
+                <?php if ($sidebar_active_plan_name !== ''): ?>
+                    &bull; <span class="badge" style="background:#b3261e;color:#fff;font-size:0.68rem;font-weight:800;padding:2px 6px;border-radius:4px;letter-spacing:0.04em;"><i class="fas fa-crown"></i> <?php echo htmlspecialchars(strtoupper($sidebar_active_plan_name)); ?></span>
+                <?php endif; ?>
+            </p>
         </a>
     </div>
     

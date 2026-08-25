@@ -232,6 +232,24 @@ if (($name_change_window['success'] ?? false) && !($name_change_window['can_chan
     $name_change_hint = 'Full name was recently updated. It can be changed again on ' . date('F j, Y g:i A', strtotime((string)$name_change_window['next_allowed_at'])) . '.';
 }
 
+// Fetch active partner subscription if organization account
+$partner_subscription = null;
+if (myAccountTableExists($conn, 'partner_plan_subscriptions') && myAccountTableExists($conn, 'platform_subscription_plans')) {
+    $sub_sql = "SELECT s.*, p.plan_name, p.plan_code, p.monthly_price, p.annual_price 
+                FROM partner_plan_subscriptions s 
+                JOIN platform_subscription_plans p ON p.id = s.plan_id 
+                WHERE s.partner_user_id = ? AND s.subscription_status IN ('active', 'trial') 
+                ORDER BY s.id DESC LIMIT 1";
+    $sub_stmt = mysqli_prepare($conn, $sub_sql);
+    if ($sub_stmt) {
+        mysqli_stmt_bind_param($sub_stmt, "i", $user_id);
+        mysqli_stmt_execute($sub_stmt);
+        $sub_res = mysqli_stmt_get_result($sub_stmt);
+        $partner_subscription = $sub_res ? mysqli_fetch_assoc($sub_res) : null;
+        mysqli_stmt_close($sub_stmt);
+    }
+}
+
 // Handle profile update
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_profile'])) {
     $default_account_tab = 'profile';
@@ -1054,6 +1072,11 @@ include 'includes/header.php';
                         <span class="hero-tag type-tag">
                             <i class="fas fa-user-tag"></i> <?php echo $is_organization_account ? 'Store Partner' : 'Customer Account'; ?>
                         </span>
+                        <?php if ($partner_subscription): ?>
+                        <a href="subscription_plans.php" class="hero-tag" style="background:#b3261e;color:#fff;border:1px solid #b3261e;text-decoration:none;font-weight:800;" title="Active Partner Plan: <?php echo htmlspecialchars($partner_subscription['plan_name']); ?>">
+                            <i class="fas fa-crown"></i> <?php echo htmlspecialchars(strtoupper($partner_subscription['plan_name'])); ?> PLAN
+                        </a>
+                        <?php endif; ?>
                         <span class="hero-tag verified-tag">
                             <i class="fas fa-shield-check"></i> <?php echo htmlspecialchars($user['email'] ?? ''); ?>
                         </span>
@@ -1108,6 +1131,15 @@ include 'includes/header.php';
                     <i class="fas fa-shield-halved"></i>
                     <span>Password & Security</span>
                 </button>
+                <?php if ($is_organization_account || $partner_subscription): ?>
+                <a href="subscription_plans.php" class="acc-tab-nav-btn" style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:10px;">
+                    <i class="fas fa-crown" style="color:#b3261e;"></i>
+                    <span>Subscription Plan</span>
+                    <?php if ($partner_subscription): ?>
+                    <span class="nav-badge" style="background:#ecfdf3;color:#027a48;font-weight:800;border:1px solid #abefc6;margin-left:auto;"><?php echo htmlspecialchars($partner_subscription['plan_name']); ?></span>
+                    <?php endif; ?>
+                </a>
+                <?php endif; ?>
             </aside>
 
             <!-- Workspace Panels -->
@@ -1115,6 +1147,36 @@ include 'includes/header.php';
 
                 <!-- 1. Profile Information Tab (Compact, Zero Unnecessary Scrolling) -->
                 <div class="acc-tab-pane active" id="profile">
+
+                    <?php if ($partner_subscription): ?>
+                    <?php
+                        $subStarted = !empty($partner_subscription['started_at']) ? date('M d, Y', strtotime((string)$partner_subscription['started_at'])) : 'Active';
+                        $subRenews = !empty($partner_subscription['renews_at']) ? date('M d, Y', strtotime((string)$partner_subscription['renews_at'])) : 'N/A';
+                        $subCycle = ucfirst((string)($partner_subscription['billing_cycle'] ?? 'monthly'));
+                    ?>
+                    <div style="background:#ffffff;border:1.5px solid #abefc6;border-radius:14px;padding:16px 20px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;background:linear-gradient(135deg,#ffffff 0%,#f6fef9 100%);box-shadow:0 2px 8px rgba(2,122,72,0.06);">
+                        <div style="display:flex;align-items:center;gap:14px;">
+                            <div style="width:44px;height:44px;border-radius:12px;background:#ecfdf3;color:#027a48;display:flex;align-items:center;justify-content:center;font-size:1.3rem;border:1px solid #abefc6;flex-shrink:0;">
+                                <i class="fas fa-crown"></i>
+                            </div>
+                            <div>
+                                <div style="font-weight:800;font-size:1rem;color:#101828;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                                    <span><?php echo htmlspecialchars($partner_subscription['plan_name']); ?> Plan (<?php echo htmlspecialchars($subCycle); ?>)</span>
+                                    <span style="background:#ecfdf3;color:#027a48;font-size:0.72rem;padding:2px 8px;border-radius:999px;border:1px solid #abefc6;font-weight:800;"><i class="fas fa-check-circle"></i> ACTIVE</span>
+                                </div>
+                                <div style="font-size:0.82rem;color:#475467;margin-top:2px;">
+                                    Subscribed: <strong><?php echo htmlspecialchars($subStarted); ?></strong> &bull; Next Renewal / Due Date: <strong style="color:#b3261e;"><?php echo htmlspecialchars($subRenews); ?></strong>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <a href="subscription_plans.php" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:#ffffff;border:1.5px solid #d0d5dd;border-radius:8px;font-size:0.84rem;font-weight:700;color:#344054;text-decoration:none;transition:all 0.2s ease;">
+                                <i class="fas fa-layer-group"></i> Change Plan
+                            </a>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+
                     <div class="acc-panel-card">
                         <div class="acc-panel-head">
                             <div>

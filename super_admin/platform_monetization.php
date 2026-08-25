@@ -501,17 +501,46 @@ saRenderModuleHeader('Platform Monetization', 'Platform Monetization & Revenue',
             </div>
             <div class="table-wrap">
                 <table class="module-table">
-                    <thead><tr><th>Partner</th><th>Plan</th><th>Status</th><th>Renews</th><th>Override</th></tr></thead>
+                    <thead><tr><th>Partner Store</th><th>Plan Subscribed</th><th>Plan Rate</th><th>Total Paid</th><th>Status</th><th>Renews</th></tr></thead>
                     <tbody>
                     <?php if (empty($subscriptions)): ?>
-                        <tr><td colspan="5" class="text-center text-muted">No subscription assignments yet.</td></tr>
+                        <tr><td colspan="6" class="text-center text-muted">No subscription assignments yet.</td></tr>
                     <?php else: foreach ($subscriptions as $subscription): ?>
+                        <?php
+                            $subStatus = strtolower(trim((string)($subscription['subscription_status'] ?? 'active')));
+                            $subChipClass = in_array($subStatus, ['active', 'trial'], true) ? 'chip-success' : (in_array($subStatus, ['past_due', 'paused'], true) ? 'chip-warning' : 'chip-danger');
+                            $planPrice = (float)($subscription['plan_price'] ?? 0);
+                            $totalPaid = (float)($subscription['total_paid_to_date'] ?? 0);
+                        ?>
                         <tr>
-                            <td><strong><?php echo htmlspecialchars((string)$subscription['business_name']); ?></strong><br><span class="compact-text"><?php echo htmlspecialchars((string)$subscription['email']); ?></span></td>
-                            <td><?php echo htmlspecialchars((string)$subscription['plan_name']); ?><br><span class="compact-text"><?php echo htmlspecialchars(ucfirst((string)$subscription['billing_cycle'])); ?></span></td>
-                            <td><?php echo htmlspecialchars(ucfirst(str_replace('_', ' ', (string)$subscription['subscription_status']))); ?></td>
+                            <td>
+                                <strong><?php echo htmlspecialchars((string)$subscription['business_name']); ?></strong>
+                                <?php if (!empty($subscription['owner_name'])): ?>
+                                    <br><span class="compact-text"><?php echo htmlspecialchars((string)$subscription['owner_name']); ?> &bull; <?php echo htmlspecialchars((string)$subscription['email']); ?></span>
+                                <?php else: ?>
+                                    <br><span class="compact-text"><?php echo htmlspecialchars((string)$subscription['email']); ?></span>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <strong style="color: #b3261e;"><?php echo htmlspecialchars((string)$subscription['plan_name']); ?></strong>
+                                <br><span class="compact-text"><?php echo htmlspecialchars(ucfirst((string)$subscription['billing_cycle'])); ?></span>
+                            </td>
+                            <td>
+                                <?php if (($subscription['price_override'] ?? null) !== null): ?>
+                                    <strong><?php echo saFormatCurrency($subscription['price_override']); ?></strong> <span class="badge bg-warning text-dark" style="font-size: 0.65rem;">Override</span>
+                                <?php else: ?>
+                                    <strong><?php echo saFormatCurrency($planPrice); ?></strong>
+                                <?php endif; ?>
+                                <br><span class="compact-text"><?php echo strtolower((string)$subscription['billing_cycle']) === 'annual' ? 'per year' : 'per month'; ?></span>
+                            </td>
+                            <td>
+                                <strong style="color: #027a48;"><?php echo saFormatCurrency($totalPaid); ?></strong>
+                                <?php if (!empty($subscription['last_payment_date'])): ?>
+                                    <br><span class="compact-text">Paid <?php echo date('M d', strtotime($subscription['last_payment_date'])); ?></span>
+                                <?php endif; ?>
+                            </td>
+                            <td><span class="status-chip <?php echo $subChipClass; ?>"><?php echo htmlspecialchars(ucfirst(str_replace('_', ' ', (string)$subscription['subscription_status']))); ?></span></td>
                             <td><?php echo htmlspecialchars(saFormatDateTime($subscription['renews_at'] ?? null, 'M d, Y', '-')); ?></td>
-                            <td><?php echo ($subscription['price_override'] ?? null) !== null ? saFormatCurrency($subscription['price_override']) : '-'; ?></td>
                         </tr>
                     <?php endforeach; endif; ?>
                     </tbody>
