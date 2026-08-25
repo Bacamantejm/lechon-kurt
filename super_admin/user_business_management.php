@@ -215,10 +215,10 @@ $roles = [];
 if ($has_roles) {
     $roles = saQueryRows(
         $conn,
-        "SELECT r.id, r.name, r.description, r.level, r.is_active,
+        "SELECT r.id, r.name, r.description, r.is_active,
                 (SELECT COUNT(*) FROM users u WHERE u.role_id = r.id) AS assigned_users
          FROM roles r
-         ORDER BY r.level DESC, r.name ASC"
+         ORDER BY r.name ASC"
     );
 }
 
@@ -532,7 +532,6 @@ saRenderModuleHeader('User & Business Management', 'User & Business Management',
                     <tr>
                         <th>Role</th>
                         <th>Description</th>
-                        <th>Level</th>
                         <th>Assigned Users</th>
                         <th>Status</th>
                     </tr>
@@ -542,7 +541,6 @@ saRenderModuleHeader('User & Business Management', 'User & Business Management',
                         <tr>
                             <td><strong><?php echo htmlspecialchars((string)$role['name']); ?></strong></td>
                             <td><?php echo htmlspecialchars((string)($role['description'] ?? '')); ?></td>
-                            <td><?php echo (int)($role['level'] ?? 0); ?></td>
                             <td><?php echo number_format((int)($role['assigned_users'] ?? 0)); ?></td>
                             <td>
                                 <?php if ((int)($role['is_active'] ?? 0) === 1): ?>

@@ -1907,8 +1907,7 @@ class ChatService {
                      WHERE u.user_type = 'admin'
                      AND u.is_active = 1
                      AND (
-                         r.level >= 100
-                         OR r.name = 'super_admin'
+                         r.name = 'super_admin'
                          OR r.name LIKE '%owner%'
                      )";
             $result = $this->conn->query($query);

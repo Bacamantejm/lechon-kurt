@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 session_start();
 include 'auth.php';
 include '../includes/config.php';
@@ -249,7 +249,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $role_name_input = trim((string)($_POST['role_name'] ?? ''));
             $role_name = rbacNormalizeRoleSlug($role_name_input);
             $role_description = trim($_POST['role_description'] ?? '');
-            $role_level = intval($_POST['role_level'] ?? 0);
             
             // Validation
             if (empty($role_name)) {
@@ -260,8 +259,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['error'] = 'Role name must be 3 to 50 characters.';
             } elseif (strlen($role_description) > 1000) {
                 $_SESSION['error'] = 'Role description is too long.';
-            } elseif (!in_array($role_level, [10, 20, 40, 60, 80, 100])) {
-                $_SESSION['error'] = 'Invalid role tier selected';
             } elseif (!preg_match('/^[a-z0-9_]+$/', $role_name)) {
                 $_SESSION['error'] = 'Role name can only contain letters, numbers, and underscores.';
             } elseif (rbacIsReservedRoleName($role_name)) {
@@ -290,18 +287,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } else {
                     // Insert new role
                     $insert_query = $is_partner_owner_admin
-                        ? "INSERT INTO roles (name, description, level, is_active, owner_user_id) VALUES (?, ?, ?, 1, ?)"
-                        : "INSERT INTO roles (name, description, level, is_active) VALUES (?, ?, ?, 1)";
+                        ? "INSERT INTO roles (name, description, is_active, owner_user_id) VALUES (?, ?, 1, ?)"
+                        : "INSERT INTO roles (name, description, is_active) VALUES (?, ?, 1)";
                     $insert_stmt = mysqli_prepare($conn, $insert_query);
                     if ($is_partner_owner_admin) {
-                        mysqli_stmt_bind_param($insert_stmt, "ssii", $stored_role_name, $role_description, $role_level, $partner_scope_owner_id);
+                        mysqli_stmt_bind_param($insert_stmt, "ssi", $stored_role_name, $role_description, $partner_scope_owner_id);
                     } else {
-                        mysqli_stmt_bind_param($insert_stmt, "ssi", $stored_role_name, $role_description, $role_level);
+                        mysqli_stmt_bind_param($insert_stmt, "ss", $stored_role_name, $role_description);
                     }
                     
                     if (mysqli_stmt_execute($insert_stmt)) {
-                        $_SESSION['success'] = "Role '" . rbacRoleDisplayName($stored_role_name, $is_partner_owner_admin ? $partner_scope_owner_id : 0) . "' created successfully at tier level $role_level.";
-                        logRBACAction($conn, $current_user_id, 'ROLE_CREATED', 'roles', "Created new role: $stored_role_name (Level: $role_level)");
+                        $_SESSION['success'] = "Role '" . rbacRoleDisplayName($stored_role_name, $is_partner_owner_admin ? $partner_scope_owner_id : 0) . "' created successfully.";
+                        logRBACAction($conn, $current_user_id, 'ROLE_CREATED', 'roles', "Created new role: $stored_role_name");
                     } else {
                         $_SESSION['error'] = 'Failed to create role: ' . mysqli_error($conn);
                     }
@@ -319,7 +316,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $clone_role_input = trim((string)($_POST['clone_role_name'] ?? ''));
             $clone_role_name = rbacNormalizeRoleSlug($clone_role_input);
             $clone_role_description = trim((string)($_POST['clone_role_description'] ?? ''));
-            $clone_role_level = (int)($_POST['clone_role_level'] ?? 0);
 
             if ($source_role_id <= 0) {
                 $_SESSION['error'] = 'Please select a source role to clone.';
@@ -365,13 +361,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 exit();
             }
 
-            $allowed_levels = [10, 20, 40, 60, 80, 100];
-            if (!in_array($clone_role_level, $allowed_levels, true)) {
-                $clone_role_level = (int)($source_role['level'] ?? 20);
-                if (!in_array($clone_role_level, $allowed_levels, true)) {
-                    $clone_role_level = 20;
-                }
-            }
             if ($clone_role_description === '') {
                 $source_desc = trim((string)($source_role['description'] ?? ''));
                 $clone_role_description = ($source_desc !== '' ? $source_desc . ' ' : '') . '(Cloned from role ID ' . $source_role_id . ')';
@@ -412,16 +401,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             mysqli_begin_transaction($conn);
             try {
                 $insert_role_sql = $is_partner_owner_admin
-                    ? "INSERT INTO roles (name, description, level, is_active, owner_user_id) VALUES (?, ?, ?, 1, ?)"
-                    : "INSERT INTO roles (name, description, level, is_active) VALUES (?, ?, ?, 1)";
+                    ? "INSERT INTO roles (name, description, is_active, owner_user_id) VALUES (?, ?, 1, ?)"
+                    : "INSERT INTO roles (name, description, is_active) VALUES (?, ?, 1)";
                 $insert_role_stmt = mysqli_prepare($conn, $insert_role_sql);
                 if (!$insert_role_stmt) {
                     throw new Exception('Unable to prepare clone role insert.');
                 }
                 if ($is_partner_owner_admin) {
-                    mysqli_stmt_bind_param($insert_role_stmt, "ssii", $stored_clone_name, $clone_role_description, $clone_role_level, $partner_scope_owner_id);
+                    mysqli_stmt_bind_param($insert_role_stmt, "ssi", $stored_clone_name, $clone_role_description, $partner_scope_owner_id);
                 } else {
-                    mysqli_stmt_bind_param($insert_role_stmt, "ssi", $stored_clone_name, $clone_role_description, $clone_role_level);
+                    mysqli_stmt_bind_param($insert_role_stmt, "ss", $stored_clone_name, $clone_role_description);
                 }
                 if (!mysqli_stmt_execute($insert_role_stmt)) {
                     throw new Exception('Unable to create cloned role.');
@@ -689,7 +678,7 @@ if ($is_partner_owner_admin) {
     }
 
     if ($partner_roles_owner_column_exists) {
-        $roles_query = "SELECT * FROM roles WHERE is_active = 1 AND owner_user_id = ? ORDER BY level DESC, name ASC";
+        $roles_query = "SELECT * FROM roles WHERE is_active = 1 AND owner_user_id = ? ORDER BY name ASC";
         $roles_stmt = mysqli_prepare($conn, $roles_query);
         if ($roles_stmt) {
             mysqli_stmt_bind_param($roles_stmt, "i", $partner_scope_owner_id);
@@ -1386,7 +1375,7 @@ unset($_SESSION['success'], $_SESSION['error']);
                     <div class="tab-pane fade <?php echo $active_tab === 'permissions' ? 'show active' : ''; ?>" id="permissions" role="tabpanel">
                     <div class="card mb-4"><div class="card-body">
                     <h2>Manage Role Permissions</h2>
-                    <p class="text-muted mb-4">Select a role to configure its permissions. Tier levels determine display order only.</p>
+                    <p class="text-muted mb-4">Select a role to configure its permissions.</p>
                     <?php if ($is_partner_owner_admin): ?>
                         <div class="alert alert-info">
                             Partner roles are scoped to your own store operations modules only.
@@ -1398,42 +1387,23 @@ unset($_SESSION['success'], $_SESSION['error']);
                     
                     <div class="role-selector">
                         <?php 
-                        // Sort roles by level (highest first) for hierarchical display
-                        usort($roles, function($a, $b) { return $b['level'] - $a['level']; });
+                        // Sort roles alphabetically by display name
+                        usort($roles, function($a, $b) use ($is_partner_owner_admin, $partner_scope_owner_id) {
+                            $name_a = rbacRoleDisplayName($a['name'] ?? '', $is_partner_owner_admin ? $partner_scope_owner_id : 0);
+                            $name_b = rbacRoleDisplayName($b['name'] ?? '', $is_partner_owner_admin ? $partner_scope_owner_id : 0);
+                            return strcasecmp($name_a, $name_b);
+                        });
                         
                         foreach ($roles as $role): 
-                            // Determine tier badge style based on level
-                            $tier_color = '#6b7280';
-                            $tier_icon = 'fas fa-user';
-                            if ($role['level'] >= 80) {
-                                $tier_color = '#d32f2f';
-                                $tier_icon = 'fas fa-crown';
-                            } elseif ($role['level'] >= 60) {
-                                $tier_color = '#f57c00';
-                                $tier_icon = 'fas fa-chart-line';
-                            } elseif ($role['level'] >= 40) {
-                                $tier_color = '#1976d2';
-                                $tier_icon = 'fas fa-users';
-                            } elseif ($role['level'] >= 20) {
-                                $tier_color = '#388e3c';
-                                $tier_icon = 'fas fa-cogs';
-                            } else {
-                                $tier_color = '#616161';
-                                $tier_icon = 'fas fa-eye';
-                            }
                         ?>
                             <div class="role-card <?php echo $role['id'] === $selected_role_id ? 'active' : ''; ?>" 
                                  data-role-search="<?php echo htmlspecialchars(strtolower(rbacRoleDisplayName($role['name'] ?? '', $is_partner_owner_admin ? $partner_scope_owner_id : 0) . ' ' . ($role['description'] ?? ''))); ?>"
                                  onclick="selectRole(<?php echo $role['id']; ?>)" style="cursor: pointer;">
                                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
                                     <h3 style="margin: 0; flex: 1;"><?php echo rbacRoleDisplayName($role['name'], $is_partner_owner_admin ? $partner_scope_owner_id : 0); ?></h3>
-                                    <span style="font-size: 16px; color: <?php echo $tier_color; ?>;" title="Level <?php echo $role['level']; ?>"><i class="<?php echo $tier_icon; ?>"></i></span>
+                                    <span style="font-size: 15px; color: #6b7280;"><i class="fas fa-shield-alt"></i></span>
                                 </div>
                                 <p style="margin: 0 0 8px 0;"><?php echo htmlspecialchars($role['description'] ?? ''); ?></p>
-                                <div style="font-size: 11px; color: <?php echo $tier_color; ?>; font-weight: 600; display: flex; justify-content: space-between; align-items: center;">
-                                    <span>TIER LEVEL: <?php echo $role['level']; ?></span>
-                                    <span class="tier-badge" style="background: <?php echo $tier_color; ?>;">L<?php echo $role['level']; ?></span>
-                                </div>
                             </div>
                         <?php endforeach; ?>
                     </div>
@@ -1447,10 +1417,6 @@ unset($_SESSION['success'], $_SESSION['error']);
                                         <i class="fas fa-shield-alt"></i> <?php echo rbacRoleDisplayName($selected_role['name'], $is_partner_owner_admin ? $partner_scope_owner_id : 0); ?>
                                     </h3>
                                     <p style="margin: 0; opacity: 0.9;"><?php echo htmlspecialchars($selected_role['description']); ?></p>
-                                </div>
-                                <div style="text-align: right;">
-                                    <div style="font-size: 32px; font-weight: bold;"><?php echo $selected_role['level']; ?></div>
-                                    <div style="font-size: 12px; opacity: 0.9;">TIER LEVEL</div>
                                 </div>
                             </div>
                             <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.2);">
@@ -1477,24 +1443,13 @@ unset($_SESSION['success'], $_SESSION['error']);
                                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
                                     <input type="hidden" name="return_tab" value="permissions">
 
-                                    <div class="col-md-4">
+                                    <div class="col-md-5">
                                         <label class="form-label mb-1">New Role Name *</label>
                                         <input type="text" name="clone_role_name" class="form-control" required
                                                maxlength="50" pattern="^[a-zA-Z0-9 _-]+$"
                                                placeholder="e.g., senior_dispatcher">
                                     </div>
-                                    <div class="col-md-2">
-                                        <label class="form-label mb-1">Tier Level</label>
-                                        <select name="clone_role_level" class="form-select">
-                                            <option value="100" <?php echo ((int)$selected_role['level'] === 100) ? 'selected' : ''; ?>>100</option>
-                                            <option value="80" <?php echo ((int)$selected_role['level'] === 80) ? 'selected' : ''; ?>>80</option>
-                                            <option value="60" <?php echo ((int)$selected_role['level'] === 60) ? 'selected' : ''; ?>>60</option>
-                                            <option value="40" <?php echo ((int)$selected_role['level'] === 40) ? 'selected' : ''; ?>>40</option>
-                                            <option value="20" <?php echo ((int)$selected_role['level'] === 20) ? 'selected' : ''; ?>>20</option>
-                                            <option value="10" <?php echo ((int)$selected_role['level'] === 10) ? 'selected' : ''; ?>>10</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-4">
+                                    <div class="col-md-5">
                                         <label class="form-label mb-1">Description (optional)</label>
                                         <input type="text" name="clone_role_description" class="form-control" maxlength="1000"
                                                placeholder="Leave blank to reuse source description">
@@ -1833,34 +1788,6 @@ unset($_SESSION['success'], $_SESSION['error']);
                     <div class="card mb-4"><div class="card-body">
                     <h2><?php echo $is_partner_owner_admin ? 'Create New Partner Role' : 'Create New Role'; ?></h2>
                     
-                    <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #1976d2;">
-                        <h4 style="margin: 0 0 10px 0; color: #1565c0;">
-                            <i class="fas fa-info-circle"></i> Current Role Hierarchy
-                        </h4>
-                        <div style="color: #555; font-size: 14px; line-height: 1.8;">
-                            <?php
-                            $existing_roles = $is_partner_owner_admin ? $roles : getAllRoles($conn, true);
-                            $roles_by_level = [];
-                            foreach ($existing_roles as $role) {
-                                $level = $role['level'];
-                                if (!isset($roles_by_level[$level])) {
-                                    $roles_by_level[$level] = [];
-                                }
-                                $roles_by_level[$level][] = $role;
-                            }
-                            krsort($roles_by_level);
-                            
-                            foreach ($roles_by_level as $level => $roles_group) {
-                                echo '<strong>Level ' . $level . ':</strong> ';
-                                $names = array_map(function($r) use ($is_partner_owner_admin, $partner_scope_owner_id) {
-                                    return rbacRoleDisplayName($r['name'], $is_partner_owner_admin ? $partner_scope_owner_id : 0);
-                                }, $roles_group);
-                                echo implode(', ', $names) . '<br>';
-                            }
-                            ?>
-                        </div>
-                    </div>
-                    
                     <?php if ($is_partner_owner_admin && !$partner_roles_owner_column_exists): ?>
                         <div class="alert alert-error">
                             Cannot create partner roles until <code>roles.owner_user_id</code> exists. Run Tenant Scope Migration first.
@@ -1883,23 +1810,6 @@ unset($_SESSION['success'], $_SESSION['error']);
                             <textarea name="role_description" id="role_description" class="form-control" 
                                       placeholder="Explain what this role can do and its responsibilities..." maxlength="1000" required></textarea>
                             <small style="color: #999;">Be specific about the role's purpose and scope</small>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="role_level">Role Tier *</label>
-                            <select name="role_level" id="role_level" class="form-select" required>
-                                <option value="">-- Select Role Tier --</option>
-                                <option value="100">Executive Level (100) - System/Business Owners</option>
-                                <option value="80">Senior Management (80) - Shop Owners, Directors</option>
-                                <option value="60" selected>Department Management (60) - Department Heads</option>
-                                <option value="40">Team Leadership (40) - Team Leads, Supervisors</option>
-                                <option value="20">Operational Staff (20) - Staff, Drivers, Workers</option>
-                                <option value="10">View-Only Access (10) - Limited/Read-Only</option>
-                            </select>
-                            <small style="color: #999;">
-                                <i class="fas fa-lightbulb"></i> Tier determines display order in role lists. 
-                                Permissions are assigned separately after creation.
-                            </small>
                         </div>
                         
                         <button type="submit" class="btn btn-success mt-3">
