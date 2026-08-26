@@ -826,3 +826,21 @@ body {
         justify-content: center;
     }
 }
+
+/* Global Dark Mode Base Overrides */
+[data-theme="dark"], body.dark-mode {
+    background-color: #121824 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode a {
+    color: #cbd5e1;
+}
+
+body.dark-mode a:hover {
+    color: #ffffff;
+}
+
+body.dark-mode hr {
+    border-color: #334155 !important;
+}
