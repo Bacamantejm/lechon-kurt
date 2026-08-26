@@ -44,6 +44,8 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 // Customer Account Protected Routes
 Route::middleware('auth')->group(function () {
     Route::get('/my-account', [AccountController::class, 'index'])->name('account.profile');
+    Route::post('/my-account/profile', [AccountController::class, 'updateProfile'])->name('account.profile.update');
+    Route::post('/my-account/password', [AccountController::class, 'updatePassword'])->name('account.password.update');
     Route::get('/my-orders', [AccountController::class, 'orders'])->name('account.orders');
     Route::get('/my-favorites', [AccountController::class, 'favorites'])->name('account.favorites');
     Route::post('/favorites/toggle', [AccountController::class, 'toggleFavorite'])->name('favorites.toggle');
