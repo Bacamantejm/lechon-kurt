@@ -121,6 +121,41 @@ function sahEnsureStoreLocationAvailabilitySchema($conn): void
     if (!sahIndexExists($conn, 'store_locations', 'idx_store_email')) {
         mysqli_query($conn, "ALTER TABLE store_locations ADD INDEX idx_store_email (email)");
     }
+
+    sahEnsureCaviteBranchesSeed($conn);
+}
+
+function sahEnsureCaviteBranchesSeed($conn): void
+{
+    if (!($conn instanceof mysqli)) {
+        return;
+    }
+    
+    static $seeded = false;
+    if ($seeded) {
+        return;
+    }
+    $seeded = true;
+
+    $chk = mysqli_query($conn, "SELECT COUNT(*) AS total FROM store_locations WHERE province = 'Cavite'");
+    $total = 0;
+    if ($chk && ($row = mysqli_fetch_assoc($chk))) {
+        $total = (int)$row['total'];
+        mysqli_free_result($chk);
+    }
+
+    if ($total < 6) {
+        $seed_file = __DIR__ . '/../database/schema_updates/cavite_sample_stores_seed.sql';
+        if (file_exists($seed_file)) {
+            $sql = file_get_contents($seed_file);
+            mysqli_multi_query($conn, $sql);
+            while (mysqli_more_results($conn) && mysqli_next_result($conn)) {
+                if ($extra = mysqli_store_result($conn)) {
+                    mysqli_free_result($extra);
+                }
+            }
+        }
+    }
 }
 
 function sahNormalizeOperatingDays($days): string
