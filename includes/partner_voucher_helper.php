@@ -250,31 +250,20 @@ if (!function_exists('pvGetCartScope')) {
         }
 
         $seller_set = [];
-        $unknown_seller_items = 0;
         $subtotal = 0.0;
 
         foreach ($items as $item) {
             $subtotal += (float)$item['price'] * (int)$item['quantity'];
             $seller_id = (int)($item['seller_id'] ?? 0);
-            if ($seller_id > 0) {
-                $seller_set[$seller_id] = true;
-            } else {
-                $unknown_seller_items++;
-            }
+            $seller_set[$seller_id] = true;
         }
 
         $seller_ids = array_keys($seller_set);
-        $is_single_seller = count($seller_ids) === 1 && $unknown_seller_items === 0;
+        $is_single_seller = (count($seller_ids) === 1);
         $message = '';
 
         if (!$is_single_seller) {
-            if (count($seller_ids) > 1) {
-                $message = 'Voucher can only be used when all cart items are from one shop.';
-            } elseif ($unknown_seller_items > 0) {
-                $message = 'Some cart items could not be matched to a shop.';
-            } else {
-                $message = 'Voucher is unavailable for this cart.';
-            }
+            $message = 'Voucher can only be used when all cart items are from one shop.';
         }
 
         return [
@@ -290,57 +279,30 @@ if (!function_exists('pvGetCartScope')) {
 
 if (!function_exists('pvGetCheckoutTenantScope')) {
     function pvGetCheckoutTenantScope($conn, $cart) {
-        $items = pvAttachSellerIdsToCartItems($conn, $cart);
-        if (empty($items)) {
+        $scope = pvGetCartScope($conn, $cart);
+        if (empty($scope['has_items'])) {
             return [
-                'has_items' => false,
-                'is_valid' => false,
-                'single_seller' => false,
+                'is_valid' => true,
                 'seller_id' => 0,
-                'seller_ids' => [],
-                'unknown_item_count' => 0,
                 'item_count' => 0,
-                'message' => 'Your cart is empty.'
+                'message' => ''
             ];
         }
 
-        $seller_set = [];
-        $unknown_item_count = 0;
-
-        foreach ($items as $item) {
-            $seller_id = (int)($item['seller_id'] ?? 0);
-            if ($seller_id > 0) {
-                $seller_set[$seller_id] = true;
-            } else {
-                $unknown_item_count++;
-            }
-        }
-
-        $seller_ids = array_map('intval', array_keys($seller_set));
-        sort($seller_ids);
-        $single_seller = count($seller_ids) === 1 && $unknown_item_count === 0;
-        $is_valid = $single_seller;
-
-        $message = '';
-        if (!$is_valid) {
-            if (count($seller_ids) > 1) {
-                $message = 'Your cart has items from multiple stores. Please checkout one store at a time.';
-            } elseif ($unknown_item_count > 0) {
-                $message = 'Some cart items are no longer available for checkout. Please update your cart and try again.';
-            } else {
-                $message = 'Your cart is not eligible for checkout right now.';
-            }
+        if (empty($scope['single_seller'])) {
+            return [
+                'is_valid' => false,
+                'seller_id' => 0,
+                'item_count' => (int)($scope['item_count'] ?? 0),
+                'message' => 'Your cart has items from multiple stores. Please checkout one store at a time.'
+            ];
         }
 
         return [
-            'has_items' => true,
-            'is_valid' => $is_valid,
-            'single_seller' => $single_seller,
-            'seller_id' => $single_seller ? (int)$seller_ids[0] : 0,
-            'seller_ids' => $seller_ids,
-            'unknown_item_count' => $unknown_item_count,
-            'item_count' => count($items),
-            'message' => $message
+            'is_valid' => true,
+            'seller_id' => (int)$scope['seller_id'],
+            'item_count' => (int)($scope['item_count'] ?? 0),
+            'message' => ''
         ];
     }
 }
@@ -349,11 +311,11 @@ if (!function_exists('pvGetVoucherByCodeForSeller')) {
     function pvGetVoucherByCodeForSeller($conn, $seller_id, $voucher_code) {
         $seller_id = (int)$seller_id;
         $voucher_code = pvNormalizeVoucherCode($voucher_code);
-        if ($seller_id <= 0 || $voucher_code === '') {
+        if ($seller_id < 0 || $voucher_code === '') {
             return null;
         }
 
-        $stmt = mysqli_prepare($conn, "SELECT * FROM partner_vouchers WHERE (seller_id = ? OR seller_id = 0) AND code = ? ORDER BY seller_id DESC LIMIT 1");
+        $stmt = mysqli_prepare($conn, "SELECT * FROM partner_vouchers WHERE (seller_id = ? OR seller_id = 0) AND code = ? AND is_active = 1 ORDER BY seller_id DESC LIMIT 1");
         if (!$stmt) {
             return null;
         }
@@ -372,28 +334,24 @@ if (!function_exists('pvGetVoucherByCodeForSeller')) {
 if (!function_exists('pvComputeVoucherDiscount')) {
     function pvComputeVoucherDiscount($voucher, $subtotal) {
         $subtotal = (float)$subtotal;
-        if (!is_array($voucher) || $subtotal <= 0) {
+        if ($subtotal <= 0 || !is_array($voucher)) {
             return 0.0;
         }
 
-        $discount_type = strtolower(trim((string)($voucher['discount_type'] ?? 'fixed')));
-        $discount_value = (float)($voucher['discount_value'] ?? 0);
-        $max_discount = isset($voucher['max_discount_amount']) ? (float)$voucher['max_discount_amount'] : 0.0;
-
-        if ($discount_value <= 0) {
-            return 0.0;
-        }
+        $type = (string)($voucher['discount_type'] ?? 'fixed');
+        $val = (float)($voucher['discount_value'] ?? 0);
+        $max_disc = (float)($voucher['max_discount_amount'] ?? 0);
 
         $discount = 0.0;
-        if ($discount_type === 'percent') {
-            $discount = $subtotal * ($discount_value / 100);
+        if ($type === 'percent') {
+            $discount = ($subtotal * ($val / 100.0));
+            if ($max_disc > 0 && $discount > $max_disc) {
+                $discount = $max_disc;
+            }
         } else {
-            $discount = $discount_value;
+            $discount = $val;
         }
 
-        if ($max_discount > 0 && $discount > $max_discount) {
-            $discount = $max_discount;
-        }
         if ($discount > $subtotal) {
             $discount = $subtotal;
         }
@@ -416,7 +374,7 @@ if (!function_exists('pvValidateVoucherForCart')) {
 
         $seller_id = (int)($scope['seller_id'] ?? 0);
         $subtotal = (float)($scope['subtotal'] ?? 0);
-        if ($seller_id <= 0 || $subtotal <= 0) {
+        if ($seller_id < 0 || $subtotal <= 0) {
             return ['success' => false, 'message' => 'Voucher could not be applied to this cart.'];
         }
 
@@ -828,5 +786,56 @@ if (!function_exists('pvRedeemVoucherForOrder')) {
         }
 
         return ['success' => true];
+    }
+}
+
+if (!function_exists('pvFetchAvailableVouchersForCart')) {
+    function pvFetchAvailableVouchersForCart($conn, $user_id, $cart) {
+        pvEnsureVoucherSchema($conn);
+        $scope = pvGetCartScope($conn, $cart);
+        if (empty($scope['has_items'])) {
+            return [];
+        }
+
+        $cart_seller_id = (int)($scope['seller_id'] ?? 0);
+        $cart_subtotal = (float)($scope['subtotal'] ?? 0);
+
+        $sql = "SELECT pv.*, COALESCE(NULLIF(TRIM(u.business_name), ''), u.full_name, '') AS store_name 
+                FROM partner_vouchers pv 
+                LEFT JOIN users u ON pv.seller_id = u.id 
+                WHERE pv.is_active = 1 
+                  AND (pv.seller_id = 0 OR pv.seller_id = {$cart_seller_id})
+                  AND (pv.start_at IS NULL OR pv.start_at <= NOW())
+                  AND (pv.end_at IS NULL OR pv.end_at >= NOW())
+                ORDER BY pv.seller_id DESC, pv.discount_value DESC";
+        $res = @mysqli_query($conn, $sql);
+        $vouchers = [];
+
+        if ($res) {
+            while ($v = mysqli_fetch_assoc($res)) {
+                $validation = pvValidateVoucherForCart($conn, $v, (int)$user_id, $scope);
+                $is_eligible = !empty($validation['success']);
+                $discount_amount = $is_eligible ? (float)$validation['discount_amount'] : (float)pvComputeVoucherDiscount($v, $cart_subtotal);
+
+                $vouchers[] = [
+                    'id' => (int)$v['id'],
+                    'code' => (string)$v['code'],
+                    'name' => (string)$v['name'],
+                    'description' => (string)($v['description'] ?? ''),
+                    'discount_type' => (string)$v['discount_type'],
+                    'discount_value' => (float)$v['discount_value'],
+                    'min_order_amount' => (float)$v['min_order_amount'],
+                    'max_discount_amount' => (float)($v['max_discount_amount'] ?? 0),
+                    'seller_id' => (int)$v['seller_id'],
+                    'store_name' => (string)($v['store_name'] ?? ''),
+                    'is_eligible' => $is_eligible,
+                    'ineligible_reason' => $is_eligible ? '' : (string)($validation['message'] ?? 'Min. spend not reached'),
+                    'calculated_discount' => $discount_amount,
+                    'badge' => ((int)$v['seller_id'] > 0) ? 'STORE DEAL' : 'PLATFORM VOUCHER'
+                ];
+            }
+            @mysqli_free_result($res);
+        }
+        return $vouchers;
     }
 }

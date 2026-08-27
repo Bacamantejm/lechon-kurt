@@ -1,16 +1,27 @@
 <?php
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    @session_start();
+}
 
-header('Content-Type: application/json');
+@error_reporting(0);
+@ini_set('display_errors', '0');
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    echo json_encode(['success' => false, 'message' => 'Invalid request method.']);
+if (ob_get_length()) {
+    @ob_clean();
+}
+@ob_start();
+
+function sendVoucherJsonResponse($data) {
+    if (ob_get_length()) {
+        @ob_clean();
+    }
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($data);
     exit;
 }
 
-if (!isset($_SESSION['user_id'])) {
-    echo json_encode(['success' => false, 'message' => 'Please log in first.']);
-    exit;
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    sendVoucherJsonResponse(['success' => false, 'message' => 'Invalid request method.']);
 }
 
 if (!isset($_SESSION['cart']) || !is_array($_SESSION['cart'])) {
@@ -22,7 +33,7 @@ require_once __DIR__ . '/includes/partner_voucher_helper.php';
 
 pvEnsureVoucherSchema($conn);
 
-$user_id = (int)$_SESSION['user_id'];
+$user_id = (int)($_SESSION['user_id'] ?? ($_SESSION['customer_id'] ?? 0));
 $action = strtolower(trim((string)($_POST['action'] ?? 'apply')));
 
 $subtotal = 0.0;
@@ -34,7 +45,7 @@ $vat_amount = round($subtotal * 0.12, 2);
 
 if ($action === 'remove') {
     pvClearAppliedVoucherSession();
-    echo json_encode([
+    sendVoucherJsonResponse([
         'success' => true,
         'message' => 'Voucher removed.',
         'voucher_applied' => false,
@@ -44,13 +55,12 @@ if ($action === 'remove') {
         'subtotal' => $subtotal,
         'vat_amount' => $vat_amount
     ]);
-    exit;
 }
 
 $raw_code = (string)($_POST['code'] ?? '');
 $apply_result = pvApplyVoucherCodeForSession($conn, $user_id, $raw_code, $_SESSION['cart']);
 if (empty($apply_result['success'])) {
-    echo json_encode([
+    sendVoucherJsonResponse([
         'success' => false,
         'message' => $apply_result['message'] ?? 'Voucher could not be applied.',
         'voucher_applied' => false,
@@ -58,12 +68,11 @@ if (empty($apply_result['success'])) {
         'subtotal' => $subtotal,
         'vat_amount' => $vat_amount
     ]);
-    exit;
 }
 
 $state = pvResolveAppliedVoucherState($conn, $user_id, $_SESSION['cart']);
 if (empty($state['applied'])) {
-    echo json_encode([
+    sendVoucherJsonResponse([
         'success' => false,
         'message' => $state['message'] ?: 'Voucher could not be applied.',
         'voucher_applied' => false,
@@ -71,10 +80,9 @@ if (empty($state['applied'])) {
         'subtotal' => $subtotal,
         'vat_amount' => $vat_amount
     ]);
-    exit;
 }
 
-echo json_encode([
+sendVoucherJsonResponse([
     'success' => true,
     'message' => 'Voucher applied successfully.',
     'voucher_applied' => true,

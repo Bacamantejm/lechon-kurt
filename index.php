@@ -3207,8 +3207,14 @@ body {
                                             <?php echo htmlspecialchars($store['summary']); ?>
                                         </div>
                                         
+                                        <!-- DSS Distance & Delivery ETA Badges -->
+                                        <div class="panda-card-dss-info" style="display:flex; align-items:center; gap:8px; margin:6px 0; font-size:0.75rem; font-weight:700;">
+                                            <span style="display:inline-flex; align-items:center; gap:4px; background:#fff1f0; color:#b3261e; padding:3px 8px; border-radius:6px; border:1px solid #fee4e2;" data-role="dss-eta"><i class="fas fa-truck-fast"></i> <span data-role="eta-text">20-30 min</span></span>
+                                            <span style="display:inline-flex; align-items:center; gap:4px; background:#eff8ff; color:#175cd3; padding:3px 8px; border-radius:6px; border:1px solid #b2ddff;" data-role="dss-distance"><i class="fas fa-location-dot"></i> <span data-role="distance-text">Near Cavite</span></span>
+                                        </div>
+
                                         <div class="panda-card-footer-line">
-                                            <span class="panda-card-city"><i class="fas fa-location-dot"></i> <?php echo htmlspecialchars($city_label); ?></span>
+                                            <span class="panda-card-city"><i class="fas fa-store"></i> <?php echo htmlspecialchars($city_label); ?></span>
                                             <strong class="panda-card-price-text"><?php echo htmlspecialchars($price); ?></strong>
                                         </div>
                                     </div>
@@ -3553,22 +3559,19 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function sortRows() {
         if (!storeGrid) return;
-        if ((currentSort === 'distance' || currentSort === 'fastest') && !locationReady) {
-            if (detectNearestStatus) detectNearestStatus.textContent = 'Enable location first to sort by distance or fastest delivery.';
-        }
         const sorted = [...rows].sort(function (left, right) {
             if (currentSort === 'top_rated') {
                 return getSortValue(left, 'top_rated') - getSortValue(right, 'top_rated');
             }
             if (currentSort === 'fastest') {
-                const leftMinutes = parseFloat(left.dataset.minutes || '');
-                const rightMinutes = parseFloat(right.dataset.minutes || '');
-                const leftValue = Number.isFinite(leftMinutes) ? leftMinutes : getSortValue(left, 'distance');
-                const rightValue = Number.isFinite(rightMinutes) ? rightMinutes : getSortValue(right, 'distance');
-                return leftValue - rightValue;
+                const leftMinutes = parseFloat(left.dataset.minutes || '999');
+                const rightMinutes = parseFloat(right.dataset.minutes || '999');
+                return leftMinutes - rightMinutes;
             }
             if (currentSort === 'distance') {
-                return getSortValue(left, 'distance') - getSortValue(right, 'distance');
+                const leftDist = parseFloat(left.dataset.distance || '999');
+                const rightDist = parseFloat(right.dataset.distance || '999');
+                return leftDist - rightDist;
             }
             return getSortValue(left, 'relevance') - getSortValue(right, 'relevance');
         });
@@ -3643,7 +3646,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const matchLive = useServerMatches ? true : (!filterLiveOnly || !filterLiveOnly.checked || isOpen);
             const matchPartner = useServerMatches ? true : (!filterPartnerOnly || !filterPartnerOnly.checked || isPartner);
             const matchBranch = useServerMatches ? true : (!filterBranchOnly || !filterBranchOnly.checked || isBranch);
-            const matchNearby = !filterNearbyOnly || !filterNearbyOnly.checked || (locationReady && Number.isFinite(distance) && distance <= 35);
+            const matchNearby = !filterNearbyOnly || !filterNearbyOnly.checked || (Number.isFinite(distance) && distance <= 15);
             if (matchQuery && matchRatings && matchLive && matchPartner && matchBranch && matchNearby) {
                 matchedRows.push(row);
             }
@@ -3662,7 +3665,7 @@ document.addEventListener('DOMContentLoaded', function () {
         updatePaginationUi(shownCount, matchedCount, shouldUseServerResults, useServerMatches);
     }
 
-    function updateNearest(lat, lng) {
+    function updateNearest(lat, lng, isUserGps) {
         let nearestName = '';
         let nearestDistance = Number.POSITIVE_INFINITY;
 
@@ -3670,21 +3673,38 @@ document.addEventListener('DOMContentLoaded', function () {
             const storeLat = parseFloat(row.dataset.lat || '');
             const storeLng = parseFloat(row.dataset.lng || '');
             const timeLabel = row.querySelector('[data-role="time-label"]');
+            const etaText = row.querySelector('[data-role="eta-text"]');
+            const distanceText = row.querySelector('[data-role="distance-text"]');
 
-            if (!Number.isFinite(storeLat) || !Number.isFinite(storeLng)) {
-                row.dataset.distance = '';
-                row.dataset.minutes = '';
+            if (!Number.isFinite(storeLat) || !Number.isFinite(storeLng) || storeLat === 0 || storeLng === 0) {
+                row.dataset.distance = '999';
+                row.dataset.minutes = '999';
                 if (timeLabel) timeLabel.textContent = row.dataset.open === '1' ? 'Open now' : 'Closed now';
+                if (etaText) etaText.textContent = '20-30 min';
+                if (distanceText) distanceText.textContent = 'Near Cavite';
                 return;
             }
 
             const distanceKm = haversineKm(lat, lng, storeLat, storeLng);
-            const minutes = Math.max(5, Math.round((distanceKm * 4.2) + 6));
+            const minTime = Math.max(15, Math.round((distanceKm * 3.5) + 15));
+            const maxTime = minTime + 10;
+            
             row.dataset.distance = distanceKm.toFixed(2);
-            row.dataset.minutes = minutes.toString();
+            row.dataset.minutes = minTime.toString();
+
+            const isOpen = row.dataset.open === '1';
+            const etaString = minTime + '-' + maxTime + ' min';
 
             if (timeLabel) {
-                timeLabel.textContent = distanceKm.toFixed(1) + ' km | ' + minutes + ' min';
+                timeLabel.innerHTML = isOpen 
+                    ? '<i class="fas fa-truck-fast"></i> ' + etaString + ' &bull; ' + distanceKm.toFixed(1) + ' km' 
+                    : '<i class="fas fa-store-slash"></i> Closed &bull; ' + distanceKm.toFixed(1) + ' km';
+            }
+            if (etaText) {
+                etaText.textContent = etaString;
+            }
+            if (distanceText) {
+                distanceText.textContent = distanceKm.toFixed(1) + ' km away';
             }
 
             if (distanceKm < nearestDistance) {
@@ -3694,17 +3714,23 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         locationReady = true;
-        if (detectNearestStatus) detectNearestStatus.textContent = 'Location detected. Stores can now be sorted by fastest delivery or distance.';
+        if (isUserGps && detectNearestStatus) {
+            detectNearestStatus.textContent = 'GPS location detected! Stores sorted by exact real-time distance and delivery ETA.';
+        } else if (detectNearestStatus) {
+            detectNearestStatus.textContent = 'Calculated distances & delivery ETAs for Cavite stores.';
+        }
         if (distanceSummary) {
             distanceSummary.textContent = nearestName !== ''
-                ? 'Nearest detected shop: ' + nearestName + ' at about ' + nearestDistance.toFixed(1) + ' km from your current location.'
-                : 'Location detected, but no stores with saved coordinates were found.';
+                ? 'Nearest Cavite store: ' + nearestName + ' (~' + nearestDistance.toFixed(1) + ' km away)'
+                : 'Store distances updated based on Cavite location.';
         }
 
-        currentSort = 'distance';
-        sortInputs.forEach(function (input) {
-            input.checked = input.value === 'distance';
-        });
+        if (isUserGps) {
+            currentSort = 'distance';
+            sortInputs.forEach(function (input) {
+                input.checked = input.value === 'distance';
+            });
+        }
         sortRows();
         applyFilters(heroSearch || gridSearch, { preservePagination: true });
     }
@@ -3722,10 +3748,6 @@ document.addEventListener('DOMContentLoaded', function () {
     [filterRatings4, filterLiveOnly, filterPartnerOnly, filterBranchOnly, filterNearbyOnly].forEach(function (control) {
         if (!control) return;
         control.addEventListener('change', function () {
-            if (control === filterNearbyOnly && filterNearbyOnly.checked && !locationReady) {
-                if (detectNearestStatus) detectNearestStatus.textContent = 'Nearby filter will start working after you allow location access.';
-                if (distanceSummary) distanceSummary.textContent = 'Use "Detect nearest shops" to filter the store list by real distance.';
-            }
             applyFilters(heroSearch || gridSearch);
         });
     });
@@ -3764,15 +3786,28 @@ document.addEventListener('DOMContentLoaded', function () {
             if (detectNearestStatus) detectNearestStatus.textContent = 'Detecting your current location...';
             navigator.geolocation.getCurrentPosition(
                 function (position) {
-                    updateNearest(position.coords.latitude, position.coords.longitude);
+                    updateNearest(position.coords.latitude, position.coords.longitude, true);
                 },
                 function () {
-                    if (detectNearestStatus) detectNearestStatus.textContent = 'Location permission was denied. You can still browse and sort by rating.';
-                    if (distanceSummary) distanceSummary.textContent = 'Nearest Cavite-style sorting needs browser location access. Please allow location if you want true nearest results.';
+                    if (detectNearestStatus) detectNearestStatus.textContent = 'Location permission was denied. Default Cavite distances remain active.';
                 },
                 { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
             );
         });
+    }
+
+    // Immediate initial DSS calculation on load using Cavite center coordinates (14.3294, 120.9367)
+    updateNearest(14.3294, 120.9367, false);
+
+    // Try auto-detecting user location silently if permission was previously granted
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            function (position) {
+                updateNearest(position.coords.latitude, position.coords.longitude, true);
+            },
+            function () { /* Keep default Cavite calculation */ },
+            { enableHighAccuracy: false, timeout: 4000, maximumAge: 300000 }
+        );
     }
 
     const params = new URLSearchParams(window.location.search);

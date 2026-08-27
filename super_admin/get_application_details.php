@@ -244,7 +244,7 @@ if (saTableExists($conn, 'franchise_applications')) {
         </div>
     </div>
     
-    <?php if ($app['status'] === 'pending'): ?>
+    <?php if ($app['status'] === 'pending' || $app['status'] === 'incomplete'): ?>
         <div class="app-actions">
             <form method="POST" action="../super_admin/franchise_applications.php" id="appForm">
                 <input type="hidden" name="app_id" value="<?php echo $app_id; ?>">
@@ -252,23 +252,26 @@ if (saTableExists($conn, 'franchise_applications')) {
                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token, ENT_QUOTES, 'UTF-8'); ?>">
                 
                 <div class="form-group">
-                    <label>Admin Notes</label>
-                    <textarea name="admin_notes" class="form-control" rows="3"><?php echo htmlspecialchars($app['admin_notes'] ?? ''); ?></textarea>
+                    <label>Admin Notes / Missing Requirements Feedback</label>
+                    <textarea name="admin_notes" class="form-control" rows="3" placeholder="Specify any missing documents or admin notes to include in the client email..."><?php echo htmlspecialchars($app['admin_notes'] ?? ''); ?></textarea>
                 </div>
                 
-                <div class="action-buttons">
+                <div class="action-buttons" style="display:flex; gap:10px; flex-wrap:wrap;">
                     <button type="submit"
                             name="app_action"
                             value="approve"
                             class="btn btn-outline-success"
                             data-sa-confirm="1"
                             data-sa-confirm-title="Approve Application?"
-                            data-sa-confirm-text="This will approve this business application and grant partner access controls."
+                            data-sa-confirm-text="This will approve this business application, notify the client via email, and grant partner access controls."
                             data-sa-confirm-confirm-text="Yes, Approve"
                             data-sa-confirm-confirm-color="#166534">
                         <i class="fas fa-check"></i> Approve Application
                     </button>
-                    <button type="button" class="btn btn-outline-danger" onclick="handleReject('<?php echo htmlspecialchars($app['application_number']); ?>', <?php echo $app_id; ?>)">
+                    <button type="button" class="btn btn-outline-warning" onclick="handleIncomplete('<?php echo htmlspecialchars($app['application_number']); ?>')">
+                        <i class="fas fa-exclamation-triangle"></i> Mark Incomplete
+                    </button>
+                    <button type="button" class="btn btn-outline-danger" onclick="handleReject('<?php echo htmlspecialchars($app['application_number']); ?>')">
                         <i class="fas fa-times"></i> Reject Application
                     </button>
                 </div>

@@ -83,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_action'])) {
     $action = strtolower(trim((string)($_POST['app_action'] ?? '')));
     $notes = trim((string)($_POST['admin_notes'] ?? ''));
 
-    $status_map = ['approve' => 'approved', 'reject' => 'rejected'];
+    $status_map = ['approve' => 'approved', 'reject' => 'rejected', 'incomplete' => 'incomplete'];
     $new_status = $status_map[$action] ?? null;
 
     if ($app_id <= 0 || !$new_status) {
@@ -186,6 +186,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_action'])) {
         if ($new_status === 'approved') {
             $title = "Franchise Application Approved!";
             $message = "Congratulations! Your franchise application for " . htmlspecialchars($app_data['business_name']) . " has been approved. You can now access the admin portal and manage your own store products. Your 1-month platform trial starts today.";
+        } elseif ($new_status === 'incomplete') {
+            $title = "Action Required: Franchise Application Incomplete";
+            $message = "Your franchise application for " . htmlspecialchars($app_data['business_name']) . " has missing requirements. " . (!empty($notes) ? "Details: " . substr($notes, 0, 100) . "..." : "Please upload your complete compliance documents.");
         } else {
             $title = "Franchise Application Update";
             $message = "Your franchise application has been reviewed. " . (!empty($notes) ? "Feedback: " . substr($notes, 0, 100) . "..." : "Please check your email for more details.");
@@ -201,12 +204,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_action'])) {
             'franchise_application'
         );
 
-        sendFranchiseNotification($app_data, $new_status, $notes);
+        sendFranchiseNotification($conn, $app_data, $new_status, $notes);
 
         if ($new_status === 'approved' && is_array($store_result)) {
             $store_note = !empty($store_result['created']) ? 'A new store location was created.' : 'Existing store location was updated.';
             $trial_note = $trial_started ? ' A 1-month trial subscription was also activated.' : ' Trial subscription setup was skipped because an active billing profile already exists.';
             saSetFlash('success', "Application approved successfully. {$store_note} Business partner now has admin access with store-scoped product management.{$trial_note}");
+        } elseif ($new_status === 'incomplete') {
+            saSetFlash('warning', 'Application marked as Incomplete Requirements. Notification email sent to applicant.');
         } else {
             saSetFlash('success', 'Application status updated successfully. Notification email sent to applicant.');
         }
@@ -220,58 +225,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_action'])) {
     exit;
 }
 
-function sendFranchiseNotification($app_data, $status, $admin_notes) {
-    include '../email_service.php';
-
-    $subject = ($status === 'approved')
-        ? "Good News! Your Business Application Has Been Approved"
-        : "Update on Your Business Application";
-
-    if ($status === 'approved') {
-        $message = "
-        <h2>Congratulations!</h2>
-        <p>Dear " . htmlspecialchars($app_data['full_name']) . ",</p>
-        <p>We are pleased to inform you that your business application has been <strong>APPROVED</strong>!</p>
-        <p><strong>Application Number:</strong> " . htmlspecialchars($app_data['application_number']) . "</p>
-        <p><strong>Business Name:</strong> " . htmlspecialchars($app_data['business_name']) . "</p>
-        <p><strong>Capital Investment:</strong> PHP " . number_format((float)($app_data['capital_investment'] ?? 0), 2) . "</p>
-        ";
-
-        if (!empty($admin_notes)) {
-            $message .= "<p><strong>Admin Notes:</strong><br>" . nl2br(htmlspecialchars($admin_notes)) . "</p>";
+function sendFranchiseNotification($conn, $app_data, $status, $admin_notes) {
+    try {
+        require_once dirname(__DIR__) . '/email_service.php';
+        $recipient_email = trim((string)($app_data['email'] ?? $app_data['contact_email'] ?? ''));
+        if ($recipient_email !== '') {
+            $mailer = new EmailService($conn);
+            $mailer->sendFranchiseStatusEmail($recipient_email, $status, $app_data, $admin_notes);
         }
-
-        $message .= "
-        <p>Your account now has business-owner admin access so you can manage your own store and menu/products.</p>
-        <p>You also have a <strong>1-month platform trial</strong> starting from your approval date. During this trial, you can explore the partner modules and billing features before paid partner billing applies.</p>
-        <p>Our team will be in touch with you shortly to discuss the next steps and franchise agreement details.</p>
-        <p>Thank you for choosing to be part of our franchise family!</p>
-        <p>Best regards,<br>Lechong Sarao Management Team</p>
-        ";
-    } else {
-        $message = "
-        <h2>Update on Your Business Application</h2>
-        <p>Dear " . htmlspecialchars($app_data['full_name']) . ",</p>
-        <p>Thank you for your interest in becoming a Lechong Sarao franchisee. After careful review, we regret to inform you that your application status is <strong>REJECTED</strong>.</p>
-        <p><strong>Application Number:</strong> " . htmlspecialchars($app_data['application_number']) . "</p>
-        ";
-
-        if (!empty($admin_notes)) {
-            $message .= "<p><strong>Reason/Feedback:</strong><br>" . nl2br(htmlspecialchars($admin_notes)) . "</p>";
-        }
-
-        $message .= "
-        <p>You may submit <strong>one final application</strong> after a <strong>3-day cooldown period</strong>, provided you still have a remaining attempt. Please use this waiting time to complete or improve your compliance documents.</p>
-        <p>If you have any questions or would like feedback on your application, please feel free to contact us.</p>
-        <p>Best regards,<br>Lechong Sarao Management Team</p>
-        ";
+    } catch (Throwable $e) {
+        error_log("Failed to send franchise status email notification: " . $e->getMessage());
     }
-
-    $headers = "MIME-Version: 1.0" . "\r\n";
-    $headers .= "Content-type: text/html; charset=UTF-8" . "\r\n";
-    $headers .= "From: noreply@lechongsarao.com" . "\r\n";
-
-    @mail($app_data['email'], $subject, $message, $headers);
 }
 
 $app_stats = ['total' => 0, 'pending' => 0, 'approved' => 0, 'rejected' => 0];
@@ -321,7 +285,7 @@ if (!function_exists('saApplicationStatusChipClass')) {
         if ($status === 'approved') {
             return 'chip-success';
         }
-        if ($status === 'pending') {
+        if ($status === 'pending' || $status === 'incomplete') {
             return 'chip-warning';
         }
         if ($status === 'rejected') {
@@ -374,6 +338,7 @@ saRenderModuleHeader('Business Applications', 'Business Applications', $admin_in
             <option value="" <?php echo $status_filter === '' ? 'selected' : ''; ?>>All Status</option>
             <option value="pending" <?php echo $status_filter === 'pending' ? 'selected' : ''; ?>>Pending</option>
             <option value="approved" <?php echo $status_filter === 'approved' ? 'selected' : ''; ?>>Approved</option>
+            <option value="incomplete" <?php echo $status_filter === 'incomplete' ? 'selected' : ''; ?>>Incomplete Requirements</option>
             <option value="rejected" <?php echo $status_filter === 'rejected' ? 'selected' : ''; ?>>Rejected</option>
         </select>
         <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Search</button>
@@ -460,6 +425,29 @@ $extra_scripts = <<<'HTML'
             },
             error: function() {
                 $('#appDetails').html('<div class="alert alert-danger">Unable to load application details.</div>');
+            }
+        });
+    }
+
+    function handleIncomplete(applicationNumber) {
+        Swal.fire({
+            title: 'Mark Incomplete Requirements',
+            html: 'Are you sure you want to mark application <strong>' + applicationNumber + '</strong> as <strong>INCOMPLETE REQUIREMENTS</strong>?<br><br>An email notification with admin notes will be sent to the applicant asking for completed documents.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#f59e0b',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Yes, Mark Incomplete & Notify Client',
+            cancelButtonText: 'Cancel',
+            backdrop: 'rgba(0,0,0,0.5)'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                const appActionInput = document.getElementById('app_action');
+                const appForm = document.getElementById('appForm');
+                if (appActionInput && appForm) {
+                    appActionInput.value = 'incomplete';
+                    appForm.submit();
+                }
             }
         });
     }

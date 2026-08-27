@@ -16,7 +16,7 @@ $faqs = [
         'badge' => 'Delivery Coverage',
         'icon' => 'fa-truck-fast',
         'question' => 'Where do you deliver?',
-        'answer' => 'We deliver across Metro Manila and Cavite key cities (General Trias, Dasmariñas, Imus, Bacoor, Tagaytay). For deliveries outside these regions, please contact our hotline at 8939-1221 or 8851-2987 for special dispatch arrangements.'
+        'answer' => 'We deliver across key cities and municipalities in Cavite (Dasmariñas, Imus, General Trias, Bacoor, Tagaytay, Silang, Kawit, Trece Martires, Naic, Carmona). For special delivery arrangements within Cavite, feel free to contact our hotline.'
     ],
     [
         'category' => 'ordering',

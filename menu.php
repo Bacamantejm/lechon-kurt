@@ -64,7 +64,7 @@ if (!isset($_SESSION['delivery_option'])) {
     $_SESSION['delivery_option'] = 'pickup'; // Default to pickup
 }
 if (!isset($_SESSION['delivery_location'])) {
-    $_SESSION['delivery_location'] = 'metro_manila'; // Default to Metro Manila
+    $_SESSION['delivery_location'] = 'cavite'; // Default to Cavite
 }
 
 // Delivery fee quotes are now calculated dynamically from the nearest store and the customer's pinned location.
@@ -226,54 +226,67 @@ if (empty($store_locations)) {
         [
             'id' => 1,
             'owner_user_id' => 0,
-            'name' => 'Main Branch - Makati',
-            'street_address' => '123 Ayala Avenue',
-            'address' => '123 Ayala Avenue, Makati City, Metro Manila',
-            'city' => 'Makati',
-            'province' => 'Metro Manila',
-            'phone' => '(02) 1234-5678',
+            'name' => 'Dasmariñas Branch',
+            'street_address' => 'Governor Drive, Sampaloc 1',
+            'address' => 'Governor Drive, Sampaloc 1, Dasmariñas, Cavite',
+            'city' => 'Dasmariñas',
+            'province' => 'Cavite',
+            'phone' => '(046) 416-1234',
             'hours' => '8:00 AM - 10:00 PM',
-            'latitude' => 14.554729,
-            'longitude' => 121.024445
+            'latitude' => 14.32940000,
+            'longitude' => 120.93670000
         ],
         [
             'id' => 2,
             'owner_user_id' => 0,
-            'name' => 'Quezon City Branch',
-            'street_address' => '456 Tomas Morato Avenue',
-            'address' => '456 Tomas Morato Avenue, Quezon City, Metro Manila',
-            'city' => 'Quezon City',
-            'province' => 'Metro Manila',
-            'phone' => '(02) 8765-4321',
+            'name' => 'Imus Branch',
+            'street_address' => 'Nueno Avenue, Poblacion',
+            'address' => 'Nueno Avenue, Poblacion, Imus, Cavite',
+            'city' => 'Imus',
+            'province' => 'Cavite',
+            'phone' => '(046) 471-5678',
             'hours' => '8:00 AM - 10:00 PM',
-            'latitude' => 14.632916,
-            'longitude' => 121.033203
+            'latitude' => 14.42970000,
+            'longitude' => 120.93670000
         ],
         [
             'id' => 3,
             'owner_user_id' => 0,
-            'name' => 'Alabang Branch',
-            'street_address' => '789 Commerce Avenue',
-            'address' => '789 Commerce Avenue, Muntinlupa, Metro Manila',
-            'city' => 'Muntinlupa',
-            'province' => 'Metro Manila',
-            'phone' => '(02) 3456-7890',
+            'name' => 'General Trias Branch',
+            'street_address' => 'Arnaldo Highway, San Francisco',
+            'address' => 'Arnaldo Highway, San Francisco, General Trias, Cavite',
+            'city' => 'General Trias',
+            'province' => 'Cavite',
+            'phone' => '(046) 509-9012',
             'hours' => '8:00 AM - 10:00 PM',
-            'latitude' => 14.425533,
-            'longitude' => 121.039489
+            'latitude' => 14.38690000,
+            'longitude' => 120.88090000
         ],
         [
             'id' => 4,
             'owner_user_id' => 0,
-            'name' => 'Antipolo Branch',
-            'street_address' => '101 Sumulong Highway',
-            'address' => '101 Sumulong Highway, Antipolo, Rizal',
-            'city' => 'Antipolo',
-            'province' => 'Rizal',
-            'phone' => '(02) 9876-5432',
-            'hours' => '8:00 AM - 9:00 PM',
-            'latitude' => 14.589768,
-            'longitude' => 121.173599
+            'name' => 'Bacoor Branch',
+            'street_address' => 'Aguinaldo Highway, Talaba',
+            'address' => 'Aguinaldo Highway, Talaba, Bacoor, Cavite',
+            'city' => 'Bacoor',
+            'province' => 'Cavite',
+            'phone' => '(046) 417-3456',
+            'hours' => '8:00 AM - 10:00 PM',
+            'latitude' => 14.46040000,
+            'longitude' => 120.96340000
+        ],
+        [
+            'id' => 5,
+            'owner_user_id' => 0,
+            'name' => 'Tagaytay Branch',
+            'street_address' => 'Emilio Aguinaldo Hwy, Silang Junction South',
+            'address' => 'Emilio Aguinaldo Hwy, Silang Junction South, Tagaytay, Cavite',
+            'city' => 'Tagaytay',
+            'province' => 'Cavite',
+            'phone' => '(046) 483-7890',
+            'hours' => '8:00 AM - 10:00 PM',
+            'latitude' => 14.11530000,
+            'longitude' => 120.96210000
         ]
     ];
 }
@@ -847,9 +860,11 @@ if ($lookup_seller_id > 0 && isset($conn) && $conn instanceof mysqli) {
         <div class="storefront-overview">
             <div class="store-logo-tile">
                 <?php if ($store_logo_image !== ''): ?>
-                    <img src="<?php echo htmlspecialchars($store_logo_image); ?>" alt="<?php echo htmlspecialchars($store_display_name); ?>" loading="lazy" onerror="this.style.display='none';">
+                    <img src="<?php echo htmlspecialchars($store_logo_image); ?>" alt="<?php echo htmlspecialchars($store_display_name); ?>" loading="lazy" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <span class="store-logo-initials" style="display:none;"><?php echo htmlspecialchars($store_initials); ?></span>
+                <?php else: ?>
+                    <span class="store-logo-initials"><?php echo htmlspecialchars($store_initials); ?></span>
                 <?php endif; ?>
-                <span class="store-logo-initials"><?php echo htmlspecialchars($store_initials); ?></span>
             </div>
             <div class="storefront-copy">
                 <p class="storefront-categories"><?php echo htmlspecialchars($store_category_line); ?></p>
@@ -5685,16 +5700,49 @@ body {
 }
 .storefront-overview {
     display: flex !important;
-    flex-direction: column !important;
-    gap: 8px !important;
-    align-items: flex-start !important;
+    flex-direction: row !important;
+    gap: 20px !important;
+    align-items: center !important;
 }
 .store-logo-tile {
-    display: none !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 110px !important;
+    height: 110px !important;
+    min-width: 110px !important;
+    min-height: 110px !important;
+    border-radius: 18px !important;
+    background: #ffffff !important;
+    border: 1px solid #eaecf0 !important;
+    box-shadow: 0 4px 16px rgba(16, 24, 40, 0.08) !important;
+    overflow: hidden !important;
+    flex-shrink: 0 !important;
+    position: relative !important;
+}
+.store-logo-tile img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    display: block !important;
+}
+.store-logo-initials {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+    height: 100% !important;
+    background: linear-gradient(135deg, #b3261e 0%, #981b15 100%) !important;
+    color: #ffffff !important;
+    font-family: 'Outfit', sans-serif !important;
+    font-size: 2.2rem !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.5px !important;
 }
 .storefront-copy {
     padding: 0 !important;
-    width: 100% !important;
+    flex: 1 !important;
+    min-width: 0 !important;
 }
 .storefront-copy h1 {
     font-family: 'Outfit', sans-serif !important;
