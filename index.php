@@ -12,142 +12,162 @@ $show_welcome = !empty($_SESSION['register_success']);
 $user_email = $_SESSION['register_email'] ?? '';
 unset($_SESSION['register_success'], $_SESSION['register_email']);
 
-function asset_path($path, $fallback = 'images/store-bg.jpg') {
-    $path = trim((string)$path);
-    if ($path !== '' && (stripos($path, 'http://') === 0 || stripos($path, 'https://') === 0)) return $path;
-    $candidates = [];
-    if ($path !== '') {
-        $path = ltrim(str_replace('\\', '/', $path), '/');
-        $candidates[] = $path;
-        if (strpos($path, '/') === false) {
-            $candidates[] = 'uploads/products/' . $path;
-            $candidates[] = 'images/menu/' . $path;
-            $candidates[] = 'images/' . $path;
-        }
-    }
-    $candidates[] = ltrim(str_replace('\\', '/', $fallback), '/');
-    foreach ($candidates as $candidate) {
-        if ($candidate !== '' && is_file(__DIR__ . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $candidate))) return $candidate;
-    }
-    return $fallback;
-}
-
-function normalize_store_media_path($value) {
-    if (function_exists('normalizeUserAvatarPath')) {
-        return normalizeUserAvatarPath($value);
-    }
-    $path = str_replace('\\', '/', trim((string)$value));
-    if ($path === '') return '';
-    if (!preg_match('#^uploads/(profile_pictures|business_logos)/[A-Za-z0-9._-]+$#', $path)) return '';
-    return $path;
-}
-
-function user_storefront_image(array $user_row, $fallback = '') {
-    $business_logo = normalize_store_media_path($user_row['business_logo'] ?? '');
-    if ($business_logo !== '') {
-        return asset_path($business_logo, $fallback !== '' ? $fallback : 'images/store-bg.jpg');
-    }
-
-    $profile_image = normalize_store_media_path($user_row['profile_image'] ?? '');
-    if ($profile_image !== '') {
-        return asset_path($profile_image, $fallback !== '' ? $fallback : 'images/store-bg.jpg');
-    }
-
-    return $fallback !== '' ? asset_path('', $fallback) : '';
-}
-
-function norm_key($value) {
-    $value = strtolower(trim((string)$value));
-    $value = preg_replace('/\b(branch|store|lechon|delights)\b/', ' ', $value);
-    $value = preg_replace('/[^a-z0-9]+/', ' ', $value);
-    return trim(preg_replace('/\s+/', ' ', $value));
-}
-
-function add_unique_limited(array &$items, $value, $limit = 3) {
-    $value = trim((string)$value);
-    if ($value === '' || in_array($value, $items, true) || count($items) >= $limit) return;
-    $items[] = $value;
-}
-
-function location_label($address, $city = '', $province = '') {
-    $parts = [];
-    $address = trim((string)$address);
-    $city = trim((string)$city);
-    $province = trim((string)$province);
-    if ($address !== '') {
-        $chunks = array_values(array_filter(array_map('trim', explode(',', $address))));
-        if (!empty($chunks)) $parts[] = $chunks[0];
-    }
-    if ($city !== '') $parts[] = $city;
-    if ($province !== '' && strcasecmp($province, $city) !== 0) $parts[] = $province;
-    return !empty($parts) ? implode(', ', array_unique($parts)) : 'Cavite';
-}
-
-function business_type_label($type) {
-    $type = trim((string)$type);
-    return $type === '' ? 'Partner store' : ucwords(str_replace('_', ' ', $type));
-}
-
-function is_cavite_scope($address = '', $city = '', $province = '') {
-    $normalize = static function ($value) {
-        $value = strtolower(trim((string)$value));
-        if ($value === '') {
-            return '';
-        }
-        if (function_exists('iconv')) {
-            $converted = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $value);
-            if (is_string($converted) && $converted !== '') {
-                $value = strtolower($converted);
+if (!function_exists('asset_path')) {
+    function asset_path($path, $fallback = 'images/store-bg.jpg') {
+        $path = trim((string)$path);
+        if ($path !== '' && (stripos($path, 'http://') === 0 || stripos($path, 'https://') === 0)) return $path;
+        $candidates = [];
+        if ($path !== '') {
+            $path = ltrim(str_replace('\\', '/', $path), '/');
+            $candidates[] = $path;
+            if (strpos($path, '/') === false) {
+                $candidates[] = 'uploads/products/' . $path;
+                $candidates[] = 'images/menu/' . $path;
+                $candidates[] = 'images/' . $path;
             }
         }
-        $value = str_replace(['Ã±', 'ñ'], 'n', $value);
-        $value = preg_replace('/[^a-z0-9\.\s]+/', ' ', $value);
+        $candidates[] = ltrim(str_replace('\\', '/', $fallback), '/');
+        foreach ($candidates as $candidate) {
+            if ($candidate !== '' && is_file(__DIR__ . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $candidate))) return $candidate;
+        }
+        return $fallback;
+    }
+}
+
+if (!function_exists('normalize_store_media_path')) {
+    function normalize_store_media_path($value) {
+        if (function_exists('normalizeUserAvatarPath')) {
+            return normalizeUserAvatarPath($value);
+        }
+        $path = str_replace('\\', '/', trim((string)$value));
+        if ($path === '') return '';
+        if (!preg_match('#^uploads/(profile_pictures|business_logos)/[A-Za-z0-9._-]+$#', $path)) return '';
+        return $path;
+    }
+}
+
+if (!function_exists('user_storefront_image')) {
+    function user_storefront_image(array $user_row, $fallback = '') {
+        $business_logo = normalize_store_media_path($user_row['business_logo'] ?? '');
+        if ($business_logo !== '') {
+            return asset_path($business_logo, $fallback !== '' ? $fallback : 'images/store-bg.jpg');
+        }
+
+        $profile_image = normalize_store_media_path($user_row['profile_image'] ?? '');
+        if ($profile_image !== '') {
+            return asset_path($profile_image, $fallback !== '' ? $fallback : 'images/store-bg.jpg');
+        }
+
+        return $fallback !== '' ? asset_path('', $fallback) : '';
+    }
+}
+
+if (!function_exists('norm_key')) {
+    function norm_key($value) {
+        $value = strtolower(trim((string)$value));
+        $value = preg_replace('/\b(branch|store|lechon|delights)\b/', ' ', $value);
+        $value = preg_replace('/[^a-z0-9]+/', ' ', $value);
         return trim(preg_replace('/\s+/', ' ', $value));
-    };
-
-    $haystack = trim(implode(' ', array_filter([
-        $normalize($address),
-        $normalize($city),
-        $normalize($province)
-    ])));
-    if ($haystack === '') return false;
-
-    return strpos($haystack, 'cavite') !== false
-        || strpos($haystack, 'general trias') !== false
-        || strpos($haystack, 'gentri') !== false
-        || strpos($haystack, 'imus') !== false
-        || strpos($haystack, 'bacoor') !== false
-        || strpos($haystack, 'dasmarinas') !== false
-        || strpos($haystack, 'tagaytay') !== false
-        || strpos($haystack, 'trece martires') !== false
-        || strpos($haystack, 'kawit') !== false
-        || strpos($haystack, 'noveleta') !== false
-        || strpos($haystack, 'rosario') !== false
-        || strpos($haystack, 'tanza') !== false
-        || strpos($haystack, 'naic') !== false
-        || strpos($haystack, 'ternate') !== false
-        || strpos($haystack, 'maragondon') !== false
-        || strpos($haystack, 'indang') !== false
-        || strpos($haystack, 'alfonso') !== false
-        || strpos($haystack, 'mendez') !== false
-        || strpos($haystack, 'silang') !== false
-        || strpos($haystack, 'carmona') !== false
-        || strpos($haystack, 'gen. trias') !== false;
+    }
 }
 
-function store_menu_link(array $store) {
-    $params = [];
-    $seller_id = isset($store['seller_id']) ? (int)$store['seller_id'] : 0;
-    $branch_id = isset($store['branch_id']) ? (int)$store['branch_id'] : 0;
-
-    if ($seller_id > 0) $params['seller_id'] = $seller_id;
-    if ($branch_id > 0) $params['branch_id'] = $branch_id;
-
-    return empty($params) ? 'menu.php' : 'menu.php?' . http_build_query($params);
+if (!function_exists('add_unique_limited')) {
+    function add_unique_limited(array &$items, $value, $limit = 3) {
+        $value = trim((string)$value);
+        if ($value === '' || in_array($value, $items, true) || count($items) >= $limit) return;
+        $items[] = $value;
+    }
 }
 
-function branch_fallbacks() {
-    return [];
+if (!function_exists('location_label')) {
+    function location_label($address, $city = '', $province = '') {
+        $parts = [];
+        $address = trim((string)$address);
+        $city = trim((string)$city);
+        $province = trim((string)$province);
+        if ($address !== '') {
+            $chunks = array_values(array_filter(array_map('trim', explode(',', $address))));
+            if (!empty($chunks)) $parts[] = $chunks[0];
+        }
+        if ($city !== '') $parts[] = $city;
+        if ($province !== '' && strcasecmp($province, $city) !== 0) $parts[] = $province;
+        return !empty($parts) ? implode(', ', array_unique($parts)) : 'Cavite';
+    }
+}
+
+if (!function_exists('business_type_label')) {
+    function business_type_label($type) {
+        $type = trim((string)$type);
+        return $type === '' ? 'Partner store' : ucwords(str_replace('_', ' ', $type));
+    }
+}
+
+if (!function_exists('is_cavite_scope')) {
+    function is_cavite_scope($address = '', $city = '', $province = '') {
+        $normalize = static function ($value) {
+            $value = strtolower(trim((string)$value));
+            if ($value === '') {
+                return '';
+            }
+            if (function_exists('iconv')) {
+                $converted = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $value);
+                if (is_string($converted) && $converted !== '') {
+                    $value = strtolower($converted);
+                }
+            }
+            $value = str_replace(['Ã±', 'ñ'], 'n', $value);
+            $value = preg_replace('/[^a-z0-9\.\s]+/', ' ', $value);
+            return trim(preg_replace('/\s+/', ' ', $value));
+        };
+
+        $haystack = trim(implode(' ', array_filter([
+            $normalize($address),
+            $normalize($city),
+            $normalize($province)
+        ])));
+        if ($haystack === '') return false;
+
+        return strpos($haystack, 'cavite') !== false
+            || strpos($haystack, 'general trias') !== false
+            || strpos($haystack, 'gentri') !== false
+            || strpos($haystack, 'imus') !== false
+            || strpos($haystack, 'bacoor') !== false
+            || strpos($haystack, 'dasmarinas') !== false
+            || strpos($haystack, 'tagaytay') !== false
+            || strpos($haystack, 'trece martires') !== false
+            || strpos($haystack, 'kawit') !== false
+            || strpos($haystack, 'noveleta') !== false
+            || strpos($haystack, 'rosario') !== false
+            || strpos($haystack, 'tanza') !== false
+            || strpos($haystack, 'naic') !== false
+            || strpos($haystack, 'ternate') !== false
+            || strpos($haystack, 'maragondon') !== false
+            || strpos($haystack, 'indang') !== false
+            || strpos($haystack, 'alfonso') !== false
+            || strpos($haystack, 'mendez') !== false
+            || strpos($haystack, 'silang') !== false
+            || strpos($haystack, 'carmona') !== false
+            || strpos($haystack, 'gen. trias') !== false;
+    }
+}
+
+if (!function_exists('store_menu_link')) {
+    function store_menu_link(array $store) {
+        $params = [];
+        $seller_id = isset($store['seller_id']) ? (int)$store['seller_id'] : 0;
+        $branch_id = isset($store['branch_id']) ? (int)$store['branch_id'] : 0;
+
+        if ($seller_id > 0) $params['seller_id'] = $seller_id;
+        if ($branch_id > 0) $params['branch_id'] = $branch_id;
+
+        return empty($params) ? 'menu.php' : 'menu.php?' . http_build_query($params);
+    }
+}
+
+if (!function_exists('branch_fallbacks')) {
+    function branch_fallbacks() {
+        return [];
+    }
 }
 
 $current_user_address = '';
@@ -2476,8 +2496,7 @@ include 'includes/header.php';
     gap: 6px !important;
 }
 
-<?php if (!empty($_SESSION['user_id'])): ?>
-/* Logged-in Customer Dashboard Layout Theme */
+/* Marketplace Layout Theme */
 body {
     background: #ffffff !important;
     --bg: #ffffff !important;
@@ -2584,7 +2603,144 @@ body {
         display: none !important;
     }
 }
-<?php endif; ?>
+
+/* First User Welcome Deals Section */
+.first-user-deals-section {
+    margin-bottom: 32px;
+}
+.first-user-deals-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+}
+.deal-card {
+    background: #ffffff;
+    border: 1px solid #eaecf0;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.deal-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(16, 24, 40, 0.08);
+    border-color: #d0d5dd;
+}
+.deal-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+.deal-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.deal-badge-primary {
+    background: #fff1f0;
+    color: #b3261e;
+    border: 1px solid #fee4e2;
+}
+.deal-badge-success {
+    background: #ecfdf3;
+    color: #027a48;
+    border: 1px solid #abefc6;
+}
+.deal-badge-warning {
+    background: #fffaeb;
+    color: #b54708;
+    border: 1px solid #fedf89;
+}
+.deal-badge-info {
+    background: #eff8ff;
+    color: #175cd3;
+    border: 1px solid #b2ddff;
+}
+.deal-discount-val {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: #101828;
+    line-height: 1.15;
+    margin-bottom: 4px;
+}
+.deal-desc {
+    font-size: 0.82rem;
+    color: #475467;
+    margin: 0 0 14px 0;
+    line-height: 1.4;
+}
+.deal-code-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #f8f9fa;
+    border: 1px dashed #d0d5dd;
+    border-radius: 10px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+}
+.deal-code-text {
+    font-family: monospace;
+    font-size: 0.96rem;
+    font-weight: 800;
+    color: #b3261e;
+    letter-spacing: 0.06em;
+}
+.deal-copy-btn {
+    background: #ffffff;
+    border: 1px solid #d0d5dd;
+    color: #344054;
+    font-size: 0.76rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.15s ease;
+}
+.deal-copy-btn:hover {
+    background: #f2f4f7;
+    border-color: #98a2b3;
+}
+.deal-copy-btn.copied {
+    background: #ecfdf3 !important;
+    color: #027a48 !important;
+    border-color: #abefc6 !important;
+}
+.deal-action-btn {
+    width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: #b3261e;
+    color: #ffffff;
+    font-size: 0.82rem;
+    font-weight: 700;
+    padding: 9px 14px;
+    border-radius: 10px;
+    text-decoration: none;
+    transition: background 0.15s ease;
+}
+.deal-action-btn:hover {
+    background: #981b15;
+    color: #ffffff;
+}
 </style>
 
 <div class="market-home">
@@ -2717,6 +2873,115 @@ body {
                                 </div>
                             </div>
                         </div>
+                    <?php endif; ?>
+
+                    <?php if (!empty($_SESSION['user_id'])): ?>
+                    <!-- New Customer Exclusive Welcome Deals (Logged-in Welcome Offer) -->
+                    <section class="first-user-deals-section" id="welcomeDealsSection">
+                        <div class="market-head" style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 10px;">
+                            <div>
+                                <div style="display:inline-flex; align-items:center; gap:6px; padding:4px 12px; background:#fff1f0; border:1px solid #fee4e2; border-radius:999px; color:#b3261e; font-size:0.75rem; font-weight:800; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:6px;">
+                                    <i class="fas fa-gift"></i> Customer Welcome Perks
+                                </div>
+                                <h2 style="font-family:'Outfit',sans-serif; font-size:1.45rem; font-weight:800; color:#101828; margin:0 0 4px 0;">Your Exclusive Welcome Deals</h2>
+                                <p style="font-size:0.86rem; color:#475467; margin:0;">Thanks for logging in! Claim or copy any voucher code below to enjoy instant savings on your next order.</p>
+                            </div>
+                        </div>
+
+                        <div class="first-user-deals-grid">
+                            <!-- Deal 1 -->
+                            <article class="deal-card">
+                                <div>
+                                    <div class="deal-card-top">
+                                        <span class="deal-badge deal-badge-primary"><i class="fas fa-sparkles"></i> Welcome Gift</span>
+                                        <span style="font-size:0.76rem; color:#667085; font-weight:600;">1st Order Only</span>
+                                    </div>
+                                    <div class="deal-discount-val">₱100 OFF</div>
+                                    <p class="deal-desc">Get ₱100 flat discount on your very first freshly roasted lechon order. Min. spend ₱500.</p>
+                                </div>
+                                <div>
+                                    <div class="deal-code-row">
+                                        <span class="deal-code-text">WELCOME100</span>
+                                        <button type="button" class="deal-copy-btn" onclick="copyWelcomePromoCode('WELCOME100', this)">
+                                            <i class="fas fa-copy"></i> Copy
+                                        </button>
+                                    </div>
+                                    <a href="javascript:void(0)" onclick="claimAndUseWelcomeDeal('WELCOME100', '#marketplaceStores')" class="deal-action-btn">
+                                        <i class="fas fa-utensils"></i> Claim &amp; Order Now
+                                    </a>
+                                </div>
+                            </article>
+
+                            <!-- Deal 2 -->
+                            <article class="deal-card">
+                                <div>
+                                    <div class="deal-card-top">
+                                        <span class="deal-badge deal-badge-success"><i class="fas fa-truck-fast"></i> Free Delivery</span>
+                                        <span style="font-size:0.76rem; color:#667085; font-weight:600;">Whole &amp; Half Lechon</span>
+                                    </div>
+                                    <div class="deal-discount-val">Free Shipping</div>
+                                    <p class="deal-desc">Enjoy zero delivery fee on your first party celebration or whole lechon delivery across Cavite.</p>
+                                </div>
+                                <div>
+                                    <div class="deal-code-row">
+                                        <span class="deal-code-text">FREESHIP</span>
+                                        <button type="button" class="deal-copy-btn" onclick="copyWelcomePromoCode('FREESHIP', this)">
+                                            <i class="fas fa-copy"></i> Copy
+                                        </button>
+                                    </div>
+                                    <a href="javascript:void(0)" onclick="claimAndUseWelcomeDeal('FREESHIP', 'preorder.php')" class="deal-action-btn" style="background:#027a48;">
+                                        <i class="fas fa-calendar-check"></i> Claim Free Shipping
+                                    </a>
+                                </div>
+                            </article>
+
+                            <!-- Deal 3 -->
+                            <article class="deal-card">
+                                <div>
+                                    <div class="deal-card-top">
+                                        <span class="deal-badge deal-badge-warning"><i class="fas fa-percent"></i> Best Value</span>
+                                        <span style="font-size:0.76rem; color:#667085; font-weight:600;">Advance Booking</span>
+                                    </div>
+                                    <div class="deal-discount-val">15% OFF</div>
+                                    <p class="deal-desc">Save 15% (up to ₱300) when booking your weekend family feasts and birthdays in advance.</p>
+                                </div>
+                                <div>
+                                    <div class="deal-code-row">
+                                        <span class="deal-code-text">LECHON15</span>
+                                        <button type="button" class="deal-copy-btn" onclick="copyWelcomePromoCode('LECHON15', this)">
+                                            <i class="fas fa-copy"></i> Copy
+                                        </button>
+                                    </div>
+                                    <a href="javascript:void(0)" onclick="claimAndUseWelcomeDeal('LECHON15', 'preorder.php')" class="deal-action-btn" style="background:#b54708;">
+                                        <i class="fas fa-ticket"></i> Claim 15% OFF
+                                    </a>
+                                </div>
+                            </article>
+
+                            <!-- Deal 4 -->
+                            <article class="deal-card">
+                                <div>
+                                    <div class="deal-card-top">
+                                        <span class="deal-badge deal-badge-info"><i class="fas fa-drumstick-bite"></i> Snack &amp; Meal</span>
+                                        <span style="font-size:0.76rem; color:#667085; font-weight:600;">Belly &amp; Meals</span>
+                                    </div>
+                                    <div class="deal-discount-val">₱50 OFF</div>
+                                    <p class="deal-desc">Direct discount on crispy lechon belly rolls, sisig packs, or kilo boxes. Min. spend ₱350.</p>
+                                </div>
+                                <div>
+                                    <div class="deal-code-row">
+                                        <span class="deal-code-text">BELLY50</span>
+                                        <button type="button" class="deal-copy-btn" onclick="copyWelcomePromoCode('BELLY50', this)">
+                                            <i class="fas fa-copy"></i> Copy
+                                        </button>
+                                    </div>
+                                    <a href="javascript:void(0)" onclick="claimAndUseWelcomeDeal('BELLY50', '#marketplaceStores')" class="deal-action-btn" style="background:#175cd3;">
+                                        <i class="fas fa-store"></i> Claim ₱50 OFF
+                                    </a>
+                                </div>
+                            </article>
+                        </div>
+                    </section>
                     <?php endif; ?>
 
                     <?php 
@@ -3962,6 +4227,109 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+function copyWelcomePromoCode(code, btn) {
+    if (!code) return;
+    const textToCopy = String(code).trim();
+    
+    const applySuccessState = () => {
+        if (btn) {
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+            btn.classList.add('copied');
+            setTimeout(() => {
+                btn.innerHTML = originalHtml;
+                btn.classList.remove('copied');
+            }, 2500);
+        }
+        if (typeof Swal !== 'undefined') {
+            const Toast = Swal.mixin({
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3500,
+                timerProgressBar: true,
+                didOpen: (toast) => {
+                    toast.onmouseenter = Swal.stopTimer;
+                    toast.onmouseleave = Swal.resumeTimer;
+                }
+            });
+            Toast.fire({
+                icon: 'success',
+                title: 'Code ' + textToCopy + ' copied! Apply at checkout.'
+            });
+        }
+    };
+
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(textToCopy).then(applySuccessState).catch(() => {
+            fallbackCopy(textToCopy);
+        });
+    } else {
+        fallbackCopy(textToCopy);
+    }
+
+    function fallbackCopy(text) {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            applySuccessState();
+        } catch (err) {}
+        document.body.removeChild(textArea);
+    }
+}
+
+function claimAndUseWelcomeDeal(code, targetUrl) {
+    if (!code) return;
+    const textToCopy = String(code).trim();
+    
+    // Save to session storage so checkout.php auto-applies it automatically
+    try {
+        sessionStorage.setItem('pending_welcome_voucher', textToCopy);
+    } catch(e) {}
+
+    // Copy to clipboard
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(textToCopy).catch(() => {});
+    }
+
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            icon: 'success',
+            title: 'Deal Claimed!',
+            html: 'Voucher code <strong>' + textToCopy + '</strong> has been activated for your next order.',
+            showConfirmButton: true,
+            confirmButtonText: 'Continue to Menu',
+            confirmButtonColor: '#b3261e',
+            timer: 2200,
+            timerProgressBar: true
+        }).then(() => {
+            proceedToTarget();
+        });
+    } else {
+        proceedToTarget();
+    }
+
+    function proceedToTarget() {
+        if (!targetUrl || targetUrl === '#marketplaceStores') {
+            const storesElem = document.getElementById('marketplaceStores');
+            if (storesElem) {
+                storesElem.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } else {
+                window.location.href = 'index.php#marketplaceStores';
+            }
+        } else {
+            const separator = targetUrl.includes('?') ? '&' : '?';
+            window.location.href = targetUrl + separator + 'voucher=' + encodeURIComponent(textToCopy);
+        }
+    }
+}
 </script>
 <?php include 'includes/footer.php'; ?>
 

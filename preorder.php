@@ -15,6 +15,7 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 require_once 'includes/config.php';
+require_once 'includes/preorder_schedule_helper.php';
 $google_maps_api_key = function_exists('getGoogleMapsApiKey')
     ? getGoogleMapsApiKey()
     : trim((string)(defined('GOOGLE_MAPS_API_KEY') ? GOOGLE_MAPS_API_KEY : (getenv('GOOGLE_MAPS_API_KEY') ?: '')));
@@ -66,6 +67,24 @@ function preorderExtractAddressParts($rawAddress) {
 }
 
 $requested_seller_id = isset($_GET['seller_id']) ? (int)$_GET['seller_id'] : 0;
+$requested_product_id = isset($_GET['product_id']) ? (int)$_GET['product_id'] : 0;
+
+if ($requested_product_id > 0 && $requested_seller_id <= 0) {
+    $p_stmt = mysqli_prepare($conn, "SELECT seller_id FROM products WHERE id = ? LIMIT 1");
+    if ($p_stmt) {
+        mysqli_stmt_bind_param($p_stmt, "i", $requested_product_id);
+        mysqli_stmt_execute($p_stmt);
+        $p_res = mysqli_stmt_get_result($p_stmt);
+        if ($p_row = mysqli_fetch_assoc($p_res)) {
+            $resolved_p_seller = (int)($p_row['seller_id'] ?? 0);
+            if ($resolved_p_seller > 0) {
+                $requested_seller_id = $resolved_p_seller;
+            }
+        }
+        mysqli_stmt_close($p_stmt);
+    }
+}
+
 if ($requested_seller_id > 0) {
     $_SESSION['storefront_seller_id'] = $requested_seller_id;
 }
@@ -91,6 +110,9 @@ if ($active_seller_id > 0) {
         mysqli_stmt_close($store_stmt);
     }
 }
+
+$preorder_schedule = posGetSellerSchedule($conn, (int)$active_seller_id);
+$initial_calendar_data = posGetCalendarAvailability($conn, (int)$active_seller_id);
 
 $user_profile = [
     'full_name' => '',
@@ -461,31 +483,61 @@ include 'includes/header.php';
 
             <!-- Pick-up Date & Time Schedule -->
             <div class="preorder-section-block">
-                <h4 class="preorder-block-title"><i class="fas fa-calendar-clock"></i> Scheduled Pick-up Date & Time</h4>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="pickupDate">Pick-up Date *</label>
-                        <input type="date" id="pickupDate" name="pickupDate" required min="<?php echo date('Y-m-d'); ?>">
-                        <small style="color:#667085; font-size:0.78rem;">Select your event or celebration date.</small>
+                <h4 class="preorder-block-title"><i class="fas fa-calendar-check"></i> Select Roasting &amp; Pick-up Schedule</h4>
+                <p style="color: #667085; font-size: 0.85rem; margin-top: -6px; margin-bottom: 16px;">
+                    Choose an available pick-up date from our store calendar. Available dates and daily roasting batch capacities automatically update in real-time.
+                </p>
+
+                <!-- Hidden inputs for seamless form submission & validation -->
+                <input type="hidden" id="pickupDate" name="pickupDate" value="" required>
+                <input type="hidden" id="pickupTime" name="pickupTime" value="" required>
+
+                <!-- Interactive Calendar Widget -->
+                <div class="preorder-cal-widget" id="preorderCalendarWidget">
+                    <div class="cal-widget-header">
+                        <button type="button" class="cal-nav-btn" id="calPrevMonthBtn" title="Previous Month"><i class="fas fa-chevron-left"></i></button>
+                        <div class="cal-widget-title" id="calMonthTitle"><?php echo htmlspecialchars($initial_calendar_data['month_title']); ?></div>
+                        <button type="button" class="cal-nav-btn" id="calNextMonthBtn" title="Next Month"><i class="fas fa-chevron-right"></i></button>
                     </div>
-                    <div class="form-group">
-                        <label for="pickupTime">Available Pick-up Time *</label>
-                        <select id="pickupTime" name="pickupTime" required>
-                            <option value="">-- Select Pick-up Time --</option>
-                            <option value="8:00 AM">8:00 AM (Morning Batch)</option>
-                            <option value="9:00 AM">9:00 AM</option>
-                            <option value="10:00 AM">10:00 AM</option>
-                            <option value="11:00 AM">11:00 AM (Lunch Rush)</option>
-                            <option value="12:00 PM">12:00 PM (Lunch Peak)</option>
-                            <option value="1:00 PM">1:00 PM</option>
-                            <option value="2:00 PM">2:00 PM</option>
-                            <option value="3:00 PM">3:00 PM (Afternoon Batch)</option>
-                            <option value="4:00 PM">4:00 PM</option>
-                            <option value="5:00 PM">5:00 PM (Dinner Rush)</option>
-                            <option value="6:00 PM">6:00 PM (Dinner Peak)</option>
-                            <option value="7:00 PM">7:00 PM</option>
-                            <option value="8:00 PM">8:00 PM (Last Pick-up)</option>
-                        </select>
+
+                    <div class="cal-schedule-policy-bar">
+                        <span><i class="fas fa-clock"></i> <strong>Lead Time:</strong> <?php echo (int)$preorder_schedule['lead_time_days']; ?> day(s) notice</span>
+                        <span><i class="fas fa-hourglass-half"></i> <strong>Daily Cutoff:</strong> <?php echo date('g:i A', strtotime($preorder_schedule['cutoff_time'])); ?></span>
+                        <span><i class="fas fa-calendar-alt"></i> <strong>Window:</strong> Up to <?php echo (int)$preorder_schedule['max_advance_days']; ?> days ahead</span>
+                    </div>
+
+                    <div class="cal-grid-weekdays">
+                        <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>
+                    </div>
+
+                    <div class="cal-grid-days" id="calDaysGrid">
+                        <!-- Populated by JavaScript and server initial render -->
+                    </div>
+
+                    <div class="cal-legend-bar">
+                        <div class="cal-legend-item"><span class="legend-dot available"></span> Available Date</div>
+                        <div class="cal-legend-item"><span class="legend-dot selected"></span> Selected</div>
+                        <div class="cal-legend-item"><span class="legend-dot disabled"></span> Closed / Cutoff</div>
+                        <div class="cal-legend-item"><span class="legend-dot full"></span> Fully Booked</div>
+                    </div>
+                </div>
+
+                <!-- Available Time Slots for Selected Date -->
+                <div class="preorder-slots-section" id="preorderSlotsSection" style="margin-top: 24px; display: none;">
+                    <h5 style="font-family:'Outfit',sans-serif; font-weight:700; font-size:1rem; color:#101828; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+                        <i class="fas fa-clock text-danger"></i> Available Pick-up Time Slots for <span id="slotsSelectedDateText" style="color:#b3261e;"></span>
+                    </h5>
+                    <div class="time-slots-grid" id="timeSlotsGrid">
+                        <!-- Time slot cards dynamically injected here -->
+                    </div>
+                </div>
+
+                <!-- Selected Date & Time Confirmation Banner -->
+                <div class="preorder-schedule-selected-badge" id="scheduleSelectedBadge" style="display: none; margin-top: 18px; background: #ecfdf3; border: 1px solid #abefc6; border-radius: 12px; padding: 14px 18px; color: #027a48; align-items: center; gap: 12px;">
+                    <i class="fas fa-circle-check" style="font-size: 1.3rem;"></i>
+                    <div>
+                        <div style="font-weight: 800; font-size: 0.95rem;">Pick-up Schedule Confirmed</div>
+                        <div style="font-size: 0.86rem;" id="scheduleSelectedSummaryText"></div>
                     </div>
                 </div>
             </div>
@@ -728,40 +780,204 @@ function showPreorderToast(msg) {
     }, 1800);
 }
 
+// Pre-Order Roasting Calendar & Time Slot Controller
+let currentCalMonth = <?php echo json_encode($initial_calendar_data['current_month']); ?>;
+let selectedPickupDate = '';
+let selectedPickupTime = '';
+
+async function loadCalendarMonth(monthStr) {
+    const daysGrid = document.getElementById('calDaysGrid');
+    const monthTitle = document.getElementById('calMonthTitle');
+    const prevBtn = document.getElementById('calPrevMonthBtn');
+    const nextBtn = document.getElementById('calNextMonthBtn');
+    
+    if (!daysGrid) return;
+    daysGrid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 20px; color: #667085;"><i class="fas fa-spinner fa-spin"></i> Loading schedule...</div>';
+
+    try {
+        const res = await fetch(`api/preorder_schedule.php?action=get_calendar&seller_id=${activeSellerId}&month=${encodeURIComponent(monthStr || '')}`);
+        const json = await res.json();
+        if (json.success && json.data) {
+            const data = json.data;
+            currentCalMonth = data.current_month;
+            if (monthTitle) monthTitle.textContent = data.month_title;
+            
+            if (prevBtn) {
+                prevBtn.disabled = !data.prev_month;
+                prevBtn.onclick = () => data.prev_month && loadCalendarMonth(data.prev_month);
+            }
+            if (nextBtn) {
+                nextBtn.disabled = !data.next_month;
+                nextBtn.onclick = () => data.next_month && loadCalendarMonth(data.next_month);
+            }
+
+            renderCalendarDays(data);
+        }
+    } catch (e) {
+        console.error('Error loading calendar:', e);
+        daysGrid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 20px; color: #b3261e;">Failed to load schedule. Please try again.</div>';
+    }
+}
+
+function renderCalendarDays(calData) {
+    const daysGrid = document.getElementById('calDaysGrid');
+    if (!daysGrid) return;
+    daysGrid.innerHTML = '';
+
+    // Leading blanks
+    for (let i = 1; i < calData.first_day_weekday; i++) {
+        const blank = document.createElement('div');
+        blank.className = 'cal-day-cell is-blank';
+        daysGrid.appendChild(blank);
+    }
+
+    calData.days.forEach(day => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `cal-day-cell is-day ${day.available ? 'is-available' : 'is-disabled'}`;
+        if (day.date === selectedPickupDate) {
+            btn.classList.add('is-selected');
+        }
+        btn.title = day.status_reason;
+
+        let statusSub = '';
+        if (day.available) {
+            statusSub = `<span class="cal-day-sub">${day.remaining_capacity} left</span>`;
+        } else if (day.status === 'lead_time_cutoff') {
+            statusSub = `<span class="cal-day-sub muted">Cutoff</span>`;
+        } else if (day.status === 'closed_weekday') {
+            statusSub = `<span class="cal-day-sub muted">Closed</span>`;
+        } else if (day.status === 'fully_booked') {
+            statusSub = `<span class="cal-day-sub full">Full</span>`;
+        } else if (day.status === 'blackout') {
+            statusSub = `<span class="cal-day-sub full">Holiday</span>`;
+        }
+
+        btn.innerHTML = `<span class="cal-day-num">${day.day}</span>${statusSub}`;
+
+        if (day.available) {
+            btn.addEventListener('click', () => {
+                selectCalendarDate(day.date, day);
+            });
+        }
+
+        daysGrid.appendChild(btn);
+    });
+}
+
+async function selectCalendarDate(dateStr, dayData) {
+    selectedPickupDate = dateStr;
+    const pickupDateInput = document.getElementById('pickupDate');
+    if (pickupDateInput) pickupDateInput.value = dateStr;
+
+    // Reset selected time
+    selectedPickupTime = '';
+    const pickupTimeInput = document.getElementById('pickupTime');
+    if (pickupTimeInput) pickupTimeInput.value = '';
+
+    const badge = document.getElementById('scheduleSelectedBadge');
+    if (badge) badge.style.display = 'none';
+
+    document.querySelectorAll('.cal-day-cell.is-day').forEach(cell => cell.classList.remove('is-selected'));
+    const allCells = document.querySelectorAll('.cal-day-cell.is-day');
+    allCells.forEach(cell => {
+        if (cell.title && cell.title.includes(dateStr)) cell.classList.add('is-selected');
+    });
+
+    await loadTimeSlotsForDate(dateStr);
+}
+
+async function loadTimeSlotsForDate(dateStr) {
+    const slotsSection = document.getElementById('preorderSlotsSection');
+    const slotsGrid = document.getElementById('timeSlotsGrid');
+    const dateText = document.getElementById('slotsSelectedDateText');
+
+    if (!slotsSection || !slotsGrid) return;
+
+    slotsSection.style.display = 'block';
+    if (dateText) {
+        const dObj = new Date(dateStr + 'T00:00:00');
+        dateText.textContent = dObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    slotsGrid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:15px; color:#667085;"><i class="fas fa-spinner fa-spin"></i> Loading available slots...</div>';
+
+    try {
+        const res = await fetch(`api/preorder_schedule.php?action=get_slots&seller_id=${activeSellerId}&date=${encodeURIComponent(dateStr)}`);
+        const json = await res.json();
+        if (json.success && json.slots) {
+            renderTimeSlots(json.slots);
+        }
+    } catch (e) {
+        console.error('Error loading time slots:', e);
+        slotsGrid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:15px; color:#b3261e;">Failed to load time slots.</div>';
+    }
+}
+
+function renderTimeSlots(slots) {
+    const slotsGrid = document.getElementById('timeSlotsGrid');
+    if (!slotsGrid) return;
+    slotsGrid.innerHTML = '';
+
+    if (slots.length === 0) {
+        slotsGrid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:15px; color:#667085;">No pickup time slots configured for this date.</div>';
+        return;
+    }
+
+    slots.forEach(slot => {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = `time-slot-card ${slot.is_available ? 'is-available' : 'is-disabled'}`;
+        if (slot.time_value === selectedPickupTime) {
+            card.classList.add('is-selected');
+        }
+
+        card.innerHTML = `
+            <div class="slot-time"><i class="fas fa-clock"></i> ${slot.time_value}</div>
+            <div class="slot-label">${slot.display_label}</div>
+            <span class="slot-badge ${slot.is_available ? 'badge-open' : 'badge-full'}">${slot.badge_text}</span>
+        `;
+
+        if (slot.is_available) {
+            card.addEventListener('click', (e) => {
+                selectTimeSlot(slot.time_value, slot.display_label, card);
+            });
+        }
+
+        slotsGrid.appendChild(card);
+    });
+}
+
+function selectTimeSlot(timeVal, label, clickedEl) {
+    selectedPickupTime = timeVal;
+    const pickupTimeInput = document.getElementById('pickupTime');
+    if (pickupTimeInput) pickupTimeInput.value = timeVal;
+
+    document.querySelectorAll('.time-slot-card').forEach(c => c.classList.remove('is-selected'));
+    if (clickedEl) clickedEl.classList.add('is-selected');
+
+    const badge = document.getElementById('scheduleSelectedBadge');
+    const summaryText = document.getElementById('scheduleSelectedSummaryText');
+    if (badge && summaryText && selectedPickupDate) {
+        const dObj = new Date(selectedPickupDate + 'T00:00:00');
+        const formattedDate = dObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+        summaryText.innerHTML = `<strong>${formattedDate}</strong> at <strong>${timeVal}</strong> (${label})`;
+        badge.style.display = 'flex';
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     renderProducts('all');
     setupButtons();
     setupFilters();
     setupProgressNavigation();
     syncPreorderStoreAddress();
+    loadCalendarMonth(currentCalMonth);
     
-    // Delegated click listener for product cards & add buttons
-    document.addEventListener('click', function(e) {
-        const addBtn = e.target.closest('.btn-add-preorder');
-        const card = e.target.closest('.product-card');
-        
-        if (addBtn) {
-            e.preventDefault();
-            e.stopPropagation();
-            const id = addBtn.getAttribute('data-product-id');
-            if (id) {
-                addToCart(id);
-            }
-        } else if (card) {
-            if (!e.target.closest('button') && !e.target.closest('a')) {
-                const id = card.getAttribute('data-product-id');
-                if (id) {
-                    addToCart(id);
-                }
-            }
-        }
-    });
-    
-    // Set minimum date to today for pickup date
-    const today = new Date().toISOString().split('T')[0];
-    const pickupDateInput = document.getElementById('pickupDate');
-    if (pickupDateInput) {
-        pickupDateInput.setAttribute('min', today);
+    // Auto-add product if routed with product_id (e.g. from Menu 'Reserve Event Date')
+    const preselectedProductId = <?php echo (int)$requested_product_id; ?>;
+    if (preselectedProductId > 0) {
+        addToCart(preselectedProductId);
     }
 });
 
@@ -825,13 +1041,15 @@ function renderProducts(category) {
 }
 
 function addToCart(productId) {
-    const product = products.find(p => String(p.id) === String(productId) || String(p.product_id) === String(productId));
+    if (!productId) return;
+    const pIdStr = String(productId);
+    const product = products.find(p => String(p.id) === pIdStr || (p.product_id && String(p.product_id) === pIdStr));
     if (!product) {
         console.warn('Product not found for ID:', productId);
         return;
     }
     
-    const existing = cart.find(i => String(i.id) === String(productId) || String(i.product_id) === String(productId));
+    const existing = cart.find(i => String(i.id) === String(product.id) || (i.product_id && String(i.product_id) === String(product.product_id)));
     if (existing) {
         existing.quantity = (parseInt(existing.quantity) || 1) + 1;
     } else {
@@ -845,7 +1063,7 @@ function addToCart(productId) {
         });
     }
     
-    showPreorderToast('Added to Pre-Order Cart');
+    showPreorderToast('Added ' + product.name + ' to Pre-Order Cart');
     
     updateCartUI();
     const activeBtn = document.querySelector('.category-link.active');
@@ -2355,6 +2573,241 @@ input:focus, select:focus, textarea:focus {
     font-weight: 700;
     color: #344054;
     z-index: 400;
+}
+
+/* Interactive Pre-Order Roasting Calendar Widget */
+.preorder-cal-widget {
+    background: #ffffff;
+    border: 1px solid #eaecf0;
+    border-radius: 14px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+}
+.cal-widget-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+}
+.cal-widget-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #101828;
+}
+.cal-nav-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    border: 1px solid #d0d5dd;
+    background: #ffffff;
+    color: #344054;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.cal-nav-btn:hover:not(:disabled) {
+    background: #f8f9fa;
+    border-color: #b3261e;
+    color: #b3261e;
+}
+.cal-nav-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+.cal-schedule-policy-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    background: #f8f9fa;
+    border: 1px solid #eaecf0;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 0.78rem;
+    color: #475467;
+    margin-bottom: 16px;
+}
+.cal-schedule-policy-bar span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.cal-schedule-policy-bar span i {
+    color: #b3261e;
+}
+.cal-grid-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    text-align: center;
+    font-size: 0.78rem;
+    font-weight: 800;
+    color: #667085;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+}
+.cal-grid-days {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+}
+.cal-day-cell {
+    border: 1px solid #eaecf0;
+    border-radius: 10px;
+    min-height: 64px;
+    padding: 6px 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    background: #ffffff;
+    transition: all 0.15s ease-in-out;
+    cursor: pointer;
+}
+.cal-day-cell.is-blank {
+    background: transparent;
+    border-color: transparent;
+    cursor: default;
+}
+.cal-day-cell.is-available {
+    background: #f8fdf9;
+    border-color: #d1fadf;
+    color: #027a48;
+}
+.cal-day-cell.is-available:hover {
+    border-color: #12b76a;
+    background: #ecfdf3;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(18, 183, 106, 0.15);
+}
+.cal-day-cell.is-selected {
+    background: #b3261e !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(179, 38, 30, 0.25);
+}
+.cal-day-cell.is-selected .cal-day-sub {
+    color: #ffffff !important;
+    opacity: 0.95;
+}
+.cal-day-cell.is-disabled {
+    background: #f8f9fa;
+    border-color: #eaecf0;
+    color: #98a2b3;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+.cal-day-num {
+    font-size: 0.95rem;
+    font-weight: 800;
+    line-height: 1;
+}
+.cal-day-sub {
+    font-size: 0.64rem;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+}
+.cal-day-sub.muted { color: #98a2b3; }
+.cal-day-sub.full { color: #b3261e; }
+.cal-legend-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid #eaecf0;
+    font-size: 0.75rem;
+    color: #667085;
+}
+.cal-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    display: inline-block;
+}
+.legend-dot.available { background: #ecfdf3; border: 1px solid #a6f4c5; }
+.legend-dot.selected { background: #b3261e; border: 1px solid #b3261e; }
+.legend-dot.disabled { background: #f2f4f7; border: 1px solid #d0d5dd; }
+.legend-dot.full { background: #fff1f0; border: 1px solid #fee4e2; }
+
+/* Time Slots Grid */
+.time-slots-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 10px;
+}
+.time-slot-card {
+    border: 1px solid #d0d5dd;
+    border-radius: 10px;
+    padding: 12px 14px;
+    background: #ffffff;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.time-slot-card.is-available:hover {
+    border-color: #b3261e;
+    background: #fffafa;
+}
+.time-slot-card.is-selected {
+    border-color: #b3261e !important;
+    background: #fff1f0 !important;
+    box-shadow: 0 0 0 2px rgba(179, 38, 30, 0.2);
+}
+.time-slot-card.is-selected .slot-time {
+    color: #b3261e;
+}
+.time-slot-card.is-disabled {
+    background: #f8f9fa;
+    border-color: #eaecf0;
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.slot-time {
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: #101828;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.slot-label {
+    font-size: 0.74rem;
+    color: #667085;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.slot-badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 999px;
+    display: inline-block;
+    align-self: flex-start;
+    margin-top: 2px;
+}
+.slot-badge.badge-open {
+    background: #ecfdf3;
+    color: #027a48;
+    border: 1px solid #abefc6;
+}
+.slot-badge.badge-full {
+    background: #fff1f0;
+    color: #b3261e;
+    border: 1px solid #fee4e2;
 }
 
 @media (max-width: 768px) {

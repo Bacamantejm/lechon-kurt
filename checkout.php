@@ -282,11 +282,19 @@ if ($current_checkout_delivery_option === 'pickup') {
 
 $vat_rate = 0.12;
 $vat_amount = round($subtotal * $vat_rate, 2);
+
+if (!empty($_GET['voucher']) && $user_id > 0 && !empty($_SESSION['cart'])) {
+    pvApplyVoucherCodeForSession($conn, (int)$user_id, (string)$_GET['voucher'], $_SESSION['cart']);
+}
+
 $applied_voucher_state = pvResolveAppliedVoucherState($conn, (int)$user_id, $_SESSION['cart']);
 $voucher_discount = (float)($applied_voucher_state['discount_amount'] ?? 0);
 $applied_voucher_code = (string)($applied_voucher_state['voucher_code'] ?? '');
 $applied_voucher_id = (int)($applied_voucher_state['voucher_id'] ?? 0);
 $voucher_message = (string)($applied_voucher_state['message'] ?? '');
+$voucher_scope_label = (string)($applied_voucher_state['scope_label'] ?? '');
+$voucher_store_name = (string)($applied_voucher_state['store_name'] ?? '');
+$voucher_is_exclusive = !empty($applied_voucher_state['is_store_exclusive']);
 $checkout_tenant_scope = function_exists('pvGetCheckoutTenantScope')
     ? pvGetCheckoutTenantScope($conn, $_SESSION['cart'])
     : ['is_valid' => true, 'seller_id' => 0, 'message' => ''];
@@ -672,11 +680,12 @@ $remaining = $total - $downpayment;
                             <p class="voucher-feedback <?php echo $voucher_discount > 0 ? 'success' : (!empty($voucher_message) ? 'warning' : ''); ?>" id="voucherFeedback">
                                 <?php
                                 if ($voucher_discount > 0) {
-                                    echo 'Applied ' . htmlspecialchars($applied_voucher_code) . ': -PHP ' . number_format($voucher_discount, 2);
+                                    $scope_tag = $voucher_scope_label ? ' (' . htmlspecialchars($voucher_scope_label) . ')' : '';
+                                    echo '<i class="fas fa-check-circle"></i> Applied ' . htmlspecialchars($applied_voucher_code) . ': -PHP ' . number_format($voucher_discount, 2) . $scope_tag;
                                 } elseif (!empty($voucher_message)) {
-                                    echo htmlspecialchars($voucher_message);
+                                    echo '<i class="fas fa-exclamation-triangle"></i> ' . htmlspecialchars($voucher_message);
                                 } else {
-                                    echo 'Partner vouchers are created by each shop and automatically validated at checkout.';
+                                    echo '<i class="fas fa-info-circle"></i> Store vouchers apply exclusively to their shop. Platform vouchers apply to all shops.';
                                 }
                                 ?>
                             </p>
@@ -4433,7 +4442,8 @@ async function applyVoucherCode() {
         if (voucherCodeInput) voucherCodeInput.value = currentVoucherCode;
 
         recalculateOrderTotals();
-        setVoucherFeedback(`Applied ${currentVoucherCode}: -${moneyFormatter.format(currentVoucherDiscount)}`, 'success');
+        const scopeBadge = result.scope_label ? ` (${result.scope_label})` : '';
+        setVoucherFeedback(`Applied ${currentVoucherCode}: -${moneyFormatter.format(currentVoucherDiscount)}${scopeBadge}`, 'success');
     } catch (error) {
         console.error('Unable to apply voucher:', error);
         setVoucherFeedback('Voucher request failed. Please try again.', 'warning');
@@ -4484,6 +4494,18 @@ if (voucherCodeInput) {
             applyVoucherCode();
         }
     });
+
+    // Auto-apply pending welcome voucher from sessionStorage if not already applied
+    try {
+        const pendingVoucher = sessionStorage.getItem('pending_welcome_voucher');
+        if (pendingVoucher && !voucherCodeInput.value.trim()) {
+            voucherCodeInput.value = pendingVoucher;
+            sessionStorage.removeItem('pending_welcome_voucher');
+            setTimeout(() => {
+                applyVoucherCode();
+            }, 350);
+        }
+    } catch(e) {}
 }
 
 async function submitCheckoutAjax(formElement) {

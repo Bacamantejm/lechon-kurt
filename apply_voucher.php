@@ -81,6 +81,10 @@ echo json_encode([
     'voucher_id' => (int)$state['voucher_id'],
     'voucher_code' => (string)$state['voucher_code'],
     'voucher_name' => (string)($state['voucher_name'] ?? ''),
+    'seller_id' => (int)($state['seller_id'] ?? 0),
+    'store_name' => (string)($state['store_name'] ?? ''),
+    'is_store_exclusive' => !empty($state['is_store_exclusive']),
+    'scope_label' => (string)($state['scope_label'] ?? ''),
     'discount_amount' => (float)$state['discount_amount'],
     'subtotal' => $subtotal,
     'vat_amount' => $vat_amount

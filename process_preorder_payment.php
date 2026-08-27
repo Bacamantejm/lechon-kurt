@@ -430,14 +430,43 @@ if (function_exists('createNotification')) {
 $preorder_id = $first_preorder_id;
 $desc_text = $item_count > 1 ? "Pre-Order: $item_count items" : "Pre-Order: " . $processed_items[0]['name'];
 
+// Always enforce logged-in user identity for PayMongo billing
+$auth_user_id = (int)$_SESSION['user_id'];
+$resolved_customer_name = trim((string)($data['full_name'] ?? ''));
+$resolved_customer_email = trim((string)($data['email'] ?? ''));
+$resolved_customer_phone = trim((string)($data['phone'] ?? ''));
+
+$u_stmt = mysqli_prepare($conn, "SELECT full_name, email, phone FROM users WHERE id = ? LIMIT 1");
+if ($u_stmt) {
+    mysqli_stmt_bind_param($u_stmt, "i", $auth_user_id);
+    mysqli_stmt_execute($u_stmt);
+    $u_res = mysqli_stmt_get_result($u_stmt);
+    if ($u_row = mysqli_fetch_assoc($u_res)) {
+        if (!empty($u_row['full_name'])) {
+            $resolved_customer_name = trim((string)$u_row['full_name']);
+        }
+        if (!empty($u_row['email']) && empty($resolved_customer_email)) {
+            $resolved_customer_email = trim((string)$u_row['email']);
+        }
+        if (!empty($u_row['phone']) && empty($resolved_customer_phone)) {
+            $resolved_customer_phone = trim((string)$u_row['phone']);
+        }
+    }
+    mysqli_stmt_close($u_stmt);
+}
+
+if ($resolved_customer_name === '' && !empty($_SESSION['full_name'])) {
+    $resolved_customer_name = trim((string)$_SESSION['full_name']);
+}
+
 // Prepare PayMongo checkout data
 $checkout_data = [
     'amount' => $amount,
     'description' => $desc_text,
     'order_id' => $preorder_id,
-    'customer_name' => $data['full_name'],
-    'customer_email' => $data['email'],
-    'customer_phone' => $data['phone'],
+    'customer_name' => $resolved_customer_name,
+    'customer_email' => $resolved_customer_email,
+    'customer_phone' => $resolved_customer_phone,
     'success_url' => 'http://' . $_SERVER['HTTP_HOST'] . '/lechonsystem/payment_success_preorder.php?preorder_id=' . $preorder_id,
     'cancel_url' => 'http://' . $_SERVER['HTTP_HOST'] . '/lechonsystem/payment_cancel_preorder.php?preorder_id=' . $preorder_id,
     'payment_method' => 'all' // Allow all payment methods

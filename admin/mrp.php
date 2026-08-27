@@ -305,7 +305,7 @@ mrpEnsureControlSchema($conn);
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
-    $mrp_manage_actions = ['create_pr', 'approve_pr', 'reject_pr', 'save_supplier', 'receive_stock', 'submit_budget_request', 'quick_add_material', 'quick_add_product', 'quick_add_ingredient', 'quick_update_ingredient', 'quick_delete_ingredient', 'create_sales_pr_draft'];
+    $mrp_manage_actions = ['create_pr', 'approve_pr', 'reject_pr', 'save_supplier', 'receive_stock', 'submit_budget_request', 'quick_add_material', 'quick_add_product', 'quick_add_ingredient', 'quick_update_ingredient', 'quick_delete_ingredient', 'create_sales_pr_draft', 'commit_roast_batch_yield'];
     $finance_control_actions = ['approve_budget_request', 'reject_budget_request', 'record_supplier_payment'];
     if (in_array($action, $mrp_manage_actions, true) && !$can_manage_mrp) {
         $_SESSION['error'] = 'You do not have permission to manage procurement workflow actions.';
@@ -315,6 +315,78 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (in_array($action, $finance_control_actions, true) && !$can_manage_finance_control) {
         $_SESSION['error'] = 'Finance approval is required for this procurement control action.';
         header("Location: mrp.php?tab=budget_payments");
+        exit;
+    }
+
+    if ($action === 'commit_roast_batch_yield') {
+        $product_id = (int)($_POST['target_product_id'] ?? 0);
+        $units_to_add = (int)($_POST['commit_units'] ?? 0);
+        $batch_name = trim((string)($_POST['batch_name'] ?? 'Roasting Batch'));
+        $batch_notes = trim((string)($_POST['batch_notes'] ?? ''));
+
+        if ($product_id <= 0 || $units_to_add <= 0) {
+            $_SESSION['error'] = 'Please select a valid menu product and specify at least 1 finished unit.';
+            header("Location: mrp.php?tab=batch_roasting");
+            exit;
+        }
+
+        // Verify product access
+        $p_check_sql = $seller_scope_id !== null
+            ? "SELECT id, name, stock FROM products WHERE id = ? AND seller_id = ? AND is_archived = 0 LIMIT 1"
+            : "SELECT id, name, stock FROM products WHERE id = ? AND is_archived = 0 LIMIT 1";
+        $p_stmt = mysqli_prepare($conn, $p_check_sql);
+        if ($seller_scope_id !== null) {
+            mysqli_stmt_bind_param($p_stmt, "ii", $product_id, $scope_owner_id);
+        } else {
+            mysqli_stmt_bind_param($p_stmt, "i", $product_id);
+        }
+        mysqli_stmt_execute($p_stmt);
+        $p_res = mysqli_stmt_get_result($p_stmt);
+        $product_row = $p_res ? mysqli_fetch_assoc($p_res) : null;
+        if ($p_res) mysqli_free_result($p_res);
+        mysqli_stmt_close($p_stmt);
+
+        if (!$product_row) {
+            $_SESSION['error'] = 'Selected product was not found or is not managed by your store.';
+            header("Location: mrp.php?tab=batch_roasting");
+            exit;
+        }
+
+        // Update product stock
+        $upd_p = mysqli_prepare($conn, "UPDATE products SET stock = stock + ?, updated_at = NOW() WHERE id = ?");
+        if ($upd_p) {
+            mysqli_stmt_bind_param($upd_p, "ii", $units_to_add, $product_id);
+            mysqli_stmt_execute($upd_p);
+            mysqli_stmt_close($upd_p);
+        }
+
+        // Update today's inventory
+        $inv_stmt = mysqli_prepare($conn, "SELECT id, current_stock FROM inventory WHERE product_id = ? AND inventory_date = CURDATE() AND is_archived = 0 LIMIT 1");
+        if ($inv_stmt) {
+            mysqli_stmt_bind_param($inv_stmt, "i", $product_id);
+            mysqli_stmt_execute($inv_stmt);
+            $inv_res = mysqli_stmt_get_result($inv_stmt);
+            if ($inv_row = mysqli_fetch_assoc($inv_res)) {
+                $upd_inv = mysqli_prepare($conn, "UPDATE inventory SET current_stock = current_stock + ?, last_updated = NOW() WHERE id = ?");
+                if ($upd_inv) {
+                    mysqli_stmt_bind_param($upd_inv, "ii", $units_to_add, $inv_row['id']);
+                    mysqli_stmt_execute($upd_inv);
+                    mysqli_stmt_close($upd_inv);
+                }
+            } else {
+                $ins_inv = mysqli_prepare($conn, "INSERT INTO inventory (product_id, current_stock, min_stock_level, inventory_date) VALUES (?, ?, 5, CURDATE())");
+                if ($ins_inv) {
+                    mysqli_stmt_bind_param($ins_inv, "ii", $product_id, $units_to_add);
+                    mysqli_stmt_execute($ins_inv);
+                    mysqli_stmt_close($ins_inv);
+                }
+            }
+            if ($inv_res) mysqli_free_result($inv_res);
+            mysqli_stmt_close($inv_stmt);
+        }
+
+        $_SESSION['success'] = "Roast Batch Yield Committed! Added {$units_to_add} units of \"{$product_row['name']}\" directly to your live store menu inventory.";
+        header("Location: mrp.php?tab=batch_roasting");
         exit;
     }
 
@@ -1748,7 +1820,7 @@ foreach ($simple_flow_steps as &$simple_step) {
 }
 unset($simple_step);
 
-$valid_tabs = ['requisitions', 'purchase_orders', 'low_stock', 'suppliers', 'budget_payments'];
+$valid_tabs = ['requisitions', 'purchase_orders', 'low_stock', 'suppliers', 'budget_payments', 'batch_roasting'];
 $requested_tab = $_GET['tab'] ?? '';
 if (!in_array($requested_tab, $valid_tabs, true)) {
     $requested_tab = '';
@@ -1760,6 +1832,18 @@ if ($requested_tab !== '') {
     $tab = $next_workflow_step['tab'];
 } else {
     $tab = 'requisitions';
+}
+
+$mrp_roast_products = [];
+$p_query = $seller_scope_id !== null
+    ? "SELECT id, name, stock, price, category FROM products WHERE seller_id = " . (int)$seller_scope_id . " AND is_archived = 0 ORDER BY name ASC"
+    : "SELECT id, name, stock, price, category FROM products WHERE is_archived = 0 ORDER BY name ASC";
+$p_res = mysqli_query($conn, $p_query);
+if ($p_res) {
+    while ($p_row = mysqli_fetch_assoc($p_res)) {
+        $mrp_roast_products[] = $p_row;
+    }
+    mysqli_free_result($p_res);
 }
 
 $open_pr_modal = (isset($_GET['open_pr']) && $_GET['open_pr'] === '1');
@@ -2061,6 +2145,9 @@ unset($_SESSION['success'], $_SESSION['error']);
                     </li>
                     <li class="nav-item">
                         <a class="nav-link <?php echo $tab === 'suppliers' ? 'active' : ''; ?>" href="?tab=suppliers">Optional: Suppliers</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link <?php echo $tab === 'batch_roasting' ? 'active' : ''; ?>" href="?tab=batch_roasting"><i class="fas fa-fire"></i> 5. Batch Roasting &amp; Yield</a>
                     </li>
                 </ul>
 
@@ -2856,6 +2943,186 @@ unset($_SESSION['success'], $_SESSION['error']);
                         </table>
                     </div>
                 </div>
+
+                <!-- 5. Batch Roasting & Yield Calculator Tab -->
+                <div class="tab-pane fade <?php echo $tab === 'batch_roasting' ? 'show active' : ''; ?>" id="batch_roasting">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <h4 class="mb-1"><i class="fas fa-fire text-danger"></i> MRP Batch Roasting &amp; Yield Calculator</h4>
+                            <p class="text-muted small mb-0">Plan daily roasting batches, calculate cooked pork yields, track production costs, and commit finished stock directly to your live store menu.</p>
+                        </div>
+                    </div>
+
+                    <div class="row g-4">
+                        <!-- Left Column: Batch Parameters & Roasting Inputs -->
+                        <div class="col-lg-7">
+                            <div class="card border-0 shadow-sm p-4 rounded-3 mb-4" style="border: 1px solid #eaecf0 !important; background: #ffffff;">
+                                <h5 class="fw-bold mb-3" style="color: #101828;"><i class="fas fa-sliders text-muted me-2"></i>Batch Parameters</h5>
+                                
+                                <form method="POST" id="roastBatchForm">
+                                    <input type="hidden" name="action" value="commit_roast_batch_yield">
+                                    <input type="hidden" name="commit_units" id="hiddenCommitUnits" value="1">
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label fw-semibold">Target Menu Product <span class="text-danger">*</span></label>
+                                        <select name="target_product_id" id="roastProductSelect" class="form-select form-select-lg" required>
+                                            <option value="">-- Choose Product to Restock --</option>
+                                            <?php foreach ($mrp_roast_products as $p): ?>
+                                                <option value="<?php echo (int)$p['id']; ?>" 
+                                                        data-price="<?php echo (float)$p['price']; ?>"
+                                                        data-stock="<?php echo (int)$p['stock']; ?>"
+                                                        data-name="<?php echo htmlspecialchars($p['name']); ?>">
+                                                    <?php echo htmlspecialchars($p['name']); ?> (Current Stock: <?php echo (int)$p['stock']; ?> | ₱<?php echo number_format((float)$p['price'], 2); ?>)
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+
+                                    <div class="row g-3 mb-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-semibold">Batch Pig / Portion Count</label>
+                                            <div class="input-group">
+                                                <span class="input-group-text"><i class="fas fa-boxes-stacked"></i></span>
+                                                <input type="number" name="batch_pig_count" id="roastPigCount" class="form-control" value="5" min="1" max="100" step="1" required>
+                                                <span class="input-group-text">pigs / heads</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-semibold">Avg. Dressed Weight per Pig</label>
+                                            <div class="input-group">
+                                                <span class="input-group-text"><i class="fas fa-weight-hanging"></i></span>
+                                                <input type="number" id="roastDressedWeight" class="form-control" value="16.0" min="1" max="150" step="0.5" required>
+                                                <span class="input-group-text">kg / head</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="row g-3 mb-4">
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-semibold">Expected Cooked Roasting Yield</label>
+                                            <div class="input-group">
+                                                <span class="input-group-text"><i class="fas fa-percent"></i></span>
+                                                <input type="number" id="roastYieldPercent" class="form-control" value="65" min="30" max="100" step="1" required>
+                                                <span class="input-group-text">% yield</span>
+                                            </div>
+                                            <small class="text-muted">Standard whole roast lechon cooked yield is 60% – 68%.</small>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-semibold">Raw Pork Cost per kg</label>
+                                            <div class="input-group">
+                                                <span class="input-group-text">₱</span>
+                                                <input type="number" id="roastMeatCostPerKg" class="form-control" value="230" min="0" step="1" required>
+                                                <span class="input-group-text">/ kg</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <h5 class="fw-bold mb-3 mt-4" style="color: #101828;"><i class="fas fa-fire-burner text-muted me-2"></i>Roasting Pit &amp; Seasoning Costs</h5>
+                                    <div class="row g-3 mb-4">
+                                        <div class="col-md-4">
+                                            <label class="form-label fw-semibold">Charcoal Cost (Batch)</label>
+                                            <div class="input-group">
+                                                <span class="input-group-text">₱</span>
+                                                <input type="number" id="roastCharcoalCost" class="form-control" value="650" min="0" step="10">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label fw-semibold">Spices &amp; Aromatics</label>
+                                            <div class="input-group">
+                                                <span class="input-group-text">₱</span>
+                                                <input type="number" id="roastSpicesCost" class="form-control" value="350" min="0" step="10">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label fw-semibold">Roaster Labor (Pit)</label>
+                                            <div class="input-group">
+                                                <span class="input-group-text">₱</span>
+                                                <input type="number" id="roastLaborCost" class="form-control" value="800" min="0" step="50">
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label fw-semibold">Batch Notes (Optional)</label>
+                                        <input type="text" name="batch_notes" class="form-control" placeholder="e.g. Weekend morning roast batch for Cavite orders">
+                                    </div>
+
+                                    <button type="submit" class="btn btn-primary btn-lg w-100 py-3 fw-bold" id="commitYieldBtn" style="background: #b3261e; border-color: #b3261e;" <?php echo $can_manage_mrp ? '' : 'disabled'; ?>>
+                                        <i class="fas fa-check-circle me-2"></i> Commit Batch Yield to Live Store Inventory
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+
+                        <!-- Right Column: Live Economics & Yield Summary Card -->
+                        <div class="col-lg-5">
+                            <div class="card border-0 shadow-sm p-4 rounded-3 sticky-top" style="top: 20px; border: 1px solid #eaecf0 !important; background: #ffffff;">
+                                <div class="d-flex align-items-center justify-content-between mb-3 border-bottom pb-2">
+                                    <h5 class="fw-bold mb-0" style="color: #101828;"><i class="fas fa-calculator text-primary me-2"></i>Yield &amp; Economics</h5>
+                                    <span class="badge bg-success" id="calcYieldBadge">Live Calculator</span>
+                                </div>
+
+                                <div class="p-3 mb-3 rounded-3" style="background: #f8f9fa; border: 1px solid #eaecf0;">
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span class="text-muted">Total Raw Dressed Weight:</span>
+                                        <strong id="summaryRawWeight">80.0 kg</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span class="text-muted">Estimated Cooked Yield:</span>
+                                        <strong class="text-success" id="summaryCookedYield">52.0 kg</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between">
+                                        <span class="text-muted">Finished Units to Restock:</span>
+                                        <strong class="text-primary fs-5" id="summaryFinishedUnits">5 Units</strong>
+                                    </div>
+                                </div>
+
+                                <div class="p-3 mb-3 rounded-3" style="background: #fff9f2; border: 1px solid #fedf89;">
+                                    <h6 class="fw-bold text-dark mb-2">Batch Cost Breakdown</h6>
+                                    <div class="d-flex justify-content-between small mb-1">
+                                        <span class="text-muted">Raw Meat Cost:</span>
+                                        <span id="summaryMeatCost">₱18,400.00</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between small mb-1">
+                                        <span class="text-muted">Charcoal &amp; Seasonings:</span>
+                                        <span id="summaryConsumablesCost">₱1,000.00</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between small mb-2">
+                                        <span class="text-muted">Roaster Pit Labor:</span>
+                                        <span id="summaryLaborCost">₱800.00</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between border-top pt-2 fw-bold">
+                                        <span>Total Batch Cost:</span>
+                                        <span class="text-danger" id="summaryTotalCost">₱20,200.00</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between small text-muted mt-1">
+                                        <span>Cost per Finished Unit:</span>
+                                        <span id="summaryUnitCost">₱4,040.00</span>
+                                    </div>
+                                </div>
+
+                                <div class="p-3 rounded-3" style="background: #ecfdf3; border: 1px solid #abefc6;">
+                                    <h6 class="fw-bold text-success mb-2">Projected Store Revenue</h6>
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <span class="text-muted">Selling Price / Unit:</span>
+                                        <strong id="summarySellingPrice">₱6,500.00</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <span class="text-muted">Gross Revenue:</span>
+                                        <strong class="text-success" id="summaryGrossRevenue">₱32,500.00</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between border-top pt-2 fw-bold">
+                                        <span>Est. Net Profit:</span>
+                                        <span class="text-success fs-5" id="summaryNetProfit">+₱12,300.00</span>
+                                    </div>
+                                    <div class="text-end small text-success fw-semibold mt-1" id="summaryProfitMargin">
+                                        Margin: 37.8%
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -3137,6 +3404,85 @@ unset($_SESSION['success'], $_SESSION['error']);
                 }
             }
         });
+
+        // MRP Batch Roasting & Yield Real-Time Calculator
+        const roastProductSelect = document.getElementById('roastProductSelect');
+        const roastPigCount = document.getElementById('roastPigCount');
+        const roastDressedWeight = document.getElementById('roastDressedWeight');
+        const roastYieldPercent = document.getElementById('roastYieldPercent');
+        const roastMeatCostPerKg = document.getElementById('roastMeatCostPerKg');
+        const roastCharcoalCost = document.getElementById('roastCharcoalCost');
+        const roastSpicesCost = document.getElementById('roastSpicesCost');
+        const roastLaborCost = document.getElementById('roastLaborCost');
+        const hiddenCommitUnits = document.getElementById('hiddenCommitUnits');
+
+        function calculateRoastBatchEconomics() {
+            if (!roastPigCount) return;
+
+            const count = Math.max(1, parseInt(roastPigCount.value) || 1);
+            const dressedWeight = Math.max(0.1, parseFloat(roastDressedWeight ? roastDressedWeight.value : 16) || 16);
+            const yieldPct = Math.max(1, Math.min(100, parseFloat(roastYieldPercent ? roastYieldPercent.value : 65) || 65)) / 100;
+            const meatRate = Math.max(0, parseFloat(roastMeatCostPerKg ? roastMeatCostPerKg.value : 230) || 230);
+            const charcoal = Math.max(0, parseFloat(roastCharcoalCost ? roastCharcoalCost.value : 0) || 0);
+            const spices = Math.max(0, parseFloat(roastSpicesCost ? roastSpicesCost.value : 0) || 0);
+            const labor = Math.max(0, parseFloat(roastLaborCost ? roastLaborCost.value : 0) || 0);
+
+            const totalDressedWeight = count * dressedWeight;
+            const totalCookedYield = totalDressedWeight * yieldPct;
+            const totalMeatCost = totalDressedWeight * meatRate;
+            const totalBatchCost = totalMeatCost + charcoal + spices + labor;
+            const costPerUnit = totalBatchCost / count;
+
+            let sellingPrice = 6500;
+            if (roastProductSelect && roastProductSelect.selectedIndex > 0) {
+                const opt = roastProductSelect.options[roastProductSelect.selectedIndex];
+                const pPrice = parseFloat(opt.getAttribute('data-price')) || 0;
+                if (pPrice > 0) sellingPrice = pPrice;
+            }
+
+            const grossRevenue = count * sellingPrice;
+            const netProfit = grossRevenue - totalBatchCost;
+            const profitMargin = grossRevenue > 0 ? (netProfit / grossRevenue) * 100 : 0;
+
+            if (hiddenCommitUnits) hiddenCommitUnits.value = count;
+
+            const fmt = (n) => '₱' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+            const elRaw = document.getElementById('summaryRawWeight');
+            const elCooked = document.getElementById('summaryCookedYield');
+            const elUnits = document.getElementById('summaryFinishedUnits');
+            const elMeat = document.getElementById('summaryMeatCost');
+            const elConsumables = document.getElementById('summaryConsumablesCost');
+            const elLabor = document.getElementById('summaryLaborCost');
+            const elTotalCost = document.getElementById('summaryTotalCost');
+            const elUnitCost = document.getElementById('summaryUnitCost');
+            const elSelling = document.getElementById('summarySellingPrice');
+            const elGross = document.getElementById('summaryGrossRevenue');
+            const elProfit = document.getElementById('summaryNetProfit');
+            const elMargin = document.getElementById('summaryProfitMargin');
+
+            if (elRaw) elRaw.textContent = totalDressedWeight.toFixed(1) + ' kg';
+            if (elCooked) elCooked.textContent = totalCookedYield.toFixed(1) + ' kg';
+            if (elUnits) elUnits.textContent = count + ' Units';
+            if (elMeat) elMeat.textContent = fmt(totalMeatCost);
+            if (elConsumables) elConsumables.textContent = fmt(charcoal + spices);
+            if (elLabor) elLabor.textContent = fmt(labor);
+            if (elTotalCost) elTotalCost.textContent = fmt(totalBatchCost);
+            if (elUnitCost) elUnitCost.textContent = fmt(costPerUnit);
+            if (elSelling) elSelling.textContent = fmt(sellingPrice);
+            if (elGross) elGross.textContent = fmt(grossRevenue);
+            if (elProfit) elProfit.textContent = (netProfit >= 0 ? '+' : '') + fmt(netProfit);
+            if (elMargin) elMargin.textContent = 'Margin: ' + profitMargin.toFixed(1) + '%';
+        }
+
+        [roastProductSelect, roastPigCount, roastDressedWeight, roastYieldPercent, roastMeatCostPerKg, roastCharcoalCost, roastSpicesCost, roastLaborCost].forEach(el => {
+            if (el) {
+                el.addEventListener('input', calculateRoastBatchEconomics);
+                el.addEventListener('change', calculateRoastBatchEconomics);
+            }
+        });
+
+        calculateRoastBatchEconomics();
     </script>
 </body>
 </html>

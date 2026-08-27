@@ -33,6 +33,13 @@ if (!function_exists('pvEnsureVoucherSchema')) {
         if ($ensured || !($conn instanceof mysqli)) {
             return;
         }
+        try {
+            if (!@mysqli_ping($conn)) {
+                return;
+            }
+        } catch (\Throwable $e) {
+            return;
+        }
         $ensured = true;
 
         $vouchers_sql = "
@@ -89,6 +96,31 @@ if (!function_exists('pvEnsureVoucherSchema')) {
         }
         if (!pvHasTableColumn($conn, 'orders', 'voucher_discount')) {
             mysqli_query($conn, "ALTER TABLE `orders` ADD COLUMN `voucher_discount` decimal(10,2) NOT NULL DEFAULT 0.00 AFTER `voucher_code`");
+        }
+
+        $default_vouchers = [
+            ['WELCOME100', 'New User Welcome ₱100 OFF', 'Get ₱100 flat discount on your first order.', 'fixed', 100.00, 500.00, 100.00],
+            ['FREESHIP', 'First Order Free Delivery', 'Free shipping discount on whole or half lechon pre-orders.', 'fixed', 150.00, 1200.00, 150.00],
+            ['LECHON15', '15% OFF Celebration Pre-order', 'Save 15% on advance celebrations up to ₱300.', 'percent', 15.00, 800.00, 300.00],
+            ['BELLY50', '₱50 OFF Crispy Lechon Belly', 'Save ₱50 on lechon belly rolls and meal boxes.', 'fixed', 50.00, 350.00, 50.00]
+        ];
+
+        foreach ($default_vouchers as $v) {
+            $code = $v[0];
+            $check = mysqli_query($conn, "SELECT id FROM `partner_vouchers` WHERE `seller_id` = 0 AND `code` = '{$code}' LIMIT 1");
+            if ($check && mysqli_num_rows($check) === 0) {
+                $name = mysqli_real_escape_string($conn, $v[1]);
+                $desc = mysqli_real_escape_string($conn, $v[2]);
+                $type = $v[3];
+                $val = (float)$v[4];
+                $min = (float)$v[5];
+                $max = (float)$v[6];
+                mysqli_query($conn, "
+                    INSERT INTO `partner_vouchers` 
+                    (`seller_id`, `code`, `name`, `description`, `discount_type`, `discount_value`, `min_order_amount`, `max_discount_amount`, `is_active`)
+                    VALUES (0, '{$code}', '{$name}', '{$desc}', '{$type}', {$val}, {$min}, {$max}, 1)
+                ");
+            }
         }
     }
 }
@@ -321,7 +353,7 @@ if (!function_exists('pvGetVoucherByCodeForSeller')) {
             return null;
         }
 
-        $stmt = mysqli_prepare($conn, "SELECT * FROM partner_vouchers WHERE seller_id = ? AND code = ? LIMIT 1");
+        $stmt = mysqli_prepare($conn, "SELECT * FROM partner_vouchers WHERE (seller_id = ? OR seller_id = 0) AND code = ? ORDER BY seller_id DESC LIMIT 1");
         if (!$stmt) {
             return null;
         }
@@ -392,7 +424,8 @@ if (!function_exists('pvValidateVoucherForCart')) {
             return ['success' => false, 'message' => 'Voucher is inactive.'];
         }
 
-        if ((int)($voucher['seller_id'] ?? 0) !== $seller_id) {
+        $voucher_seller_id = (int)($voucher['seller_id'] ?? 0);
+        if ($voucher_seller_id !== 0 && $voucher_seller_id !== $seller_id) {
             return ['success' => false, 'message' => 'Voucher does not belong to this shop.'];
         }
 
@@ -473,7 +506,7 @@ if (!function_exists('pvGetAppliedVoucherSession')) {
         $voucher_id = (int)($raw['voucher_id'] ?? 0);
         $seller_id = (int)($raw['seller_id'] ?? 0);
         $voucher_code = pvNormalizeVoucherCode($raw['voucher_code'] ?? '');
-        if ($voucher_id <= 0 || $seller_id <= 0 || $voucher_code === '') {
+        if ($voucher_id <= 0 || $voucher_code === '') {
             return null;
         }
 
@@ -506,6 +539,27 @@ if (!function_exists('pvApplyVoucherCodeForSession')) {
 
         $voucher = pvGetVoucherByCodeForSeller($conn, (int)$scope['seller_id'], $voucher_code);
         if (!$voucher) {
+            // Check if this promo code exists for another store to give clear actionable feedback
+            $other_stmt = mysqli_prepare($conn, "
+                SELECT pv.seller_id, COALESCE(NULLIF(TRIM(u.business_name), ''), u.full_name, 'another partner store') AS store_name 
+                FROM partner_vouchers pv 
+                LEFT JOIN users u ON pv.seller_id = u.id 
+                WHERE pv.code = ? AND pv.seller_id > 0 AND pv.is_active = 1 
+                LIMIT 1
+            ");
+            if ($other_stmt) {
+                mysqli_stmt_bind_param($other_stmt, "s", $voucher_code);
+                mysqli_stmt_execute($other_stmt);
+                $other_res = mysqli_stmt_get_result($other_stmt);
+                if ($other_row = mysqli_fetch_assoc($other_res)) {
+                    $other_store = (string)$other_row['store_name'];
+                    mysqli_free_result($other_res);
+                    mysqli_stmt_close($other_stmt);
+                    return ['success' => false, 'message' => "This promo code is exclusive to {$other_store} and cannot be used for this store's order."];
+                }
+                if ($other_res) mysqli_free_result($other_res);
+                mysqli_stmt_close($other_stmt);
+            }
             return ['success' => false, 'message' => 'Voucher code is invalid for this shop.'];
         }
 
@@ -521,12 +575,31 @@ if (!function_exists('pvApplyVoucherCodeForSession')) {
             'applied_at' => date('c')
         ];
 
+        $store_name = '';
+        if ((int)$voucher['seller_id'] > 0) {
+            $st_stmt = mysqli_prepare($conn, "SELECT COALESCE(NULLIF(TRIM(business_name), ''), full_name, 'Partner Store') AS store_name FROM users WHERE id = ? LIMIT 1");
+            if ($st_stmt) {
+                mysqli_stmt_bind_param($st_stmt, "i", $voucher['seller_id']);
+                mysqli_stmt_execute($st_stmt);
+                $st_res = mysqli_stmt_get_result($st_stmt);
+                if ($st_row = mysqli_fetch_assoc($st_res)) {
+                    $store_name = (string)$st_row['store_name'];
+                }
+                if ($st_res) mysqli_free_result($st_res);
+                mysqli_stmt_close($st_stmt);
+            }
+        }
+
         return [
             'success' => true,
             'message' => 'Voucher applied.',
             'voucher_id' => (int)$voucher['id'],
             'voucher_code' => (string)$voucher['code'],
             'voucher_name' => (string)($voucher['name'] ?? ''),
+            'seller_id' => (int)$voucher['seller_id'],
+            'store_name' => $store_name,
+            'is_store_exclusive' => ((int)$voucher['seller_id'] > 0),
+            'scope_label' => ((int)$voucher['seller_id'] > 0) ? ("Exclusive to " . ($store_name ?: "this store")) : "Platform Welcome Perk (All Stores)",
             'discount_amount' => (float)$validation['discount_amount'],
             'scope' => $scope
         ];
@@ -545,6 +618,10 @@ if (!function_exists('pvResolveAppliedVoucherState')) {
                 'voucher_id' => 0,
                 'voucher_code' => '',
                 'voucher_name' => '',
+                'seller_id' => 0,
+                'store_name' => '',
+                'is_store_exclusive' => false,
+                'scope_label' => '',
                 'discount_amount' => 0.0,
                 'scope' => $scope,
                 'message' => ''
@@ -558,19 +635,28 @@ if (!function_exists('pvResolveAppliedVoucherState')) {
                 'voucher_id' => 0,
                 'voucher_code' => '',
                 'voucher_name' => '',
+                'seller_id' => 0,
+                'store_name' => '',
+                'is_store_exclusive' => false,
+                'scope_label' => '',
                 'discount_amount' => 0.0,
                 'scope' => $scope,
                 'message' => $scope['message'] ?? 'Voucher was removed because your cart changed.'
             ];
         }
 
-        if ((int)$scope['seller_id'] !== (int)$session_data['seller_id']) {
+        $session_seller_id = (int)($session_data['seller_id'] ?? 0);
+        if ($session_seller_id !== 0 && (int)$scope['seller_id'] !== $session_seller_id) {
             pvClearAppliedVoucherSession();
             return [
                 'applied' => false,
                 'voucher_id' => 0,
                 'voucher_code' => '',
                 'voucher_name' => '',
+                'seller_id' => 0,
+                'store_name' => '',
+                'is_store_exclusive' => false,
+                'scope_label' => '',
                 'discount_amount' => 0.0,
                 'scope' => $scope,
                 'message' => 'Voucher was removed because your cart shop changed.'
@@ -586,6 +672,10 @@ if (!function_exists('pvResolveAppliedVoucherState')) {
                 'voucher_id' => 0,
                 'voucher_code' => '',
                 'voucher_name' => '',
+                'seller_id' => 0,
+                'store_name' => '',
+                'is_store_exclusive' => false,
+                'scope_label' => '',
                 'discount_amount' => 0.0,
                 'scope' => $scope,
                 'message' => 'Voucher lookup failed.'
@@ -608,6 +698,10 @@ if (!function_exists('pvResolveAppliedVoucherState')) {
                 'voucher_id' => 0,
                 'voucher_code' => '',
                 'voucher_name' => '',
+                'seller_id' => 0,
+                'store_name' => '',
+                'is_store_exclusive' => false,
+                'scope_label' => '',
                 'discount_amount' => 0.0,
                 'scope' => $scope,
                 'message' => 'Voucher no longer exists.'
@@ -622,10 +716,29 @@ if (!function_exists('pvResolveAppliedVoucherState')) {
                 'voucher_id' => 0,
                 'voucher_code' => '',
                 'voucher_name' => '',
+                'seller_id' => 0,
+                'store_name' => '',
+                'is_store_exclusive' => false,
+                'scope_label' => '',
                 'discount_amount' => 0.0,
                 'scope' => $scope,
                 'message' => $validation['message'] ?? 'Voucher is no longer valid.'
             ];
+        }
+
+        $store_name = '';
+        if ((int)$voucher['seller_id'] > 0) {
+            $st_stmt = mysqli_prepare($conn, "SELECT COALESCE(NULLIF(TRIM(business_name), ''), full_name, 'Partner Store') AS store_name FROM users WHERE id = ? LIMIT 1");
+            if ($st_stmt) {
+                mysqli_stmt_bind_param($st_stmt, "i", $voucher['seller_id']);
+                mysqli_stmt_execute($st_stmt);
+                $st_res = mysqli_stmt_get_result($st_stmt);
+                if ($st_row = mysqli_fetch_assoc($st_res)) {
+                    $store_name = (string)$st_row['store_name'];
+                }
+                if ($st_res) mysqli_free_result($st_res);
+                mysqli_stmt_close($st_stmt);
+            }
         }
 
         return [
@@ -634,6 +747,9 @@ if (!function_exists('pvResolveAppliedVoucherState')) {
             'voucher_code' => (string)$voucher['code'],
             'voucher_name' => (string)($voucher['name'] ?? ''),
             'seller_id' => (int)$voucher['seller_id'],
+            'store_name' => $store_name,
+            'is_store_exclusive' => ((int)$voucher['seller_id'] > 0),
+            'scope_label' => ((int)$voucher['seller_id'] > 0) ? ("Exclusive to " . ($store_name ?: "this store")) : "Platform Welcome Perk (All Stores)",
             'discount_amount' => (float)$validation['discount_amount'],
             'scope' => $scope,
             'message' => ''
@@ -649,6 +765,9 @@ if (!function_exists('pvRedeemVoucherForOrder')) {
 
         $voucher_id = (int)($voucher_state['voucher_id'] ?? 0);
         $seller_id = (int)($voucher_state['seller_id'] ?? 0);
+        if ($seller_id <= 0 && isset($voucher_state['scope']['seller_id'])) {
+            $seller_id = (int)$voucher_state['scope']['seller_id'];
+        }
         $voucher_code = pvNormalizeVoucherCode($voucher_state['voucher_code'] ?? '');
         $discount_amount = (float)($voucher_state['discount_amount'] ?? 0);
 

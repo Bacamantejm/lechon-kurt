@@ -135,6 +135,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $product_seller_id = 1;
     }
 
+    $clear_and_add = !empty($_POST['clear_and_add']) || !empty($_POST['replace_cart']);
+
+    if ($clear_and_add) {
+        $_SESSION['cart'] = [];
+        unset($_SESSION['applied_voucher']);
+    }
+
     $current_cart_seller_id = 0;
     if (!empty($_SESSION['cart']) && function_exists('pvGetCheckoutTenantScope')) {
         $cart_scope = pvGetCheckoutTenantScope($conn, $_SESSION['cart']);
@@ -155,16 +162,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($current_cart_seller_id > 0 && $product_seller_id !== $current_cart_seller_id) {
+        $curr_store_name = 'current store';
+        $new_store_name = 'new store';
+
         if (isset($conn) && $conn instanceof mysqli) {
+            $s_stmt = mysqli_prepare($conn, "SELECT id, COALESCE(NULLIF(TRIM(business_name), ''), full_name, 'Partner Store') AS store_name FROM users WHERE id IN (?, ?)");
+            if ($s_stmt) {
+                mysqli_stmt_bind_param($s_stmt, "ii", $current_cart_seller_id, $product_seller_id);
+                mysqli_stmt_execute($s_stmt);
+                $s_res = mysqli_stmt_get_result($s_stmt);
+                while ($s_row = mysqli_fetch_assoc($s_res)) {
+                    if ((int)$s_row['id'] === $current_cart_seller_id) {
+                        $curr_store_name = (string)$s_row['store_name'];
+                    }
+                    if ((int)$s_row['id'] === $product_seller_id) {
+                        $new_store_name = (string)$s_row['store_name'];
+                    }
+                }
+                mysqli_free_result($s_res);
+                mysqli_stmt_close($s_stmt);
+            }
             mysqli_close($conn);
         }
+
         sendJsonResponse(
             false,
-            'You can only add items from one store per checkout. Please finish or clear your current cart first.',
+            "Your cart already contains items from {$curr_store_name}. Would you like to clear your cart and start an order from {$new_store_name}?",
             [
                 'code' => 'MIXED_TENANT_ADD_BLOCKED',
                 'current_seller_id' => $current_cart_seller_id,
+                'current_store_name' => $curr_store_name,
                 'attempted_seller_id' => $product_seller_id,
+                'new_store_name' => $new_store_name,
                 'redirect_url' => 'cart.php'
             ]
         );

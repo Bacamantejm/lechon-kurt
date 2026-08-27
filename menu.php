@@ -636,7 +636,34 @@ if (!empty($product_ids_for_reviews)) {
     }
 }
 
-mysqli_close($conn);
+// Fetch active store-specific deals/vouchers for this shop
+$store_deals = [];
+$lookup_seller_id = (int)($requested_seller_id ?: ($store_owner_id ?? 0));
+if ($lookup_seller_id > 0 && isset($conn) && $conn instanceof mysqli) {
+    require_once __DIR__ . '/includes/partner_voucher_helper.php';
+    pvEnsureVoucherSchema($conn);
+    $vd_stmt = mysqli_prepare($conn, "
+        SELECT id, code, name, description, discount_type, discount_value, min_order_amount, max_discount_amount 
+        FROM partner_vouchers 
+        WHERE seller_id = ? AND is_active = 1 
+          AND (start_at IS NULL OR start_at <= NOW()) 
+          AND (end_at IS NULL OR end_at >= NOW()) 
+        ORDER BY id DESC 
+        LIMIT 4
+    ");
+    if ($vd_stmt) {
+        mysqli_stmt_bind_param($vd_stmt, "i", $lookup_seller_id);
+        mysqli_stmt_execute($vd_stmt);
+        $vd_res = mysqli_stmt_get_result($vd_stmt);
+        if ($vd_res) {
+            while ($vd_row = mysqli_fetch_assoc($vd_res)) {
+                $store_deals[] = $vd_row;
+            }
+            mysqli_free_result($vd_res);
+        }
+        mysqli_stmt_close($vd_stmt);
+    }
+}
 ?><!-- Product Preview Modal -->
 <div class="product-preview-modal" id="productPreviewModal" style="display:none;">
     <div class="preview-modal-content">
@@ -687,9 +714,14 @@ mysqli_close($conn);
                     </div>
                 </div>
                 
-                <button class="btn-primary add-to-cart-confirm" id="addToCartConfirm">
-                    <i class="fas fa-cart-plus"></i> Add to Cart
-                </button>
+                <div style="display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap;">
+                    <button class="btn-primary add-to-cart-confirm" id="addToCartConfirm" style="flex: 1; min-width: 160px;">
+                        <i class="fas fa-cart-plus"></i> Add to Cart
+                    </button>
+                    <a href="preorder.php" id="previewPreorderLink" style="display: none; align-items: center; justify-content: center; gap: 6px; padding: 12px 18px; border-radius: 12px; font-weight: 700; font-size: 0.88rem; background: #fffaeb; color: #b54708; border: 1px solid #fedf89; text-decoration: none; white-space: nowrap;">
+                        <i class="fas fa-calendar-check"></i> Reserve Event Date
+                    </a>
+                </div>
             </div>
         </div>
     </div>
@@ -841,6 +873,46 @@ mysqli_close($conn);
 <!-- Menu Section -->
 <section class="menu-section" id="menu">
     <div class="container">
+        <?php if (!empty($store_deals)): ?>
+            <div class="store-deals-strip" style="background: #ffffff; border: 1px solid #eaecf0; border-radius: 16px; padding: 18px 20px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(16, 24, 40, 0.04);">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div style="width: 34px; height: 34px; border-radius: 10px; background: #fff1f0; color: #b3261e; display: flex; align-items: center; justify-content: center; font-size: 0.95rem;">
+                            <i class="fas fa-tags"></i>
+                        </div>
+                        <div>
+                            <h3 style="margin: 0; font-family: 'Outfit', sans-serif; font-size: 1.1rem; font-weight: 800; color: #101828;">Store Exclusive Deals</h3>
+                            <p style="margin: 0; font-size: 0.78rem; color: #667085;">Special discounts available only when ordering from <?php echo htmlspecialchars($store_display_name); ?>.</p>
+                        </div>
+                    </div>
+                    <span style="font-size: 0.76rem; font-weight: 700; color: #027a48; background: #ecfdf3; border: 1px solid #abefc6; padding: 4px 10px; border-radius: 999px;">
+                        <i class="fas fa-badge-check"></i> <?php echo count($store_deals); ?> Store Offer<?php echo count($store_deals) > 1 ? 's' : ''; ?> Available
+                    </span>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px;">
+                    <?php foreach ($store_deals as $deal): ?>
+                        <?php
+                            $is_pct = strtolower((string)$deal['discount_type']) === 'percent';
+                            $val_text = $is_pct ? (rtrim(rtrim(number_format((float)$deal['discount_value'], 2), '0'), '.') . '% OFF') : ('₱' . number_format((float)$deal['discount_value'], 0) . ' OFF');
+                            $min_order = (float)$deal['min_order_amount'];
+                            $min_text = $min_order > 0 ? ('Min. spend ₱' . number_format($min_order, 0)) : 'No min. spend';
+                            $deal_code = htmlspecialchars((string)$deal['code']);
+                        ?>
+                        <div style="background: #f8f9fa; border: 1px dashed #d0d5dd; border-radius: 12px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+                            <div>
+                                <div style="font-weight: 800; color: #b3261e; font-size: 1.05rem;"><?php echo $val_text; ?></div>
+                                <div style="font-size: 0.78rem; color: #344054; font-weight: 700; margin-top: 1px;"><?php echo htmlspecialchars((string)$deal['name']); ?></div>
+                                <div style="font-size: 0.72rem; color: #667085;"><?php echo $min_text; ?></div>
+                            </div>
+                            <button type="button" onclick="claimStoreVoucher('<?php echo $deal_code; ?>', this)" style="background: #ffffff; border: 1px solid #d0d5dd; color: #344054; font-size: 0.76rem; font-weight: 700; padding: 7px 12px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; transition: all 0.15s ease;">
+                                <i class="fas fa-copy"></i> <?php echo $deal_code; ?>
+                            </button>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        <?php endif; ?>
+
         <!-- Foodpanda Unified Sticky Category Navigation Bar -->
         <div class="panda-menu-sticky-bar" id="pandaMenuStickyBar">
             <div class="panda-menu-bar-inner">
@@ -966,6 +1038,16 @@ mysqli_close($conn);
                     
                     <!-- Card Body Content -->
                     <div class="item-content">
+                        <?php 
+                        $is_whole_roast = stripos($item['name'], 'whole') !== false || stripos($item['category'], 'whole') !== false || stripos($item['name'], 'lechon baka') !== false;
+                        if ($is_whole_roast): 
+                        ?>
+                            <div style="margin-bottom: 6px;">
+                                <span style="display:inline-flex; align-items:center; gap:4px; font-size:0.7rem; font-weight:800; color:#b54708; background:#fffaeb; border:1px solid #fedf89; padding:2px 8px; border-radius:6px;">
+                                    <i class="fas fa-clock"></i> 4–6 hrs Roasting • Advance Order
+                                </span>
+                            </div>
+                        <?php endif; ?>
                         <h3><?php echo htmlspecialchars($item['name']); ?></h3>
                         
                         <div class="item-rating">
@@ -1154,6 +1236,46 @@ mysqli_close($conn);
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <script>
+function claimStoreVoucher(code, btn) {
+    if (!code) return;
+    const textToCopy = String(code).trim();
+    try {
+        sessionStorage.setItem('pending_welcome_voucher', textToCopy);
+    } catch(e) {}
+
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(textToCopy).catch(() => {});
+    }
+
+    if (btn) {
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check"></i> Applied!';
+        btn.style.background = '#ecfdf3';
+        btn.style.color = '#027a48';
+        btn.style.borderColor = '#abefc6';
+        setTimeout(() => {
+            btn.innerHTML = originalHtml;
+            btn.style.background = '#ffffff';
+            btn.style.color = '#344054';
+            btn.style.borderColor = '#d0d5dd';
+        }, 2500);
+    }
+
+    if (typeof Swal !== 'undefined') {
+        const Toast = Swal.mixin({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 3000,
+            timerProgressBar: true
+        });
+        Toast.fire({
+            icon: 'success',
+            title: 'Store Voucher ' + textToCopy + ' activated! It will apply to this shop at checkout.'
+        });
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     // Product Preview Modal
     const productPreviewModal = document.getElementById('productPreviewModal');
@@ -1913,8 +2035,20 @@ document.addEventListener('click', function(e) {
         } else {
             document.getElementById('previewAddonsSection').style.display = 'none';
         }
-              // Set initial price
+        // Set initial price
         updateOrderSummary();
+
+        // Toggle advance pre-order reservation link for whole roasts
+        const isWholeRoast = (product.name && (product.name.toLowerCase().includes('whole') || product.name.toLowerCase().includes('baka'))) || (product.category && product.category.toLowerCase().includes('whole'));
+        const preorderLink = document.getElementById('previewPreorderLink');
+        if (preorderLink) {
+            if (isWholeRoast) {
+                preorderLink.style.display = 'inline-flex';
+                preorderLink.href = 'preorder.php?product_id=' + encodeURIComponent(product.id || product.product_id || '');
+            } else {
+                preorderLink.style.display = 'none';
+            }
+        }
         
         // Show modal
         if (productPreviewModal) {
@@ -2041,16 +2175,69 @@ document.addEventListener('click', function(e) {
                         });
                     }
                 } else {
-                    if (data.code === 'MIXED_TENANT_ADD_BLOCKED' || data.code === 'MIXED_TENANT_CART_EXISTING') {
+                    if (data.code === 'MIXED_TENANT_ADD_BLOCKED') {
                         if (typeof Swal !== 'undefined') {
                             Swal.fire({
                                 icon: 'warning',
-                                title: 'Different Store Item',
+                                title: 'Switch Store Order?',
+                                text: data.message || 'Your cart has items from another store. Clear cart and start an order from this shop?',
+                                showCancelButton: true,
+                                confirmButtonColor: '#b3261e',
+                                cancelButtonColor: '#6c757d',
+                                confirmButtonText: '<i class="fas fa-rotate"></i> Yes, Clear &amp; Add Item',
+                                cancelButtonText: 'Keep Existing Cart'
+                            }).then(async (result) => {
+                                if (result.isConfirmed) {
+                                    formData.append('clear_and_add', '1');
+                                    try {
+                                        const retryRes = await fetch('add_to_cart.php', {
+                                            method: 'POST',
+                                            body: formData
+                                        });
+                                        const retryData = await retryRes.json();
+                                        if (retryData.success) {
+                                            closeProductPreview();
+                                            updateCartSidebar();
+                                            Swal.fire({
+                                                icon: 'success',
+                                                title: 'Switched Store!',
+                                                text: 'Cart was cleared and your new item was added.',
+                                                toast: true,
+                                                position: 'top-end',
+                                                showConfirmButton: false,
+                                                timer: 2500
+                                            });
+                                        } else {
+                                            Swal.fire({
+                                                icon: 'error',
+                                                title: 'Cannot Add Item',
+                                                text: retryData.message || 'Failed to add item.',
+                                                confirmButtonColor: '#b3261e'
+                                            });
+                                        }
+                                    } catch (e) {
+                                        console.error(e);
+                                    }
+                                }
+                            });
+                        } else {
+                            if (confirm(data.message + "\n\nClick OK to clear cart and add this item.")) {
+                                formData.append('clear_and_add', '1');
+                                fetch('add_to_cart.php', { method: 'POST', body: formData })
+                                    .then(r => r.json())
+                                    .then(rd => { if (rd.success) { location.reload(); } });
+                            }
+                        }
+                    } else if (data.code === 'MIXED_TENANT_CART_EXISTING') {
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                icon: 'warning',
+                                title: 'Cart Contains Multiple Stores',
                                 text: data.message,
                                 showCancelButton: true,
                                 confirmButtonColor: '#b3261e',
                                 confirmButtonText: 'Go to Cart',
-                                cancelButtonText: 'Keep Current Cart'
+                                cancelButtonText: 'Close'
                             }).then((result) => {
                                 if (result.isConfirmed) {
                                     openCartSidebar();

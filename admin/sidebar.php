@@ -88,7 +88,7 @@ $can_products = $canPermission('products.view') || $canModule('products');
 $can_inventory = $canPermission('inventory.view') || $canModule('inventory');
 $can_mrp = $canPermission('mrp.view') || $canModule('mrp');
 $show_inventory = $can_products || $can_inventory || $can_mrp;
-$can_vouchers = false;
+$can_vouchers = $is_partner_scoped_admin || $canPermission('products.edit') || $canModule('products');
 
 $can_finance = $canPermission('finance.view') || $canModule('finance');
 $can_expenses = $canPermission('expenses.view') || $canModule('finance');
@@ -494,6 +494,12 @@ if ($is_partner_scoped_admin && $partner_scope_owner_id > 0) {
                     <a href="preorders.php" class="menu-item <?php echo ($current_page === 'preorders.php') ? 'active' : ''; ?>">
                         <i class="fas fa-calendar-check"></i>
                         <span>Pre-Orders</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="preorder_schedule.php" class="menu-item <?php echo ($current_page === 'preorder_schedule.php') ? 'active' : ''; ?>">
+                        <i class="fas fa-calendar-days"></i>
+                        <span>Pickup Schedule &amp; Slots</span>
                     </a>
                 </li>
             <?php endif; ?>
