@@ -20,18 +20,94 @@ class CheckoutController extends Controller
         $this->deliveryPricing = $deliveryPricing;
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        $cart = session()->get('cart', []);
+        require_once base_path('includes/config.php');
+        require_once base_path('includes/partner_voucher_helper.php');
+        require_once base_path('includes/checkout_address_helper.php');
+        require_once base_path('includes/delivery_pricing_helper.php');
+
+        global $conn;
+
+        if (auth()->check()) {
+            $_SESSION['user_id'] = auth()->id();
+            $_SESSION['full_name'] = auth()->user()->full_name;
+            $_SESSION['email'] = auth()->user()->email;
+            $_SESSION['user_type'] = auth()->user()->user_type;
+            $_SESSION['address'] = auth()->user()->address ?? '';
+            $_SESSION['phone'] = auth()->user()->phone ?? '';
+        }
+
+        $cart = session()->get('cart', $_SESSION['cart'] ?? []);
+        $_SESSION['cart'] = $cart;
+
         if (empty($cart)) {
             return redirect()->route('menu')->with('info', 'Your cart is empty. Choose delicious lechon meals first!');
         }
 
-        $stores = StoreLocation::where('is_active', true)->get();
-        $subtotal = array_sum(array_map(fn($item) => $item['price'] * $item['quantity'], $cart));
+        $current_page = 'checkout';
+        $page_title = "Checkout | Lechon Delights";
+
+        $user_id = auth()->id() ?? (int)($_SESSION['user_id'] ?? 0);
+        $user = auth()->check() ? [
+            'full_name' => auth()->user()->full_name,
+            'email' => auth()->user()->email,
+            'phone' => auth()->user()->phone ?? '',
+            'address' => auth()->user()->address ?? '',
+        ] : [];
+
+        if (isset($conn) && $conn) {
+            pvEnsureVoucherSchema($conn);
+            caEnsureUserSavedAddressSchema($conn);
+            caEnsureDefaultUserProfileAddress(
+                $conn,
+                $user_id,
+                (string)($user['address'] ?? ''),
+                (string)($user['full_name'] ?? ''),
+                (string)($user['phone'] ?? '')
+            );
+        }
+
+        $saved_addresses = (isset($conn) && $conn) ? caFetchUserSavedAddresses($conn, $user_id) : [];
+        $default_saved_address_id = 0;
+        foreach ($saved_addresses as $saved_address_row) {
+            if ((int)($saved_address_row['is_default'] ?? 0) === 1) {
+                $default_saved_address_id = (int)$saved_address_row['id'];
+                break;
+            }
+        }
+
+        $stores = (isset($conn) && $conn) ? StoreLocation::where('is_active', true)->get()->toArray() : [];
+        $_SESSION['store_locations'] = $stores;
+
+        $subtotal = 0;
+        $checkout_item_count = 0;
+        $checkout_total_quantity = 0;
+        foreach ($cart as $item) {
+            $subtotal += ($item['price'] ?? 0) * ($item['quantity'] ?? 1);
+            $checkout_item_count++;
+            $checkout_total_quantity += (int)($item['quantity'] ?? 0);
+        }
+
+        $deliveryPricingConfig = function_exists('dpGetDeliveryPricingConfig') ? dpGetDeliveryPricingConfig() : [];
+        $base_delivery_fee = (float)($deliveryPricingConfig['base_fee'] ?? 50);
         $estimatedDeliveryFee = 59.00;
 
-        return view('storefront.checkout', compact('cart', 'stores', 'subtotal', 'estimatedDeliveryFee'));
+        return view('storefront.checkout', compact(
+            'current_page',
+            'page_title',
+            'user',
+            'user_id',
+            'cart',
+            'stores',
+            'saved_addresses',
+            'default_saved_address_id',
+            'subtotal',
+            'checkout_item_count',
+            'checkout_total_quantity',
+            'estimatedDeliveryFee',
+            'base_delivery_fee'
+        ));
     }
 
     public function process(Request $request)
@@ -45,12 +121,12 @@ class CheckoutController extends Controller
             'store_id' => 'required|exists:store_locations,store_id',
         ]);
 
-        $cart = session()->get('cart', []);
+        $cart = session()->get('cart', $_SESSION['cart'] ?? []);
         if (empty($cart)) {
             return redirect()->route('menu')->with('error', 'Cart session expired.');
         }
 
-        $subtotal = array_sum(array_map(fn($item) => $item['price'] * $item['quantity'], $cart));
+        $subtotal = array_sum(array_map(fn($item) => ($item['price'] ?? 0) * ($item['quantity'] ?? 1), $cart));
         $deliveryFee = ($request->delivery_type === 'pickup') ? 0.00 : 59.00;
         $totalAmount = $subtotal + $deliveryFee;
 
@@ -81,16 +157,17 @@ class CheckoutController extends Controller
             foreach ($cart as $item) {
                 OrderItem::create([
                     'order_id' => $order->id,
-                    'product_id' => (string)$item['id'],
-                    'product_name' => $item['name'],
-                    'quantity' => (int)$item['quantity'],
-                    'price' => $item['price'],
-                    'total' => $item['price'] * $item['quantity'],
+                    'product_id' => (string)($item['id'] ?? $item['product_id'] ?? 1),
+                    'product_name' => $item['name'] ?? 'Lechon Special',
+                    'quantity' => (int)($item['quantity'] ?? 1),
+                    'price' => $item['price'] ?? 0,
+                    'total' => ($item['price'] ?? 0) * ($item['quantity'] ?? 1),
                 ]);
             }
 
             DB::commit();
             session()->forget('cart');
+            unset($_SESSION['cart']);
 
             return redirect()->route('track.order', ['order_number' => $orderNumber])
                 ->with('success', 'Order placed successfully! Track your meal below.');

@@ -1,24 +1,86 @@
 @extends('layouts.app')
 
-@section('title', 'Marketplace Home | Lechon Delights')
-
-@push('styles')
+@section('content')
 <style>
 .market-home {
     --menu-red: #b3261e;
     --menu-orange: #ef6b2e;
+    --menu-cream: #fff8ef;
     --rose: #b3261e;
+    --rose-soft: #ffe7d3;
+    --rose-wash: #fff2e4;
     --ink: #2a211d;
     --muted: #7a6c63;
     --line: #efddcd;
     --card: #ffffff;
+    --shadow-soft: 0 20px 42px rgba(74, 32, 20, 0.14);
     --shadow-card: 0 12px 26px rgba(74, 32, 20, 0.1);
-    --transition-lift: transform .22s cubic-bezier(.22, 1, .36, 1), box-shadow .22s ease, border-color .22s ease;
+    --motion-ease: cubic-bezier(.22, 1, .36, 1);
+    --motion-fast: .22s;
+    --motion-base: .28s;
+    --transition-fast: all var(--motion-fast) var(--motion-ease);
+    --transition-lift: transform var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
     position: relative;
     overflow: visible;
-    background: #ffffff;
+    background:
+        radial-gradient(circle at 8% -5%, rgba(239, 107, 46, 0.14), transparent 36%),
+        radial-gradient(circle at 90% 12%, rgba(179, 38, 30, 0.12), transparent 32%),
+        linear-gradient(180deg, #fff8ef 0%, #fff9f2 34%, #ffffff 100%);
     color: var(--ink);
     padding: 20px 0 56px;
+}
+
+.partner-ad-card {
+    border-radius: 20px;
+    padding: 22px 24px;
+    color: #ffffff;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 10px 28px rgba(23, 25, 34, 0.08);
+    transition: transform 0.25s cubic-bezier(.22,1,.36,1), box-shadow 0.25s ease;
+}
+.partner-ad-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 16px 36px rgba(179, 38, 30, 0.18);
+}
+.partner-ad-card.gradient-red { background: linear-gradient(135deg, #b3261e 0%, #ef6b2e 100%); }
+.partner-ad-card.gradient-orange { background: linear-gradient(135deg, #ef6b2e 0%, #ff9e43 100%); }
+.partner-ad-card.gradient-dark { background: linear-gradient(135deg, #171922 0%, #343a40 100%); }
+
+.partner-ad-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.partner-ad-store { font-size: 0.78rem; font-weight: 700; opacity: 0.95; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 6px; }
+.partner-ad-badge { background: rgba(255, 255, 255, 0.25); backdrop-filter: blur(4px); color: #ffffff; font-weight: 800; font-size: 0.72rem; padding: 4px 10px; border-radius: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+.partner-ad-title { font-size: 1.25rem; font-weight: 800; margin: 0 0 6px 0; color: #ffffff; line-height: 1.25; }
+.partner-ad-desc { font-size: 0.88rem; opacity: 0.92; margin: 0 0 16px 0; line-height: 1.4; color: #ffffff; }
+.partner-ad-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.2); }
+.partner-ad-code { background: #ffffff; color: #171922; font-weight: 800; font-size: 0.82rem; padding: 6px 12px; border-radius: 8px; font-family: monospace; display: flex; align-items: center; gap: 6px; }
+.partner-ad-code i { color: #b3261e; }
+.partner-ad-btn { background: #ffffff; color: #b3261e; text-decoration: none; font-weight: 800; font-size: 0.82rem; padding: 8px 16px; border-radius: 10px; transition: background 0.2s ease, transform 0.2s ease; display: inline-flex; align-items: center; gap: 6px; }
+.partner-ad-btn:hover { background: #171922; color: #ffffff; transform: translateX(2px); }
+
+.market-home::before,
+.market-home::after {
+    content: "";
+    position: absolute;
+    border-radius: 999px;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.market-home::before {
+    width: 260px;
+    height: 260px;
+    right: -80px;
+    top: 160px;
+    background: radial-gradient(circle, rgba(239, 107, 46, 0.2), rgba(239, 107, 46, 0));
+}
+
+.market-home::after {
+    width: 220px;
+    height: 220px;
+    left: -70px;
+    top: 520px;
+    background: radial-gradient(circle, rgba(179, 38, 30, 0.2), rgba(179, 38, 30, 0));
 }
 
 .market-home .container {
@@ -30,7 +92,29 @@
     box-sizing: border-box;
 }
 
-/* Dual Hero Banners */
+@media (max-width: 768px) {
+    .market-home .container {
+        padding: 0 16px;
+    }
+}
+
+@media (max-width: 480px) {
+    .market-home .container {
+        padding: 0 12px;
+    }
+}
+
+.market-hero-grid,
+.market-head,
+.market-toolbar,
+.market-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 22px;
+    flex-wrap: wrap;
+}
+
 .panda-hero-banners {
     display: grid;
     gap: 16px;
@@ -161,6 +245,8 @@
     margin-bottom: -10px;
     filter: drop-shadow(0 10px 18px rgba(179, 38, 30, 0.16));
     transition: transform 0.3s cubic-bezier(.22,1,.36,1);
+    border-radius: 0;
+    box-shadow: none;
     background: transparent;
 }
 
@@ -194,10 +280,36 @@
 .panda-heart-shape {
     position: absolute;
     background: rgba(239, 107, 46, 0.12);
-    border-radius: 50%;
+    transition: transform 0.3s ease;
 }
-.panda-heart-shape.heart-lg { width: 180px; height: 180px; right: -40px; top: -30px; }
-.panda-heart-shape.heart-sm { width: 90px; height: 90px; right: 100px; bottom: -20px; }
+
+.panda-heart-shape.heart-lg {
+    width: 200px;
+    height: 200px;
+    right: -40px;
+    bottom: -60px;
+    transform: rotate(-15deg);
+    background: radial-gradient(circle, rgba(255, 220, 200, 0.85) 0%, rgba(255, 235, 220, 0.45) 100%);
+    border-radius: 50% 50% 50% 0;
+}
+
+.panda-heart-shape.heart-sm {
+    width: 130px;
+    height: 130px;
+    right: 60px;
+    top: -20px;
+    transform: rotate(25deg);
+    background: radial-gradient(circle, rgba(255, 230, 210, 0.95) 0%, rgba(255, 240, 230, 0.45) 100%);
+    border-radius: 50% 50% 50% 0;
+}
+
+.panda-hero-card:hover .panda-heart-shape.heart-lg {
+    transform: rotate(-10deg) scale(1.06);
+}
+
+.panda-hero-card:hover .panda-heart-shape.heart-sm {
+    transform: rotate(30deg) scale(1.08);
+}
 
 .panda-float-badge-wrap {
     position: absolute;
@@ -217,89 +329,1067 @@
 }
 
 .panda-badge-calendar {
-    top: 18px; right: 50px; width: 70px; height: 70px; color: #ef6b2e; font-size: 1.8rem;
+    top: 18px;
+    right: 50px;
+    width: 78px;
+    height: 78px;
+    background: #ffffff;
+    color: #ef6b2e;
+    font-size: 2.15rem;
     box-shadow: 0 12px 28px rgba(239, 107, 46, 0.22);
-}
-.panda-badge-gift {
-    bottom: 12px; right: 6px; width: 50px; height: 50px; background: #fff3eb; color: #ef6b2e; font-size: 1.3rem;
-}
-.panda-badge-party {
-    top: 10px; right: 120px; width: 42px; height: 42px; color: #b3261e; font-size: 1.1rem;
+    animation: pandaFloatA 3.2s ease-in-out infinite alternate;
 }
 
-/* Explorer Layout & Sidebar */
+.panda-badge-gift {
+    bottom: 12px;
+    right: 6px;
+    width: 52px;
+    height: 52px;
+    background: #fff3eb;
+    color: #ef6b2e;
+    font-size: 1.35rem;
+    box-shadow: 0 8px 20px rgba(239, 107, 46, 0.16);
+    animation: pandaFloatB 2.6s ease-in-out infinite alternate;
+}
+
+.panda-badge-party {
+    top: 10px;
+    right: 126px;
+    width: 44px;
+    height: 44px;
+    background: #ffffff;
+    color: #b3261e;
+    font-size: 1.12rem;
+    box-shadow: 0 6px 16px rgba(179, 38, 30, 0.15);
+    animation: pandaFloatC 2.9s ease-in-out infinite alternate;
+}
+
+@keyframes pandaFloatA {
+    0% { transform: translateY(0) rotate(0deg); }
+    100% { transform: translateY(-8px) rotate(4deg); }
+}
+
+@keyframes pandaFloatB {
+    0% { transform: translateY(0) rotate(0deg); }
+    100% { transform: translateY(-6px) rotate(-5deg); }
+}
+
+@keyframes pandaFloatC {
+    0% { transform: translateY(0) scale(1); }
+    100% { transform: translateY(-10px) scale(1.1); }
+}
+
+@media (max-width: 640px) {
+    .panda-hero-card {
+        padding: 20px;
+    }
+    .panda-card-graphic {
+        flex: 0 0 120px;
+        height: 110px;
+    }
+    .panda-card-graphic img.panda-mascot-img {
+        height: 110px;
+    }
+}
+
+.hero-chip-list .market-chip {
+    text-decoration: none;
+    font-size: 0.8rem;
+    padding: 5px 12px;
+    border-radius: 999px;
+    background: #ffffff;
+    border: 1px solid #e2ba9c;
+    color: var(--rose);
+    font-weight: 600;
+    transition: var(--transition-fast);
+}
+
+.hero-chip-list .market-chip:hover {
+    background: var(--rose);
+    color: #fff;
+    border-color: var(--rose);
+}
+
+.market-btn,
+.market-btn-soft,
+.market-btn-ghost,
+.market-card-btn,
+.market-card-btn-soft,
+.market-card-btn-disabled {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 38px;
+    padding: 0 14px;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 0.84rem;
+    text-decoration: none;
+    transition: var(--transition-lift);
+}
+
+.market-btn,
+.market-card-btn {
+    background: linear-gradient(135deg, var(--menu-red), var(--menu-orange));
+    color: #fff;
+    border: none;
+    box-shadow: 0 8px 18px rgba(179, 38, 30, 0.2);
+}
+
+.market-btn-soft {
+    background: #fff;
+    border: 1px solid var(--line);
+    color: var(--ink);
+}
+
+.market-btn-ghost,
+.market-card-btn-soft {
+    background: #fff;
+    border: 1px solid var(--line);
+    color: var(--ink);
+}
+
+.market-card-btn-disabled {
+    background: #fff8f0;
+    border: 1px dashed #e6cdb8;
+    color: #9a7e6f;
+}
+
+.market-btn:hover,
+.market-btn-soft:hover,
+.market-btn-ghost:hover,
+.market-card-btn:hover,
+.market-card-btn-soft:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 20px rgba(74, 32, 20, 0.12);
+}
+
+.market-hero {
+    padding: 16px 0 20px;
+}
+
+.market-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: #ffe8d2;
+    color: var(--rose);
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.market-copy h1 {
+    margin: 0 0 10px;
+    max-width: 680px;
+    font-family: "Outfit", "Plus Jakarta Sans", sans-serif;
+    font-size: clamp(1.6rem, 2.2vw, 2.3rem);
+    line-height: 1.15;
+    letter-spacing: -0.03em;
+}
+
+.market-copy p,
+.market-head p,
+.market-card-copy,
+.market-dish-meta,
+.market-branch-meta {
+    color: var(--muted);
+    line-height: 1.55;
+}
+
+.market-copy p {
+    max-width: 640px;
+    font-size: 0.92rem;
+}
+
+.market-search {
+    max-width: 640px;
+    margin-top: 12px;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 10px 24px rgba(74, 32, 20, 0.08);
+}
+
+.market-address {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 0.85rem;
+    font-weight: 700;
+}
+
+.market-address span:last-child {
+    color: var(--muted);
+    font-weight: 600;
+}
+
+.market-search-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+}
+
+.market-input {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 14px;
+    background: #fff8f0;
+    border: 1px solid transparent;
+    border-radius: 12px;
+}
+
+.market-input:focus-within {
+    border-color: #e2ba9c;
+    background: #fff;
+}
+
+.market-input input {
+    width: 100%;
+    min-height: 40px;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: var(--ink);
+    font-size: 0.88rem;
+}
+
+.market-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.market-stat,
+.market-toolbar-note {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: var(--shadow-card);
+}
+
+.market-stat {
+    padding: 12px 14px;
+}
+
+.market-stat strong {
+    display: block;
+    margin-bottom: 2px;
+    font-size: 1.15rem;
+    font-family: "Outfit", "Plus Jakarta Sans", sans-serif;
+}
+
+.market-stat span {
+    font-size: 0.78rem;
+}
+
+.market-hero-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.75fr) minmax(280px, 1fr);
+    gap: 20px;
+}
+
+.market-side {
+    display: grid;
+    gap: 20px;
+    align-self: stretch;
+}
+
+.market-hero-showcase {
+    display: grid;
+    gap: 18px;
+}
+
+.market-store-card,
+.market-product-card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 28px;
+    box-shadow: 0 18px 40px rgba(74, 32, 20, 0.1);
+    overflow: hidden;
+}
+
+.market-store-card {
+    display: grid;
+    grid-template-columns: 1fr;
+}
+
+.market-store-card-image {
+    width: 100%;
+    min-height: 240px;
+    background-size: cover;
+    background-position: center;
+}
+
+.market-store-card-body {
+    padding: 24px;
+    display: grid;
+    gap: 16px;
+}
+
+.market-store-card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.market-store-card-head h3 {
+    margin: 0;
+    font-size: 1.55rem;
+    line-height: 1.1;
+}
+
+.market-store-card-meta {
+    display: grid;
+    gap: 10px;
+    color: var(--muted);
+    font-size: 0.95rem;
+}
+
+.market-store-card-meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.market-store-card-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.market-store-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: #fff4e8;
+    color: var(--rose);
+    font-weight: 700;
+}
+
+.market-product-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.market-product-card {
+    transition: var(--transition-lift);
+}
+
+.market-product-card:hover {
+    transform: translateY(-2px);
+}
+
+.market-product-thumb {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    display: block;
+}
+
+.market-product-body {
+    padding: 16px;
+    display: grid;
+    gap: 10px;
+}
+
+.market-product-body h4 {
+    margin: 0;
+    font-size: 1rem;
+    line-height: 1.3;
+}
+
+.market-product-meta {
+    display: grid;
+    gap: 8px;
+    font-size: 0.86rem;
+    color: var(--muted);
+}
+
+.market-product-meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.market-product-price {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-weight: 700;
+}
+
+.market-chip-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.market-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(179, 38, 30, 0.14);
+    background: rgba(255, 243, 236, 0.8);
+    color: var(--rose);
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.market-spot-card,
+.market-mini-card,
+.market-status-card,
+.market-dish,
+.market-branch,
+.market-sidebar,
+.market-store-row {
+    background: var(--card);
+    border: 1px solid var(--line);
+    box-shadow: 0 14px 30px rgba(74, 32, 20, 0.11);
+}
+
+.market-spot-card {
+    display: grid;
+    grid-template-columns: 78px 1fr;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 20px;
+    color: inherit;
+    text-decoration: none;
+    transition: var(--transition-lift);
+}
+
+.market-spot-thumb {
+    width: 78px;
+    height: 78px;
+    border-radius: 16px;
+    background-size: cover;
+    background-position: center;
+}
+
+.market-spot-card h3,
+.market-dish h3,
+.market-branch h3,
+.market-store-row-head h3 {
+    margin: 0 0 6px;
+    color: var(--ink);
+}
+
+.market-spot-card p {
+    margin: 0 0 8px;
+    color: var(--muted);
+    font-size: 0.88rem;
+    line-height: 1.55;
+}
+
+.market-spot-meta,
+.market-card-sub,
+.market-dish-meta,
+.market-branch-meta,
+.market-mini-meta,
+.market-store-row-meta {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: 0.84rem;
+}
+
+.market-section {
+    padding: 26px 0;
+}
+
+.market-head {
+    margin-bottom: 18px;
+    align-items: flex-end;
+}
+
+.market-head h2,
+.market-mini-section h2 {
+    margin: 0 0 8px;
+    font-family: "Outfit", "Plus Jakarta Sans", sans-serif;
+    font-size: clamp(1.9rem, 2.3vw, 2.8rem);
+    letter-spacing: -0.04em;
+}
+
+.market-toolbar {
+    margin-bottom: 18px;
+}
+
+.market-toolbar-note {
+    padding: 12px 16px;
+    color: var(--muted);
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.market-pagination {
+    margin-top: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.market-pagination-note {
+    color: var(--muted);
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.market-banner {
+    margin-top: 8px;
+    padding: 28px;
+    border: 1px solid #efddcd;
+    border-radius: 32px;
+    background:
+        radial-gradient(circle at top right, rgba(239, 107, 46, 0.14), transparent 28%),
+        linear-gradient(180deg, #fffaf3 0%, #fff1e2 100%);
+    box-shadow: var(--shadow-soft);
+}
+
+.market-banner h2 {
+    margin: 0 0 8px;
+    font-size: clamp(1.7rem, 2vw, 2.4rem);
+    line-height: 1.08;
+}
+
+.market-banner p {
+    margin: 0;
+    max-width: 760px;
+    color: var(--muted);
+}
+
 .market-explorer {
     display: grid;
-    grid-template-columns: 260px minmax(0, 1fr);
-    gap: 32px;
+    grid-template-columns: 280px minmax(0, 1fr);
+    gap: 28px;
     align-items: start;
 }
 
 .market-sidebar {
     position: sticky;
     top: 112px;
-    background: #ffffff;
-    border: 1px solid #eaecf0;
-    border-radius: 16px;
-    padding: 20px;
-    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.02);
+    max-height: calc(100vh - 130px);
+    overflow-y: auto;
+    align-self: start;
+    z-index: 100;
+    padding: 20px 14px 20px 20px;
+    border-radius: 26px;
+    scrollbar-width: thin;
+    scrollbar-color: #94a3b8 #f1f5f9;
 }
 
-.market-sidebar-section {
-    border-bottom: 1px solid #f1f5f9;
-    padding-bottom: 16px;
-    margin-bottom: 16px;
+.market-sidebar::-webkit-scrollbar {
+    width: 6px;
 }
-.market-sidebar-section:last-child {
-    border-bottom: none;
-    padding-bottom: 0;
-    margin-bottom: 0;
+
+.market-sidebar::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 999px;
+}
+
+.market-sidebar::-webkit-scrollbar-thumb {
+    background: #94a3b8;
+    border-radius: 999px;
+}
+
+.market-sidebar::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
+}
+
+.market-sidebar h3,
+.market-sidebar h4 {
+    margin: 0 0 14px;
+    color: var(--ink);
 }
 
 .market-sidebar h3 {
-    margin: 0 0 10px 0;
-    font-size: 1.15rem;
-    font-weight: 800;
-    color: #1e293b;
+    font-size: 1.25rem;
 }
 
 .market-sidebar h4 {
-    margin: 0 0 10px 0;
-    font-size: 0.88rem;
-    font-weight: 700;
-    color: #475569;
+    font-size: 1rem;
 }
 
-.market-radio-list, .market-check-list {
+.market-sidebar-section + .market-sidebar-section {
+    margin-top: 24px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+}
+
+.market-radio-list,
+.market-check-list {
     display: grid;
-    gap: 12px;
+    gap: 14px;
 }
 
-.market-radio, .market-check {
+.market-radio,
+.market-check {
     display: flex;
     align-items: center;
-    gap: 10px;
-    font-size: 0.88rem;
+    gap: 12px;
     font-weight: 600;
-    color: #334155;
+    color: var(--ink);
     cursor: pointer;
 }
 
-.market-radio input, .market-check input {
-    width: 18px;
-    height: 18px;
-    accent-color: #b3261e;
+.market-radio input,
+.market-check input {
+    width: 20px;
+    height: 20px;
+    accent-color: var(--rose);
 }
 
-/* Brands Slider */
+.market-helper {
+    font-size: 0.88rem;
+    color: var(--muted);
+    line-height: 1.65;
+}
+
+.market-detect-btn {
+    width: 100%;
+    justify-content: center;
+}
+
+.market-status-card {
+    margin-bottom: 20px;
+    padding: 18px;
+    border-radius: 24px;
+}
+
+.market-status-card strong {
+    display: block;
+    margin-bottom: 6px;
+}
+
+.market-status-card p {
+    margin: 0;
+    color: var(--muted);
+}
+
+.market-mini-section + .market-mini-section {
+    margin-top: 24px;
+}
+
+.market-mini-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 18px;
+}
+
+.market-mini-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+        "body body"
+        "thumb arrow";
+    column-gap: 14px;
+    row-gap: 14px;
+    align-items: end;
+    padding: 18px;
+    border-radius: 24px;
+    color: inherit;
+    text-decoration: none;
+    transition: var(--transition-lift);
+}
+
+.market-mini-card:hover,
+.market-spot-card:hover,
+.market-store-row:hover,
+.market-dish:hover,
+.market-branch:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 22px 40px rgba(74, 32, 20, 0.18);
+}
+
+.market-mini-thumb {
+    grid-area: thumb;
+    width: 96px;
+    height: 96px;
+    flex: 0 0 96px;
+    border-radius: 20px;
+    background-color: #fff4e8;
+    background-position: center;
+    background-size: cover;
+}
+
+.market-mini-body {
+    grid-area: body;
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+}
+
+.market-mini-title {
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: var(--ink);
+    line-height: 1.15;
+}
+
+.market-mini-sub,
+.market-mini-meta {
+    font-size: 0.92rem;
+    color: var(--muted);
+    line-height: 1.45;
+}
+
+.market-mini-sub {
+    overflow-wrap: anywhere;
+}
+
+.market-mini-meta {
+    display: grid;
+    gap: 4px;
+}
+
+.market-mini-meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.market-mini-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    width: fit-content;
+    padding: 6px 11px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+}
+
+.market-mini-status-pill.open {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.market-mini-status-pill.closed {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.market-mini-arrow {
+    grid-area: arrow;
+    justify-self: end;
+    align-self: center;
+    width: 44px;
+    height: 44px;
+    flex: 0 0 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    background: #fff9f2;
+    transition: var(--transition-lift);
+}
+
+.market-mini-card:hover .market-mini-arrow {
+    transform: translateX(2px);
+    background: #fff;
+}
+
+.market-store-list {
+    display: grid;
+    gap: 16px;
+}
+
+.market-store-row {
+    display: grid;
+    grid-template-columns: 92px minmax(0, 1fr) auto;
+    gap: 16px;
+    align-items: center;
+    padding: 16px 18px;
+    border-radius: 26px;
+    transition: var(--transition-lift);
+}
+
+.market-store-row.is-hidden {
+    display: none;
+}
+
+.market-store-row-thumb {
+    width: 92px;
+    height: 92px;
+    border-radius: 20px;
+    background-color: #fff4e8;
+    background-position: center;
+    background-size: cover;
+}
+
+.market-store-row-main {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+}
+
+.market-store-row-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.market-type-pill,
+.market-time-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 11px;
+    border-radius: 999px;
+    font-size: 0.79rem;
+    font-weight: 800;
+}
+
+.market-type-pill {
+    background: #ffe8d2;
+    color: #932d1f;
+}
+
+.market-time-pill {
+    background: #fff3e5;
+    color: #6b3a2a;
+}
+
+.market-store-favorite-btn {
+    width: 34px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    border: 1px solid #efd8c3;
+    background: #fff;
+    color: #8f7a6d;
+    cursor: pointer;
+    transition: var(--transition-lift);
+}
+
+.market-store-favorite-btn:hover {
+    color: #b3261e;
+    border-color: #e2b59f;
+}
+
+.market-store-favorite-btn.is-active {
+    color: #b3261e;
+    border-color: #e2b59f;
+    background: #fff1ea;
+}
+
+.market-store-row-copy {
+    color: var(--muted);
+    font-size: 0.92rem;
+    line-height: 1.6;
+}
+
+.market-store-row-meta {
+    color: #6b7387;
+}
+
+.market-store-row-side {
+    display: grid;
+    gap: 12px;
+    justify-items: end;
+}
+
+.market-score-block {
+    display: grid;
+    gap: 8px;
+    justify-items: end;
+}
+
+.market-score-block strong {
+    font-size: 1.05rem;
+}
+
+.market-score-block span {
+    font-size: 0.84rem;
+    color: #8b7568;
+}
+
+.market-list-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.market-dishes,
+.market-branches {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 18px;
+}
+
+.market-dish,
+.market-branch {
+    border-radius: 28px;
+    overflow: hidden;
+    transition: var(--transition-lift);
+    background: #fffdfb;
+}
+
+.market-dish img {
+    display: block;
+    width: 100%;
+    height: 170px;
+    object-fit: cover;
+}
+
+.market-dish-body,
+.market-branch-body {
+    padding: 18px;
+    background: linear-gradient(180deg, #fffefc 0%, #fff8f0 100%);
+}
+
+.market-dish-price {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    font-weight: 800;
+}
+
+@keyframes marketFadeUp {
+    from {
+        opacity: 0;
+        transform: translateY(18px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.market-hero .market-copy,
+.market-hero .market-side {
+    animation: marketFadeUp 0.5s ease both;
+}
+
+.market-mini-section,
+.market-store-list .market-store-row,
+.market-dishes .market-dish,
+.market-branches .market-branch {
+    animation: marketFadeUp 0.45s ease both;
+}
+
+.market-store-list .market-store-row:nth-child(2n) { animation-delay: 0.04s; }
+.market-store-list .market-store-row:nth-child(3n) { animation-delay: 0.08s; }
+.market-dishes .market-dish:nth-child(2n),
+.market-branches .market-branch:nth-child(2n) { animation-delay: 0.06s; }
+
+@media (prefers-reduced-motion: reduce) {
+    .market-hero .market-copy,
+    .market-hero .market-side,
+    .market-mini-section,
+    .market-store-list .market-store-row,
+    .market-dishes .market-dish,
+    .market-branches .market-branch {
+        animation: none;
+    }
+}
+
+@media (max-width: 1100px) {
+    .market-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 980px) {
+    .market-explorer {
+        grid-template-columns: 1fr;
+    }
+
+    .market-sidebar {
+        position: static;
+    }
+
+    .market-store-row {
+        grid-template-columns: 76px minmax(0, 1fr);
+    }
+
+    .market-list-actions {
+        justify-content: flex-start;
+    }
+
+    .market-hero-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .market-product-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 860px) {
+    .market-hero-grid,
+    .market-head,
+    .market-toolbar,
+    .market-banner {
+        display: grid;
+    }
+
+    .market-search-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 640px) {
+    .market-home {
+        padding-top: 12px;
+    }
+
+    .market-copy h1 {
+        font-size: 2.25rem;
+    }
+
+    .market-stats {
+        grid-template-columns: 1fr;
+    }
+
+    .market-side,
+    .market-search,
+    .market-dish,
+    .market-branch,
+    .market-store-row {
+        border-radius: 24px;
+    }
+}
+
+/* Foodpanda Brands Carousel UI */
 .panda-brand-slider {
     display: flex;
     gap: 12px;
     overflow-x: auto;
     padding: 6px 2px 14px;
     scrollbar-width: none;
+    -ms-overflow-style: none;
 }
-.panda-brand-slider::-webkit-scrollbar { display: none; }
+
+.panda-brand-slider::-webkit-scrollbar {
+    display: none;
+}
 
 .panda-brand-item {
     flex: 0 0 115px;
@@ -314,8 +1404,9 @@
     text-decoration: none;
     color: #2a211d;
     box-shadow: 0 4px 10px rgba(74, 32, 20, 0.04);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
+
 .panda-brand-item:hover {
     transform: translateY(-3px);
     box-shadow: 0 8px 18px rgba(74, 32, 20, 0.09);
@@ -339,10 +1430,10 @@
     line-height: 1.2;
     margin-bottom: 3px;
     color: #2a211d;
-    white-space: nowrap;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    text-overflow: ellipsis;
-    width: 100%;
 }
 
 .panda-brand-meta {
@@ -351,274 +1442,1866 @@
     font-weight: 600;
 }
 
-/* 3-Column Store Grid */
-.store-list-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: 18px;
+/* Scoped Foodpanda Redesign of All Restaurants Grid - FOR ALL VISITORS */
+.panda-card-link {
+    text-decoration: none !important;
+    color: inherit !important;
+    cursor: pointer !important;
 }
 
+.market-store-list,
+.store-list-grid,
+.store-list-rows {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)) !important;
+    gap: 18px !important;
+}
+
+.market-product-card,
 .market-store-row {
-    display: flex;
-    flex-direction: column;
-    background: #ffffff;
-    border: 1px solid #f0e2d5;
-    border-radius: 16px;
-    overflow: hidden;
-    transition: transform 0.22s ease, box-shadow 0.22s ease;
-    box-shadow: 0 4px 12px rgba(74, 32, 20, 0.04);
-    text-decoration: none;
-    color: inherit;
+    display: flex !important;
+    flex-direction: column !important;
+    background: #ffffff !important;
+    border: 1px solid #f0e2d5 !important;
+    border-radius: 16px !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease !important;
+    box-shadow: 0 4px 12px rgba(74, 32, 20, 0.04) !important;
+    grid-template-columns: none !important;
 }
+
+.market-product-card:hover,
 .market-store-row:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 10px 24px rgba(74, 32, 20, 0.1);
-    border-color: #ebd7c5;
-}
-
-.store-card-image-wrap {
-    position: relative;
-    width: 100%;
-    height: 135px;
-    overflow: hidden;
-}
-
-.market-store-row-thumb {
-    width: 100%;
-    height: 100%;
-    background-size: cover;
-    background-position: center;
-    transition: transform 0.3s ease;
-}
-.market-store-row:hover .market-store-row-thumb { transform: scale(1.04); }
-
-.market-type-pill {
-    position: absolute; left: 10px; top: 10px; z-index: 5; background: rgba(42, 33, 29, 0.85);
-    color: #ffffff; font-size: 0.68rem; padding: 3px 8px; border-radius: 6px; font-weight: 700;
-}
-.market-time-pill {
-    position: absolute; left: 10px; bottom: 10px; z-index: 5; background: rgba(255, 255, 255, 0.92);
-    color: #b3261e; font-size: 0.68rem; padding: 3px 8px; border-radius: 6px; font-weight: 800;
+    transform: translateY(-3px) !important;
+    box-shadow: 0 10px 24px rgba(74, 32, 20, 0.1) !important;
+    border-color: #ebd7c5 !important;
 }
 
 .store-card-details {
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    flex: 1;
-    gap: 6px;
+    padding: 18px 20px 20px 20px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    flex: 1 !important;
+    gap: 6px !important;
 }
 
 .store-card-row-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    gap: 8px !important;
+    margin-bottom: 6px !important;
 }
 
 .store-card-row-head h3 {
-    margin: 0;
-    font-family: 'Outfit', sans-serif;
-    font-size: 1.05rem;
-    font-weight: 800;
-    color: #171922;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    margin: 0 !important;
+    font-family: 'Outfit', sans-serif !important;
+    font-size: 1.05rem !important;
+    font-weight: 800 !important;
+    color: #171922 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    flex: 1 !important;
+}
+
+.store-card-summary {
+    font-size: 0.84rem !important;
+    color: #64748b !important;
+    line-height: 1.45 !important;
+    height: 38px !important;
+    overflow: hidden !important;
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2 !important;
+    -webkit-box-orient: vertical !important;
+    margin-bottom: 8px !important;
 }
 
 .panda-card-footer-line {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    margin-top: 8px !important;
+    padding-top: 8px !important;
+    border-top: 1px solid #f5eae0 !important;
+    gap: 8px !important;
+}
+
+.panda-card-city {
+    font-size: 0.76rem !important;
+    color: #64748b !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+
+.panda-card-price-text {
+    font-family: 'Outfit', sans-serif !important;
+    font-size: 0.88rem !important;
+    font-weight: 800 !important;
+    color: #b3261e !important;
+    white-space: nowrap !important;
+}
+
+.store-card-image-wrap {
+    position: relative !important;
+    width: 100% !important;
+    height: 135px !important;
+    overflow: hidden !important;
+}
+
+.market-store-row-thumb {
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: 0 !important;
+    background-size: cover !important;
+    background-position: center !important;
+    transition: transform 0.3s ease !important;
+}
+
+.market-store-row:hover .market-store-row-thumb {
+    transform: scale(1.04) !important;
+}
+
+/* Floating favorite button in card */
+.market-store-favorite-btn {
+    position: absolute !important;
+    top: 10px !important;
+    right: 10px !important;
+    z-index: 10 !important;
+    width: 32px !important;
+    height: 32px !important;
+    background: #ffffff !important;
+    border: none !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.12) !important;
+    cursor: pointer !important;
+    color: #e11d48 !important;
+    font-size: 0.85rem !important;
+    transition: transform 0.2s ease !important;
+}
+
+.market-store-favorite-btn:hover {
+    transform: scale(1.08) !important;
+}
+
+/* Overlay pills on image */
+.market-type-pill {
+    position: absolute !important;
+    left: 10px !important;
+    top: 10px !important;
+    z-index: 5 !important;
+    background: rgba(42, 33, 29, 0.85) !important;
+    color: #ffffff !important;
+    font-size: 0.68rem !important;
+    padding: 3px 8px !important;
+    border-radius: 6px !important;
+    border: none !important;
+    font-weight: 700 !important;
+}
+
+.market-time-pill {
+    position: absolute !important;
+    left: 10px !important;
+    bottom: 10px !important;
+    z-index: 5 !important;
+    background: rgba(255, 255, 255, 0.92) !important;
+    color: #b3261e !important;
+    font-size: 0.68rem !important;
+    padding: 3px 8px !important;
+    border-radius: 6px !important;
+    font-weight: 800 !important;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1) !important;
+}
+
+/* Foodpanda Store Section Header Bar */
+.panda-store-header-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-bottom: 22px;
+}
+
+@media (min-width: 768px) {
+    .panda-store-header-bar {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+    }
+}
+
+.panda-store-header-title h2.panda-main-heading {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.55rem;
+    font-weight: 800;
+    color: #2a211d;
+    margin: 0 0 6px 0;
+    letter-spacing: -0.02em;
+}
+
+.panda-store-stats-row {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    margin-top: 8px;
-    padding-top: 8px;
-    border-top: 1px solid #f5eae0;
     gap: 8px;
+    flex-wrap: wrap;
 }
 
-@media (max-width: 900px) {
-    .market-explorer { grid-template-columns: 1fr; }
-    .market-sidebar { position: static; max-width: 100%; margin-bottom: 20px; }
+.panda-stat-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.78rem;
+    color: #55483f;
+    background: #f8f1eb;
+    border: 1px solid #ebd7c5;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-weight: 600;
 }
+
+.panda-stat-pill.panda-stat-live {
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+    color: #166534;
+}
+
+.panda-stat-pill.panda-stat-live i {
+    font-size: 0.5rem;
+    color: #22c55e;
+}
+
+.panda-search-bar-wrap {
+    flex: 1;
+    max-width: 440px;
+    width: 100%;
+}
+
+.panda-search-bar {
+    display: flex;
+    align-items: center;
+    background: #fcf8f5;
+    border: 1.5px solid #ebd7c5;
+    border-radius: 30px;
+    padding: 9px 18px;
+    gap: 10px;
+    box-shadow: 0 2px 8px rgba(74, 32, 20, 0.03);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+    cursor: text;
+}
+
+.panda-search-bar:focus-within {
+    background: #ffffff;
+    border-color: #ef6b2e;
+    box-shadow: 0 4px 14px rgba(239, 107, 46, 0.14);
+}
+
+.panda-search-bar .search-icon {
+    color: #ef6b2e;
+    font-size: 0.95rem;
+}
+
+.panda-search-bar input {
+    border: none;
+    background: transparent;
+    outline: none;
+    width: 100%;
+    font-size: 0.88rem;
+    color: #2a211d;
+    font-family: inherit;
+    font-weight: 500;
+}
+
+.panda-search-bar input::placeholder {
+    color: #a39589;
+}
+    gap: 8px !important;
+    flex: 1 !important;
+}
+
+.store-list-grid .store-card-row-head {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    gap: 8px !important;
+}
+
+.store-list-grid .store-card-row-head h3 {
+    margin: 0 !important;
+    font-family: 'Outfit', sans-serif !important;
+    font-size: 1.12rem !important;
+    font-weight: 800 !important;
+    color: #2a211d !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    flex: 1 !important;
+}
+
+.store-list-grid .store-card-rating {
+    font-size: 0.88rem !important;
+    font-weight: 700 !important;
+    color: #2a211d !important;
+    display: flex !important;
+    align-items: center !important;
+    white-space: nowrap !important;
+}
+
+.store-list-grid .store-card-summary {
+    font-size: 0.84rem !important;
+    color: #7a6c63 !important;
+    line-height: 1.4 !important;
+    height: 38px !important;
+    overflow: hidden !important;
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2 !important;
+    -webkit-box-orient: vertical !important;
+}
+
+.store-list-grid .store-card-meta {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 4px !important;
+    font-size: 0.8rem !important;
+    color: #7a6c63 !important;
+    border-bottom: 1px solid #efddcd !important;
+    padding-bottom: 10px !important;
+    margin-bottom: 4px !important;
+}
+
+.store-list-grid .store-card-meta-item {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+}
+
+.store-list-grid .store-card-meta-item i {
+    color: #b3261e !important;
+    width: 14px !important;
+}
+
+.store-list-grid .store-card-footer {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    margin-top: auto !important;
+    padding-top: 8px !important;
+}
+
+.store-list-grid .store-card-price {
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+.store-list-grid .store-card-price strong {
+    font-size: 0.95rem !important;
+    color: #b3261e !important;
+    font-weight: 800 !important;
+}
+
+.store-list-grid .store-card-price span {
+    font-size: 0.72rem !important;
+    color: #7a6c63 !important;
+}
+
+.store-list-grid .store-card-actions {
+    display: flex !important;
+    gap: 6px !important;
+}
+
+<?php if (!empty($_SESSION['user_id'])): ?>
+/* Logged-in Customer Dashboard Layout Theme */
+body {
+    background: #ffffff !important;
+    --bg: #ffffff !important;
+}
+
+.market-explorer {
+    gap: 36px !important;
+    align-items: flex-start !important;
+}
+
+.market-sidebar {
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 16px !important;
+    padding: 20px !important;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.02) !important;
+    max-width: 280px !important;
+    width: 100% !important;
+}
+
+.market-sidebar-section {
+    border-bottom: 1px solid #f1f5f9 !important;
+    padding-bottom: 16px !important;
+    margin-bottom: 16px !important;
+}
+
+.market-sidebar-section:last-child {
+    border-bottom: none !important;
+    padding-bottom: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+.market-sidebar h3 {
+    margin: 0 0 12px 0 !important;
+    font-size: 1.15rem !important;
+    font-weight: 800 !important;
+    color: #1e293b !important;
+}
+
+.market-sidebar h4 {
+    margin: 0 0 10px 0 !important;
+    font-size: 0.88rem !important;
+    font-weight: 700 !important;
+    color: #475569 !important;
+}
+
+/* Header bottom links for customer portal */
+.market-home-link.active {
+    background: #b3261e !important;
+    color: #ffffff !important;
+    border-color: #b3261e !important;
+}
+
+.market-home-link:hover:not(.active) {
+    background: #f1f5f9 !important;
+    color: #171922 !important;
+}
+.bestseller-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 28px rgba(179, 38, 30, 0.12) !important;
+    border-color: #b3261e !important;
+}
+.bestseller-card:hover .market-store-row-thumb {
+    transform: scale(1.06);
+}
+@media (max-width: 768px) {
+    .market-sidebar {
+        border-radius: 14px !important;
+        padding: 12px 16px !important;
+        margin-bottom: 14px !important;
+        max-width: 100% !important;
+        border: 1px solid #eaecf0 !important;
+        background: #ffffff !important;
+    }
+    .market-sidebar-toggle-btn {
+        display: flex !important;
+        align-items: center;
+        justify-content: space-between;
+        font-weight: 800;
+        font-size: 0.92rem;
+        color: #1e293b;
+        cursor: pointer;
+        padding: 4px 0;
+        user-select: none;
+    }
+    .market-sidebar-toggle-btn i.fa-sliders {
+        color: #b3261e;
+        margin-right: 6px;
+    }
+    .market-sidebar.is-collapsed-mobile .market-sidebar-section {
+        display: none !important;
+    }
+    .market-sidebar.is-collapsed-mobile .toggle-icon {
+        transform: rotate(-90deg);
+        transition: transform 0.2s ease;
+    }
+    .market-sidebar:not(.is-collapsed-mobile) .toggle-icon {
+        transform: rotate(0deg);
+        transition: transform 0.2s ease;
+    }
+}
+@media (min-width: 769px) {
+    .market-sidebar-toggle-btn {
+        display: none !important;
+    }
+}
+<?php endif; ?>
 </style>
-@endpush
 
-@section('content')
 <div class="market-home">
-    <div class="container">
-        
-        <div class="market-explorer">
-            <!-- Left Sticky Sidebar -->
-            <aside class="market-sidebar" id="marketSidebar">
-                <div class="market-sidebar-section">
-                    <h3>Filters</h3>
-                </div>
-
-                <div class="market-sidebar-section">
-                    <h4>Sort by</h4>
-                    <div class="market-radio-list">
-                        <label class="market-radio"><input type="radio" name="storeSort" value="relevance" checked> <span>Relevance</span></label>
-                        <label class="market-radio"><input type="radio" name="storeSort" value="fastest"> <span>Fastest delivery</span></label>
-                        <label class="market-radio"><input type="radio" name="storeSort" value="distance"> <span>Distance</span></label>
-                        <label class="market-radio"><input type="radio" name="storeSort" value="top_rated"> <span>Top rated</span></label>
+    <section class="market-section" id="marketplaceStores">
+        <div class="container">
+            <div class="market-explorer">
+                <aside class="market-sidebar is-collapsed-mobile" id="marketSidebar">
+                    <div class="market-sidebar-toggle-btn" id="marketSidebarToggleBtn" onclick="document.getElementById('marketSidebar').classList.toggle('is-collapsed-mobile')">
+                        <span><i class="fas fa-sliders"></i> Filters & Sort</span>
+                        <i class="fas fa-chevron-down toggle-icon"></i>
                     </div>
-                </div>
 
-                <div class="market-sidebar-section">
-                    <h4>Quick filters</h4>
-                    <div class="market-check-list">
-                        <label class="market-check"><input type="checkbox" id="filterRatings4"> <span>Ratings 4+</span></label>
-                        <label class="market-check"><input type="checkbox" id="filterLiveOnly"> <span>Open now only</span></label>
-                        <label class="market-check"><input type="checkbox" id="filterPartnerOnly"> <span>Partner stores</span></label>
-                        <label class="market-check"><input type="checkbox" id="filterBranchOnly"> <span>Pickup branches</span></label>
+                    <div class="market-sidebar-section">
+                        <h3>Filters</h3>
                     </div>
-                </div>
-
-                <div class="market-sidebar-section">
-                    <h4>Cavite Cities</h4>
-                    <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px;">
-                        @foreach(['General Trias', 'Dasmariñas', 'Imus', 'Bacoor', 'Tagaytay', 'Silang', 'Tanza'] as $city)
-                            <a href="{{ route('home', ['city' => $city]) }}" style="font-size: 0.76rem; font-weight: 700; color: #475467; text-decoration: none; padding: 4px 10px; border-radius: 999px; border: 1px solid #eaecf0; background: #f8f9fa;">
-                                {{ $city }}
-                            </a>
-                        @endforeach
+                    <div class="market-sidebar-section">
+                        <h4>Sort by</h4>
+                        <div class="market-radio-list">
+                            <label class="market-radio"><input type="radio" name="storeSort" value="relevance" checked> <span>Relevance</span></label>
+                            <label class="market-radio"><input type="radio" name="storeSort" value="fastest"> <span>Fastest delivery</span></label>
+                            <label class="market-radio"><input type="radio" name="storeSort" value="distance"> <span>Distance</span></label>
+                            <label class="market-radio"><input type="radio" name="storeSort" value="top_rated"> <span>Top rated</span></label>
+                        </div>
                     </div>
-                </div>
-            </aside>
+                    <div class="market-sidebar-section">
+                        <h4>Quick filters</h4>
+                        <div class="market-check-list">
+                            <label class="market-check"><input type="checkbox" id="filterRatings4"> <span>Ratings 4+</span></label>
+                            <label class="market-check"><input type="checkbox" id="filterLiveOnly"> <span>Open now only</span></label>
+                            <label class="market-check"><input type="checkbox" id="filterPartnerOnly"> <span>Partner stores</span></label>
+                            <label class="market-check"><input type="checkbox" id="filterBranchOnly"> <span>Pickup branches</span></label>
+                            <label class="market-check"><input type="checkbox" id="filterNearbyOnly"> <span>Nearby only</span></label>
+                        </div>
+                    </div>
+                    <div class="market-sidebar-section">
+                        <h4>Nearest Cavite lechon shops</h4>
+                        <p class="market-helper">Allow location access and the page will rank the closest saved Cavite branches first using your browser position and store coordinates.</p>
+                        <button type="button" class="market-btn market-detect-btn" id="detectNearestStores"><i class="fas fa-location-crosshairs"></i> Detect nearest shops</button>
+                        <p class="market-helper" id="nearestDetectStatus" style="margin-top:12px;">Waiting for location permission.</p>
+                    </div>
+                </aside>
 
-            <!-- Right Main Marketplace Content -->
-            <div>
-                
-                <!-- Dual Hero Promotional Banners with Mascot -->
-                <div class="panda-hero-banners">
-                    <!-- Order Fresh Lechon Banner -->
-                    <article class="panda-hero-card panda-card-pink">
-                        <div class="panda-card-arch"></div>
-                        <div class="panda-card-content">
-                            <h2 class="panda-card-title">Order Fresh Lechon</h2>
-                            <p class="panda-card-desc">Enjoy crispy skin and juicy meat, roasted fresh for every order.</p>
-                            <a href="{{ route('menu') }}" class="panda-card-btn">Order Now</a>
-                        </div>
-                        <div class="panda-card-graphic">
-                            <img src="{{ asset('assets/images/lechon_mascot_user.png') }}" alt="Lechon Mascot" class="panda-mascot-img" onerror="this.src='{{ asset('images/panda_fresh_lechon.jpg') }}'">
-                        </div>
-                    </article>
-
-                    <!-- Pre-order for Celebrations Banner -->
-                    <article class="panda-hero-card panda-card-soft">
-                        <div class="panda-card-heart-bg">
-                            <div class="panda-heart-shape heart-lg"></div>
-                            <div class="panda-heart-shape heart-sm"></div>
-                        </div>
-                        <div class="panda-card-content">
-                            <h2 class="panda-card-title">Pre-order for Celebrations</h2>
-                            <p class="panda-card-desc">Avoid the rush by booking your whole or half lechon ahead of time.</p>
-                            <a href="{{ route('menu') }}" class="panda-card-btn panda-card-btn-alt">Reserve Now</a>
-                        </div>
-                        <div class="panda-card-graphic-cluster">
-                            <div class="panda-float-badge-wrap">
-                                <div class="panda-badge-item panda-badge-calendar"><i class="fas fa-calendar-check"></i></div>
-                                <div class="panda-badge-item panda-badge-gift"><i class="fas fa-gift"></i></div>
-                                <div class="panda-badge-item panda-badge-party"><i class="fas fa-utensils"></i></div>
+                <div>
+                    <?php if ($is_pickup_mode): ?>
+                        <!-- Foodpanda-Style Pick-up Map Section (Leaflet Map for Nearby Stores) -->
+                        <div class="foodpanda-pickup-banner" style="background: linear-gradient(135deg, #f0fdf4 0%, #e0f2fe 100%); border: 1px solid #cbd5e1; border-radius: 20px; padding: 22px; margin-bottom: 24px; box-shadow: 0 4px 16px rgba(15,23,42,0.04);">
+                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; flex-wrap: wrap;">
+                                <div>
+                                    <div style="display: inline-flex; align-items: center; gap: 6px; background: #ffffff; color: #b3261e; padding: 4px 14px; border-radius: 999px; font-size: 0.8rem; font-weight: 800; margin-bottom: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.06);">
+                                        <i class="fas fa-person-walking"></i> Nearby Pick-up Branches
+                                    </div>
+                                    <h2 style="margin: 0; font-family: 'Outfit', sans-serif; font-size: 1.45rem; font-weight: 800; color: #1e293b;">Explore restaurants around you</h2>
+                                </div>
+                                <span style="font-size: 0.85rem; color: #64748b; font-weight: 600;"><i class="fas fa-location-dot" style="color: #b3261e;"></i> Showing nearby Cavite store pins</span>
+                            </div>
+                            <div id="pickupMapContainer" style="width: 100%;">
+                                <div id="pickupLeafletMap" style="width: 100%; height: 340px; border-radius: 16px; border: 2px solid #ffffff; box-shadow: 0 8px 24px rgba(15,23,42,0.12); z-index: 1;"></div>
                             </div>
                         </div>
-                    </article>
-                </div>
+                    <?php endif; ?>
 
-                <!-- Top Lechon Brands & Hubs Carousel -->
-                @if(!empty($top_rated_stores))
-                <section style="margin-bottom: 28px;">
-                    <div style="margin-bottom: 12px;">
-                        <h2 style="font-family: 'Outfit', sans-serif; font-size: 1.35rem; font-weight: 800; color: #171922; margin: 0 0 4px 0;">Top lechon brands & hubs</h2>
-                        <p style="font-size: 0.86rem; color: #64748b; margin: 0;">Popular Cavite lechon pitmasters, whole lechon suppliers, and quick pickup branches.</p>
-                    </div>
-                    <div class="panda-brand-slider">
-                        @foreach($top_rated_stores as $top_store)
-                            <a href="{{ $top_store['menu_link'] }}" class="panda-brand-item">
-                                <div class="panda-brand-avatar" style="background-image: url('{{ $top_store['image'] }}');"></div>
-                                <div class="panda-brand-name">{{ $top_store['name'] }}</div>
-                                <div class="panda-brand-meta">
-                                    <i class="fas fa-star" style="color: #ef6b2e;"></i> {{ $top_store['rating'] }} &bull; 25-35m
-                                </div>
-                            </a>
-                        @endforeach
-                    </div>
-                </section>
-                @endif
-
-                <!-- Best Sellers Grid -->
-                @if(!empty($featured_products) && count($featured_products) > 0)
-                <section style="margin-bottom: 32px; padding: 18px 20px; background: linear-gradient(135deg, #fff9f2 0%, #ffffff 100%); border: 1px solid #efddcd; border-radius: 16px;">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
-                        <div>
-                            <div style="display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; background: #fff1f2; border: 1px solid #ffe4e6; border-radius: 999px; color: #b3261e; font-size: 0.72rem; font-weight: 800; text-transform: uppercase;">
-                                <i class="fas fa-fire" style="color: #ef6b2e;"></i> Top Customer Choices
+                    <?php if (empty($is_pickup_mode) && !empty($_SESSION['user_id'])): 
+                        $first_name = explode(' ', $_SESSION['full_name'] ?? 'Guest')[0];
+                    ?>
+                        <div class="panda-welcome-banner" style="background: linear-gradient(135deg, #b3261e 0%, #8f261a 100%); color: #fff; padding: 28px 24px; border-radius: 24px; margin-bottom: 24px; box-shadow: 0 12px 28px rgba(179, 38, 30, 0.15); display: flex; justify-content: space-between; align-items: center; overflow: hidden; position: relative;">
+                            <div style="position: absolute; right: -20px; bottom: -40px; opacity: 0.12; font-size: 10rem; color: #fff; transform: rotate(-15deg); pointer-events: none;"><i class="fas fa-utensils"></i></div>
+                            <div style="z-index: 1;">
+                                <h1 style="margin: 0 0 6px 0; font-family: 'Outfit', sans-serif; font-size: clamp(1.5rem, 2.5vw, 2.2rem); font-weight: 800; color: #ffffff;">Mabuhay, <?php echo htmlspecialchars($first_name); ?>! ðŸ‘‹</h1>
+                                <p style="margin: 0; font-size: 0.95rem; opacity: 0.9; max-width: 580px; color: #ffffff;">Ready for some crispy, mouth-watering lechon? Check out the available Cavite partners and branches open right now near you.</p>
                             </div>
-                            <h2 style="font-family: 'Outfit', sans-serif; font-size: 1.3rem; font-weight: 800; color: #171922; margin: 4px 0 2px 0;">Best Sellers & Top Rated Dishes</h2>
                         </div>
-                        <a href="{{ route('menu') }}" style="color: #b3261e; font-weight: 700; font-size: 0.82rem; text-decoration: none;">
-                            Explore Full Menu <i class="fas fa-arrow-right"></i>
-                        </a>
-                    </div>
-
-                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px;">
-                        @foreach($featured_products->take(6) as $idx => $prod)
-                            <a href="{{ $prod['menu_link'] }}" style="background: #ffffff; border: 1px solid #efddcd; border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; text-decoration: none; color: inherit;">
-                                <div style="height: 110px; background-image: url('{{ $prod['image'] }}'); background-size: cover; background-position: center; position: relative;">
-                                    <span style="position: absolute; top: 8px; left: 8px; background: linear-gradient(135deg, #b3261e, #ef6b2e); color: #fff; font-size: 0.68rem; font-weight: 800; padding: 2px 7px; border-radius: 999px;">
-                                        #{{ $idx + 1 }} Best Seller
-                                    </span>
+                    <?php endif; ?>
+                    <?php if (empty($_SESSION['user_id'])): ?>
+                        <div class="panda-hero-banners">
+                            <article class="panda-hero-card panda-card-pink">
+                                <div class="panda-card-arch"></div>
+                                <div class="panda-card-content">
+                                    <h2 class="panda-card-title">Order Fresh Lechon</h2>
+                                    <p class="panda-card-desc">Enjoy crispy skin and juicy meat, roasted fresh for every order.</p>
+                                    <a href="register.php" class="panda-card-btn guest-cta-btn">Order Now</a>
                                 </div>
-                                <div style="padding: 10px 12px; display: flex; flex-direction: column; flex: 1;">
-                                    <h4 style="font-family: 'Outfit', sans-serif; font-size: 0.88rem; font-weight: 800; margin: 0 0 4px 0; line-height: 1.2;">{{ $prod['name'] }}</h4>
-                                    <p style="font-size: 0.75rem; color: #64748b; margin: 0 0 8px 0;">{{ $prod['store'] }}</p>
-                                    <div style="margin-top: auto; display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed #f0e2d5; padding-top: 6px;">
-                                        <strong style="color: #b3261e; font-size: 0.9rem; font-weight: 800;">₱{{ number_format($prod['price'], 2) }}</strong>
-                                        <span style="font-size: 0.72rem; background: #b3261e; color: #fff; padding: 3px 8px; border-radius: 6px; font-weight: 700;">Order</span>
+                                <div class="panda-card-graphic">
+                                    <img src="assets/images/lechon_mascot_user.png" alt="Lechon Delights Mascot" class="panda-mascot-img" loading="lazy">
+                                </div>
+                            </article>
+
+                            <article class="panda-hero-card panda-card-soft">
+                                <div class="panda-card-heart-bg">
+                                    <div class="panda-heart-shape heart-lg"></div>
+                                    <div class="panda-heart-shape heart-sm"></div>
+                                </div>
+                                <div class="panda-card-content">
+                                    <h2 class="panda-card-title">Pre-order for Celebrations</h2>
+                                    <p class="panda-card-desc">Avoid the rush by booking your whole or half lechon ahead of time.</p>
+                                    <a href="register.php" class="panda-card-btn panda-card-btn-alt guest-cta-btn">Reserve Now</a>
+                                </div>
+                                <div class="panda-card-graphic-cluster">
+                                    <div class="panda-float-badge-wrap">
+                                        <div class="panda-badge-item panda-badge-calendar" title="Pre-order Ahead"><i class="fas fa-calendar-check"></i></div>
+                                        <div class="panda-badge-item panda-badge-gift" title="Celebration Offer"><i class="fas fa-gift"></i></div>
+                                        <div class="panda-badge-item panda-badge-party" title="Lechon Feast"><i class="fas fa-utensils"></i></div>
                                     </div>
                                 </div>
-                            </a>
-                        @endforeach
-                    </div>
-                </section>
-                @endif
-
-                <!-- All Cavite Stores Section -->
-                <section>
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;">
-                        <h2 style="font-family: 'Outfit', sans-serif; font-size: 1.45rem; font-weight: 800; color: #171922; margin: 0;">All Cavite stores</h2>
-                    </div>
-
-                    <div class="store-list-grid" id="marketStoreGrid">
-                        @foreach($stores as $store)
-                            <a href="{{ $store['menu_link'] }}" class="market-store-row">
-                                <div class="store-card-image-wrap">
-                                    <div class="market-store-row-thumb" style="background-image: url('{{ $store['image'] }}');"></div>
-                                    <span class="market-type-pill">{{ $store['business_type'] }}</span>
-                                    <span class="market-time-pill">{{ $store['status_label'] }}</span>
+                            </article>
+                        </div>
+                    <?php else: ?>
+                        <!-- Logged-in Premium Minimal Promo Cards -->
+                        <div class="user-promo-row" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-bottom: 28px;">
+                            <!-- Order Now Card -->
+                            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 4px 12px rgba(15,23,42,0.02); transition: transform 0.2s ease;">
+                                <div style="width: 52px; height: 52px; border-radius: 12px; background: #fff1f2; display: flex; align-items: center; justify-content: center; color: #b3261e; font-size: 1.4rem; flex-shrink: 0;">
+                                    <i class="fas fa-motorcycle"></i>
                                 </div>
-                                <div class="store-card-details">
-                                    <div class="store-card-row-head">
-                                        <h3>{{ $store['name'] }}</h3>
-                                        <span style="font-size: 0.85rem; font-weight: 800; color: #171922;">
-                                            <i class="fas fa-star" style="color: #ef6b2e;"></i> {{ $store['rating'] }}
+                                <div style="flex: 1;">
+                                    <h4 style="margin: 0 0 4px 0; font-family: 'Outfit', sans-serif; font-size: 0.98rem; font-weight: 800; color: #1e293b;">Order Fresh Lechon</h4>
+                                    <p style="margin: 0 0 10px 0; font-size: 0.8rem; color: #64748b; line-height: 1.4;">Crispy skin and juicy meat roasted fresh for your feast.</p>
+                                    <a href="#marketplaceStores" class="market-btn" style="min-height: 32px; padding: 0 14px; font-size: 0.78rem; border-radius: 8px; text-decoration: none; display: inline-flex; align-items: center; justify-content: center;">Order Now</a>
+                                </div>
+                            </div>
+                            
+                            <!-- Reserve Now Card -->
+                            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 4px 12px rgba(15,23,42,0.02); transition: transform 0.2s ease;">
+                                <div style="width: 52px; height: 52px; border-radius: 12px; background: #fef4ea; display: flex; align-items: center; justify-content: center; color: #ef6b2e; font-size: 1.4rem; flex-shrink: 0;">
+                                    <i class="fas fa-calendar-check"></i>
+                                </div>
+                                <div style="flex: 1;">
+                                    <h4 style="margin: 0 0 4px 0; font-family: 'Outfit', sans-serif; font-size: 0.98rem; font-weight: 800; color: #1e293b;">Pre-order Celebrations</h4>
+                                    <p style="margin: 0 0 10px 0; font-size: 0.8rem; color: #64748b; line-height: 1.4;">Avoid the rush and reserve your whole lechon ahead of time.</p>
+                                    <a href="preorder.php" class="market-btn-soft" style="min-height: 32px; padding: 0 14px; font-size: 0.78rem; border-radius: 8px; text-decoration: none; display: inline-flex; align-items: center; justify-content: center;">Reserve Now</a>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+
+                    <?php 
+                    $featured_ads = paGetActiveAdvertisements($conn, 6);
+                    if ($scoped_partner_seller_id > 0 && !empty($featured_ads)) {
+                        $featured_ads = array_values(array_filter($featured_ads, function($ad) use ($scoped_partner_seller_id) {
+                            return (int)($ad['seller_id'] ?? 0) === (int)$scoped_partner_seller_id;
+                        }));
+                    }
+                    if (!empty($featured_ads)): 
+                    ?>
+                    <!-- Partner Promos & Advertisements Section -->
+                    <section class="partner-ads-section" style="margin-bottom: 32px;">
+                        <div class="market-head" style="margin-bottom: 14px;">
+                            <div>
+                                <h2 style="font-family:'Outfit',sans-serif; font-size:1.45rem; font-weight:800; color:#171922; display:flex; align-items:center; gap:8px;">
+                                    <i class="fas fa-bullhorn" style="color:#ef6b2e;"></i> Featured Promos & Partner Deals
+                                </h2>
+                                <p style="font-size:0.88rem; color:#7b6d64; margin:0;">Exclusive discounts, voucher codes, and special offers from store owners and partner sellers.</p>
+                            </div>
+                        </div>
+
+                        <div class="partner-ads-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); gap: 18px;">
+                            <?php foreach ($featured_ads as $ad): 
+                                $theme_class = htmlspecialchars($ad['bg_theme'] ?: 'gradient-red');
+                                $seller_name = htmlspecialchars($ad['business_name'] ?: 'Partner Store');
+                                $target_url = htmlspecialchars($ad['target_url'] ?: 'menu.php?seller_id=' . $ad['seller_id']);
+                            ?>
+                                <article class="partner-ad-card <?php echo $theme_class; ?>">
+                                    <div class="partner-ad-header">
+                                        <div class="partner-ad-store">
+                                            <i class="fas fa-store"></i> <?php echo $seller_name; ?>
+                                        </div>
+                                        <?php if (!empty($ad['discount_tag'])): ?>
+                                            <span class="partner-ad-badge"><?php echo htmlspecialchars($ad['discount_tag']); ?></span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <h3 class="partner-ad-title"><?php echo htmlspecialchars($ad['title']); ?></h3>
+                                    <p class="partner-ad-desc"><?php echo htmlspecialchars($ad['subtitle'] ?: 'Special promotional offer for customers.'); ?></p>
+                                    
+                                    <div class="partner-ad-footer">
+                                        <?php if (!empty($ad['promo_code'])): ?>
+                                            <div class="partner-ad-code" title="Use voucher code at checkout">
+                                                <i class="fas fa-ticket-alt"></i> <span><?php echo htmlspecialchars($ad['promo_code']); ?></span>
+                                            </div>
+                                        <?php endif; ?>
+                                        <a href="<?php echo $target_url; ?>" class="partner-ad-btn">
+                                            Claim Deal <i class="fas fa-arrow-right"></i>
+                                        </a>
+                                    </div>
+                                </article>
+                            <?php endforeach; ?>
+                        </div>
+                    </section>
+                    <?php endif; ?>
+
+                    <?php if (!empty($top_rated_stores)): ?>
+                    <!-- Foodpanda Brands Carousel: Top Lechon Houses -->
+                    <section class="market-mini-section">
+                        <div class="market-head" style="margin-bottom:12px;">
+                            <div>
+                                <h2 style="font-family:'Outfit',sans-serif; font-size:1.4rem; font-weight:800; color:#2a211d;">Top lechon brands & hubs</h2>
+                                <p style="font-size:0.88rem; color:#7d6f65; margin:0;">Popular Cavite lechon pitmasters, whole lechon suppliers, and quick pickup branches.</p>
+                            </div>
+                        </div>
+                        <div class="panda-brand-slider">
+                            <?php foreach ($top_rated_stores as $top_store): ?>
+                                <a href="<?php echo htmlspecialchars($top_store['menu_link']); ?>" class="panda-brand-item">
+                                    <div class="panda-brand-avatar" style="background-image:url('<?php echo htmlspecialchars($top_store['image']); ?>');"></div>
+                                    <div class="panda-brand-name"><?php echo htmlspecialchars($top_store['name']); ?></div>
+                                    <div class="panda-brand-meta">
+                                        <i class="fas fa-star" style="color:#ef6b2e;"></i> <?php echo $top_store['rating'] > 0 ? number_format((float)$top_store['rating'], 1) : '4.9'; ?>
+                                        â€¢ 25-35m
+                                    </div>
+                                </a>
+                            <?php endforeach; ?>
+                        </div>
+                    </section>
+                    <?php endif; ?>
+
+                    <?php if (!empty($featured_products)): ?>
+                    <!-- Prominent Best Sellers & Top Rated Dishes Section -->
+                    <section class="bestsellers-section" style="margin-bottom: 24px; padding: 18px 20px; background: linear-gradient(135deg, #fff9f2 0%, #ffffff 100%); border: 1px solid #efddcd; border-radius: 16px; box-shadow: 0 6px 18px rgba(42,33,29,0.04);">
+                        <div class="market-head" style="margin-bottom: 14px; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 10px;">
+                            <div>
+                                <div style="display:inline-flex; align-items:center; gap:5px; padding:3px 10px; background:#fff1f2; border:1px solid #ffe4e6; border-radius:999px; color:#b3261e; font-size:0.72rem; font-weight:800; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:4px;">
+                                    <i class="fas fa-fire" style="color:#ef6b2e;"></i> Top Customer Choices
+                                </div>
+                                <h2 style="font-family:'Outfit',sans-serif; font-size:1.3rem; font-weight:800; color:#171922; margin:0 0 3px 0;">Best Sellers & Top Rated Dishes</h2>
+                                <p style="font-size:0.82rem; color:#7b6d64; margin:0;">Hand-picked customer favorites with high sales volume and top customer ratings across Cavite.</p>
+                            </div>
+                            <a href="menu.php" class="btn-outline btn-sm" style="border-radius:999px; font-weight:700; text-decoration:none; padding:6px 14px; font-size:0.78rem;">
+                                Explore Full Menu <i class="fas fa-arrow-right" style="margin-left:4px;"></i>
+                            </a>
+                        </div>
+
+                        <div class="bestsellers-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(195px, 1fr)); gap: 14px;">
+                            <?php foreach ($featured_products as $idx => $product): ?>
+                                <?php
+                                $prod_id_val = (string)($product['id'] ?? '');
+                                $is_prod_fav = !empty($favorite_store_keys['product_' . $prod_id_val]);
+                                $rank_num = $idx + 1;
+                                ?>
+                                <a href="<?php echo htmlspecialchars($product['menu_link'] ?? 'menu.php'); ?>" class="bestseller-card panda-card-link" style="background:#ffffff; border:1px solid #efddcd; border-radius:14px; overflow:hidden; display:flex; flex-direction:column; transition:transform 0.25s ease, box-shadow 0.25s ease; text-decoration:none; position:relative;">
+                                    <div class="store-card-image-wrap" style="height: 115px; position:relative; overflow:hidden;">
+                                        <div class="market-store-row-thumb" style="background-image: url('<?php echo htmlspecialchars($product['image']); ?>'); width:100%; height:100%; background-size:cover; background-position:center; transition:transform 0.4s ease;"></div>
+                                        <span class="bestseller-rank-badge" style="position:absolute; top:8px; left:8px; background:linear-gradient(135deg, #b3261e, #ef6b2e); color:#ffffff; font-weight:800; font-size:0.68rem; padding:3px 8px; border-radius:999px; box-shadow:0 3px 8px rgba(179,38,30,0.25); display:inline-flex; align-items:center; gap:3px; z-index:2;">
+                                            <i class="fas fa-fire"></i> #<?php echo $rank_num; ?> Best Seller
                                         </span>
+                                        <button
+                                            type="button"
+                                            class="market-store-favorite-btn<?php echo $is_prod_fav ? ' is-active' : ''; ?>"
+                                            data-favorite-toggle="1"
+                                            data-favorite-type="product"
+                                            data-favorite-product-id="<?php echo htmlspecialchars($prod_id_val); ?>"
+                                            data-favorite-active="<?php echo $is_prod_fav ? '1' : '0'; ?>"
+                                            aria-pressed="<?php echo $is_prod_fav ? 'true' : 'false'; ?>"
+                                            title="<?php echo $is_prod_fav ? 'Remove from favorites' : 'Save to favorites'; ?>"
+                                            onclick="event.preventDefault(); event.stopPropagation();"
+                                            style="position:absolute; top:8px; right:8px; z-index:2; width:28px; height:28px; font-size:0.75rem;">
+                                            <i class="<?php echo $is_prod_fav ? 'fas' : 'far'; ?> fa-heart"></i>
+                                        </button>
                                     </div>
-                                    <div class="panda-card-footer-line">
-                                        <span class="panda-card-city"><i class="fas fa-location-dot" style="color: #b3261e;"></i> {{ $store['city'] }}</span>
-                                        <span class="panda-card-price-text">₱{{ number_format($store['start'], 2) }}</span>
-                                    </div>
-                                </div>
-                            </a>
-                        @endforeach
-                    </div>
-                </section>
 
+                                    <div class="store-card-details" style="padding: 10px 12px; display:flex; flex-direction:column; flex:1;">
+                                        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:6px; margin-bottom:3px;">
+                                            <h3 style="font-family:'Outfit',sans-serif; font-size:0.88rem; font-weight:800; color:#171922; margin:0; line-height:1.3; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; flex:1;"><?php echo htmlspecialchars($product['name']); ?></h3>
+                                            <?php if ($product['rating'] > 0): ?>
+                                            <span style="font-size:0.78rem; font-weight:800; color:#171922; display:inline-flex; align-items:center; gap:2px; white-space:nowrap;">
+                                                <i class="fas fa-star" style="color:#ef6b2e;"></i><?php echo number_format((float)$product['rating'], 1); ?>
+                                            </span>
+                                            <?php endif; ?>
+                                        </div>
+                                        
+                                        <div style="font-size:0.75rem; color:#7b6d64; margin-bottom:8px; display:flex; align-items:center; gap:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                                            <i class="fas fa-store" style="color:#ef6b2e;"></i> <span><?php echo htmlspecialchars($product['store']); ?></span>
+                                        </div>
+
+                                        <div style="margin-top:auto; padding-top:8px; border-top:1px dashed #efddcd; display:flex; justify-content:space-between; align-items:center;">
+                                            <div>
+                                                <strong style="font-size:0.92rem; color:#b3261e; font-weight:800; display:block;">PHP <?php echo number_format((float)$product['price'], 2); ?></strong>
+                                                <span style="font-size:0.7rem; color:#7b6d64; font-weight:600;"><?php echo number_format((int)$product['sold']); ?> sold</span>
+                                            </div>
+                                            <span class="btn-primary btn-sm" style="padding:5px 10px; font-size:0.72rem; border-radius:6px; pointer-events:none; background:linear-gradient(135deg, #b3261e, #ef6b2e); color:#fff; font-weight:700;">
+                                                Order Now <i class="fas fa-arrow-right" style="font-size:0.7rem;"></i>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </a>
+                            <?php endforeach; ?>
+                        </div>
+                    </section>
+                    <?php endif; ?>
+
+                    <section class="market-mini-section">
+                        <div class="panda-store-header-bar">
+                            <div class="panda-store-header-title">
+                                <h2 class="panda-main-heading">All Cavite stores</h2>
+                            </div>
+                            <div class="panda-search-bar-wrap">
+                                <label class="panda-search-bar" for="gridStoreSearch">
+                                    <i class="fas fa-magnifying-glass search-icon"></i>
+                                    <input type="text" id="gridStoreSearch" placeholder="Search stores, whole lechon, belly, cities...">
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Unified Foodpanda 3-Column Card Grid Layout -->
+                        <div class="market-store-list store-list-grid" id="marketStoreGrid">
+                            <?php foreach ($stores as $index => $store): ?>
+                                <?php
+                                $price = $store['start'] !== null ? 'PHP ' . number_format((float)$store['start'], 2) : 'Starts at PHP 450.00';
+                                $type_label = $store['type'] === 'branch' ? 'Pickup branch' : ($store['type'] === 'partner' ? 'Partner store' : ($store['type'] === 'platform' ? 'Marketplace favorite' : 'Seller'));
+                                $store_key_value = (string)($store['key'] ?? '');
+                                $is_store_favorite = !empty($favorite_store_keys[$store_key_value]);
+                                $city_label = !empty($store['city']) ? $store['city'] . ', Cavite' : $store['location'];
+                                ?>
+                                <a href="<?php echo htmlspecialchars($store['menu_link']); ?>"
+                                   class="market-store-row panda-card-link"
+                                   data-store-key="<?php echo htmlspecialchars($store_key_value); ?>"
+                                   data-index="<?php echo (int)$index; ?>"
+                                   data-search="<?php echo htmlspecialchars($store['search']); ?>"
+                                   data-tags="<?php echo htmlspecialchars(strtolower(implode(' ', $store['tags']))); ?>"
+                                   data-type="<?php echo htmlspecialchars($store['type']); ?>"
+                                   data-live="<?php echo !empty($store['live']) ? '1' : '0'; ?>"
+                                   data-open="<?php echo !empty($store['is_open']) ? '1' : '0'; ?>"
+                                   data-rating="<?php echo number_format((float)$store['rating'], 2, '.', ''); ?>"
+                                   data-reviews="<?php echo (int)$store['reviews']; ?>"
+                                   data-count="<?php echo (int)$store['count']; ?>"
+                                   data-lat="<?php echo $store['latitude'] !== null ? htmlspecialchars((string)$store['latitude']) : ''; ?>"
+                                   data-lng="<?php echo $store['longitude'] !== null ? htmlspecialchars((string)$store['longitude']) : ''; ?>">
+                                    
+                                    <!-- Image Wrapper -->
+                                    <div class="store-card-image-wrap">
+                                        <div class="market-store-row-thumb" style="background-image:url('<?php echo htmlspecialchars($store['image']); ?>');"></div>
+                                        <span class="market-type-pill"><?php echo htmlspecialchars($type_label); ?></span>
+                                        <span class="market-time-pill" data-role="time-label"><?php echo !empty($store['is_open']) ? 'Open now' : 'Closed now'; ?></span>
+                                        <button
+                                            type="button"
+                                            class="market-store-favorite-btn<?php echo $is_store_favorite ? ' is-active' : ''; ?>"
+                                            data-favorite-toggle="1"
+                                            data-favorite-type="store"
+                                            data-favorite-store-key="<?php echo htmlspecialchars($store_key_value); ?>"
+                                            data-favorite-active="<?php echo $is_store_favorite ? '1' : '0'; ?>"
+                                            aria-pressed="<?php echo $is_store_favorite ? 'true' : 'false'; ?>"
+                                            title="<?php echo $is_store_favorite ? 'Remove from favorites' : 'Save to favorites'; ?>"
+                                            onclick="event.preventDefault(); event.stopPropagation();">
+                                            <i class="<?php echo $is_store_favorite ? 'fas' : 'far'; ?> fa-heart"></i>
+                                        </button>
+                                    </div>
+
+                                    <!-- Details Container -->
+                                    <div class="store-card-details">
+                                        <div class="store-card-row-head">
+                                            <h3><?php echo htmlspecialchars($store['name']); ?></h3>
+                                            <span class="store-card-rating">
+                                                <i class="fas fa-star" style="color:#ef6b2e; margin-right:3px;"></i><?php echo $store['rating'] > 0 ? number_format((float)$store['rating'], 1) : 'New'; ?>
+                                                <?php if ($store['reviews'] > 0): ?><span class="store-card-reviews" style="font-size:0.75rem; color:#64748b; font-weight:normal;">(<?php echo (int)$store['reviews']; ?>)</span><?php endif; ?>
+                                            </span>
+                                        </div>
+                                        
+                                        <div class="store-card-summary">
+                                            <?php echo htmlspecialchars($store['summary']); ?>
+                                        </div>
+                                        
+                                        <div class="panda-card-footer-line">
+                                            <span class="panda-card-city"><i class="fas fa-location-dot"></i> <?php echo htmlspecialchars($city_label); ?></span>
+                                            <strong class="panda-card-price-text"><?php echo htmlspecialchars($price); ?></strong>
+                                        </div>
+                                    </div>
+                                </a>
+                            <?php endforeach; ?>
+                        </div>
+                        <div class="market-pagination">
+                            <div class="market-pagination-note" id="marketPaginationNote">Showing all stores.</div>
+                            <button type="button" class="market-btn-soft" id="marketLoadMoreBtn">Show more stores</button>
+                        </div>
+                    </section>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // Intercept guest order/reserve button clicks
+    const guestCtaBtns = document.querySelectorAll('.guest-cta-btn');
+    guestCtaBtns.forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            window.location.href = 'login.php';
+        });
+    });
+
+    // Auto-initialize Foodpanda Leaflet Pick-up Map for Nearby Stores
+    const pickupMapElement = document.getElementById('pickupLeafletMap');
+    let pickupLeafletMap = null;
+
+    if (pickupMapElement && typeof L !== 'undefined') {
+        setTimeout(function() {
+            pickupLeafletMap = L.map('pickupLeafletMap').setView([14.3294, 120.9367], 12);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(pickupLeafletMap);
+
+            const storeIcon = L.divIcon({
+                className: 'pickup-leaflet-marker',
+                html: '<div style="background:#b3261e; color:#fff; width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; border:2px solid #fff; box-shadow:0 4px 12px rgba(0,0,0,0.3); font-size:15px;"><i class="fas fa-location-dot"></i></div>',
+                iconSize: [34, 34],
+                iconAnchor: [17, 34],
+                popupAnchor: [0, -34]
+            });
+
+            const rowsList = Array.from(document.querySelectorAll('.market-store-row'));
+            const bounds = [];
+
+            rowsList.forEach(row => {
+                const lat = parseFloat(row.dataset.lat || '');
+                const lng = parseFloat(row.dataset.lng || '');
+                const storeTitle = row.querySelector('.market-store-row-title')?.textContent.trim() || 'Lechon Branch';
+                const storeLink = row.dataset.href || 'menu.php';
+
+                if (Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0) {
+                    bounds.push([lat, lng]);
+                    const marker = L.marker([lat, lng], { icon: storeIcon }).addTo(pickupLeafletMap);
+                    marker.bindPopup(`
+                        <div style="font-family:'Outfit',sans-serif; padding:4px;">
+                            <strong style="font-size:14px; color:#2a211d;">${storeTitle}</strong>
+                            <div style="font-size:12px; color:#667085; margin:4px 0 8px 0;">Pickup Branch Available</div>
+                            <a href="${storeLink}" style="background:#b3261e; color:#fff; padding:6px 12px; border-radius:6px; font-size:12px; font-weight:700; text-decoration:none; display:inline-block;">View Menu & Order</a>
+                        </div>
+                    `);
+                }
+            });
+
+            if (bounds.length > 0) {
+                pickupLeafletMap.fitBounds(bounds, { padding: [40, 40] });
+            }
+            pickupLeafletMap.invalidateSize();
+        }, 150);
+    }
+
+    if (window.location.search.includes('type=pickup')) {
+        const filterBranchOnly = document.getElementById('filterBranchOnly');
+        if (filterBranchOnly && !filterBranchOnly.checked) {
+            filterBranchOnly.checked = true;
+        }
+    }
+
+    const heroSearch = document.getElementById('heroStoreSearch');
+    const gridSearch = document.getElementById('gridStoreSearch');
+    const headerSearch = document.getElementById('marketHeaderSearch');
+    const storeGrid = document.getElementById('marketStoreGrid');
+    const rows = Array.from(document.querySelectorAll('.market-store-row'));
+    const visibleCount = document.getElementById('visibleStoreCount');
+    const paginationNote = document.getElementById('marketPaginationNote');
+    const loadMoreButton = document.getElementById('marketLoadMoreBtn');
+    const distanceSummary = document.getElementById('marketDistanceSummary');
+    const detectNearestButton = document.getElementById('detectNearestStores');
+    const detectNearestStatus = document.getElementById('nearestDetectStatus');
+    const sortInputs = Array.from(document.querySelectorAll('input[name="storeSort"]'));
+    const filterRatings4 = document.getElementById('filterRatings4');
+    const filterLiveOnly = document.getElementById('filterLiveOnly');
+    const filterPartnerOnly = document.getElementById('filterPartnerOnly');
+    const filterBranchOnly = document.getElementById('filterBranchOnly');
+    const filterNearbyOnly = document.getElementById('filterNearbyOnly');
+    const MARKET_SEARCH_ENDPOINT = 'api/search_marketplace.php';
+    const CLIENT_PAGE_SIZE = 24;
+    const SERVER_PAGE_SIZE = 120;
+    let currentSort = 'relevance';
+    let locationReady = false;
+    let displayLimit = CLIENT_PAGE_SIZE;
+    let paginationSignature = '';
+    let serverMatchedKeys = null;
+    let serverCriteriaSignature = '';
+    let pendingServerCriteriaSignature = '';
+    let serverTotalMatches = 0;
+    let serverNextOffset = 0;
+    let serverHasMore = false;
+    let serverIsLoading = false;
+    let serverSearchTimer = null;
+    let serverSearchController = null;
+    let canRevealMoreRows = false;
+    let canFetchMoreServerRows = false;
+    let lastFilterSource = null;
+    let lastAppliedState = null;
+
+    function normalizeSearch(value) {
+        let text = (value || '').toString().toLowerCase().trim();
+        try {
+            text = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        } catch (error) {
+            // Keep original text when normalize is unavailable.
+        }
+        return text.replace(/\s+/g, ' ');
+    }
+
+    function syncInputs(source, value) {
+        if (heroSearch && source !== heroSearch) heroSearch.value = value;
+        if (gridSearch && source !== gridSearch) gridSearch.value = value;
+        if (headerSearch && source !== headerSearch) headerSearch.value = value;
+    }
+
+    function shouldSearchServer(state) {
+        return state.query !== '' || state.rating4 || state.live || state.partner || state.branch;
+    }
+
+    function getCurrentSearchState(source) {
+        const rawQuery = ((source && source.value) || (headerSearch && headerSearch.value) || (heroSearch && heroSearch.value) || '').trim();
+        return {
+            rawQuery,
+            query: normalizeSearch(rawQuery),
+            rating4: !!(filterRatings4 && filterRatings4.checked),
+            live: !!(filterLiveOnly && filterLiveOnly.checked),
+            partner: !!(filterPartnerOnly && filterPartnerOnly.checked),
+            branch: !!(filterBranchOnly && filterBranchOnly.checked)
+        };
+    }
+
+    function buildServerCriteriaSignature(state) {
+        return JSON.stringify({
+            q: state.query || '',
+            r4: state.rating4 ? 1 : 0,
+            l: state.live ? 1 : 0,
+            p: state.partner ? 1 : 0,
+            b: state.branch ? 1 : 0
+        });
+    }
+
+    function buildPaginationSignature(state) {
+        return JSON.stringify({
+            criteria: buildServerCriteriaSignature(state),
+            nearby: !!(filterNearbyOnly && filterNearbyOnly.checked),
+            nearby_ready: !!(filterNearbyOnly && filterNearbyOnly.checked && locationReady)
+        });
+    }
+
+    function formatCount(value) {
+        const parsed = parseInt(value, 10);
+        return Number.isFinite(parsed) ? parsed.toLocaleString() : '0';
+    }
+
+    function abortPendingServerSearch() {
+        if (serverSearchTimer) {
+            clearTimeout(serverSearchTimer);
+            serverSearchTimer = null;
+        }
+        if (serverSearchController) {
+            serverSearchController.abort();
+            serverSearchController = null;
+        }
+        serverIsLoading = false;
+    }
+
+    function resetServerMatches() {
+        serverMatchedKeys = null;
+        serverCriteriaSignature = '';
+        pendingServerCriteriaSignature = '';
+        serverTotalMatches = 0;
+        serverNextOffset = 0;
+        serverHasMore = false;
+        abortPendingServerSearch();
+    }
+
+    async function fetchServerResults(state, source, criteriaSignature, append) {
+        if (serverIsLoading) return;
+        if (append && !serverHasMore) return;
+
+        serverIsLoading = true;
+        if (!append) {
+            serverMatchedKeys = null;
+            serverCriteriaSignature = '';
+            serverTotalMatches = 0;
+            serverNextOffset = 0;
+            serverHasMore = false;
+        }
+
+        const params = new URLSearchParams();
+        if (state.query !== '') params.set('search', state.rawQuery);
+        if (state.rating4) params.set('rating4', '1');
+        if (state.live) params.set('live', '1');
+        if (state.partner) params.set('partner', '1');
+        if (state.branch) params.set('branch', '1');
+        params.set('offset', append ? String(serverNextOffset) : '0');
+        params.set('limit', String(SERVER_PAGE_SIZE));
+
+        const controller = new AbortController();
+        serverSearchController = controller;
+
+        try {
+            const response = await fetch(MARKET_SEARCH_ENDPOINT + '?' + params.toString(), {
+                method: 'GET',
+                headers: { 'Accept': 'application/json' },
+                signal: controller.signal
+            });
+
+            if (!response.ok) {
+                throw new Error('Search endpoint request failed');
+            }
+
+            const payload = await response.json();
+            if (!append && pendingServerCriteriaSignature !== criteriaSignature) {
+                return;
+            }
+            if (append && serverCriteriaSignature !== criteriaSignature) {
+                return;
+            }
+
+            const keys = Array.isArray(payload.store_keys) ? payload.store_keys : [];
+            if (!append || !(serverMatchedKeys instanceof Set)) {
+                serverMatchedKeys = new Set();
+            }
+
+            keys.forEach(function (value) {
+                const key = String(value || '');
+                if (key !== '') serverMatchedKeys.add(key);
+            });
+
+            const payloadTotal = parseInt(payload.total_matches, 10);
+            serverTotalMatches = Number.isFinite(payloadTotal) ? Math.max(0, payloadTotal) : serverMatchedKeys.size;
+
+            const payloadNextOffset = payload.next_offset;
+            if (payloadNextOffset === null || payloadNextOffset === undefined || payloadNextOffset === '') {
+                serverNextOffset = serverMatchedKeys.size;
+            } else {
+                const nextValue = parseInt(payloadNextOffset, 10);
+                serverNextOffset = Number.isFinite(nextValue) ? Math.max(0, nextValue) : serverMatchedKeys.size;
+            }
+            serverHasMore = !!payload.has_more;
+            serverCriteriaSignature = criteriaSignature;
+            pendingServerCriteriaSignature = criteriaSignature;
+        } catch (error) {
+            if (!error || error.name !== 'AbortError') {
+                if (!append) {
+                    serverMatchedKeys = null;
+                    serverCriteriaSignature = '';
+                    serverTotalMatches = 0;
+                    serverNextOffset = 0;
+                    serverHasMore = false;
+                }
+            }
+        } finally {
+            if (serverSearchController === controller) {
+                serverSearchController = null;
+            }
+            serverIsLoading = false;
+            applyFilters(source || lastFilterSource || heroSearch || gridSearch || headerSearch, {
+                skipServerRequest: true,
+                preservePagination: true
+            });
+        }
+    }
+
+    function queueServerSearch(state, source) {
+        if (!shouldSearchServer(state)) {
+            resetServerMatches();
+            return;
+        }
+
+        const criteriaSignature = buildServerCriteriaSignature(state);
+        if (criteriaSignature === serverCriteriaSignature && serverMatchedKeys instanceof Set) {
+            return;
+        }
+        if (criteriaSignature === pendingServerCriteriaSignature && (serverSearchTimer !== null || serverIsLoading)) {
+            return;
+        }
+        pendingServerCriteriaSignature = criteriaSignature;
+
+        if (criteriaSignature !== serverCriteriaSignature) {
+            serverMatchedKeys = null;
+            serverCriteriaSignature = '';
+            serverTotalMatches = 0;
+            serverNextOffset = 0;
+            serverHasMore = false;
+        }
+        abortPendingServerSearch();
+
+        serverSearchTimer = window.setTimeout(async function () {
+            serverSearchTimer = null;
+            await fetchServerResults(state, source, criteriaSignature, false);
+        }, 220);
+    }
+
+    function toRadians(value) {
+        return value * (Math.PI / 180);
+    }
+
+    function haversineKm(lat1, lng1, lat2, lng2) {
+        const earthRadiusKm = 6371;
+        const dLat = toRadians(lat2 - lat1);
+        const dLng = toRadians(lng2 - lng1);
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) *
+            Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return earthRadiusKm * c;
+    }
+
+    function getSortValue(row, key) {
+        if (key === 'distance' || key === 'fastest') {
+            const distance = parseFloat(row.dataset.distance || '');
+            return Number.isFinite(distance) ? distance : Number.POSITIVE_INFINITY;
+        }
+        if (key === 'top_rated') {
+            return -((parseFloat(row.dataset.rating || '0') * 100) + parseInt(row.dataset.reviews || '0', 10));
+        }
+        return parseInt(row.dataset.index || '0', 10);
+    }
+
+    function sortRows() {
+        if (!storeGrid) return;
+        if ((currentSort === 'distance' || currentSort === 'fastest') && !locationReady) {
+            if (detectNearestStatus) detectNearestStatus.textContent = 'Enable location first to sort by distance or fastest delivery.';
+        }
+        const sorted = [...rows].sort(function (left, right) {
+            if (currentSort === 'top_rated') {
+                return getSortValue(left, 'top_rated') - getSortValue(right, 'top_rated');
+            }
+            if (currentSort === 'fastest') {
+                const leftMinutes = parseFloat(left.dataset.minutes || '');
+                const rightMinutes = parseFloat(right.dataset.minutes || '');
+                const leftValue = Number.isFinite(leftMinutes) ? leftMinutes : getSortValue(left, 'distance');
+                const rightValue = Number.isFinite(rightMinutes) ? rightMinutes : getSortValue(right, 'distance');
+                return leftValue - rightValue;
+            }
+            if (currentSort === 'distance') {
+                return getSortValue(left, 'distance') - getSortValue(right, 'distance');
+            }
+            return getSortValue(left, 'relevance') - getSortValue(right, 'relevance');
+        });
+        sorted.forEach(function (row) { storeGrid.appendChild(row); });
+    }
+
+    function updatePaginationUi(shownCount, matchedCount, shouldUseServerResults, useServerMatches) {
+        const pendingServerLookup = shouldUseServerResults && !useServerMatches && (serverSearchTimer !== null || serverIsLoading);
+
+        if (paginationNote) {
+            if (pendingServerLookup) {
+                paginationNote.textContent = 'Finding matching stores...';
+            } else if (matchedCount <= 0) {
+                paginationNote.textContent = 'No stores matched your current filters.';
+            } else if (shownCount < matchedCount) {
+                paginationNote.textContent = 'Showing ' + formatCount(shownCount) + ' of ' + formatCount(matchedCount) + ' matching stores.';
+            } else {
+                paginationNote.textContent = 'Showing all ' + formatCount(matchedCount) + ' matching stores.';
+            }
+        }
+
+        if (!loadMoreButton) return;
+        const hasMoreActions = canRevealMoreRows || canFetchMoreServerRows;
+        loadMoreButton.hidden = !hasMoreActions && !serverIsLoading;
+        loadMoreButton.disabled = serverIsLoading || (!canRevealMoreRows && !canFetchMoreServerRows);
+        if (serverIsLoading) {
+            loadMoreButton.textContent = 'Loading stores...';
+        } else if (canFetchMoreServerRows) {
+            loadMoreButton.textContent = 'Load more results';
+        } else {
+            loadMoreButton.textContent = 'Show more stores';
+        }
+    }
+
+    function applyFilters(source, options) {
+        const config = options || {};
+        const state = getCurrentSearchState(source);
+        lastFilterSource = source || heroSearch || gridSearch || headerSearch;
+        lastAppliedState = state;
+        const rawQuery = state.rawQuery;
+        const query = state.query;
+        const criteriaSignature = buildServerCriteriaSignature(state);
+        const shouldUseServerResults = shouldSearchServer(state);
+        const nextPaginationSignature = buildPaginationSignature(state);
+
+        if (paginationSignature === '') {
+            paginationSignature = nextPaginationSignature;
+        } else if (!config.preservePagination && paginationSignature !== nextPaginationSignature) {
+            displayLimit = CLIENT_PAGE_SIZE;
+            paginationSignature = nextPaginationSignature;
+        }
+
+        if (!config.skipServerRequest) {
+            queueServerSearch(state, lastFilterSource);
+        }
+
+        syncInputs(source, rawQuery);
+        const useServerMatches = shouldUseServerResults && serverMatchedKeys instanceof Set && serverCriteriaSignature === criteriaSignature;
+        const orderedRows = storeGrid ? Array.from(storeGrid.querySelectorAll('.market-store-row')) : rows;
+        const matchedRows = [];
+
+        orderedRows.forEach(function (row) {
+            const search = normalizeSearch(row.dataset.search || '');
+            const rating = parseFloat(row.dataset.rating || '0');
+            const isOpen = row.dataset.open === '1';
+            const isBranch = row.dataset.type === 'branch';
+            const isPartner = row.dataset.type !== 'branch';
+            const distance = parseFloat(row.dataset.distance || '');
+            const rowKey = String(row.dataset.storeKey || '');
+            const matchQuery = useServerMatches ? serverMatchedKeys.has(rowKey) : (query === '' || search.indexOf(query) !== -1);
+            const matchRatings = useServerMatches ? true : (!filterRatings4 || !filterRatings4.checked || rating >= 4);
+            const matchLive = useServerMatches ? true : (!filterLiveOnly || !filterLiveOnly.checked || isOpen);
+            const matchPartner = useServerMatches ? true : (!filterPartnerOnly || !filterPartnerOnly.checked || isPartner);
+            const matchBranch = useServerMatches ? true : (!filterBranchOnly || !filterBranchOnly.checked || isBranch);
+            const matchNearby = !filterNearbyOnly || !filterNearbyOnly.checked || (locationReady && Number.isFinite(distance) && distance <= 35);
+            if (matchQuery && matchRatings && matchLive && matchPartner && matchBranch && matchNearby) {
+                matchedRows.push(row);
+            }
+        });
+
+        rows.forEach(function (row) { row.classList.add('is-hidden'); });
+        const shownRows = matchedRows.slice(0, displayLimit);
+        shownRows.forEach(function (row) { row.classList.remove('is-hidden'); });
+
+        const shownCount = shownRows.length;
+        const matchedCount = useServerMatches && serverTotalMatches > 0 ? serverTotalMatches : matchedRows.length;
+        canRevealMoreRows = matchedRows.length > shownCount;
+        canFetchMoreServerRows = useServerMatches && !canRevealMoreRows && serverHasMore;
+
+        if (visibleCount) visibleCount.textContent = formatCount(shownCount);
+        updatePaginationUi(shownCount, matchedCount, shouldUseServerResults, useServerMatches);
+    }
+
+    function updateNearest(lat, lng) {
+        let nearestName = '';
+        let nearestDistance = Number.POSITIVE_INFINITY;
+
+        rows.forEach(function (row) {
+            const storeLat = parseFloat(row.dataset.lat || '');
+            const storeLng = parseFloat(row.dataset.lng || '');
+            const timeLabel = row.querySelector('[data-role="time-label"]');
+
+            if (!Number.isFinite(storeLat) || !Number.isFinite(storeLng)) {
+                row.dataset.distance = '';
+                row.dataset.minutes = '';
+                if (timeLabel) timeLabel.textContent = row.dataset.open === '1' ? 'Open now' : 'Closed now';
+                return;
+            }
+
+            const distanceKm = haversineKm(lat, lng, storeLat, storeLng);
+            const minutes = Math.max(5, Math.round((distanceKm * 4.2) + 6));
+            row.dataset.distance = distanceKm.toFixed(2);
+            row.dataset.minutes = minutes.toString();
+
+            if (timeLabel) {
+                timeLabel.textContent = distanceKm.toFixed(1) + ' km | ' + minutes + ' min';
+            }
+
+            if (distanceKm < nearestDistance) {
+                nearestDistance = distanceKm;
+                nearestName = row.querySelector('h3') ? row.querySelector('h3').textContent.trim() : '';
+            }
+        });
+
+        locationReady = true;
+        if (detectNearestStatus) detectNearestStatus.textContent = 'Location detected. Stores can now be sorted by fastest delivery or distance.';
+        if (distanceSummary) {
+            distanceSummary.textContent = nearestName !== ''
+                ? 'Nearest detected shop: ' + nearestName + ' at about ' + nearestDistance.toFixed(1) + ' km from your current location.'
+                : 'Location detected, but no stores with saved coordinates were found.';
+        }
+
+        currentSort = 'distance';
+        sortInputs.forEach(function (input) {
+            input.checked = input.value === 'distance';
+        });
+        sortRows();
+        applyFilters(heroSearch || gridSearch, { preservePagination: true });
+    }
+
+    if (heroSearch) heroSearch.addEventListener('input', function () { applyFilters(heroSearch); });
+    if (gridSearch) gridSearch.addEventListener('input', function () { applyFilters(gridSearch); });
+    if (headerSearch) headerSearch.addEventListener('input', function () { applyFilters(headerSearch); });
+    sortInputs.forEach(function (input) {
+        input.addEventListener('change', function () {
+            currentSort = input.value;
+            sortRows();
+            applyFilters(heroSearch || gridSearch, { preservePagination: true });
+        });
+    });
+    [filterRatings4, filterLiveOnly, filterPartnerOnly, filterBranchOnly, filterNearbyOnly].forEach(function (control) {
+        if (!control) return;
+        control.addEventListener('change', function () {
+            if (control === filterNearbyOnly && filterNearbyOnly.checked && !locationReady) {
+                if (detectNearestStatus) detectNearestStatus.textContent = 'Nearby filter will start working after you allow location access.';
+                if (distanceSummary) distanceSummary.textContent = 'Use "Detect nearest shops" to filter the store list by real distance.';
+            }
+            applyFilters(heroSearch || gridSearch);
+        });
+    });
+    if (loadMoreButton) {
+        loadMoreButton.addEventListener('click', function () {
+            if (serverIsLoading) return;
+
+            if (canRevealMoreRows) {
+                displayLimit += CLIENT_PAGE_SIZE;
+                applyFilters(lastFilterSource || heroSearch || gridSearch || headerSearch, {
+                    skipServerRequest: true,
+                    preservePagination: true
+                });
+                return;
+            }
+
+            if (canFetchMoreServerRows && lastAppliedState) {
+                displayLimit += CLIENT_PAGE_SIZE;
+                fetchServerResults(
+                    lastAppliedState,
+                    lastFilterSource || heroSearch || gridSearch || headerSearch,
+                    buildServerCriteriaSignature(lastAppliedState),
+                    true
+                );
+            }
+        });
+    }
+    if (detectNearestButton) {
+        detectNearestButton.addEventListener('click', function () {
+            if (!navigator.geolocation) {
+                if (detectNearestStatus) detectNearestStatus.textContent = 'This browser does not support geolocation.';
+                if (distanceSummary) distanceSummary.textContent = 'Geolocation is unavailable, so nearest-shop detection could not run.';
+                return;
+            }
+
+            if (detectNearestStatus) detectNearestStatus.textContent = 'Detecting your current location...';
+            navigator.geolocation.getCurrentPosition(
+                function (position) {
+                    updateNearest(position.coords.latitude, position.coords.longitude);
+                },
+                function () {
+                    if (detectNearestStatus) detectNearestStatus.textContent = 'Location permission was denied. You can still browse and sort by rating.';
+                    if (distanceSummary) distanceSummary.textContent = 'Nearest Cavite-style sorting needs browser location access. Please allow location if you want true nearest results.';
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
+            );
+        });
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const initialSearch = params.get('search');
+    const initialSort = (params.get('sort') || '').trim().toLowerCase();
+    const initialRating4 = params.get('rating4') === '1';
+    const initialLive = params.get('live') === '1';
+    const initialPartner = params.get('partner') === '1';
+    const initialBranch = params.get('branch') === '1';
+    const initialNearby = params.get('nearby') === '1';
+
+    if (['relevance', 'fastest', 'distance', 'top_rated'].includes(initialSort)) {
+        currentSort = initialSort;
+        sortInputs.forEach(function (input) {
+            input.checked = input.value === initialSort;
+        });
+    }
+    if (filterRatings4) filterRatings4.checked = initialRating4;
+    if (filterLiveOnly) filterLiveOnly.checked = initialLive;
+    if (filterPartnerOnly) filterPartnerOnly.checked = initialPartner;
+    if (filterBranchOnly) filterBranchOnly.checked = initialBranch;
+    if (filterNearbyOnly) filterNearbyOnly.checked = initialNearby;
+
+    if (initialSearch) {
+        syncInputs(null, initialSearch);
+    }
+    if (initialNearby && !locationReady) {
+        if (detectNearestStatus) detectNearestStatus.textContent = 'Nearby filter is active. Allow location access to show nearby stores.';
+        if (distanceSummary) distanceSummary.textContent = 'Nearby filtering needs browser location access. Click "Detect nearest shops".';
+    }
+
+    sortRows();
+    applyFilters(heroSearch || gridSearch || headerSearch);
+
+    <?php if ($show_welcome): ?>
+    Swal.fire({
+        icon: 'success',
+        title: 'Welcome!',
+        html: '<p style="font-size:1.05rem;margin-bottom:10px;color:#2b2f3a;">Registration successful.</p><p style="font-size:.95rem;color:#667085;">You are now signed in as <strong><?php echo htmlspecialchars($user_email, ENT_QUOTES); ?></strong>.</p><p style="font-size:.9rem;color:#7a8395;margin-top:14px;">Explore the marketplace and start browsing stores.</p>',
+        confirmButtonColor: '#d81b60',
+        confirmButtonText: 'Explore now',
+        allowOutsideClick: false,
+        allowEscapeKey: false
+    });
+    <?php endif; ?>
+});
+</script>
+
+<!-- Landing Page Login & Signup Popup Modal Styles -->
+<style>
+.auth-popup-overlay { position:fixed; inset:0; background:rgba(15, 23, 42, 0.45); backdrop-filter:blur(10px); z-index:2000; display:flex; align-items:center; justify-content:center; padding:16px; opacity:0; visibility:hidden; transition: opacity 0.22s cubic-bezier(.22,1,.36,1), visibility 0.22s cubic-bezier(.22,1,.36,1); }
+.auth-popup-overlay.active { opacity:1; visibility:visible; }
+.auth-popup-card { background:#fff; border-radius:24px; box-shadow:0 30px 60px rgba(15,23,42,.18); width:min(460px,100%); max-height:92vh; display:flex; flex-direction:column; overflow:hidden; border:1px solid #efddcd; transform:translateY(20px) scale(0.96); transition:transform 0.28s cubic-bezier(.22,1,.36,1); position:relative; }
+.auth-popup-overlay.active .auth-popup-card { transform:translateY(0) scale(1); }
+.auth-popup-close { position:absolute; top:18px; right:20px; border:none; background:transparent; width:34px; height:34px; border-radius:10px; color:#667085; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; transition:all 0.22s; z-index:10; }
+.auth-popup-close:hover { background:#fff9f2; color:#171922; }
+.auth-popup-tabs { display:flex; border-bottom:1px solid #efddcd; padding:0 24px; background:#faf7f4; padding-top:10px; }
+.auth-popup-tab { appearance:none; border:none; background:transparent; font-weight:800; font-size:.95rem; color:#667085; padding:18px 12px; border-bottom:3px solid transparent; cursor:pointer; transition:all 0.22s; }
+.auth-popup-tab:hover { color:#171922; }
+.auth-popup-tab.active { color:#b3261e; border-bottom-color:#b3261e; }
+.auth-popup-content { padding:28px 24px; overflow-x:hidden; overflow-y:auto; position:relative; }
+.auth-popup-pane { display:none; opacity:0; transform:translateX(20px); }
+.auth-popup-pane.active { display:block; animation: authPaneSlideFast 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+@keyframes authPaneSlideFast {
+    0% { opacity: 0; transform: translateX(22px); }
+    100% { opacity: 1; transform: translateX(0); }
+}
+
+.auth-popup-form .form-group { display:grid; gap:6px; margin-bottom:16px; }
+.auth-popup-form .form-group label { font-size:.88rem; font-weight:700; color:#171922; text-align: left; }
+.auth-popup-form .input-wrap { position:relative !important; width:100% !important; display:flex !important; align-items:center !important; }
+.auth-popup-form .input-wrap > i { position:absolute !important; left:14px !important; top:50% !important; transform:translateY(-50%) !important; color:#667085 !important; font-size:1rem !important; pointer-events:none !important; z-index:2 !important; }
+.auth-popup-form .form-control { width:100% !important; min-height:46px !important; border-radius:12px !important; border:1px solid #efddcd !important; padding:0 46px 0 42px !important; outline:none !important; font-family:inherit !important; font-size:.9rem !important; transition:all 0.22s !important; background:#fcf9f6 !important; }
+.auth-popup-form .form-control:focus { border-color:#b3261e !important; box-shadow:0 0 0 3px rgba(179,38,30,0.12) !important; background:#fff !important; }
+.auth-popup-form .toggle-password { position:absolute !important; right:12px !important; top:50% !important; transform:translateY(-50%) !important; border:none !important; background:transparent !important; color:#667085 !important; cursor:pointer !important; padding:6px 8px !important; font-size:1rem !important; z-index:5 !important; display:inline-flex !important; align-items:center !important; justify-content:center !important; }
+.auth-popup-form .toggle-password:hover { color:#b3261e !important; }
+.auth-popup-form .password-field { padding-right:46px !important; }
+.auth-popup-form .remember-forgot { display:flex; justify-content:space-between; align-items:center; font-size:.84rem; margin-bottom:20px; }
+.auth-popup-form .remember-label { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-weight:600; color:#667085; }
+.auth-popup-form .forgot-link { color:#b3261e; text-decoration:none; font-weight:700; }
+.auth-popup-form .forgot-link:hover { text-decoration:underline; }
+.auth-popup-form .btn-submit { width:100%; min-height:48px; border-radius:12px; border:none; background:#b3261e; color:#fff; font-weight:800; font-size:.94rem; display:inline-flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; transition:all 0.22s; box-shadow:0 10px 24px rgba(179,38,30,.2); }
+.auth-popup-form .btn-submit:hover { background:#8f261a; transform:translateY(-1px); }
+.auth-popup-form .auth-link { margin-top:20px; font-size:.86rem; color:#667085; text-align: center; }
+.auth-popup-form .auth-link a { color:#b3261e; text-decoration:none; font-weight:700; }
+.auth-popup-form .auth-link a:hover { text-decoration:underline; }
+
+.reg-choice-grid { display:grid; gap:16px; margin-top:4px; }
+.reg-choice-card { display:flex; gap:16px; align-items:center; border:1px solid #efddcd; border-radius:16px; padding:18px; text-decoration:none; color:inherit; transition:all 0.22s; background:#fcf9f6; text-align: left; }
+.reg-choice-card:hover { border-color:#b3261e; background:#fff5e9; transform:translateY(-2px); box-shadow:0 12px 30px rgba(15,23,42,.1); }
+.reg-choice-icon { width:48px; height:48px; border-radius:12px; background:rgba(179,38,30,0.08); color:#b3261e; display:inline-flex; align-items:center; justify-content:center; font-size:1.3rem; flex-shrink:0; }
+.reg-choice-info { display:grid; gap:2px; }
+.reg-choice-title { font-weight:800; font-size:1.02rem; color:#171922; }
+.reg-choice-desc { font-size:.82rem; color:#667085; line-height:1.3; }
+</style>
+
+<!-- Landing Page Login & Signup Popup Modal Markup -->
+<div class="auth-popup-overlay" id="authPopupOverlay">
+    <div class="auth-popup-card">
+        <button type="button" class="auth-popup-close" id="authPopupClose" aria-label="Close modal">
+            <i class="fas fa-times"></i>
+        </button>
+        
+        <div class="auth-popup-tabs">
+            <button type="button" class="auth-popup-tab active" data-auth-tab="login">Sign In</button>
+            <button type="button" class="auth-popup-tab" data-auth-tab="register">Create Account</button>
+        </div>
+        
+        <div class="auth-popup-content">
+            <!-- Login Pane -->
+            <div class="auth-popup-pane active" id="authPaneLogin">
+                <form class="auth-popup-form" id="popupLoginForm" novalidate>
+                    <div class="form-group">
+                        <label for="popupEmail">Email Address</label>
+                        <div class="input-wrap">
+                            <i class="fas fa-envelope"></i>
+                            <input type="email" id="popupEmail" name="email" class="form-control" placeholder="Enter your email address" required autocomplete="email">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="popupPassword">Password</label>
+                        <div class="input-wrap">
+                            <i class="fas fa-lock"></i>
+                            <input type="password" id="popupPassword" name="password" class="form-control password-field" placeholder="Enter your password" required autocomplete="current-password">
+                            <button type="button" class="toggle-password" id="popupTogglePassword" aria-label="Toggle password visibility">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="remember-forgot">
+                        <label class="remember-label">
+                            <input type="checkbox" name="remember" id="popupRememberMe" value="1">
+                            <span>Remember me</span>
+                        </label>
+                        <a href="javascript:void(0);" class="forgot-link" id="popupSwitchToForgot">Forgot password?</a>
+                    </div>
+                    
+                    <button type="submit" class="btn-submit" id="popupLoginBtn">
+                        <i class="fas fa-sign-in-alt"></i>
+                        <span>Sign In</span>
+                    </button>
+                    
+                    <div class="auth-link">
+                        Don't have an account? 
+                        <a href="javascript:void(0);" id="popupSwitchToRegister">Create an account</a>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Register Pane -->
+            <div class="auth-popup-pane" id="authPaneRegister">
+                <div class="reg-choice-grid" style="grid-template-columns: 1fr;">
+                    <a href="register.php?account_type=individual" class="reg-choice-card">
+                        <div class="reg-choice-icon">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <div class="reg-choice-info">
+                            <span class="reg-choice-title">Individual Customer</span>
+                            <span class="reg-choice-desc">Order delicious lechon dishes, rate food, track deliveries, and manage your account.</span>
+                        </div>
+                    </a>
+                </div>
+                <div class="auth-popup-form" style="margin-top: 10px;">
+                    <div class="auth-link">
+                        Already have an account? 
+                        <a href="javascript:void(0);" id="popupSwitchToLogin">Sign in</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Forgot Password Pane -->
+            <div class="auth-popup-pane" id="authPaneForgot">
+                <form class="auth-popup-form" id="popupForgotForm" novalidate style="margin-top: 10px;">
+                    <input type="hidden" name="ajax" value="true">
+                    <div id="popupForgotAlert" class="auth-popup-alert" style="display:none; margin-bottom:15px; padding:12px 16px; border-radius:8px; font-size:.88rem; font-weight:600; line-height:1.4;"></div>
+
+                    <div class="form-group">
+                        <label for="popupForgotEmail">Email Address</label>
+                        <div class="input-wrap">
+                            <i class="fas fa-envelope"></i>
+                            <input type="email" id="popupForgotEmail" name="email" class="form-control" placeholder="Enter your email address" required autocomplete="email">
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn-submit" id="popupForgotBtn" style="margin-top: 10px;">
+                        <i class="fas fa-paper-plane"></i>
+                        <span>Send Reset Link</span>
+                    </button>
+
+                    <div class="auth-link">
+                        <a href="javascript:void(0);" id="popupForgotBackToLogin"><i class="fas fa-arrow-left"></i> Back to Sign In</a>
+                    </div>
+                </form>
             </div>
         </div>
-
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const authOverlay = document.getElementById('authPopupOverlay');
+    const authClose = document.getElementById('authPopupClose');
+    const togglePasswordBtn = document.getElementById('popupTogglePassword');
+    const passwordInput = document.getElementById('popupPassword');
+    const popupLoginForm = document.getElementById('popupLoginForm');
+    const authTabs = document.querySelectorAll('[data-auth-tab]');
+    const authPanes = document.querySelectorAll('.auth-popup-pane');
+    
+    function switchAuthTab(tabName) {
+        authTabs.forEach(tab => {
+            if (tab.dataset.authTab === tabName) {
+                tab.classList.add('active');
+            } else {
+                tab.classList.remove('active');
+            }
+        });
+        
+        authPanes.forEach(pane => {
+            if (pane.id === 'authPane' + tabName.charAt(0).toUpperCase() + tabName.slice(1)) {
+                pane.classList.add('active');
+            } else {
+                pane.classList.remove('active');
+            }
+        });
+    }
+
+    authTabs.forEach(tab => {
+        tab.addEventListener('click', function() {
+            switchAuthTab(this.dataset.authTab);
+        });
+    });
+
+    const switchToRegisterLink = document.getElementById('popupSwitchToRegister');
+    if (switchToRegisterLink) {
+        switchToRegisterLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            switchAuthTab('register');
+        });
+    }
+
+    const switchToLoginLink = document.getElementById('popupSwitchToLogin');
+    if (switchToLoginLink) {
+        switchToLoginLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            switchAuthTab('login');
+        });
+    }
+
+    const switchToForgotLink = document.getElementById('popupSwitchToForgot');
+    const popupForgotEmailInput = document.getElementById('popupForgotEmail');
+    const popupEmailInput = document.getElementById('popupEmail');
+
+    if (switchToForgotLink) {
+        switchToForgotLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            if (popupEmailInput && popupEmailInput.value && popupForgotEmailInput) {
+                popupForgotEmailInput.value = popupEmailInput.value.trim();
+            }
+            switchAuthTab('forgot');
+        });
+    }
+
+    const popupForgotBackToLogin = document.getElementById('popupForgotBackToLogin');
+    if (popupForgotBackToLogin) {
+        popupForgotBackToLogin.addEventListener('click', function(e) {
+            e.preventDefault();
+            switchAuthTab('login');
+        });
+    }
+
+    const popupForgotForm = document.getElementById('popupForgotForm');
+    const popupForgotBtn = document.getElementById('popupForgotBtn');
+    const popupForgotAlert = document.getElementById('popupForgotAlert');
+
+    if (popupForgotForm) {
+        popupForgotForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const email = popupForgotEmailInput ? popupForgotEmailInput.value.trim() : '';
+            if (!email) return;
+
+            if (popupForgotBtn) {
+                popupForgotBtn.disabled = true;
+                popupForgotBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> <span>Sending Link...</span>';
+            }
+            if (popupForgotAlert) popupForgotAlert.style.display = 'none';
+
+            try {
+                const formData = new FormData(popupForgotForm);
+                const res = await fetch('reset_password_request.php', {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    body: formData
+                });
+                const data = await res.json();
+                if (data.success) {
+                    if (popupForgotAlert) {
+                        popupForgotAlert.style.background = '#E8F5E9';
+                        popupForgotAlert.style.borderLeft = '4px solid #4CAF50';
+                        popupForgotAlert.style.color = '#2E7D32';
+                        popupForgotAlert.innerHTML = '<i class="fas fa-check-circle"></i> ' + (data.message || 'Password reset link sent! Check your inbox.');
+                        popupForgotAlert.style.display = 'block';
+                    }
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Reset Link Sent',
+                            text: data.message || 'Check your email inbox for password reset instructions.',
+                            confirmButtonColor: '#b3261e'
+                        });
+                    }
+                } else {
+                    if (popupForgotAlert) {
+                        popupForgotAlert.style.background = '#FFEBEE';
+                        popupForgotAlert.style.borderLeft = '4px solid #F44336';
+                        popupForgotAlert.style.color = '#b3261e';
+                        popupForgotAlert.innerHTML = '<i class="fas fa-exclamation-circle"></i> ' + (data.message || 'Error processing request.');
+                        popupForgotAlert.style.display = 'block';
+                    }
+                }
+            } catch (err) {
+                if (popupForgotAlert) {
+                    popupForgotAlert.style.background = '#FFEBEE';
+                    popupForgotAlert.style.borderLeft = '4px solid #F44336';
+                    popupForgotAlert.style.color = '#b3261e';
+                    popupForgotAlert.innerHTML = '<i class="fas fa-exclamation-circle"></i> An unexpected error occurred. Please try again.';
+                    popupForgotAlert.style.display = 'block';
+                }
+            } finally {
+                if (popupForgotBtn) {
+                    popupForgotBtn.disabled = false;
+                    popupForgotBtn.innerHTML = '<i class="fas fa-paper-plane"></i> <span>Send Reset Link</span>';
+                }
+            }
+        });
+    }
+    
+    
+    
+    if (authClose) {
+        authClose.addEventListener('click', function() {
+            if (authOverlay) authOverlay.classList.remove('active');
+        });
+    }
+    
+    if (authOverlay) {
+        authOverlay.addEventListener('click', function(e) {
+            if (e.target === authOverlay) {
+                authOverlay.classList.remove('active');
+            }
+        });
+    }
+    
+    if (togglePasswordBtn && passwordInput) {
+        togglePasswordBtn.addEventListener('click', function() {
+            const isPassword = passwordInput.type === 'password';
+            passwordInput.type = isPassword ? 'text' : 'password';
+            const icon = this.querySelector('i');
+            if (icon) {
+                icon.className = isPassword ? 'fas fa-eye-slash' : 'fas fa-eye';
+            }
+        });
+    }
+    
+    if (popupLoginForm) {
+        popupLoginForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const emailInput = document.getElementById('popupEmail');
+            const submitBtn = document.getElementById('popupLoginBtn');
+            
+            const email = emailInput.value.trim();
+            const password = passwordInput.value;
+            const remember = document.getElementById('popupRememberMe').checked;
+            
+            if (!email || !password) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Missing Information',
+                    text: 'Please enter both email and password.',
+                    confirmButtonColor: '#b3261e'
+                });
+                return;
+            }
+            
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                const span = submitBtn.querySelector('span');
+                if (span) span.textContent = 'Signing in...';
+            }
+            
+            const formData = new FormData();
+            formData.append('login', 'true');
+            formData.append('ajax', 'true');
+            formData.append('email', email);
+            formData.append('password', password);
+            if (remember) formData.append('remember', '1');
+            
+            fetch('login.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.text())
+            .then(data => {
+                try {
+                    const json = JSON.parse(data);
+                    if (json.success) {
+                        window.location.reload();
+                        return;
+                    }
+                } catch(e) {}
+                
+                if (data.includes('alert-error') || data.includes('Invalid email or password')) {
+                    const errorMatch = data.match(/alert-error.*?<div>(.*?)<\/div>/s);
+                    const errMsg = errorMatch ? errorMatch[1].trim() : 'Invalid email or password';
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Sign In Failed',
+                        text: errMsg,
+                        confirmButtonColor: '#b3261e'
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'An unexpected error occurred. Please try again.',
+                        confirmButtonColor: '#b3261e'
+                    });
+                }
+                
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    const span = submitBtn.querySelector('span');
+                    if (span) span.textContent = 'Sign In';
+                }
+            })
+            .catch(err => {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Connection Error',
+                    text: 'Could not connect to authentication server.',
+                    confirmButtonColor: '#b3261e'
+                });
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    const span = submitBtn.querySelector('span');
+                    if (span) span.textContent = 'Sign In';
+                }
+            });
+        });
+    }
+});
+</script>
+<?php include 'includes/footer.php'; ?>
+
+
 @endsection

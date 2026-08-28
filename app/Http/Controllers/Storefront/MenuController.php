@@ -12,109 +12,38 @@ class MenuController extends Controller
 {
     public function index(Request $request)
     {
-        $sellerId = $request->query('seller_id', session('storefront_seller_id', 0));
-        $branchId = $request->query('branch_id', $request->query('store_id', 0));
+        require_once base_path('includes/config.php');
+        require_once base_path('includes/favorites_helper.php');
+        require_once base_path('includes/delivery_pricing_helper.php');
+        require_once base_path('includes/partner_dashboard_helper.php');
 
-        $storeLocations = StoreLocation::where('is_active', true)->get();
-        $selectedStore = null;
+        global $conn;
 
-        if ($branchId > 0) {
-            $selectedStore = StoreLocation::where('store_id', $branchId)->first();
-        } elseif ($sellerId > 0) {
-            $seller = User::find($sellerId);
-            if ($seller) {
-                $selectedStore = (object)[
-                    'id' => $seller->id,
-                    'store_id' => $seller->id,
-                    'store_name' => $seller->business_name ?: $seller->full_name . ' Store',
-                    'address' => $seller->address ?? 'Cavite',
-                    'city' => 'Cavite',
-                    'phone' => $seller->phone ?? '',
-                    'rating' => 4.9,
-                    'reviews' => 42,
-                ];
-            }
+        $current_page = 'menu';
+        $page_title = "Menu & Order | Lechon Delights";
+
+        $scoped_partner_seller_id = 0;
+        if (auth()->check()) {
+            $_SESSION['user_id'] = auth()->id();
+            $_SESSION['full_name'] = auth()->user()->full_name;
+            $_SESSION['email'] = auth()->user()->email;
+            $_SESSION['user_type'] = auth()->user()->user_type;
+            $_SESSION['address'] = auth()->user()->address ?? '';
         }
 
-        if (!$selectedStore && $storeLocations->isNotEmpty()) {
-            $selectedStore = $storeLocations->first();
+        $requested_seller_id = (int)$request->query('seller_id', session('storefront_seller_id', 0));
+        $requested_branch_id = (int)$request->query('branch_id', $request->query('store_id', 0));
+
+        if ($requested_seller_id > 0) {
+            $_SESSION['storefront_seller_id'] = $requested_seller_id;
         }
-
-        // Fetch products
-        $productsQuery = Product::where('is_active', true)->where('is_archived', false);
-        if ($sellerId > 0) {
-            $productsQuery->where('seller_id', $sellerId);
-        }
-
-        $allProducts = $productsQuery->orderBy('category')->orderBy('name')->get();
-
-        $menuCategories = [];
-        $productDetails = [];
-
-        foreach ($allProducts as $p) {
-            $cat = $p->category ?: 'Signature Lechon';
-            if (!isset($menuCategories[$cat])) {
-                $menuCategories[$cat] = [];
-            }
-
-            // Parse sizes and addons
-            $sizes = ['Regular'];
-            $sizePrices = ['Regular' => (float)$p->price];
-            $weights = ['Regular' => $p->weight_info ?? '1kg'];
-            $goodFor = ['Regular' => $p->pax_info ?? '3-4 persons'];
-
-            if (!empty($p->sizes)) {
-                $parsedSizes = json_decode($p->sizes, true);
-                if (is_array($parsedSizes)) {
-                    $sizes = [];
-                    foreach ($parsedSizes as $sName => $sPrice) {
-                        $sizes[] = $sName;
-                        $sizePrices[$sName] = (float)$sPrice;
-                    }
-                }
-            }
-
-            $addons = [];
-            if (!empty($p->addons)) {
-                $parsedAddons = json_decode($p->addons, true);
-                if (is_array($parsedAddons)) {
-                    $addons = $parsedAddons;
-                }
-            }
-
-            $imageSrc = $p->image ? asset($p->image) : asset('images/menu/whole-lechon.jpg');
-
-            $itemData = [
-                'id' => $p->id,
-                'name' => $p->name,
-                'description' => $p->description ?? 'Freshly roasted Cavite lechon prepared with aromatic herbs and native spices.',
-                'price' => (float)$p->price,
-                'category' => $cat,
-                'image' => $imageSrc,
-                'sizes' => $sizes,
-                'size_prices' => $sizePrices,
-                'weights' => $weights,
-                'good_for' => $goodFor,
-                'addons' => $addons,
-                'stock' => (int)($p->stock ?? 10),
-                'avg_rating' => (float)($p->avg_rating > 0 ? $p->avg_rating : 4.9),
-                'review_count' => (int)($p->review_count ?: 18),
-            ];
-
-            $menuCategories[$cat][] = $itemData;
-            $productDetails[$p->id] = $itemData;
-        }
-
-        $cart = session()->get('cart', []);
-        $deliveryOption = session()->get('delivery_option', 'pickup');
 
         return view('storefront.menu', compact(
-            'menuCategories',
-            'productDetails',
-            'storeLocations',
-            'selectedStore',
-            'cart',
-            'deliveryOption'
+            'current_page',
+            'page_title',
+            'requested_seller_id',
+            'requested_branch_id',
+            'scoped_partner_seller_id'
         ));
     }
 
@@ -160,6 +89,7 @@ class MenuController extends Controller
         }
 
         session()->put('cart', $cart);
+        $_SESSION['cart'] = $cart;
 
         $subtotal = array_sum(array_map(fn($item) => $item['price'] * $item['quantity'], $cart));
 
@@ -193,6 +123,7 @@ class MenuController extends Controller
         }
 
         session()->put('cart', $cart);
+        $_SESSION['cart'] = $cart;
         $subtotal = array_sum(array_map(fn($item) => $item['price'] * $item['quantity'], $cart));
 
         return response()->json([
@@ -210,6 +141,7 @@ class MenuController extends Controller
 
         unset($cart[$request->product_id]);
         session()->put('cart', $cart);
+        $_SESSION['cart'] = $cart;
         $subtotal = array_sum(array_map(fn($item) => $item['price'] * $item['quantity'], $cart));
 
         return response()->json([
