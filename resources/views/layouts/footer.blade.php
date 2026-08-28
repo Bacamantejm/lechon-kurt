@@ -1,5 +1,7 @@
     <?php
-    require_once __DIR__ . '/legal_policy_content.php';
+    global $conn;
+    require_once base_path('includes/config.php');
+    require_once base_path('includes/legal_policy_content.php');
     $normalized_footer_user_type = strtolower(trim((string)($_SESSION['user_type'] ?? '')));
     $is_customer_user_footer = isset($_SESSION['user_id']) && !empty($_SESSION['user_id']) && (
         $normalized_footer_user_type === '' ||

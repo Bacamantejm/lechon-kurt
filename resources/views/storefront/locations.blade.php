@@ -3,6 +3,9 @@
 @section('title', 'Cavite Store Branches | Lechon Delights Marketplace')
 
 @section('content')
+<?php
+$locations = $locations ?? \App\Models\StoreLocation::where('is_active', true)->get();
+?>
 <div style="max-width: 1280px; margin: 0 auto; padding: 36px 20px 80px;">
     
     <div style="text-align: center; margin-bottom: 36px;">

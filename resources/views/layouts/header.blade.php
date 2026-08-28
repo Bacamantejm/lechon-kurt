@@ -1,4 +1,16 @@
 <?php
+global $conn;
+if (!isset($conn) || !($conn instanceof \mysqli)) {
+    require_once base_path('includes/config.php');
+    if (!isset($conn) || !($conn instanceof \mysqli)) {
+        $conn = @mysqli_connect(
+            defined('DB_HOST') ? DB_HOST : (getenv('DB_HOST') ?: '127.0.0.1'),
+            defined('DB_USER') ? DB_USER : (getenv('DB_USERNAME') ?: 'root'),
+            defined('DB_PASS') ? DB_PASS : (getenv('DB_PASSWORD') ?: ''),
+            defined('DB_NAME') ? DB_NAME : (getenv('DB_DATABASE') ?: 'lechon_db')
+        );
+    }
+}
 if (session_status() === PHP_SESSION_NONE) session_start();
 if (!isset($current_page)) $current_page = basename($_SERVER['PHP_SELF'], '.php');
 
@@ -33,7 +45,7 @@ $viewer_profile_image = str_replace('\\', '/', $viewer_profile_image);
 if (!preg_match('#^uploads/(profile_pictures|business_logos)/[A-Za-z0-9._-]+$#', $viewer_profile_image)) {
     $viewer_profile_image = '';
 }
-if ($viewer_profile_image !== '' && !is_file(__DIR__ . '/../' . $viewer_profile_image)) {
+if ($viewer_profile_image !== '' && !is_file(base_path($viewer_profile_image))) {
     $viewer_profile_image = '';
 }
 $viewer_profile_image_url = $viewer_profile_image !== '' ? $path_prefix . ltrim($viewer_profile_image, '/') : '';

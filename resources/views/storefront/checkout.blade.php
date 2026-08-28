@@ -1,6 +1,24 @@
 @extends('layouts.app')
 
 @section('content')
+<?php
+global $conn;
+if (!isset($conn) || !($conn instanceof \mysqli)) {
+    require_once base_path('includes/config.php');
+    if (!isset($conn) || !($conn instanceof \mysqli)) {
+        $conn = @mysqli_connect(
+            defined('DB_HOST') ? DB_HOST : (getenv('DB_HOST') ?: '127.0.0.1'),
+            defined('DB_USER') ? DB_USER : (getenv('DB_USERNAME') ?: 'root'),
+            defined('DB_PASS') ? DB_PASS : (getenv('DB_PASSWORD') ?: ''),
+            defined('DB_NAME') ? DB_NAME : (getenv('DB_DATABASE') ?: 'lechon_db')
+        );
+    }
+}
+
+$google_maps_api_key = function_exists('getGoogleMapsApiKey')
+    ? getGoogleMapsApiKey()
+    : trim((string)(defined('GOOGLE_MAPS_API_KEY') ? GOOGLE_MAPS_API_KEY : (getenv('GOOGLE_MAPS_API_KEY') ?: '')));
+$google_geocoding_enabled = function_exists('shouldUseGoogleGeocoding') ? shouldUseGoogleGeocoding() : true;
 
 // Get store locations and delivery quote context from session
 $stores = $_SESSION['store_locations'] ?? [];
@@ -5382,9 +5400,4 @@ document.addEventListener('DOMContentLoaded', function() {
     }, 400);
 });
 </script>
-
-<?php include 'includes/footer.php'; ?>
-
-
-
 @endsection

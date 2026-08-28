@@ -1,6 +1,22 @@
 @extends('layouts.app')
 
 @section('content')
+<?php
+global $conn;
+if (!isset($conn) || !($conn instanceof \mysqli)) {
+    require_once base_path('includes/config.php');
+    if (!isset($conn) || !($conn instanceof \mysqli)) {
+        $conn = @mysqli_connect(
+            defined('DB_HOST') ? DB_HOST : (getenv('DB_HOST') ?: '127.0.0.1'),
+            defined('DB_USER') ? DB_USER : (getenv('DB_USERNAME') ?: 'root'),
+            defined('DB_PASS') ? DB_PASS : (getenv('DB_PASSWORD') ?: ''),
+            defined('DB_NAME') ? DB_NAME : (getenv('DB_DATABASE') ?: 'lechon_db')
+        );
+    }
+}
+$show_welcome = !empty($_SESSION['register_success']) || session()->has('register_success');
+$user_email = $_SESSION['register_email'] ?? session('register_email', '');
+?>
 <style>
 .market-home {
     --menu-red: #b3261e;
@@ -2277,7 +2293,7 @@ body {
                                         </div>
                                         
                                         <div class="store-card-summary">
-                                            <?php echo htmlspecialchars($store['summary']); ?>
+                                            <?php echo htmlspecialchars($store['summary'] ?? ($store['note'] ?? 'Cavite specialty')); ?>
                                         </div>
                                         
                                         <div class="panda-card-footer-line">
@@ -3301,7 +3317,4 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
-<?php include 'includes/footer.php'; ?>
-
-
 @endsection

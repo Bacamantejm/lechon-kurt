@@ -1,6 +1,23 @@
 @extends('layouts.app')
 
 @section('content')
+<?php
+global $conn;
+if (!isset($conn) || !($conn instanceof \mysqli)) {
+    require_once base_path('includes/config.php');
+    if (!isset($conn) || !($conn instanceof \mysqli)) {
+        $conn = @mysqli_connect(
+            defined('DB_HOST') ? DB_HOST : (getenv('DB_HOST') ?: '127.0.0.1'),
+            defined('DB_USER') ? DB_USER : (getenv('DB_USERNAME') ?: 'root'),
+            defined('DB_PASS') ? DB_PASS : (getenv('DB_PASSWORD') ?: ''),
+            defined('DB_NAME') ? DB_NAME : (getenv('DB_DATABASE') ?: 'lechon_db')
+        );
+    }
+}
+require_once base_path('includes/favorites_helper.php');
+require_once base_path('includes/delivery_pricing_helper.php');
+require_once base_path('includes/partner_dashboard_helper.php');
+
 $storefront_name = '';
 $storefront_subtitle = 'Choose from our delicious selection of lechon and Filipino dishes';
 $storefront_partner_account = null;
@@ -23,10 +40,10 @@ if (!isset($_SESSION['delivery_location'])) {
 $delivery_fees = [];
 
 // Get products from database
-require_once 'includes/config.php';
-require_once __DIR__ . '/includes/favorites_helper.php';
-require_once __DIR__ . '/includes/delivery_pricing_helper.php';
-require_once __DIR__ . '/includes/partner_dashboard_helper.php';
+require_once base_path('includes/config.php');
+require_once base_path('includes/favorites_helper.php');
+require_once base_path('includes/delivery_pricing_helper.php');
+require_once base_path('includes/partner_dashboard_helper.php');
 
 function menuAddressLabel(string $address = '', string $barangay = '', string $city = '', string $province = ''): string
 {
@@ -469,7 +486,7 @@ if (is_array($storefront_partner_account) && function_exists('resolveUserAvatarP
     $logo_candidate = trim((string)resolveUserAvatarPathFromRow($storefront_partner_account));
     if ($logo_candidate !== '') {
         $logo_candidate_path = ltrim($logo_candidate, '/');
-        if (is_file(__DIR__ . '/' . $logo_candidate_path)) {
+        if (is_file(base_path($logo_candidate_path))) {
             $store_logo_image = $logo_candidate_path;
         }
     }
@@ -587,8 +604,6 @@ if (!empty($product_ids_for_reviews)) {
         mysqli_free_result($reviews_result);
     }
 }
-
-mysqli_close($conn);
 ?><!-- Product Preview Modal -->
 <div class="product-preview-modal" id="productPreviewModal" style="display:none;">
     <div class="preview-modal-content">
@@ -5636,7 +5651,4 @@ body {
     }
 }
 </style>
-
-<?php include 'includes/footer.php'; ?>
-
 @endsection
