@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 global $conn;
 if (!isset($conn) || !($conn instanceof \mysqli)) {
     require_once base_path('includes/config.php');
@@ -14,6 +14,7 @@ if (!isset($conn) || !($conn instanceof \mysqli)) {
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+require_once base_path('includes/config.php');
 
 function loginSessionUserExists($conn, $user_id) {
     $user_id = (int)$user_id;
@@ -1026,11 +1027,11 @@ body {
         <!-- Left Side: Branding Panel with Floating Mascot Pigs -->
         <div class="login-left">
             <div class="floating-pigs-container">
-                <div class="floating-pig pig-1">Ã°Å¸ÂÂ·</div>
-                <div class="floating-pig pig-2">Ã°Å¸ÂÂ·</div>
-                <div class="floating-pig pig-3">Ã°Å¸ÂÂ·</div>
-                <div class="floating-pig pig-4">Ã°Å¸ÂÂ·</div>
-                <div class="floating-pig pig-5">Ã°Å¸ÂÂ·</div>
+                <div class="floating-pig pig-1">🐷</div>
+                <div class="floating-pig pig-2">🐷</div>
+                <div class="floating-pig pig-3">🐷</div>
+                <div class="floating-pig pig-4">🐷</div>
+                <div class="floating-pig pig-5">🐷</div>
             </div>
             <div class="brand-content" style="position: relative; z-index: 10;">
                 <h1 class="brand-title">Lechon Delights</h1>

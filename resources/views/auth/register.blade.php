@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 global $conn;
 if (!isset($conn) || !($conn instanceof \mysqli)) {
     require_once base_path('includes/config.php');
@@ -14,6 +14,7 @@ if (!isset($conn) || !($conn instanceof \mysqli)) {
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+require_once base_path('includes/config.php');
 require_once base_path('includes/email_verification_helper.php');
 require_once base_path('includes/security.php');
 
@@ -417,7 +418,7 @@ $business_registration = trim($_POST['business_registration'] ?? '');
 
             // Keyword check for Cavite cities / municipalities
             $cavite_keywords = [
-                'cavite', 'dasmariÃƒÂ±as', 'dasmarinas', 'imus', 'bacoor', 'general trias', 'gen. trias',
+                'cavite', 'dasmariñas', 'dasmarinas', 'imus', 'bacoor', 'general trias', 'gen. trias',
                 'tagaytay', 'cavite city', 'trece martires', 'silang', 'kawit', 'tanza', 'alfonso',
                 'amadeo', 'carmona', 'gma', 'general mariano alvarez', 'indang', 'magallanes',
                 'maragondon', 'mendez', 'naic', 'noveleta', 'rosario', 'ternate', 'bailen', 'aguinaldo'
@@ -431,7 +432,7 @@ $business_registration = trim($_POST['business_registration'] ?? '');
             }
 
             // Explicit rejection of outside areas (e.g. NCR/Manila, Laguna, Batangas)
-            $outside_keywords = ['las piÃƒÂ±as', 'las pinas', 'paraÃƒÂ±aque', 'paranaque', 'muntinlupa', 'metro manila', 'ncr', 'batangas', 'laguna', 'quezon city', 'pasay'];
+            $outside_keywords = ['las piñas', 'las pinas', 'parañaque', 'paranaque', 'muntinlupa', 'metro manila', 'ncr', 'batangas', 'laguna', 'quezon city', 'pasay'];
             foreach ($outside_keywords as $out_kw) {
                 if (strpos($addr_lower, $out_kw) !== false && strpos($addr_lower, 'cavite') === false) {
                     $is_cavite = false;
@@ -1794,11 +1795,11 @@ body {
             </div>
 
             <div class="floating-pigs-container">
-                <div class="floating-pig pig-1">Ã°Å¸ÂÂ·</div>
-                <div class="floating-pig pig-2">Ã°Å¸ÂÂ·</div>
-                <div class="floating-pig pig-3">Ã°Å¸ÂÂ·</div>
-                <div class="floating-pig pig-4">Ã°Å¸ÂÂ·</div>
-                <div class="floating-pig pig-5">Ã°Å¸ÂÂ·</div>
+                <div class="floating-pig pig-1">🐷</div>
+                <div class="floating-pig pig-2">🐷</div>
+                <div class="floating-pig pig-3">🐷</div>
+                <div class="floating-pig pig-4">🐷</div>
+                <div class="floating-pig pig-5">🐷</div>
             </div>
 
             <!-- Hero View for Register Mode (Default: on left side) -->
@@ -1859,7 +1860,7 @@ body {
                             </div>
                             <div class="progress-container" style="width: 100%; height: 6px; background: #efddcd; border-radius: 3px; margin-top: 15px; overflow: visible; position: relative;">
                                 <div class="progress-bar" id="progressBar" style="position: absolute; left: 0; top: 0; height: 100%; width: 25%; background: #b3261e; transition: width 0.3s ease; display: block !important; overflow: visible;">
-                                    <div class="running-pig" style="position: absolute; right: -14px; top: -20px; font-size: 22px; user-select: none; line-height: 1; animation: pigRun 0.4s infinite alternate ease-in-out;">Ã°Å¸Ââ€“</div>
+                                    <div class="running-pig" style="position: absolute; right: -14px; top: -20px; font-size: 22px; user-select: none; line-height: 1; animation: pigRun 0.4s infinite alternate ease-in-out;">🐖</div>
                                 </div>
                             </div>
                         </div>
@@ -2536,7 +2537,7 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     const CAVITE_CITIES = [
-        'cavite', 'dasmariÃƒÂ±as', 'dasmarinas', 'imus', 'bacoor', 'general trias', 'gen. trias',
+        'cavite', 'dasmariñas', 'dasmarinas', 'imus', 'bacoor', 'general trias', 'gen. trias',
         'tagaytay', 'cavite city', 'trece martires', 'silang', 'kawit', 'tanza', 'alfonso',
         'amadeo', 'carmona', 'gma', 'general mariano alvarez', 'indang', 'magallanes',
         'maragondon', 'mendez', 'naic', 'noveleta', 'rosario', 'ternate', 'bailen', 'aguinaldo'
@@ -2565,8 +2566,8 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const isExplicitOutside = (
             textToCheck.includes('metro manila') || textToCheck.includes('ncr') ||
-            textToCheck.includes('las piÃƒÂ±as') || textToCheck.includes('las pinas') ||
-            textToCheck.includes('paraÃƒÂ±aque') || textToCheck.includes('paranaque') ||
+            textToCheck.includes('las piñas') || textToCheck.includes('las pinas') ||
+            textToCheck.includes('parañaque') || textToCheck.includes('paranaque') ||
             textToCheck.includes('muntinlupa') || textToCheck.includes('pasay') ||
             textToCheck.includes('manila') || textToCheck.includes('quezon city') ||
             textToCheck.includes('batangas') || textToCheck.includes('laguna') ||
@@ -2704,14 +2705,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const mapElem = document.getElementById('registerMapCanvas');
         if (!mapElem || !window.L) return;
 
-        let initLat = parseFloat(regLatitude?.value || '') || 14.3294; // Default DasmariÃƒÂ±as Cavite
+        let initLat = parseFloat(regLatitude?.value || '') || 14.3294; // Default Dasmariñas Cavite
         let initLng = parseFloat(regLongitude?.value || '') || 120.9367;
 
         if (!regMap) {
             regMap = L.map('registerMapCanvas').setView([initLat, initLng], 14);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
-                attribution: 'Ã‚Â© OpenStreetMap contributors'
+                attribution: '© OpenStreetMap contributors'
             }).addTo(regMap);
 
             regMarker = L.marker([initLat, initLng], { draggable: true }).addTo(regMap);
@@ -3569,7 +3570,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (closeCameraBtn) closeCameraBtn.addEventListener('click', closeModal);
 
-    // Direct upload buttons Ã¢â‚¬â€ open file picker immediately
+    // Direct upload buttons — open file picker immediately
     document.querySelectorAll('.direct-upload-btn').forEach(btn => {
         btn.addEventListener('click', function(e) {
             e.preventDefault();
