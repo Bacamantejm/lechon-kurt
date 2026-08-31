@@ -295,6 +295,7 @@ $voucher_message = (string)($applied_voucher_state['message'] ?? '');
 $voucher_scope_label = (string)($applied_voucher_state['scope_label'] ?? '');
 $voucher_store_name = (string)($applied_voucher_state['store_name'] ?? '');
 $voucher_is_exclusive = !empty($applied_voucher_state['is_store_exclusive']);
+$available_vouchers = function_exists('pvFetchAvailableVouchersForCart') ? pvFetchAvailableVouchersForCart($conn, (int)$user_id, $_SESSION['cart']) : [];
 $checkout_tenant_scope = function_exists('pvGetCheckoutTenantScope')
     ? pvGetCheckoutTenantScope($conn, $_SESSION['cart'])
     : ['is_valid' => true, 'seller_id' => 0, 'message' => ''];
@@ -662,22 +663,33 @@ $remaining = $total - $downpayment;
                     <!-- Step 3: Discounts and Payment -->
                     <div class="step-content" id="stepContent3">
                         <p class="checkout-section-label"><i class="fas fa-receipt"></i> Discounts and Payment</p>
-                        <div class="voucher-section">
-                            <h4>Discount Voucher</h4>
+                        <div class="voucher-section" style="background:#ffffff; border:1px solid #eaecf0; border-radius:16px; padding:20px; margin-bottom:24px; box-shadow:0 2px 8px rgba(16,24,40,0.04);">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+                                <h4 style="margin:0; font-family:'Outfit',sans-serif; font-size:1.1rem; font-weight:800; color:#101828;">
+                                    <i class="fas fa-ticket-alt" style="color:#b3261e; margin-right:6px;"></i> Discount Voucher
+                                </h4>
+                                <?php if (!empty($available_vouchers)): ?>
+                                    <span style="font-size:0.78rem; font-weight:700; color:#027a48; background:#ecfdf3; border:1px solid #abefc6; padding:3px 10px; border-radius:999px;">
+                                        <i class="fas fa-sparkles"></i> <?php echo count($available_vouchers); ?> Available Promotions
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+
                             <div class="voucher-input-row">
                                 <input type="text"
                                        id="voucherCodeInput"
                                        maxlength="60"
-                                       placeholder="Enter voucher code"
+                                       placeholder="Enter promo code (e.g. WELCOME100, FREESHIP)"
                                        value="<?php echo htmlspecialchars($applied_voucher_code); ?>">
-                                <button type="button" class="btn-voucher-apply" id="applyVoucherBtn">
+                                <button type="button" class="btn-voucher-apply" id="applyVoucherBtn" onclick="applyVoucherCode()">
                                     <i class="fas fa-ticket-alt"></i> Apply
                                 </button>
-                                <button type="button" class="btn-voucher-remove" id="removeVoucherBtn" <?php echo $voucher_discount > 0 ? '' : 'style="display:none;"'; ?>>
+                                <button type="button" class="btn-voucher-remove" id="removeVoucherBtn" onclick="removeVoucherCode()" <?php echo $voucher_discount > 0 ? '' : 'style="display:none;"'; ?>>
                                     Remove
                                 </button>
                             </div>
-                            <p class="voucher-feedback <?php echo $voucher_discount > 0 ? 'success' : (!empty($voucher_message) ? 'warning' : ''); ?>" id="voucherFeedback">
+
+                            <p class="voucher-feedback <?php echo $voucher_discount > 0 ? 'success' : (!empty($voucher_message) ? 'warning' : ''); ?>" id="voucherFeedback" style="margin-top:10px;">
                                 <?php
                                 if ($voucher_discount > 0) {
                                     $scope_tag = $voucher_scope_label ? ' (' . htmlspecialchars($voucher_scope_label) . ')' : '';
@@ -685,10 +697,58 @@ $remaining = $total - $downpayment;
                                 } elseif (!empty($voucher_message)) {
                                     echo '<i class="fas fa-exclamation-triangle"></i> ' . htmlspecialchars($voucher_message);
                                 } else {
-                                    echo '<i class="fas fa-info-circle"></i> Store vouchers apply exclusively to their shop. Platform vouchers apply to all shops.';
+                                    echo '<i class="fas fa-info-circle"></i> Select or claim a promotion below to apply instant discounts to your order.';
                                 }
                                 ?>
                             </p>
+
+                            <!-- Available Customer Promotions & Store Vouchers Cards -->
+                            <?php if (!empty($available_vouchers)): ?>
+                                <div class="available-vouchers-container" style="margin-top:16px; padding-top:16px; border-top:1px dashed #eaecf0;">
+                                    <div style="font-size:0.84rem; font-weight:800; color:#344054; margin-bottom:12px; display:flex; align-items:center; gap:6px;">
+                                        <i class="fas fa-tags" style="color:#b3261e;"></i> Claimed & Available Customer Vouchers:
+                                    </div>
+                                    <div class="available-vouchers-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:12px;">
+                                        <?php foreach ($available_vouchers as $v): ?>
+                                            <?php 
+                                                $is_current = (strtoupper($applied_voucher_code) === strtoupper($v['code']));
+                                                $disc_label = ($v['discount_type'] === 'percent') ? number_format($v['discount_value'], 0) . '% OFF' : 'PHP ' . number_format($v['discount_value'], 2) . ' OFF';
+                                                $min_spend_label = $v['min_order_amount'] > 0 ? 'Min. spend PHP ' . number_format($v['min_order_amount'], 2) : 'No min. spend';
+                                            ?>
+                                            <div class="available-voucher-card<?php echo $is_current ? ' is-active' : ''; ?><?php echo !$v['is_eligible'] ? ' is-ineligible' : ''; ?>" 
+                                                 style="background:<?php echo $is_current ? '#ecfdf3' : '#f8f9fa'; ?>; border:1px solid <?php echo $is_current ? '#abefc6' : '#eaecf0'; ?>; border-radius:12px; padding:12px 14px; position:relative; transition:all 0.2s; box-shadow: 0 1px 3px rgba(16,24,40,0.04);">
+                                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                                                    <span style="font-family:'Outfit',sans-serif; font-weight:800; font-size:0.95rem; color:#b3261e; letter-spacing:0.5px;">
+                                                        <?php echo htmlspecialchars($v['code']); ?>
+                                                    </span>
+                                                    <span style="font-size:0.68rem; font-weight:800; padding:2px 8px; border-radius:999px; background:<?php echo $v['seller_id'] > 0 ? '#eff8ff' : '#fff1f0'; ?>; color:<?php echo $v['seller_id'] > 0 ? '#175cd3' : '#b3261e'; ?>; border:1px solid <?php echo $v['seller_id'] > 0 ? '#b2ddff' : '#fee4e2'; ?>;">
+                                                        <?php echo htmlspecialchars($v['badge']); ?>
+                                                    </span>
+                                                </div>
+                                                <div style="font-size:0.84rem; font-weight:700; color:#101828; margin-bottom:2px;">
+                                                    <?php echo htmlspecialchars($v['name']); ?> (<?php echo $disc_label; ?>)
+                                                </div>
+                                                <div style="font-size:0.75rem; color:#667085; margin-bottom:10px;">
+                                                    <?php echo htmlspecialchars($min_spend_label); ?>
+                                                </div>
+                                                <?php if ($is_current): ?>
+                                                    <button type="button" class="btn btn-sm" style="width:100%; background:#027a48; color:#fff; font-weight:700; font-size:0.8rem; border-radius:8px; padding:7px; border:none;" disabled>
+                                                        <i class="fas fa-check-circle"></i> Applied
+                                                    </button>
+                                                <?php elseif ($v['is_eligible']): ?>
+                                                    <button type="button" onclick="applySelectedVoucher('<?php echo htmlspecialchars($v['code']); ?>')" class="btn btn-sm" style="width:100%; background:#b3261e; color:#fff; font-weight:700; font-size:0.8rem; border-radius:8px; padding:7px; border:none; cursor:pointer;" onmouseover="this.style.background='#981b15';" onmouseout="this.style.background='#b3261e';">
+                                                        <i class="fas fa-ticket-alt"></i> Apply Voucher
+                                                    </button>
+                                                <?php else: ?>
+                                                    <button type="button" class="btn btn-sm" style="width:100%; background:#f2f4f7; color:#98a2b3; font-weight:700; font-size:0.75rem; border-radius:8px; padding:7px; border:1px solid #eaecf0; cursor:not-allowed;" disabled title="<?php echo htmlspecialchars($v['ineligible_reason']); ?>">
+                                                        <i class="fas fa-lock"></i> <?php echo htmlspecialchars($v['ineligible_reason']); ?>
+                                                    </button>
+                                                <?php endif; ?>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
                         </div>
                         
                         <!-- Payment Type Selection -->
@@ -2746,7 +2806,16 @@ function setVoucherFeedback(message, stateClass) {
     const feedback = document.getElementById('voucherFeedback');
     if (!feedback) return;
 
-    feedback.textContent = String(message || '');
+    let iconHtml = '';
+    if (stateClass === 'success') {
+        iconHtml = '<i class="fas fa-check-circle" style="margin-right:6px;"></i> ';
+    } else if (stateClass === 'warning') {
+        iconHtml = '<i class="fas fa-exclamation-triangle" style="margin-right:6px;"></i> ';
+    } else {
+        iconHtml = '<i class="fas fa-info-circle" style="margin-right:6px;"></i> ';
+    }
+
+    feedback.innerHTML = iconHtml + String(message || '');
     feedback.classList.remove('success', 'warning');
     if (stateClass === 'success') {
         feedback.classList.add('success');
@@ -4400,20 +4469,23 @@ document.querySelectorAll('input[name="payment_type"]').forEach(radio => {
     });
 });
 
-const voucherCodeInput = document.getElementById('voucherCodeInput');
-const applyVoucherBtn = document.getElementById('applyVoucherBtn');
-const removeVoucherBtn = document.getElementById('removeVoucherBtn');
-const voucherIdInput = document.getElementById('voucher_id_hidden');
+async function applyVoucherCode(codeOverride) {
+    const input = document.getElementById('voucherCodeInput');
+    const applyBtn = document.getElementById('applyVoucherBtn');
+    const removeBtn = document.getElementById('removeVoucherBtn');
+    const hiddenIdInput = document.getElementById('voucher_id_hidden');
 
-async function applyVoucherCode() {
-    const voucherCode = (voucherCodeInput?.value || '').trim();
+    let voucherCode = (typeof codeOverride === 'string' && codeOverride.trim()) 
+        ? codeOverride.trim() 
+        : (input?.value || '').trim();
+
     if (!voucherCode) {
         setVoucherFeedback('Please enter a voucher code.', 'warning');
         return;
     }
 
-    if (applyVoucherBtn) applyVoucherBtn.disabled = true;
-    if (removeVoucherBtn) removeVoucherBtn.disabled = true;
+    if (applyBtn) applyBtn.disabled = true;
+    if (removeBtn) removeBtn.disabled = true;
 
     try {
         const response = await fetch('apply_voucher.php', {
@@ -4425,11 +4497,23 @@ async function applyVoucherCode() {
             })
         });
 
-        const result = await response.json();
+        const rawText = await response.text();
+        let result = null;
+        try {
+            result = JSON.parse(rawText);
+        } catch (e) {
+            const match = rawText.match(/\{[\s\S]*\}/);
+            if (match) {
+                result = JSON.parse(match[0]);
+            } else {
+                throw new Error('Server returned invalid response');
+            }
+        }
+
         if (!result.success) {
             currentVoucherCode = '';
             currentVoucherDiscount = 0;
-            if (voucherIdInput) voucherIdInput.value = '';
+            if (hiddenIdInput) hiddenIdInput.value = '';
             recalculateOrderTotals();
             setVoucherFeedback(result.message || 'Voucher could not be applied.', 'warning');
             return;
@@ -4438,24 +4522,46 @@ async function applyVoucherCode() {
         currentVoucherCode = String(result.voucher_code || voucherCode).toUpperCase();
         currentVoucherDiscount = roundToMoney(result.discount_amount || 0);
 
-        if (voucherIdInput) voucherIdInput.value = String(result.voucher_id || '');
-        if (voucherCodeInput) voucherCodeInput.value = currentVoucherCode;
+        if (hiddenIdInput) hiddenIdInput.value = String(result.voucher_id || '');
+        if (input) input.value = currentVoucherCode;
 
         recalculateOrderTotals();
         const scopeBadge = result.scope_label ? ` (${result.scope_label})` : '';
         setVoucherFeedback(`Applied ${currentVoucherCode}: -${moneyFormatter.format(currentVoucherDiscount)}${scopeBadge}`, 'success');
+
+        // Dynamically update available voucher cards UI
+        document.querySelectorAll('.available-voucher-card').forEach(card => {
+            const cardCodeEl = card.querySelector('span');
+            const cardCode = cardCodeEl ? cardCodeEl.textContent.trim().toUpperCase() : '';
+            if (cardCode === currentVoucherCode) {
+                card.classList.add('is-active');
+                card.style.background = '#ecfdf3';
+                card.style.borderColor = '#abefc6';
+            } else {
+                card.classList.remove('is-active');
+                if (!card.classList.contains('is-ineligible')) {
+                    card.style.background = '#f8f9fa';
+                    card.style.borderColor = '#eaecf0';
+                }
+            }
+        });
     } catch (error) {
         console.error('Unable to apply voucher:', error);
         setVoucherFeedback('Voucher request failed. Please try again.', 'warning');
     } finally {
-        if (applyVoucherBtn) applyVoucherBtn.disabled = false;
-        if (removeVoucherBtn) removeVoucherBtn.disabled = false;
+        if (applyBtn) applyBtn.disabled = false;
+        if (removeBtn) removeBtn.disabled = false;
     }
 }
 
 async function removeVoucherCode() {
-    if (applyVoucherBtn) applyVoucherBtn.disabled = true;
-    if (removeVoucherBtn) removeVoucherBtn.disabled = true;
+    const input = document.getElementById('voucherCodeInput');
+    const applyBtn = document.getElementById('applyVoucherBtn');
+    const removeBtn = document.getElementById('removeVoucherBtn');
+    const hiddenIdInput = document.getElementById('voucher_id_hidden');
+
+    if (applyBtn) applyBtn.disabled = true;
+    if (removeBtn) removeBtn.disabled = true;
 
     try {
         const response = await fetch('apply_voucher.php', {
@@ -4467,46 +4573,59 @@ async function removeVoucherCode() {
 
         currentVoucherCode = '';
         currentVoucherDiscount = 0;
-        if (voucherIdInput) voucherIdInput.value = '';
-        if (voucherCodeInput) voucherCodeInput.value = '';
+        if (hiddenIdInput) hiddenIdInput.value = '';
+        if (input) input.value = '';
 
         recalculateOrderTotals();
         setVoucherFeedback(result.message || 'Voucher removed.', '');
+
+        document.querySelectorAll('.available-voucher-card').forEach(card => {
+            card.classList.remove('is-active');
+            if (!card.classList.contains('is-ineligible')) {
+                card.style.background = '#f8f9fa';
+                card.style.borderColor = '#eaecf0';
+            }
+        });
     } catch (error) {
         console.error('Unable to remove voucher:', error);
         setVoucherFeedback('Could not remove voucher right now.', 'warning');
     } finally {
-        if (applyVoucherBtn) applyVoucherBtn.disabled = false;
-        if (removeVoucherBtn) removeVoucherBtn.disabled = false;
+        if (applyBtn) applyBtn.disabled = false;
+        if (removeBtn) removeBtn.disabled = false;
     }
 }
 
-if (applyVoucherBtn) {
-    applyVoucherBtn.addEventListener('click', applyVoucherCode);
+function applySelectedVoucher(code) {
+    if (!code) return;
+    const input = document.getElementById('voucherCodeInput');
+    if (input) {
+        input.value = code;
+    }
+    applyVoucherCode(code);
 }
-if (removeVoucherBtn) {
-    removeVoucherBtn.addEventListener('click', removeVoucherCode);
-}
-if (voucherCodeInput) {
-    voucherCodeInput.addEventListener('keydown', function(event) {
-        if (event.key === 'Enter') {
-            event.preventDefault();
-            applyVoucherCode();
-        }
-    });
 
-    // Auto-apply pending welcome voucher from sessionStorage if not already applied
-    try {
-        const pendingVoucher = sessionStorage.getItem('pending_welcome_voucher');
-        if (pendingVoucher && !voucherCodeInput.value.trim()) {
-            voucherCodeInput.value = pendingVoucher;
-            sessionStorage.removeItem('pending_welcome_voucher');
-            setTimeout(() => {
+document.addEventListener('DOMContentLoaded', function() {
+    const input = document.getElementById('voucherCodeInput');
+    if (input) {
+        input.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
                 applyVoucherCode();
-            }, 350);
-        }
-    } catch(e) {}
-}
+            }
+        });
+
+        try {
+            const pendingVoucher = sessionStorage.getItem('pending_welcome_voucher');
+            if (pendingVoucher && !input.value.trim()) {
+                input.value = pendingVoucher;
+                sessionStorage.removeItem('pending_welcome_voucher');
+                setTimeout(() => {
+                    applyVoucherCode(pendingVoucher);
+                }, 350);
+            }
+        } catch(e) {}
+    }
+});
 
 async function submitCheckoutAjax(formElement) {
     const submitBtn = document.getElementById('submitOrder');

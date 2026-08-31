@@ -46,7 +46,7 @@ include 'includes/header.php';
                 <div class="timeline-year">2005</div>
                 <div class="timeline-content">
                     <h3>Growing the Family</h3>
-                    <p>Expanded to 5 key locations across Metro Manila, bringing lechon closer to more homes.</p>
+                    <p>Expanded to 5 key store locations across Cavite, bringing lechon closer to more homes.</p>
                 </div>
             </div>
             <div class="timeline-item">

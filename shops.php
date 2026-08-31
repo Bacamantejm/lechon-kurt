@@ -56,6 +56,8 @@ if ($branch_res) {
             'reviews' => 12,
             'is_open' => true,
             'has_vouchers' => true,
+            'latitude' => $row['latitude'],
+            'longitude' => $row['longitude'],
             'image' => 'images/store-bg.jpg',
             'menu_link' => 'menu.php?branch_id=' . $store_id,
             'tags' => ['branch', strtolower($row['store_name']), strtolower($city_label)]
@@ -602,13 +604,16 @@ require_once 'includes/header.php';
                                data-vouchers="<?php echo !empty($shop['has_vouchers']) ? '1' : '0'; ?>"
                                data-price="<?php echo (float)$shop['start_price']; ?>"
                                data-rating="<?php echo (float)$shop['rating']; ?>"
+                               data-open="<?php echo !empty($shop['is_open']) ? '1' : '0'; ?>"
+                               data-lat="<?php echo isset($shop['latitude']) && $shop['latitude'] !== null ? htmlspecialchars((string)$shop['latitude']) : ''; ?>"
+                               data-lng="<?php echo isset($shop['longitude']) && $shop['longitude'] !== null ? htmlspecialchars((string)$shop['longitude']) : ''; ?>"
                                data-search="<?php echo htmlspecialchars(strtolower($shop['name'] . ' ' . $shop['summary'] . ' ' . implode(' ', $shop['tags']))); ?>">
                                 
                                 <!-- Image Wrapper -->
                                 <div class="store-card-image-wrap">
                                     <div class="market-store-row-thumb" style="background-image:url('<?php echo htmlspecialchars($shop['image']); ?>');"></div>
                                     <span class="market-type-pill"><?php echo htmlspecialchars($shop['type']); ?></span>
-                                    <span class="market-time-pill"><?php echo !empty($shop['is_open']) ? 'Open now' : 'Closed now'; ?></span>
+                                    <span class="market-time-pill" data-role="time-label"><?php echo !empty($shop['is_open']) ? 'Open now' : 'Closed now'; ?></span>
                                     <button
                                         type="button"
                                         class="market-store-favorite-btn<?php echo $is_shop_favorite ? ' is-active' : ''; ?>"
@@ -636,9 +641,15 @@ require_once 'includes/header.php';
                                     <div class="store-card-summary">
                                         <?php echo htmlspecialchars($shop['summary']); ?>
                                     </div>
+
+                                    <!-- DSS Distance & Delivery ETA Badges -->
+                                    <div class="panda-card-dss-info" style="display:flex; align-items:center; gap:8px; margin:6px 0; font-size:0.75rem; font-weight:700;">
+                                        <span style="display:inline-flex; align-items:center; gap:4px; background:#fff1f0; color:#b3261e; padding:3px 8px; border-radius:6px; border:1px solid #fee4e2;" data-role="dss-eta"><i class="fas fa-truck-fast"></i> <span data-role="eta-text">20-30 min</span></span>
+                                        <span style="display:inline-flex; align-items:center; gap:4px; background:#eff8ff; color:#175cd3; padding:3px 8px; border-radius:6px; border:1px solid #b2ddff;" data-role="dss-distance"><i class="fas fa-location-dot"></i> <span data-role="distance-text">Near Cavite</span></span>
+                                    </div>
                                     
                                     <div class="panda-card-footer-line">
-                                        <span class="panda-card-city"><i class="fas fa-location-dot"></i> <?php echo htmlspecialchars($city_label); ?></span>
+                                        <span class="panda-card-city"><i class="fas fa-store"></i> <?php echo htmlspecialchars($city_label); ?></span>
                                         <strong class="panda-card-price-text"><?php echo htmlspecialchars($price_text); ?></strong>
                                     </div>
                                 </div>
@@ -671,6 +682,52 @@ document.addEventListener('DOMContentLoaded', function () {
     const zeroState = document.getElementById('shopsZeroState');
     const countLabel = document.getElementById('shopsCountLabel');
     const shopsGrid = document.getElementById('shopsGrid');
+
+    function toRadians(deg) { return deg * (Math.PI / 180); }
+    function haversineKm(lat1, lng1, lat2, lng2) {
+        const R = 6371;
+        const dLat = toRadians(lat2 - lat1);
+        const dLng = toRadians(lng2 - lng1);
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) *
+            Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+    }
+
+    function calculateShopDistances(lat, lng) {
+        shopCards.forEach(function (card) {
+            const storeLat = parseFloat(card.dataset.lat || '');
+            const storeLng = parseFloat(card.dataset.lng || '');
+            const timeLabel = card.querySelector('[data-role="time-label"]');
+            const etaText = card.querySelector('[data-role="eta-text"]');
+            const distanceText = card.querySelector('[data-role="distance-text"]');
+
+            if (!Number.isFinite(storeLat) || !Number.isFinite(storeLng) || storeLat === 0 || storeLng === 0) {
+                card.dataset.distance = '999';
+                card.dataset.minutes = '999';
+                if (etaText) etaText.textContent = '20-30 min';
+                if (distanceText) distanceText.textContent = 'Near Cavite';
+                return;
+            }
+
+            const distanceKm = haversineKm(lat, lng, storeLat, storeLng);
+            const minTime = Math.max(15, Math.round((distanceKm * 3.5) + 15));
+            const maxTime = minTime + 10;
+            const etaString = minTime + '-' + maxTime + ' min';
+
+            card.dataset.distance = distanceKm.toFixed(2);
+            card.dataset.minutes = minTime.toString();
+
+            const isOpen = card.dataset.open === '1';
+            if (timeLabel) {
+                timeLabel.innerHTML = isOpen 
+                    ? '<i class="fas fa-truck-fast"></i> ' + etaString + ' &bull; ' + distanceKm.toFixed(1) + ' km' 
+                    : '<i class="fas fa-store-slash"></i> Closed &bull; ' + distanceKm.toFixed(1) + ' km';
+            }
+            if (etaText) etaText.textContent = etaString;
+            if (distanceText) distanceText.textContent = distanceKm.toFixed(1) + ' km away';
+        });
+    }
 
     const applyShopFilters = function () {
         const query = (headerSearch ? headerSearch.value : '').toLowerCase().trim();
@@ -732,6 +789,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (selectedSort === 'top_rated') {
                     return parseFloat(b.dataset.rating || '0') - parseFloat(a.dataset.rating || '0');
                 }
+                if (selectedSort === 'fastest') {
+                    return parseFloat(a.dataset.minutes || '999') - parseFloat(b.dataset.minutes || '999');
+                }
+                if (selectedSort === 'distance') {
+                    return parseFloat(a.dataset.distance || '999') - parseFloat(b.dataset.distance || '999');
+                }
                 return 0;
             });
             visibleCardsArray.forEach(function (card) {
@@ -747,6 +810,17 @@ document.addEventListener('DOMContentLoaded', function () {
             countLabel.textContent = 'Showing ' + visibleCount + ' shops';
         }
     };
+
+    // Initial calculation on load using Cavite center (14.3294, 120.9367)
+    calculateShopDistances(14.3294, 120.9367);
+    applyShopFilters();
+
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(function(pos) {
+            calculateShopDistances(pos.coords.latitude, pos.coords.longitude);
+            applyShopFilters();
+        }, function() {}, { timeout: 4000, maximumAge: 300000 });
+    }
 
     if (filterVouchers) filterVouchers.addEventListener('change', applyShopFilters);
     shopTypeChecks.forEach(chk => chk.addEventListener('change', applyShopFilters));

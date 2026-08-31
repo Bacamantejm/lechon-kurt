@@ -1174,6 +1174,23 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
                 } catch (Throwable $notification_error) {
                     error_log("Franchise notification failed after submit {$application_id}: " . $notification_error->getMessage());
                 }
+
+                try {
+                    require_once __DIR__ . '/email_service.php';
+                    $applicantEmail = trim((string)($form_data['contact_email'] ?? ''));
+                    if ($applicantEmail !== '') {
+                        $franchiseMailer = new EmailService($conn);
+                        $franchiseMailer->sendFranchiseSubmissionEmail($applicantEmail, [
+                            'contact_person' => $form_data['contact_person'],
+                            'application_number' => $application_number,
+                            'business_name' => $form_data['business_name'],
+                            'capital_investment' => $form_data['capital_investment'],
+                            'business_address' => $form_data['business_address']
+                        ]);
+                    }
+                } catch (Throwable $mail_err) {
+                    error_log("Franchise client submission email error for app {$application_id}: " . $mail_err->getMessage());
+                }
                 $has_pending_application = true;
                 $latest_application = [
                     'id' => $application_id,
@@ -1249,151 +1266,7 @@ include 'includes/header.php';
 <div class="franchise-application-page">
     <div class="container">
 
-        <!-- Merchant Partner Onboarding Hero Section (Screenshot 2 & Login UI Style) -->
-        <section class="foodpanda-hero-section" style="position: relative; background: linear-gradient(rgba(23, 25, 34, 0.75), rgba(23, 25, 34, 0.88)), url('assets/images/promo_lechon.jpg') center/cover no-repeat; border-radius: 28px; padding: 52px 40px; color: #fff; margin-bottom: 48px; box-shadow: 0 20px 48px rgba(0,0,0,0.22); min-height: 560px; display: flex; align-items: center;">
-            <div style="display: grid; grid-template-columns: 1fr 460px; gap: 44px; width: 100%; align-items: start;">
-                <!-- Left Title & Subtitle (Screenshot 2) -->
-                <div style="padding-top: 32px;">
-                    <span style="background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.3); padding: 6px 16px; border-radius: 999px; font-size: 0.82rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; display: inline-block; margin-bottom: 16px;">
-                        <i class="fas fa-store" style="margin-right: 6px; color: #ef6b2e;"></i> Partner With Us
-                    </span>
-                    <h1 style="font-family: 'Outfit', sans-serif; font-size: 3.4rem; font-weight: 800; color: #ffffff; margin: 0 0 18px 0; line-height: 1.1; text-shadow: 0 3px 12px rgba(0,0,0,0.5);">
-                        Register your restaurant with us!
-                    </h1>
-                    <p style="font-size: 1.35rem; color: rgba(255,255,255,0.92); line-height: 1.45; font-weight: 500; max-width: 520px; text-shadow: 0 2px 8px rgba(0,0,0,0.4);">
-                        Sign up easily, showcase your menu, and you can start reaching new customers
-                    </p>
-                    <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-top: 24px;">
-                        <div style="display: flex; align-items: center; gap: 8px; font-size: 0.92rem; font-weight: 700; background: rgba(255,255,255,0.12); padding: 10px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.2);">
-                            <i class="fas fa-check-circle" style="color: #25d366;"></i> Instant Verification
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 8px; font-size: 0.92rem; font-weight: 700; background: rgba(255,255,255,0.12); padding: 10px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.2);">
-                            <i class="fas fa-check-circle" style="color: #25d366;"></i> Zero Upfront Setup Fee
-                        </div>
-                    </div>
-                </div>
 
-                <!-- Right Floating Form Card (Screenshot 1 & 2) -->
-                <div style="background: #ffffff; border-radius: 24px; padding: 34px 30px; color: #171922; box-shadow: 0 24px 56px rgba(0,0,0,0.32);">
-                    <h2 style="font-family: 'Outfit', sans-serif; font-size: 1.6rem; font-weight: 800; color: #171922; margin: 0 0 20px 0;">
-                        Ready to boost your sales?
-                    </h2>
-
-                    <form method="POST" action="" id="heroFranchiseForm">
-                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token, ENT_QUOTES, 'UTF-8'); ?>">
-                        <input type="hidden" name="submit_application" value="1">
-                        <input type="hidden" name="contact_person" id="hidden_contact_person" value="">
-
-                        <div style="display: flex; flex-direction: column; gap: 14px;">
-                            <!-- Business Name -->
-                            <div class="fp-form-field">
-                                <input type="text" id="hero_business_name" name="business_name" class="fp-input" placeholder="Your Business Name *" required value="<?php echo oldFormValue('business_name', $franchise_prefill['business_name'] ?? ''); ?>">
-                            </div>
-
-                            <!-- Owner First Name -->
-                            <div class="fp-form-field">
-                                <input type="text" id="hero_owner_first_name" class="fp-input" placeholder="Business Owner First Name *" required>
-                            </div>
-
-                            <!-- Owner Last Name -->
-                            <div class="fp-form-field">
-                                <input type="text" id="hero_owner_last_name" class="fp-input" placeholder="Business Owner Last Name *" required>
-                            </div>
-
-                            <!-- Business Description Dropdown -->
-                            <div class="fp-form-field">
-                                <select id="hero_business_desc" name="business_type" class="fp-select" required>
-                                    <option value="">What describes your business? *</option>
-                                    <option value="Restaurant / Eatery">Restaurant / Eatery</option>
-                                    <option value="Food Stall / Kiosk">Food Stall / Kiosk</option>
-                                    <option value="Partnership / Sole Proprietorship">Partnership / Sole Proprietorship</option>
-                                    <option value="Cloud Kitchen / Bakery">Cloud Kitchen / Bakery</option>
-                                </select>
-                            </div>
-
-                            <!-- BIR 2303 Radio Group -->
-                            <div class="fp-radio-group">
-                                <label class="fp-radio-label">Do you have BIR 2303 form? *</label>
-                                <div style="display: flex; gap: 24px; margin-top: 6px;">
-                                    <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; font-size: 0.9rem;">
-                                        <input type="radio" name="hero_bir_form" value="Yes" checked style="accent-color: #b3261e;"> Yes
-                                    </label>
-                                    <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; font-size: 0.9rem;">
-                                        <input type="radio" name="hero_bir_form" value="No" style="accent-color: #b3261e;"> No
-                                    </label>
-                                </div>
-                            </div>
-
-                            <!-- Android Device Radio Group -->
-                            <div class="fp-radio-group">
-                                <label class="fp-radio-label">Do you have an android device to receive orders? *</label>
-                                <div style="display: flex; gap: 24px; margin-top: 6px;">
-                                    <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; font-size: 0.9rem;">
-                                        <input type="radio" name="hero_android_device" value="Yes" checked style="accent-color: #b3261e;"> Yes
-                                    </label>
-                                    <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; font-size: 0.9rem;">
-                                        <input type="radio" name="hero_android_device" value="No" style="accent-color: #b3261e;"> No
-                                    </label>
-                                </div>
-                            </div>
-
-                            <!-- Number of branches -->
-                            <div class="fp-form-field" style="position: relative;">
-                                <label style="font-size: 0.75rem; color: #667085; font-weight: 700; display: block; margin-bottom: 2px;">Number of branches to register *</label>
-                                <input type="number" id="hero_branches" name="number_of_branches" class="fp-input" value="1" min="1" required style="padding-right: 36px;">
-                                <i class="fas fa-info-circle" style="position: absolute; right: 14px; top: 28px; color: #b3261e; font-size: 16px;" title="Total physical store locations"></i>
-                            </div>
-
-                            <!-- Business Email -->
-                            <div class="fp-form-field">
-                                <input type="email" id="hero_business_email" name="contact_email" class="fp-input" placeholder="Enter your Business Email *" required value="<?php echo oldFormValue('contact_email', $franchise_prefill['contact_email'] ?? ($_SESSION['email'] ?? '')); ?>">
-                            </div>
-
-                            <!-- Phone Number -->
-                            <div class="fp-form-field" style="display: flex; border: 1px solid #d0d5dd; border-radius: 12px; overflow: hidden; align-items: center;">
-                                <span style="background: #f8f9fa; padding: 14px; font-weight: 700; color: #344054; border-right: 1px solid #d0d5dd; font-size: 0.95rem;">+63</span>
-                                <input type="tel" id="hero_phone" name="contact_phone" class="fp-input" placeholder="Business Owner Phone Number *" style="border: none; border-radius: 0;" required value="<?php echo oldFormValue('contact_phone', $franchise_prefill['contact_phone'] ?? ''); ?>">
-                            </div>
-
-                            <!-- Info Alert Note (Screenshot 1) -->
-                            <div style="background: #f0f8ff; border-radius: 12px; padding: 14px 16px; display: flex; gap: 12px; align-items: start;">
-                                <i class="fas fa-info-circle" style="color: #0284c7; font-size: 18px; margin-top: 2px;"></i>
-                                <p style="font-size: 0.82rem; color: #334155; line-height: 1.45; margin: 0; font-weight: 500;">
-                                    We’ll send an OTP to this number for verification. This number will also be used for all important communication.
-                                </p>
-                            </div>
-
-                            <!-- Checkboxes (Screenshot 1) -->
-                            <label style="display: flex; align-items: start; gap: 10px; font-size: 0.85rem; color: #171922; font-weight: 700; cursor: pointer; margin-top: 4px;">
-                                <input type="checkbox" checked style="accent-color: #b3261e; width: 18px; height: 18px; margin-top: 2px;">
-                                My Business Phone is the same as my Mobile Number
-                            </label>
-
-                            <label style="display: flex; align-items: start; gap: 10px; font-size: 0.85rem; color: #171922; font-weight: 700; cursor: pointer;">
-                                <input type="checkbox" checked style="accent-color: #b3261e; width: 18px; height: 18px; margin-top: 2px;">
-                                <span>I'd like to get updates & promotions by <strong style="color: #25d366;"><i class="fab fa-whatsapp"></i> WhatsApp</strong> and I also agree to the <a href="#" style="color: #b3261e; text-decoration: underline;">AI Notice</a></span>
-                            </label>
-
-                            <!-- Submit Button -->
-                            <button type="submit" id="btnHeroQuickApply" style="width: 100%; background: #b3261e; color: #fff; font-weight: 800; font-size: 1.05rem; border: none; border-radius: 12px; padding: 16px; cursor: pointer; margin-top: 8px; box-shadow: 0 6px 18px rgba(179,38,30,0.32); transition: all 0.2s;">
-                                SUBMIT APPLICATION
-                            </button>
-
-                            <!-- Footer Links -->
-                            <div style="text-align: center; margin-top: 8px; font-size: 0.82rem; color: #667085; line-height: 1.6;">
-                                <?php if (!isset($_SESSION['user_id'])): ?>
-                                Already have an account? <a href="login.php" style="color: #b3261e; font-weight: 700; text-decoration: none;">Login</a><br>
-                                <?php endif; ?>
-                                Do you want to be a delivery rider? <a href="locations.php" style="color: #b3261e; font-weight: 700; text-decoration: none;">Click here</a>
-                            </div>
-                            <p style="font-size: 0.7rem; color: #98a2b3; text-align: center; margin: 4px 0 0 0; line-height: 1.3;">
-                                This site is protected by reCAPTCHA and the Google <a href="privacy_policy.php" style="color: #667085;">Privacy Policy</a> and <a href="terms_of_service.php" style="color: #667085;">Terms of Service</a> apply.
-                            </p>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </section>
 
         <?php if ($success_msg): ?>
         <div class="alert alert-success" style="background-color: #d4edda; border: 2px solid #28a745; border-radius: 12px; padding: 20px; color: #155724; font-size: 1.05rem; margin-bottom: 24px;">

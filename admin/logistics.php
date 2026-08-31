@@ -1131,7 +1131,7 @@ function initLogisticsMap() {
         return;
     }
     logisticsMap = new google.maps.Map(document.getElementById('logisticsMap'), {
-        center: { lat: 14.5995, lng: 120.9842 }, // Metro Manila
+        center: { lat: 14.3294, lng: 120.9367 }, // Cavite
         zoom: 11,
         mapTypeControl: false,
         streetViewControl: false,

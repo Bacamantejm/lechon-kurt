@@ -1294,6 +1294,159 @@ class EmailService {
         }
     }
 
+    public function sendFranchiseSubmissionEmail($recipient_email, array $app_data): bool {
+        try {
+            $this->resetMessage();
+            $safe_email = trim((string)$recipient_email);
+            if ($safe_email === '' || !filter_var($safe_email, FILTER_VALIDATE_EMAIL)) {
+                return false;
+            }
+
+            $applicant_name = htmlspecialchars($app_data['contact_person'] ?? $app_data['full_name'] ?? 'Applicant');
+            $app_number = htmlspecialchars($app_data['application_number'] ?? '');
+            $business_name = htmlspecialchars($app_data['business_name'] ?? '');
+            $capital_investment = number_format((float)($app_data['capital_investment'] ?? 0), 2);
+            $business_address = htmlspecialchars($app_data['business_address'] ?? 'Cavite');
+
+            $subject = "Franchise Application Received - [{$app_number}]";
+            $this->mail->addAddress($safe_email, $applicant_name);
+            $this->mail->Subject = $subject;
+
+            $content = "
+                <h2 style='color:#b3261e;margin-top:0;'>Application Submitted Successfully</h2>
+                <p>Dear <strong>{$applicant_name}</strong>,</p>
+                <p>Thank you for submitting your franchise application with <strong>Lechon Delights / Lechong Sarao</strong>!</p>
+                <div style='background:#f8f9fa;border:1px solid #eaecf0;border-radius:12px;padding:16px;margin:20px 0;'>
+                    <p style='margin:0 0 8px;'><strong>Application Number:</strong> {$app_number}</p>
+                    <p style='margin:0 0 8px;'><strong>Business Name:</strong> {$business_name}</p>
+                    <p style='margin:0 0 8px;'><strong>Proposed Location:</strong> {$business_address}</p>
+                    <p style='margin:0;'><strong>Capital Investment:</strong> PHP {$capital_investment}</p>
+                </div>
+                <p>Our management team is currently reviewing your compliance documents and business profile. You will receive an email update once our review is complete.</p>
+                <p style='margin-top:20px;'>You can check your live application status anytime by logging into your account under <strong>My Account &gt; Franchise Applications</strong>.</p>
+                <p style='margin-top:24px;'>Best regards,<br><strong>Lechon Delights Franchise Management</strong></p>
+            ";
+
+            $this->mail->Body = $this->wrapInTemplate("Franchise Application Submission", $content);
+            $this->mail->AltBody = strip_tags($content);
+
+            if ($this->mail->send()) {
+                return true;
+            }
+            if ($this->local_mail_fallback) {
+                return $this->writeLocalMailFile($safe_email, $subject, $this->mail->Body, $this->mail->AltBody);
+            }
+            return false;
+        } catch (Exception $e) {
+            error_log("Franchise submission email error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    public function sendFranchiseStatusEmail($recipient_email, string $status, array $app_data, string $admin_notes = ''): bool {
+        try {
+            $this->resetMessage();
+            $safe_email = trim((string)$recipient_email);
+            if ($safe_email === '' || !filter_var($safe_email, FILTER_VALIDATE_EMAIL)) {
+                return false;
+            }
+
+            $applicant_name = htmlspecialchars($app_data['contact_person'] ?? $app_data['full_name'] ?? 'Applicant');
+            $app_number = htmlspecialchars($app_data['application_number'] ?? '');
+            $business_name = htmlspecialchars($app_data['business_name'] ?? '');
+            $notes_html = !empty($admin_notes) ? nl2br(htmlspecialchars($admin_notes)) : '';
+
+            $this->mail->addAddress($safe_email, $applicant_name);
+
+            if ($status === 'approved') {
+                $subject = "Good News! Your Franchise Application Has Been Accepted - [{$app_number}]";
+                $content = "
+                    <h2 style='color:#027a48;margin-top:0;'>Application Accepted!</h2>
+                    <p>Dear <strong>{$applicant_name}</strong>,</p>
+                    <p>We are thrilled to inform you that your franchise application for <strong>{$business_name}</strong> (App #{$app_number}) has been <strong>ACCEPTED & APPROVED</strong>!</p>
+                    <div style='background:#ecfdf3;border:1px solid #abefc6;border-radius:12px;padding:16px;margin:20px 0;color:#027a48;'>
+                        <p style='margin:0 0 8px;'><strong>Status:</strong> Approved & Partner Trial Activated</p>
+                        <p style='margin:0 0 8px;'><strong>Business Name:</strong> {$business_name}</p>
+                        <p style='margin:0;'><strong>Application Number:</strong> {$app_number}</p>
+                    </div>
+                ";
+                if (!empty($notes_html)) {
+                    $content .= "<div style='background:#f8f9fa;border-left:4px solid #027a48;padding:12px 16px;margin-bottom:20px;'><strong>Management Feedback:</strong><br>{$notes_html}</div>";
+                }
+                $content .= "
+                    <p><strong>Next Steps:</strong></p>
+                    <ul>
+                        <li>Your account now has <strong>Business Owner Admin Access</strong>.</li>
+                        <li>A <strong>1-month free platform trial</strong> has been activated for your store.</li>
+                        <li>You can now log in to the Admin Portal to set up your store menu, manage inventory, and configure delivery parameters.</li>
+                    </ul>
+                    <p>Our franchise onboarding team will contact you shortly regarding the formal franchise agreement.</p>
+                    <p style='margin-top:24px;'>Welcome to the Lechon Delights Family!<br><strong>Franchise Management Team</strong></p>
+                ";
+            } elseif ($status === 'incomplete') {
+                $subject = "Action Required: Incomplete Requirements for Franchise Application [{$app_number}]";
+                $content = "
+                    <h2 style='color:#b54708;margin-top:0;'>Incomplete Requirements</h2>
+                    <p>Dear <strong>{$applicant_name}</strong>,</p>
+                    <p>Thank you for submitting your franchise application for <strong>{$business_name}</strong> (App #{$app_number}).</p>
+                    <p>Upon initial review of your submission, our compliance team noted that your application has <strong>INCOMPLETE REQUIREMENTS</strong> or requires document revisions before we can proceed with final approval.</p>
+                    <div style='background:#fffaeb;border:1px solid #fedf89;border-radius:12px;padding:16px;margin:20px 0;color:#b54708;'>
+                        <p style='margin:0 0 8px;'><strong>Application Status:</strong> Incomplete Requirements / Revisions Needed</p>
+                        <p style='margin:0;'><strong>Application Number:</strong> {$app_number}</p>
+                    </div>
+                ";
+                if (!empty($notes_html)) {
+                    $content .= "
+                        <div style='background:#ffffff;border:1px solid #fedf89;border-radius:12px;padding:16px;margin-bottom:20px;'>
+                            <strong style='color:#b54708;'>Missing Requirements / Admin Notes:</strong>
+                            <p style='margin:8px 0 0;color:#344054;'>{$notes_html}</p>
+                        </div>
+                    ";
+                }
+                $content .= "
+                    <p><strong>What to do next:</strong></p>
+                    <p>Please log in to your account and navigate to <strong>My Account &gt; Franchise Applications</strong> to upload the missing documents or update your application details.</p>
+                    <p style='margin-top:24px;'>Best regards,<br><strong>Lechon Delights Compliance Team</strong></p>
+                ";
+            } else { // rejected
+                $subject = "Update on Your Franchise Application - [{$app_number}]";
+                $content = "
+                    <h2 style='color:#b3261e;margin-top:0;'>Franchise Application Update</h2>
+                    <p>Dear <strong>{$applicant_name}</strong>,</p>
+                    <p>Thank you for your interest in joining the Lechon Delights franchise network with your application for <strong>{$business_name}</strong> (App #{$app_number}).</p>
+                    <p>After careful evaluation, we regret to inform you that your application status has been marked as <strong>NOT ACCEPTED / REJECTED</strong> at this time.</p>
+                ";
+                if (!empty($notes_html)) {
+                    $content .= "
+                        <div style='background:#fff1f0;border:1px solid #fee4e2;border-radius:12px;padding:16px;margin:20px 0;color:#b3261e;'>
+                            <strong>Evaluation Feedback:</strong>
+                            <p style='margin:8px 0 0;color:#344054;'>{$notes_html}</p>
+                        </div>
+                    ";
+                }
+                $content .= "
+                    <p>If eligible, you may submit a revised application after completing the 3-day evaluation cooldown period.</p>
+                    <p style='margin-top:24px;'>Best regards,<br><strong>Lechon Delights Franchise Evaluation Board</strong></p>
+                ";
+            }
+
+            $this->mail->Subject = $subject;
+            $this->mail->Body = $this->wrapInTemplate($subject, $content);
+            $this->mail->AltBody = strip_tags($content);
+
+            if ($this->mail->send()) {
+                return true;
+            }
+            if ($this->local_mail_fallback) {
+                return $this->writeLocalMailFile($safe_email, $subject, $this->mail->Body, $this->mail->AltBody);
+            }
+            return false;
+        } catch (Exception $e) {
+            error_log("Franchise status email error: " . $e->getMessage());
+            return false;
+        }
+    }
+
     private function wrapInTemplate($title, $content) {
         // A simple wrapper to make emails look consistent.
         return "
