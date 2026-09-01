@@ -91,20 +91,25 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
         $ongoing_stmt->close();
     }
 }
+$is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="<?php echo $is_initial_dark ? 'dark' : 'light'; ?>" class="<?php echo $is_initial_dark ? 'dark-mode' : ''; ?>">
 <head>
     <script>
         (function() {
-            var savedTheme = localStorage.getItem('theme') || (document.cookie.match(/(?:^|;\s*)theme=([^;]*)/) || [])[1];
-            if (savedTheme === 'dark' || (!savedTheme && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-                document.documentElement.setAttribute('data-theme', 'dark');
-                document.documentElement.classList.add('dark-mode');
-            } else {
-                document.documentElement.setAttribute('data-theme', 'light');
-                document.documentElement.classList.remove('dark-mode');
-            }
+            try {
+                var cookieTheme = (document.cookie.match(/(?:^|;\s*)theme=([^;]*)/) || [])[1];
+                var savedTheme = localStorage.getItem('theme') || cookieTheme;
+                var isDark = (savedTheme === 'dark' || (!savedTheme && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches));
+                if (isDark) {
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                    document.documentElement.classList.add('dark-mode');
+                } else {
+                    document.documentElement.setAttribute('data-theme', 'light');
+                    document.documentElement.classList.remove('dark-mode');
+                }
+            } catch (e) {}
         })();
     </script>
     <meta charset="UTF-8">
@@ -118,21 +123,28 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
-        :root { --ink:#171922; --muted:#667085; --line:#efddcd; --rose:#b3261e; --bg:#f8f9fa; --card:#fff; --shadow:0 12px 30px rgba(15,23,42,.1); --primary-color:#b3261e; --primary-dark:#8f261a; --motion-ease:cubic-bezier(.22,1,.36,1); --motion-fast:.22s; --motion-base:.28s; --transition-fast:all var(--motion-fast) var(--motion-ease); --transition-fade:opacity var(--motion-fast) var(--motion-ease), visibility var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease); --transition-lift:transform var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease); }
-        [data-theme="dark"], body.dark-mode { --ink:#f8fafc; --muted:#94a3b8; --line:#334155; --rose:#b3261e; --bg:#121824; --card:#1e293b; --shadow:0 12px 30px rgba(0,0,0,.45); --primary-color:#b3261e; --primary-dark:#981b15; }
-        
-        * { box-sizing:border-box; }
-        html, body { margin:0; padding:0; overflow-x:clip !important; max-width:100vw; width:100%; font-family:"Plus Jakarta Sans","Segoe UI",sans-serif; background:var(--bg); color:var(--ink); transition: background-color 0.25s ease, color 0.25s ease; }
-        h1,h2,h3,h4,h5,h6 { font-family:"Outfit","Plus Jakarta Sans",sans-serif; }
-        .site-main { min-height:calc(100vh - 260px); }
-        .site-header { position:sticky; top:0; z-index:1200; background:var(--card); border-bottom:1px solid var(--line); box-shadow:0 6px 20px rgba(15,23,42,.04); width:100%; transition: background-color 0.25s ease, border-color 0.25s ease; }
-
-        /* Global Dark Mode Rules & Components */
+        /* Anti-Flash Immediate Root Styles */
+        html.dark-mode,
+        html[data-theme="dark"],
+        html.dark-mode body,
         body.dark-mode {
             background-color: #121824 !important;
             color: #f8fafc !important;
         }
+
+        :root { --ink:#171922; --muted:#667085; --line:#efddcd; --rose:#b3261e; --bg:#f8f9fa; --card:#fff; --shadow:0 12px 30px rgba(15,23,42,.1); --primary-color:#b3261e; --primary-dark:#8f261a; --motion-ease:cubic-bezier(.22,1,.36,1); --motion-fast:.22s; --motion-base:.28s; --transition-fast:all var(--motion-fast) var(--motion-ease); --transition-fade:opacity var(--motion-fast) var(--motion-ease), visibility var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease); --transition-lift:transform var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease); }
+        [data-theme="dark"], body.dark-mode { --ink:#f8fafc; --muted:#94a3b8; --line:#334155; --rose:#b3261e; --bg:#121824; --card:#1e293b; --shadow:0 12px 30px rgba(0,0,0,.45); --primary-color:#b3261e; --primary-dark:#981b15; }
+        
+        * { box-sizing:border-box; }
+        html, body { margin:0; padding:0; overflow-x:clip !important; max-width:100vw; width:100%; font-family:"Plus Jakarta Sans","Segoe UI",sans-serif; background:var(--bg); color:var(--ink); }
+        h1,h2,h3,h4,h5,h6 { font-family:"Outfit","Plus Jakarta Sans",sans-serif; }
+        .site-main { min-height:calc(100vh - 260px); }
+        .site-header { position:sticky; top:0; z-index:1200; background:var(--card); border-bottom:1px solid var(--line); box-shadow:0 6px 20px rgba(15,23,42,.04); width:100%; }
+
+        /* Global Dark Mode Rules & Components */
+        html.dark-mode .site-header,
         body.dark-mode .site-header,
+        html.dark-mode .market-header-bottom,
         body.dark-mode .market-header-bottom {
             background-color: #1e293b !important;
             border-color: #334155 !important;
@@ -217,6 +229,76 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
             background: #334155 !important;
             color: #ffffff !important;
         }
+        body.dark-mode,
+        html.dark-mode,
+        body.dark-mode .market-home,
+        body.dark-mode .main-content,
+        body.dark-mode .page-header,
+        body.dark-mode .site-content {
+            background-color: #0f172a !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .page-header h1,
+        body.dark-mode .page-header h2,
+        body.dark-mode .section-heading,
+        body.dark-mode h1,
+        body.dark-mode h2,
+        body.dark-mode h3,
+        body.dark-mode h4,
+        body.dark-mode h5,
+        body.dark-mode h6 {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .page-header p,
+        body.dark-mode .section-subheading {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode .market-sidebar,
+        body.dark-mode .page-sidebar,
+        body.dark-mode .sticky-sidebar {
+            background-color: #1e293b !important;
+            border-color: #334155 !important;
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35) !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .market-sidebar-section,
+        body.dark-mode .sidebar-section {
+            border-color: #334155 !important;
+        }
+        body.dark-mode .market-sidebar h3,
+        body.dark-mode .market-sidebar h4,
+        body.dark-mode .market-filter-title {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .market-radio,
+        body.dark-mode .market-check,
+        body.dark-mode .market-radio span,
+        body.dark-mode .market-check span {
+            color: #cbd5e1 !important;
+        }
+        body.dark-mode .market-radio:hover span,
+        body.dark-mode .market-check:hover span {
+            color: #ffffff !important;
+        }
+        body.dark-mode .panda-menu-sticky-bar,
+        body.dark-mode .sticky-category-bar,
+        body.dark-mode .category-nav-bar {
+            background-color: #1e293b !important;
+            border-color: #334155 !important;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3) !important;
+        }
+        body.dark-mode .panda-menu-search-box {
+            background: #0f172a !important;
+            border-color: #334155 !important;
+        }
+        body.dark-mode .panda-menu-search-box input {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .panda-cat-arrow {
+            background: #1e293b !important;
+            border-color: #334155 !important;
+            color: #f8fafc !important;
+        }
         body.dark-mode .card,
         body.dark-mode .product-card,
         body.dark-mode .modal-content,
@@ -233,7 +315,10 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
         body.dark-mode .sticky-ongoing-link,
         body.dark-mode .section-card,
         body.dark-mode .sidebar-card,
-        body.dark-mode .fav-card {
+        body.dark-mode .fav-card,
+        body.dark-mode .market-store-row,
+        body.dark-mode .swimlane-item-card,
+        body.dark-mode .menu-item-card {
             background-color: #1e293b !important;
             border-color: #334155 !important;
             color: #f8fafc !important;
@@ -260,6 +345,25 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
         body.dark-mode textarea:focus {
             border-color: #b3261e !important;
             box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.25) !important;
+        }
+        body.dark-mode input:-webkit-autofill,
+        body.dark-mode input:-webkit-autofill:hover, 
+        body.dark-mode input:-webkit-autofill:focus, 
+        body.dark-mode input:-webkit-autofill:active,
+        body.dark-mode textarea:-webkit-autofill,
+        body.dark-mode select:-webkit-autofill {
+            -webkit-box-shadow: 0 0 0 1000px #0f172a inset !important;
+            box-shadow: 0 0 0 1000px #0f172a inset !important;
+            -webkit-text-fill-color: #f8fafc !important;
+            color: #f8fafc !important;
+            transition: background-color 5000s ease-in-out 0s !important;
+            caret-color: #f8fafc !important;
+        }
+        body.dark-mode input:-webkit-autofill:focus {
+            -webkit-box-shadow: 0 0 0 1000px #0b1120 inset, 0 0 0 3px rgba(179, 38, 30, 0.25) !important;
+            box-shadow: 0 0 0 1000px #0b1120 inset, 0 0 0 3px rgba(179, 38, 30, 0.25) !important;
+            -webkit-text-fill-color: #ffffff !important;
+            color: #ffffff !important;
         }
         body.dark-mode .text-muted,
         body.dark-mode .sub-text,
@@ -308,6 +412,75 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
         }
         body.dark-mode .swal2-title,
         body.dark-mode .swal2-html-container {
+            color: #f8fafc !important;
+        }
+
+        /* Customer Chat Dark Theme */
+        body.dark-mode .chat-container,
+        body.dark-mode .chat-sidebar,
+        body.dark-mode .chat-header,
+        body.dark-mode .chat-input-container {
+            background-color: #1e293b !important;
+            border-color: #334155 !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .chat-messages {
+            background-color: #0f172a !important;
+        }
+        body.dark-mode .chat-bubble-agent,
+        body.dark-mode .message-agent {
+            background-color: #1e293b !important;
+            border: 1px solid #334155 !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .chat-user-item {
+            border-color: #334155 !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .chat-user-item:hover,
+        body.dark-mode .chat-user-item.active {
+            background-color: #334155 !important;
+        }
+        body.dark-mode .chat-input-container textarea,
+        body.dark-mode .chat-input-container input {
+            background-color: #0f172a !important;
+            border-color: #334155 !important;
+            color: #f8fafc !important;
+        }
+
+        /* Checkout, Orders, Help Center & Modals Dark Theme */
+        body.dark-mode .order-summary-box,
+        body.dark-mode .checkout-section,
+        body.dark-mode .payment-option-card,
+        body.dark-mode .delivery-option-card,
+        body.dark-mode .address-card,
+        body.dark-mode .pricing-plan-card,
+        body.dark-mode .faq-item,
+        body.dark-mode .accordion-item,
+        body.dark-mode .accordion-button,
+        body.dark-mode .dropdown-menu,
+        body.dark-mode .offcanvas,
+        body.dark-mode .modal-header,
+        body.dark-mode .modal-body,
+        body.dark-mode .modal-footer {
+            background-color: #1e293b !important;
+            border-color: #334155 !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .accordion-button:not(.collapsed) {
+            background-color: #273349 !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .dropdown-item {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .dropdown-item:hover {
+            background-color: #334155 !important;
+            color: #ffffff !important;
+        }
+        body.dark-mode .list-group-item {
+            background-color: #1e293b !important;
+            border-color: #334155 !important;
             color: #f8fafc !important;
         }
         .header-shell { max-width:1320px; margin:0 auto; padding:0 22px; width:100%; }
@@ -707,12 +880,20 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
             position: sticky;
             top: 0;
             z-index: 1200;
-            background: #ffffff !important;
+            background: #ffffff;
             backdrop-filter: none !important;
             -webkit-backdrop-filter: none !important;
             border-bottom: 1px solid var(--line);
             box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05);
             width: 100%;
+        }
+        body.dark-mode .site-header,
+        html.dark-mode .site-header,
+        body.dark-mode .market-header-bottom,
+        html.dark-mode .market-header-bottom {
+            background: #1e293b !important;
+            background-color: #1e293b !important;
+            border-color: #334155 !important;
         }
 
         .market-header-top, .market-header-bottom { max-width:1280px; margin:0 auto; padding:0 24px; width:100%; box-sizing:border-box; }
@@ -1192,8 +1373,8 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
     <!-- Leaflet Map CSS and JS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-</head>
-<body class="<?php echo $is_market_home_header ? 'market-body' : 'site-body'; ?>">
+<body class="<?php echo $is_market_home_header ? 'market-body' : 'site-body'; ?><?php echo $is_initial_dark ? ' dark-mode' : ''; ?>">
+<script>(function(){if(document.documentElement.classList.contains('dark-mode')&&document.body){document.body.classList.add('dark-mode');}})();</script>
 <?php if ($is_market_home_header): ?>
 <header class="site-header market-main-header">
     <div class="market-header-top">
@@ -1304,7 +1485,6 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
     <div class="market-header-bottom">
         <nav class="market-home-nav">
             <a href="<?php echo $path_prefix; ?>index.php#marketplaceStores" class="market-home-link<?php echo ($current_page === 'home' || $current_page === 'index') ? ' active' : ''; ?>"><i class="fas fa-motorcycle"></i> Delivery</a>
-            <a href="<?php echo $path_prefix; ?>index.php?type=pickup#marketplaceStores" class="market-home-link<?php echo ($current_page === 'pickup') ? ' active' : ''; ?>"><i class="fas fa-person-walking"></i> Pick-up</a>
             <a href="<?php echo $path_prefix; ?>shops.php" class="market-home-link<?php echo ($current_page === 'shops') ? ' active' : ''; ?>"><i class="fas fa-shop"></i> Shops</a>
         </nav>
         <div class="market-home-search-wrap" id="marketHeaderSearchWrap">
@@ -1313,7 +1493,6 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
                 <div class="market-search-tabs">
                     <button type="button" class="market-search-tab active" data-tab="all">All</button>
                     <button type="button" class="market-search-tab" data-tab="delivery">Delivery</button>
-                    <button type="button" class="market-search-tab" data-tab="pickup">Pick-up</button>
                     <button type="button" class="market-search-tab" data-tab="shops">Shops</button>
                 </div>
                 <div class="market-search-panel active" data-panel="all">
@@ -1330,13 +1509,6 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
                     <div class="market-search-suggestions">
                         <button type="button" class="market-search-suggestion" data-term="Fast delivery">Fast delivery</button>
                         <button type="button" class="market-search-suggestion" data-term="Live menu">Live menu</button>
-                    </div>
-                </div>
-                <div class="market-search-panel" data-panel="pickup">
-                    <p class="market-search-title">Pick-up searches</p>
-                    <div class="market-search-suggestions">
-                        <button type="button" class="market-search-suggestion" data-term="Pickup branch">Pickup branch</button>
-                        <button type="button" class="market-search-suggestion" data-term="Dasmarinas">Dasmarinas</button>
                     </div>
                 </div>
                 <div class="market-search-panel" data-panel="shops">
@@ -3025,6 +3197,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const favoriteButton = event.target.closest('[data-favorite-toggle]');
         if (!favoriteButton) return;
         event.preventDefault();
+        event.stopPropagation();
         toggleFavorite(favoriteButton);
     });
 

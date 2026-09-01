@@ -1072,6 +1072,25 @@ body.dark-mode .form-control:focus {
     box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.3) !important;
 }
 
+body.dark-mode input:-webkit-autofill,
+body.dark-mode input:-webkit-autofill:hover, 
+body.dark-mode input:-webkit-autofill:focus, 
+body.dark-mode input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 1000px #1e293b inset !important;
+    box-shadow: 0 0 0 1000px #1e293b inset !important;
+    -webkit-text-fill-color: #f8fafc !important;
+    color: #f8fafc !important;
+    transition: background-color 5000s ease-in-out 0s !important;
+    caret-color: #f8fafc !important;
+}
+
+body.dark-mode input:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0 1000px #0b1120 inset, 0 0 0 3px rgba(179, 38, 30, 0.3) !important;
+    box-shadow: 0 0 0 1000px #0b1120 inset, 0 0 0 3px rgba(179, 38, 30, 0.3) !important;
+    -webkit-text-fill-color: #ffffff !important;
+    color: #ffffff !important;
+}
+
 body.dark-mode .input-with-icon i,
 body.dark-mode #togglePassword {
     color: #94a3b8 !important;
@@ -1443,6 +1462,20 @@ document.addEventListener('DOMContentLoaded', function() {
             emailInput.focus();
         }
     }, 300);
+
+    // Password Visibility Toggle for Login
+    const togglePasswordBtn = document.getElementById('togglePassword');
+    const passwordInput = document.getElementById('password');
+    if (togglePasswordBtn && passwordInput) {
+        togglePasswordBtn.addEventListener('click', function() {
+            const isPass = passwordInput.type === 'password';
+            passwordInput.type = isPass ? 'text' : 'password';
+            const icon = this.querySelector('i');
+            if (icon) {
+                icon.className = isPass ? 'fas fa-eye-slash' : 'fas fa-eye';
+            }
+        });
+    }
     
     // In-Place View Switcher between Login and Forgot Password
     const loginView = document.getElementById('loginViewContainer');

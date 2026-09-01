@@ -2756,9 +2756,9 @@ body.dark-mode .reg-choice-desc {
 }
 
 /* Marketplace Layout Theme */
-body {
-    background: #ffffff !important;
-    --bg: #ffffff !important;
+body:not(.dark-mode) {
+    background: #ffffff;
+    --bg: #ffffff;
 }
 
 .market-explorer {
@@ -2767,8 +2767,8 @@ body {
 }
 
 .market-sidebar {
-    background: #ffffff !important;
-    border: 1px solid #e2e8f0 !important;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
     border-radius: 16px !important;
     padding: 20px !important;
     box-shadow: 0 4px 16px rgba(15, 23, 42, 0.02) !important;
@@ -3000,6 +3000,105 @@ body {
     background: #981b15;
     color: #ffffff;
 }
+
+/* ==========================================================================
+   LANDING / STORE LISTING DARK MODE THEME REINFORCEMENTS
+   ========================================================================== */
+body.dark-mode,
+html.dark-mode,
+body.dark-mode .market-home,
+html.dark-mode .market-home {
+    background: #0f172a !important;
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .market-sidebar {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35) !important;
+}
+
+body.dark-mode .market-sidebar-section {
+    border-color: #334155 !important;
+}
+
+body.dark-mode .market-sidebar h3,
+body.dark-mode .market-sidebar h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .market-radio span,
+body.dark-mode .market-check span {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .market-sidebar-toggle-btn {
+    color: #f8fafc !important;
+}
+
+/* Pick-up Map Banner in Dark Mode */
+body.dark-mode .foodpanda-pickup-banner {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4) !important;
+}
+
+body.dark-mode .foodpanda-pickup-banner h2 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .foodpanda-pickup-banner [style*="background: #ffffff"],
+body.dark-mode .foodpanda-pickup-banner [style*="background:#ffffff"] {
+    background: #0f172a !important;
+    color: #ef4444 !important;
+    border: 1px solid #334155 !important;
+}
+
+body.dark-mode .foodpanda-pickup-banner span {
+    color: #94a3b8 !important;
+}
+
+/* User Promo Cards in Dark Mode */
+body.dark-mode .user-promo-row > div {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+body.dark-mode .user-promo-row h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .user-promo-row p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .deal-card {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .deal-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .deal-desc {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .deal-code-row {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .deal-copy-btn {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
 </style>
 
 <div class="market-home">
@@ -3043,23 +3142,7 @@ body {
                 </aside>
 
                 <div>
-                    <?php if ($is_pickup_mode): ?>
-                        <!-- Foodpanda-Style Pick-up Map Section (Leaflet Map for Nearby Stores) -->
-                        <div class="foodpanda-pickup-banner" style="background: linear-gradient(135deg, #f0fdf4 0%, #e0f2fe 100%); border: 1px solid #cbd5e1; border-radius: 20px; padding: 22px; margin-bottom: 24px; box-shadow: 0 4px 16px rgba(15,23,42,0.04);">
-                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; flex-wrap: wrap;">
-                                <div>
-                                    <div style="display: inline-flex; align-items: center; gap: 6px; background: #ffffff; color: #b3261e; padding: 4px 14px; border-radius: 999px; font-size: 0.8rem; font-weight: 800; margin-bottom: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.06);">
-                                        <i class="fas fa-person-walking"></i> Nearby Pick-up Branches
-                                    </div>
-                                    <h2 style="margin: 0; font-family: 'Outfit', sans-serif; font-size: 1.45rem; font-weight: 800; color: #1e293b;">Explore restaurants around you</h2>
-                                </div>
-                                <span style="font-size: 0.85rem; color: #64748b; font-weight: 600;"><i class="fas fa-location-dot" style="color: #b3261e;"></i> Showing nearby Cavite store pins</span>
-                            </div>
-                            <div id="pickupMapContainer" style="width: 100%;">
-                                <div id="pickupLeafletMap" style="width: 100%; height: 340px; border-radius: 16px; border: 2px solid #ffffff; box-shadow: 0 8px 24px rgba(15,23,42,0.12); z-index: 1;"></div>
-                            </div>
-                        </div>
-                    <?php endif; ?>
+
 
                     <?php if (empty($is_pickup_mode) && !empty($_SESSION['user_id'])): 
                         $first_name = explode(' ', $_SESSION['full_name'] ?? 'Guest')[0];
@@ -3359,7 +3442,6 @@ body {
                                             data-favorite-active="<?php echo $is_prod_fav ? '1' : '0'; ?>"
                                             aria-pressed="<?php echo $is_prod_fav ? 'true' : 'false'; ?>"
                                             title="<?php echo $is_prod_fav ? 'Remove from favorites' : 'Save to favorites'; ?>"
-                                            onclick="event.preventDefault(); event.stopPropagation();"
                                             style="position:absolute; top:8px; right:8px; z-index:2; width:28px; height:28px; font-size:0.75rem;">
                                             <i class="<?php echo $is_prod_fav ? 'fas' : 'far'; ?> fa-heart"></i>
                                         </button>
@@ -3440,8 +3522,7 @@ body {
                                             data-favorite-store-key="<?php echo htmlspecialchars($store_key_value); ?>"
                                             data-favorite-active="<?php echo $is_store_favorite ? '1' : '0'; ?>"
                                             aria-pressed="<?php echo $is_store_favorite ? 'true' : 'false'; ?>"
-                                            title="<?php echo $is_store_favorite ? 'Remove from favorites' : 'Save to favorites'; ?>"
-                                            onclick="event.preventDefault(); event.stopPropagation();">
+                                            title="<?php echo $is_store_favorite ? 'Remove from favorites' : 'Save to favorites'; ?>">
                                             <i class="<?php echo $is_store_favorite ? 'fas' : 'far'; ?> fa-heart"></i>
                                         </button>
                                     </div>
@@ -4271,6 +4352,18 @@ document.addEventListener('DOMContentLoaded', function() {
     const popupLoginForm = document.getElementById('popupLoginForm');
     const authTabs = document.querySelectorAll('[data-auth-tab]');
     const authPanes = document.querySelectorAll('.auth-popup-pane');
+
+    // Password Visibility Toggle for Popup Modal
+    if (togglePasswordBtn && passwordInput) {
+        togglePasswordBtn.addEventListener('click', function() {
+            const isPass = passwordInput.type === 'password';
+            passwordInput.type = isPass ? 'text' : 'password';
+            const icon = this.querySelector('i');
+            if (icon) {
+                icon.className = isPass ? 'fas fa-eye-slash' : 'fas fa-eye';
+            }
+        });
+    }
     
     function switchAuthTab(tabName) {
         authTabs.forEach(tab => {

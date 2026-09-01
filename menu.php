@@ -677,7 +677,192 @@ if ($lookup_seller_id > 0 && isset($conn) && $conn instanceof mysqli) {
         mysqli_stmt_close($vd_stmt);
     }
 }
-?><!-- Product Preview Modal -->
+?>
+<style>
+/* Immediate Navigation & Tab Styles */
+.panda-cat-tab {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    padding: 10px 0 !important;
+    color: #64748b !important;
+    font-size: 0.92rem !important;
+    font-weight: 600 !important;
+    text-decoration: none !important;
+    border-bottom: 3px solid transparent !important;
+    transition: all 0.2s ease !important;
+    cursor: pointer !important;
+}
+.panda-cat-tab:hover {
+    color: #171922 !important;
+    text-decoration: none !important;
+}
+.panda-cat-tab.active {
+    color: #171922 !important;
+    font-weight: 800 !important;
+    border-bottom-color: #171922 !important;
+    text-decoration: none !important;
+}
+.panda-cat-count {
+    font-size: 0.84rem !important;
+    color: #64748b !important;
+    font-weight: 500 !important;
+}
+.panda-cat-tab.active .panda-cat-count {
+    color: #171922 !important;
+    font-weight: 700 !important;
+}
+
+/* Store Breadcrumb & Metadata Links */
+.store-breadcrumb a {
+    color: #64748b !important;
+    text-decoration: none !important;
+    font-size: 0.84rem !important;
+}
+.store-breadcrumb a:hover {
+    color: #b3261e !important;
+}
+.storefront-meta-row-secondary a {
+    color: #475467 !important;
+    text-decoration: none !important;
+}
+.storefront-meta-row-secondary a:hover {
+    color: #171922 !important;
+}
+
+/* Smooth Image Display & Zero-Jump Sizing */
+.store-logo-tile {
+    width: 100px !important;
+    height: 100px !important;
+    border-radius: 16px !important;
+    overflow: hidden !important;
+    flex-shrink: 0 !important;
+    background: #e2e8f0 !important;
+}
+.store-logo-tile img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    display: block !important;
+    transition: transform 0.25s ease !important;
+}
+.item-image {
+    position: relative !important;
+    height: 140px !important;
+    overflow: hidden !important;
+    background: #f8fafc !important;
+    border-radius: 16px 16px 0 0 !important;
+}
+.item-image img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    display: block !important;
+    transition: transform 0.25s ease !important;
+}
+.menu-item:hover .item-image img {
+    transform: scale(1.03) !important;
+}
+
+/* Dark Mode Theme Engine for Menu & Quick Order */
+body.dark-mode .panda-cat-tab {
+    color: #94a3b8 !important;
+    text-decoration: none !important;
+}
+body.dark-mode .panda-cat-tab:hover {
+    color: #ffffff !important;
+    text-decoration: none !important;
+}
+body.dark-mode .panda-cat-tab.active {
+    color: #ef4444 !important;
+    border-bottom-color: #ef4444 !important;
+    text-decoration: none !important;
+}
+body.dark-mode .panda-cat-count {
+    color: #64748b !important;
+}
+body.dark-mode .panda-cat-tab.active .panda-cat-count {
+    color: #ef4444 !important;
+}
+body.dark-mode .store-breadcrumb a {
+    color: #94a3b8 !important;
+}
+body.dark-mode .store-breadcrumb a:hover {
+    color: #ffffff !important;
+}
+body.dark-mode .storefront-meta-row-secondary a {
+    color: #cbd5e1 !important;
+}
+body.dark-mode .storefront-meta-row-secondary a:hover {
+    color: #ffffff !important;
+}
+body.dark-mode .quick-order-panel {
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+body.dark-mode .quick-order-tabs {
+    background: #0f172a !important;
+    border: 1px solid #334155 !important;
+}
+body.dark-mode .quick-order-tab {
+    color: #94a3b8 !important;
+}
+body.dark-mode .quick-order-tab.active {
+    background: #1e293b !important;
+    color: #f8fafc !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3) !important;
+}
+body.dark-mode .quick-order-hero {
+    background: #111827 !important;
+    border: 1px solid #334155 !important;
+}
+body.dark-mode .quick-order-hero h3 {
+    color: #f8fafc !important;
+}
+body.dark-mode .quick-order-hero p {
+    color: #94a3b8 !important;
+}
+body.dark-mode .quick-order-summary {
+    color: #f8fafc !important;
+}
+body.dark-mode .quick-order-meta {
+    color: #94a3b8 !important;
+}
+body.dark-mode .quick-order-items-empty {
+    color: #94a3b8 !important;
+}
+body.dark-mode .quick-order-item {
+    border-bottom-color: #334155 !important;
+}
+body.dark-mode .quick-order-item-title {
+    color: #f8fafc !important;
+}
+body.dark-mode .quick-order-item-price {
+    color: #ef4444 !important;
+}
+body.dark-mode .summary-row {
+    color: #f8fafc !important;
+}
+body.dark-mode .summary-row strong,
+body.dark-mode #quickOrderTotal {
+    color: #f8fafc !important;
+}
+body.dark-mode .quick-order-link {
+    color: #f8fafc !important;
+}
+body.dark-mode .quick-order-checkout:disabled {
+    background: #334155 !important;
+    color: #64748b !important;
+}
+body.dark-mode .quick-order-checkout:not(:disabled) {
+    background: #b3261e !important;
+    color: #ffffff !important;
+}
+</style>
+
+<!-- Product Preview Modal -->
 <div class="product-preview-modal" id="productPreviewModal" style="display:none;">
     <div class="preview-modal-content">
         <button class="preview-close" id="previewClose">&times;</button>
@@ -5917,6 +6102,227 @@ body {
     #backToTopBtn {
         z-index: 1050 !important;
     }
+}
+
+/* ==========================================================================
+   STOREFRONT MENU PAGE DARK MODE THEME ENGINE
+   ========================================================================== */
+body.dark-mode,
+html.dark-mode,
+body.dark-mode .storefront-header,
+body.dark-mode .menu-section,
+body.dark-mode .menu-container {
+    background: #0f172a !important;
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .store-breadcrumb a,
+body.dark-mode .store-breadcrumb span {
+    color: #94a3b8 !important;
+}
+body.dark-mode .store-breadcrumb .is-current {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .storefront-copy h1 {
+    color: #f8fafc !important;
+}
+body.dark-mode .storefront-categories {
+    color: #cbd5e1 !important;
+}
+body.dark-mode .storefront-subtitle {
+    color: #94a3b8 !important;
+}
+body.dark-mode .storefront-meta-row span,
+body.dark-mode .storefront-meta-row a {
+    color: #cbd5e1 !important;
+}
+body.dark-mode .storefront-meta-row a:hover {
+    color: #ffffff !important;
+}
+
+/* Store Deals Box */
+body.dark-mode .store-deals-strip {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+body.dark-mode .store-deals-strip h3 {
+    color: #f8fafc !important;
+}
+body.dark-mode .store-deals-strip p {
+    color: #94a3b8 !important;
+}
+body.dark-mode .store-deals-strip [style*="background: #f8f9fa"],
+body.dark-mode .store-deals-strip [style*="background:#f8f9fa"] {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+body.dark-mode .store-deals-strip [style*="color: #344054"],
+body.dark-mode .store-deals-strip [style*="color:#344054"] {
+    color: #f8fafc !important;
+}
+body.dark-mode .store-deals-strip button {
+    background: #1e293b !important;
+    border-color: #475569 !important;
+    color: #f8fafc !important;
+}
+
+/* Foodpanda Sticky Category Nav Bar */
+body.dark-mode .panda-menu-sticky-bar {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35) !important;
+}
+body.dark-mode .panda-menu-search-box {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+}
+body.dark-mode .panda-menu-search-box input {
+    color: #f8fafc !important;
+}
+body.dark-mode .panda-cat-arrow {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+body.dark-mode .panda-cat-arrow:hover {
+    background: #334155 !important;
+    color: #ffffff !important;
+}
+body.dark-mode .panda-cat-tab {
+    color: #94a3b8 !important;
+}
+body.dark-mode .panda-cat-tab:hover {
+    color: #ffffff !important;
+}
+body.dark-mode .panda-cat-tab.active {
+    color: #ef4444 !important;
+    border-bottom-color: #ef4444 !important;
+}
+body.dark-mode .panda-cat-count {
+    color: #64748b !important;
+}
+body.dark-mode .panda-cat-tab.active .panda-cat-count {
+    color: #ef4444 !important;
+}
+body.dark-mode .panda-menu-filter-select {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+/* Menu Category Titles & Product Cards */
+body.dark-mode .category-title {
+    color: #f8fafc !important;
+}
+body.dark-mode .menu-item {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+body.dark-mode .menu-item:hover {
+    border-color: #b3261e !important;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4) !important;
+}
+body.dark-mode .menu-item h3,
+body.dark-mode .menu-item-title {
+    color: #f8fafc !important;
+}
+body.dark-mode .menu-item p,
+body.dark-mode .menu-item-desc {
+    color: #94a3b8 !important;
+}
+body.dark-mode .menu-item-price {
+    color: #ef4444 !important;
+}
+
+/* Empty State / Storefront Update Card */
+body.dark-mode [style*="Storefront update"],
+body.dark-mode div[style*="Storefront update"] {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+body.dark-mode .empty-menu-container,
+body.dark-mode .empty-cart-message {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+/* Right Cart Sidebar in Dark Mode */
+body.dark-mode .cart-sidebar,
+body.dark-mode .panda-cart-sidebar,
+body.dark-mode .cart-container {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4) !important;
+}
+body.dark-mode .cart-sidebar h3,
+body.dark-mode .cart-sidebar h4,
+body.dark-mode .cart-sidebar strong {
+    color: #f8fafc !important;
+}
+body.dark-mode .cart-sidebar p,
+body.dark-mode .cart-sidebar span {
+    color: #cbd5e1 !important;
+}
+body.dark-mode .delivery-pickup-toggle,
+body.dark-mode .order-type-switch {
+    background: #0f172a !important;
+    border: 1px solid #334155 !important;
+}
+body.dark-mode .toggle-btn,
+body.dark-mode .order-type-btn {
+    color: #94a3b8 !important;
+}
+body.dark-mode .toggle-btn.active,
+body.dark-mode .order-type-btn.active {
+    background: #1e293b !important;
+    color: #ef4444 !important;
+    border: 1px solid #334155 !important;
+}
+body.dark-mode .cart-item-row {
+    border-color: #334155 !important;
+}
+body.dark-mode .cart-summary-line {
+    border-color: #334155 !important;
+}
+
+/* Modals in Dark Mode */
+body.dark-mode .preview-modal-content,
+body.dark-mode .product-preview-modal .preview-modal-content {
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+    color: #f8fafc !important;
+}
+body.dark-mode .preview-modal-content h2,
+body.dark-mode .preview-modal-content h3,
+body.dark-mode .preview-modal-content h4 {
+    color: #f8fafc !important;
+}
+body.dark-mode .preview-modal-content p,
+body.dark-mode .preview-modal-content span {
+    color: #cbd5e1 !important;
+}
+body.dark-mode .store-review-item {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+body.dark-mode .store-review-filter-btn {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+body.dark-mode .store-review-filter-btn.active {
+    background: #b3261e !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
 }
 </style>
 

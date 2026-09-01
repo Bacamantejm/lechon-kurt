@@ -62,8 +62,8 @@ class PartnerBusinessEconomicsService
             FROM order_items oi_scope
             INNER JOIN products p_scope
                 ON (
-                    oi_scope.product_id = p_scope.product_id
-                    OR oi_scope.product_id = CAST(p_scope.id AS CHAR)
+                    oi_scope.product_id COLLATE utf8mb4_general_ci = p_scope.product_id COLLATE utf8mb4_general_ci
+                    OR oi_scope.product_id COLLATE utf8mb4_general_ci = CAST(p_scope.id AS CHAR) COLLATE utf8mb4_general_ci
                     OR CAST(oi_scope.product_id AS UNSIGNED) = p_scope.id
                 )
             WHERE oi_scope.order_id = {$orderAlias}.id

@@ -457,8 +457,8 @@ if (!function_exists('getFranchiseScopedOrderExistsSql')) {
             FROM order_items oi_scope
             INNER JOIN products p_scope
                 ON (
-                    oi_scope.product_id = p_scope.product_id
-                    OR oi_scope.product_id = CAST(p_scope.id AS CHAR)
+                    oi_scope.product_id COLLATE utf8mb4_general_ci = p_scope.product_id COLLATE utf8mb4_general_ci
+                    OR oi_scope.product_id COLLATE utf8mb4_general_ci = CAST(p_scope.id AS CHAR) COLLATE utf8mb4_general_ci
                     OR CAST(oi_scope.product_id AS UNSIGNED) = p_scope.id
                 )
             WHERE oi_scope.order_id = {$order_id_expr}
@@ -493,7 +493,7 @@ if (!function_exists('getFranchiseScopedPreOrderExistsSql')) {
             INNER JOIN products p_scope
                 ON (
                     po_scope.product_id = p_scope.id
-                    OR CAST(po_scope.product_id AS CHAR) = p_scope.product_id
+                    OR CAST(po_scope.product_id AS CHAR) COLLATE utf8mb4_general_ci = p_scope.product_id COLLATE utf8mb4_general_ci
                     OR CAST(po_scope.product_id AS UNSIGNED) = p_scope.id
                 )
             WHERE po_scope.id = {$pre_order_id_expr}

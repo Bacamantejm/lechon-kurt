@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 session_start();
 include '../includes/config.php';
 include '../includes/security.php';
@@ -22,8 +22,8 @@ if ($seller_scope_id !== null) {
             FROM order_items oi_scope
             INNER JOIN products p_scope
                 ON (
-                    oi_scope.product_id = p_scope.product_id
-                    OR oi_scope.product_id = CAST(p_scope.id AS CHAR)
+                    oi_scope.product_id COLLATE utf8mb4_general_ci = p_scope.product_id COLLATE utf8mb4_general_ci
+                    OR oi_scope.product_id COLLATE utf8mb4_general_ci = CAST(p_scope.id AS CHAR) COLLATE utf8mb4_general_ci
                     OR CAST(oi_scope.product_id AS UNSIGNED) = p_scope.id
                 )
             WHERE oi_scope.order_id = o.id
@@ -59,7 +59,14 @@ $stats_query = "SELECT
     SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as cancelled
     FROM orders o WHERE o.is_archived = 0" . ($seller_scope_id !== null ? " AND {$seller_scoped_orders_exists}" : "");
 $stats_result = mysqli_query($conn, $stats_query);
-$order_stats = mysqli_fetch_assoc($stats_result);
+$order_stats = $stats_result ? (mysqli_fetch_assoc($stats_result) ?: []) : [
+    'total' => 0,
+    'pending' => 0,
+    'confirmed' => 0,
+    'preparing' => 0,
+    'delivered' => 0,
+    'cancelled' => 0
+];
 
 // Handle status update
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {

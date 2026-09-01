@@ -800,46 +800,76 @@ include 'includes/header.php';
     box-shadow: 0 0 0 4px rgba(198, 40, 40, 0.1);
 }
 
-.input-with-icon {
-    position: relative;
+.input-with-icon,
+.password-input-group,
+.password-wrapper {
+    position: relative !important;
+    display: flex !important;
+    align-items: center !important;
+    width: 100% !important;
 }
 
-.input-with-icon i {
-    position: absolute;
-    left: 18px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: #999;
-    font-size: 1.1rem;
-    pointer-events: none; /* Prevent icon from interfering with clicks */
+.input-with-icon > i:first-child,
+.input-with-icon > i.fas:not(.fa-eye):not(.fa-eye-slash) {
+    position: absolute !important;
+    left: 16px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    color: #94a3b8 !important;
+    font-size: 1rem !important;
+    pointer-events: none !important;
+    z-index: 2 !important;
 }
 
 .input-with-icon .form-control {
-    padding-left: 50px;
+    padding-left: 44px !important;
+    padding-right: 44px !important;
 }
 
-.password-wrapper {
-    position: relative;
+.password-input-group .form-control {
+    padding-right: 44px !important;
 }
 
-.toggle-password {
-    position: absolute;
-    right: 15px;
-    top: 50%;
-    transform: translateY(-50%);
-    background: none;
-    border: none;
-    color: #666;
-    cursor: pointer;
-    padding: 12px; /* Larger touch target */
-    font-size: 1.1rem;
-    transition: color 0.3s;
-    z-index: 10; /* Ensure button is above other elements */
+.toggle-password,
+#toggleLoginPasswordBtn,
+#togglePassword {
+    position: absolute !important;
+    right: 12px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    background: transparent !important;
+    border: none !important;
+    color: #94a3b8 !important;
+    cursor: pointer !important;
+    width: 34px !important;
+    height: 34px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 1rem !important;
+    z-index: 10 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    outline: none !important;
     -webkit-tap-highlight-color: transparent;
 }
 
-.toggle-password:hover {
-    color: #b3261e;
+.toggle-password i,
+#toggleLoginPasswordBtn i,
+#togglePassword i {
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    transform: none !important;
+    pointer-events: none !important;
+    color: inherit !important;
+    font-size: 1rem !important;
+}
+
+.toggle-password:hover,
+#toggleLoginPasswordBtn:hover,
+#togglePassword:hover {
+    color: #b3261e !important;
 }
 
 /* Form Row */
@@ -1886,6 +1916,28 @@ body.dark-mode select:focus {
     color: #ffffff !important;
 }
 
+/* Browser Autofill Dark Mode Fix */
+body.dark-mode input:-webkit-autofill,
+body.dark-mode input:-webkit-autofill:hover, 
+body.dark-mode input:-webkit-autofill:focus, 
+body.dark-mode input:-webkit-autofill:active,
+body.dark-mode textarea:-webkit-autofill,
+body.dark-mode select:-webkit-autofill {
+    -webkit-box-shadow: 0 0 0 1000px #1e293b inset !important;
+    box-shadow: 0 0 0 1000px #1e293b inset !important;
+    -webkit-text-fill-color: #f8fafc !important;
+    color: #f8fafc !important;
+    transition: background-color 5000s ease-in-out 0s !important;
+    caret-color: #f8fafc !important;
+}
+
+body.dark-mode input:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0 1000px #0b1120 inset, 0 0 0 3px rgba(179, 38, 30, 0.3) !important;
+    box-shadow: 0 0 0 1000px #0b1120 inset, 0 0 0 3px rgba(179, 38, 30, 0.3) !important;
+    -webkit-text-fill-color: #ffffff !important;
+    color: #ffffff !important;
+}
+
 body.dark-mode label,
 body.dark-mode .form-group label,
 body.dark-mode .checkbox-label {
@@ -2029,10 +2081,6 @@ body.dark-mode .floating-pig {
                 <!-- View 1: Register Form Wizard -->
                 <div id="registerViewWrapper" class="auth-view-wrapper">
                     <div class="registration-header" style="background:#fff; text-align:center; margin-bottom:24px; padding:0 0 10px;">
-                        <div style="display:inline-flex; align-items:center; justify-content:center; gap:10px; margin-bottom:12px;">
-                            <img src="assets/images/logo.jpg" alt="Lechon Delights Logo" style="width:48px; height:48px; object-fit:cover; border-radius:12px; display:block; border:1px solid #efddcd; box-shadow:0 4px 12px rgba(0,0,0,0.06);">
-                            <span style="font-size:1.6rem; font-weight:800; color:#171922; font-family:'Outfit', sans-serif;">Lechon Delights</span>
-                        </div>
                         <h2 style="font-size:1.8rem; font-weight:700; color:#333; margin-bottom:10px;">Create Account</h2>
                         <p style="font-size:1rem; color:#666; margin:0;">Join us to order Cavite's finest lechon dishes.</p>
                     </div>
@@ -2345,10 +2393,6 @@ body.dark-mode .floating-pig {
                 <!-- View 2: Login Form (Smooth Slide Transition) -->
                 <div id="loginViewWrapper" class="auth-view-wrapper" style="display: none; opacity: 0;">
                     <div class="registration-header" style="background:#fff; text-align:center; margin-bottom:24px; padding:0 0 10px;">
-                        <div style="display:inline-flex; align-items:center; justify-content:center; gap:10px; margin-bottom:12px;">
-                            <img src="assets/images/logo.jpg" alt="Lechon Delights Logo" style="width:48px; height:48px; object-fit:cover; border-radius:12px; display:block; border:1px solid #efddcd; box-shadow:0 4px 12px rgba(0,0,0,0.06);">
-                            <span style="font-size:1.6rem; font-weight:800; color:#171922; font-family:'Outfit', sans-serif;">Lechon Delights</span>
-                        </div>
                         <h2 style="font-size:1.8rem; font-weight:700; color:#333; margin-bottom:10px;">Welcome Back!</h2>
                         <p style="font-size:1rem; color:#666; margin:0;">Sign in to continue to your account.</p>
                     </div>
@@ -2370,10 +2414,10 @@ body.dark-mode .floating-pig {
                                 <label for="loginPassword" style="margin:0; color:#333; font-weight:600; font-size:0.95rem;">Password *</label>
                                 <a href="reset_password_request.php" style="font-size:0.85rem; color:#b3261e; text-decoration:none; font-weight:600;">Forgot Password?</a>
                             </div>
-                            <div class="input-with-icon" style="position: relative;">
-                                <input type="password" id="loginPassword" name="password" class="form-control" required placeholder="Enter your password" autocomplete="current-password" style="padding-left: 44px; padding-right: 44px;">
-                                <i class="fas fa-lock" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: #94a3b8;"></i>
-                                <button type="button" id="toggleLoginPasswordBtn" style="position: absolute; right: 14px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #94a3b8; cursor: pointer; padding: 4px;">
+                            <div class="input-with-icon">
+                                <i class="fas fa-lock input-lead-icon"></i>
+                                <input type="password" id="loginPassword" name="password" class="form-control" required placeholder="Enter your password" autocomplete="current-password">
+                                <button type="button" id="toggleLoginPasswordBtn" class="toggle-password" data-target="loginPassword" aria-label="Toggle password visibility">
                                     <i class="fas fa-eye"></i>
                                 </button>
                             </div>
@@ -2615,19 +2659,41 @@ document.addEventListener('DOMContentLoaded', function() {
         switchAuthMode('login', false);
     }
 
-    // Password Visibility Toggle for Login
-    const toggleLoginPasswordBtn = document.getElementById('toggleLoginPasswordBtn');
-    const loginPasswordInput = document.getElementById('loginPassword');
-    if (toggleLoginPasswordBtn && loginPasswordInput) {
-        toggleLoginPasswordBtn.addEventListener('click', function() {
-            const isPass = loginPasswordInput.type === 'password';
-            loginPasswordInput.type = isPass ? 'text' : 'password';
-            const icon = this.querySelector('i');
-            if (icon) {
-                icon.className = isPass ? 'fas fa-eye-slash' : 'fas fa-eye';
+    // Universal Password Visibility Toggle Handler
+    function handlePasswordToggle(btn, e) {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        let targetInput = null;
+        const targetId = btn.getAttribute('data-target');
+        if (targetId) {
+            targetInput = document.getElementById(targetId);
+        }
+        if (!targetInput) {
+            const parent = btn.closest('.password-input-group, .input-with-icon, .input-wrap, .form-group, .password-wrapper') || btn.parentElement;
+            if (parent) {
+                targetInput = parent.querySelector('input[type="password"], input[type="text"]');
             }
-        });
+        }
+        if (!targetInput) return;
+
+        const isPassword = targetInput.type === 'password';
+        targetInput.type = isPassword ? 'text' : 'password';
+
+        const icon = btn.querySelector('i');
+        if (icon) {
+            icon.className = isPassword ? 'fas fa-eye-slash' : 'fas fa-eye';
+        }
+        btn.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
     }
+
+    document.addEventListener('click', function(e) {
+        const toggleBtn = e.target.closest('.toggle-password, #toggleLoginPasswordBtn, #togglePassword');
+        if (toggleBtn) {
+            handlePasswordToggle(toggleBtn, e);
+        }
+    });
 
     // AJAX Login Handler
     const ajaxLoginForm = document.getElementById('ajaxLoginForm');
@@ -3511,29 +3577,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
 
-    document.querySelectorAll('.toggle-password').forEach(function(button) {
-        button.addEventListener('click', function() {
-            const wrapper = button.closest('.password-wrapper');
-            if (!wrapper) {
-                return;
-            }
-            const input = wrapper.querySelector('input');
-            const icon = button.querySelector('i');
-            if (!input || !icon) {
-                return;
-            }
 
-            if (input.type === 'password') {
-                input.type = 'text';
-                icon.className = 'fas fa-eye-slash';
-                button.setAttribute('aria-label', 'Hide password');
-            } else {
-                input.type = 'password';
-                icon.className = 'fas fa-eye';
-                button.setAttribute('aria-label', 'Show password');
-            }
-        });
-    });
 
     const passwordInput = document.getElementById('password');
     if (passwordInput) {

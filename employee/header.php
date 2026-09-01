@@ -18,16 +18,43 @@ if (isset($_SESSION['user_id']) && function_exists('hrIsLogisticsEmployeeByUserI
 }
 ?>
 
+<?php
+$is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
+?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="<?php echo $is_initial_dark ? 'dark' : 'light'; ?>" class="<?php echo $is_initial_dark ? 'dark-mode' : ''; ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Employee Portal | Lechon Delights</title>
+    <script>
+        (function() {
+            try {
+                var cookieTheme = (document.cookie.match(/(?:^|;\s*)theme=([^;]*)/) || [])[1];
+                var savedTheme = localStorage.getItem('theme') || cookieTheme;
+                var isDark = (savedTheme === 'dark' || (!savedTheme && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches));
+                if (isDark) {
+                    document.documentElement.classList.add('dark-mode');
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                } else {
+                    document.documentElement.classList.remove('dark-mode');
+                    document.documentElement.setAttribute('data-theme', 'light');
+                }
+            } catch (e) {}
+        })();
+    </script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        /* Anti-Flash Immediate Critical Styles */
+        html.dark-mode,
+        html[data-theme="dark"],
+        html.dark-mode body,
+        body.dark-mode {
+            background-color: #0f172a !important;
+            color: #f8fafc !important;
+        }
         :root {
             --food-red: #b3261e;
             --food-red-dark: #8f1d17;
@@ -460,15 +487,69 @@ if (isset($_SESSION['user_id']) && function_exists('hrIsLogisticsEmployeeByUserI
         .notification-item .content .time { font-size: 11px; color: #999; margin-top: 5px; }
 
         /* Dark Mode Styles */
-        body.dark-mode { background-color: var(--bg-color-dark) !important; color: var(--text-color-dark) !important; }
-        body.dark-mode .admin-content { background-color: var(--bg-color-dark) !important; }
+        body.dark-mode,
+        html.dark-mode { background-color: var(--bg-color-dark) !important; color: var(--text-color-dark) !important; }
+        body.dark-mode .admin-content { background-color: var(--bg-color-dark) !important; color: var(--text-color-dark) !important; }
         body.dark-mode .admin-sidebar { background: #121319; border-color: #272a37; }
-        body.dark-mode .admin-topbar, body.dark-mode .stat-card, body.dark-mode .recent-section, body.dark-mode .card, body.dark-mode .card-body, body.dark-mode .card-header { background-color: var(--card-bg-dark) !important; color: var(--text-color-dark) !important; border-color: var(--border-color-dark) !important; }
-        body.dark-mode h1, body.dark-mode h2, body.dark-mode h3, body.dark-mode h4, body.dark-mode .topbar-title h1, body.dark-mode .stat-content h3, body.dark-mode .admin-profile span { color: var(--text-color-dark) !important; }
+        body.dark-mode .admin-topbar,
+        body.dark-mode .stat-card,
+        body.dark-mode .recent-section,
+        body.dark-mode .card,
+        body.dark-mode .card-body,
+        body.dark-mode .card-header,
+        body.dark-mode .modal-content,
+        body.dark-mode .modal-header,
+        body.dark-mode .modal-body,
+        body.dark-mode .modal-footer {
+            background-color: var(--card-bg-dark) !important;
+            color: var(--text-color-dark) !important;
+            border-color: var(--border-color-dark) !important;
+        }
+        body.dark-mode h1,
+        body.dark-mode h2,
+        body.dark-mode h3,
+        body.dark-mode h4,
+        body.dark-mode .topbar-title h1,
+        body.dark-mode .stat-content h3,
+        body.dark-mode .admin-profile span {
+            color: var(--text-color-dark) !important;
+        }
         body.dark-mode .admin-profile { background: #272a37; border-color: #373a4b; color: #fff; }
-        body.dark-mode .admin-table th { background-color: #272a37; color: #fff; border-color: var(--border-color-dark); }
-        body.dark-mode .admin-table td { border-color: var(--border-color-dark); color: #e2e8f0; }
-        body.dark-mode .admin-table tr:hover td { background-color: #272a37; }
+        body.dark-mode .table,
+        body.dark-mode .admin-table {
+            color: #e2e8f0 !important;
+            border-color: var(--border-color-dark) !important;
+        }
+        body.dark-mode .table th,
+        body.dark-mode .admin-table th {
+            background-color: #272a37 !important;
+            color: #fff !important;
+            border-color: var(--border-color-dark) !important;
+        }
+        body.dark-mode .table td,
+        body.dark-mode .admin-table td {
+            border-color: var(--border-color-dark) !important;
+            color: #e2e8f0 !important;
+            background-color: transparent !important;
+        }
+        body.dark-mode .table tr:hover td,
+        body.dark-mode .admin-table tr:hover td {
+            background-color: #272a37 !important;
+        }
+        body.dark-mode .form-control,
+        body.dark-mode .form-select,
+        body.dark-mode input,
+        body.dark-mode select,
+        body.dark-mode textarea {
+            background-color: #121319 !important;
+            border-color: var(--border-color-dark) !important;
+            color: #e2e8f0 !important;
+        }
+        body.dark-mode .form-control:focus,
+        body.dark-mode .form-select:focus {
+            border-color: var(--food-red) !important;
+            box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.25) !important;
+        }
         body.dark-mode .theme-toggler { background: #272a37; color: #ffc107; border-color: #373a4b; }
 
         /* Page Loader */
@@ -488,7 +569,8 @@ if (isset($_SESSION['user_id']) && function_exists('hrIsLogisticsEmployeeByUserI
         }
     </style>
 </head>
-<body>
+<body class="<?php echo $is_initial_dark ? 'dark-mode' : ''; ?>">
+<script>(function(){if(document.documentElement.classList.contains('dark-mode')&&document.body){document.body.classList.add('dark-mode');}})();</script>
 <div class="page-loader"><div class="spinner"></div></div>
 <div class="admin-container">
     <nav class="admin-sidebar" id="adminSidebar">

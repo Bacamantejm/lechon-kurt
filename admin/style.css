@@ -843,45 +843,54 @@ body.dark-mode .sidebar-account-badge {
     border: 1px solid #4c1d1d !important;
 }
 
+html.dark-mode .sidebar-search-container,
 body.dark-mode .sidebar-search-container {
     background: #181d26 !important;
     border-bottom: 1px solid #27303f !important;
 }
 
+html.dark-mode .sidebar-search-input,
 body.dark-mode .sidebar-search-input {
     background: #222936 !important;
     border: 1px solid #2e3848 !important;
     color: #f1f5f9 !important;
 }
 
+html.dark-mode .sidebar-search-input::placeholder,
 body.dark-mode .sidebar-search-input::placeholder {
     color: #64748b !important;
 }
 
+html.dark-mode .sidebar-search-input:focus,
 body.dark-mode .sidebar-search-input:focus {
     background: #1e2430 !important;
     border-color: #b3261e !important;
     box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.25) !important;
 }
 
+html.dark-mode .sidebar-search-icon,
 body.dark-mode .sidebar-search-icon {
     color: #64748b !important;
 }
 
+html.dark-mode .sidebar-search-wrap:focus-within .sidebar-search-icon,
 body.dark-mode .sidebar-search-wrap:focus-within .sidebar-search-icon {
     color: #ef4444 !important;
 }
 
+html.dark-mode .sidebar-search-clear,
 body.dark-mode .sidebar-search-clear {
     background: #2e3848 !important;
     color: #94a3b8 !important;
 }
 
+html.dark-mode .sidebar-search-clear:hover,
 body.dark-mode .sidebar-search-clear:hover {
     background: #3e4c60 !important;
     color: #ffffff !important;
 }
 
+html.dark-mode .sidebar-search-empty,
 body.dark-mode .sidebar-search-empty {
     color: #64748b !important;
 }

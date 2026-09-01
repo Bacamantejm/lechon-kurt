@@ -7,7 +7,7 @@ if (!function_exists('favoritesIsCustomerUserSession')) {
         }
 
         $normalized_user_type = strtolower(trim((string)($_SESSION['user_type'] ?? '')));
-        return in_array($normalized_user_type, ['', 'customer', 'user'], true);
+        return !in_array($normalized_user_type, ['employee', 'rider', 'driver'], true);
     }
 }
 
@@ -40,8 +40,9 @@ if (!function_exists('favoritesEnsureTable')) {
 if (!function_exists('favoritesNormalizeStoreKey')) {
     function favoritesNormalizeStoreKey($value) {
         $text = strtolower(trim((string)$value));
-        $text = preg_replace('/[^a-z0-9\-]+/', '-', $text);
-        $text = trim((string)$text, '-');
+        $text = preg_replace('/[^a-z0-9\-_\s]+/', '', $text);
+        $text = preg_replace('/\s+/', '-', $text);
+        $text = trim((string)$text, '-_');
         if ($text === '') {
             return '';
         }

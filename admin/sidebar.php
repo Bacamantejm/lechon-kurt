@@ -377,6 +377,62 @@ if ($is_partner_scoped_admin && $partner_scope_owner_id > 0) {
 }
 ?>
 
+<script>
+(function() {
+    try {
+        const savedTheme = localStorage.getItem('theme') || (document.cookie.match(/(?:^|;\s*)theme=([^;]*)/) || [])[1];
+        if (savedTheme === 'dark' || (!savedTheme && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark-mode');
+            document.documentElement.setAttribute('data-theme', 'dark');
+            if (document.body) document.body.classList.add('dark-mode');
+        }
+    } catch(e) {}
+})();
+</script>
+<style>
+/* Anti-Flash Immediate Critical Styles */
+html.dark-mode,
+html.dark-mode body,
+body.dark-mode {
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+}
+html.dark-mode .admin-sidebar,
+body.dark-mode .admin-sidebar {
+    background: #181d26 !important;
+    border-right: 1px solid #27303f !important;
+}
+html.dark-mode .sidebar-header,
+body.dark-mode .sidebar-header {
+    background: #181d26 !important;
+    border-bottom: 1px solid #27303f !important;
+}
+html.dark-mode .sidebar-search-container,
+body.dark-mode .sidebar-search-container {
+    background: #181d26 !important;
+    border-bottom: 1px solid #27303f !important;
+}
+html.dark-mode .sidebar-search-input,
+body.dark-mode .sidebar-search-input {
+    background: #222936 !important;
+    border: 1px solid #2e3848 !important;
+    color: #f1f5f9 !important;
+}
+html.dark-mode .sidebar-footer,
+body.dark-mode .sidebar-footer {
+    background: #181d26 !important;
+    border-top: 1px solid #27303f !important;
+}
+html.dark-mode .sidebar-footer .admin-user,
+body.dark-mode .sidebar-footer .admin-user,
+html.dark-mode .sidebar-footer .logout-btn,
+body.dark-mode .sidebar-footer .logout-btn {
+    background: #222936 !important;
+    border: 1px solid #2e3848 !important;
+    color: #e2e8f0 !important;
+}
+</style>
+
 <!-- Admin Sidebar Navigation -->
 <nav class="admin-sidebar" id="adminSidebar">
     <div class="sidebar-header">
@@ -2764,6 +2820,20 @@ body.dark-mode .sidebar-footer .logout-btn:hover {
     background: #2f1717 !important;
     border-color: #ef4444 !important;
     color: #fca5a5 !important;
+}
+
+body.dark-mode input:-webkit-autofill,
+body.dark-mode input:-webkit-autofill:hover, 
+body.dark-mode input:-webkit-autofill:focus, 
+body.dark-mode input:-webkit-autofill:active,
+body.dark-mode textarea:-webkit-autofill,
+body.dark-mode select:-webkit-autofill {
+    -webkit-box-shadow: 0 0 0 1000px #181d26 inset !important;
+    box-shadow: 0 0 0 1000px #181d26 inset !important;
+    -webkit-text-fill-color: #f8fafc !important;
+    color: #f8fafc !important;
+    transition: background-color 5000s ease-in-out 0s !important;
+    caret-color: #f8fafc !important;
 }
 </style>
 
