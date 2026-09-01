@@ -557,81 +557,62 @@ body {
 }
 
 .admin-profile {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 8px;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-main);
-    padding: 6px 10px 6px 8px;
-    background: var(--white);
-    border-radius: 999px;
-    border: 1px solid var(--border);
-    box-shadow: var(--shadow-sm);
-    transition: var(--transition);
-    max-width: 220px;
+    justify-content: center;
+    padding: 0;
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    background: transparent;
+    border-radius: 50%;
+    border: none;
+    box-shadow: none;
     position: relative;
     cursor: pointer;
+    transition: transform 0.2s ease;
 }
 
-.admin-profile > span,
-.admin-profile-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+.admin-profile > span:not(.admin-profile-avatar),
+.admin-profile-name,
+.admin-profile-caret,
+.admin-profile > i:not(.admin-profile-dropdown i) {
+    display: none !important;
 }
 
 .admin-profile:hover {
-    box-shadow: var(--shadow);
-    transform: translateY(-1px);
+    box-shadow: none;
+    transform: scale(1.05);
 }
 
 .admin-profile.open {
-    box-shadow: var(--shadow);
-}
-
-.admin-profile > i,
-.admin-profile-caret {
-    font-size: 20px;
-    color: var(--primary);
-}
-
-.admin-profile-name {
-    flex: 1 1 auto;
-    min-width: 0;
-    font-size: 13px;
-    font-weight: 700;
-}
-
-.admin-profile-caret {
-    font-size: 13px;
-    transition: transform 0.18s ease;
-}
-
-.admin-profile.open .admin-profile-caret {
-    transform: rotate(180deg);
+    box-shadow: none;
 }
 
 .admin-profile-avatar {
-    width: 32px;
-    height: 32px;
-    border-radius: 12px;
-    flex: 0 0 32px;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    flex: 0 0 38px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     object-fit: cover;
-    background: #fff;
-    border: 1px solid #f1d8d0;
-    box-shadow: 0 8px 16px rgba(198, 40, 40, 0.12);
+    background: linear-gradient(135deg, var(--primary), #d93829);
+    color: #ffffff;
+    font-size: 15px;
+    font-weight: 800;
+    border: 2px solid #ffffff;
+    box-shadow: 0 2px 8px rgba(179, 38, 30, 0.25);
+    user-select: none;
 }
 
 .admin-profile-fallback {
-    background: linear-gradient(135deg, var(--primary), #ff7a59);
-    color: #fff;
-    font-size: 13px;
+    background: linear-gradient(135deg, var(--primary), #d93829);
+    color: #ffffff;
+    font-size: 15px;
     font-weight: 800;
-    border: none;
+    border: 2px solid #ffffff;
 }
 
 .admin-profile-dropdown {
@@ -806,6 +787,30 @@ body.dark-mode .admin-profile-link {
 }
 .topbar-right .admin-profile {
     order: 4;
+}
+
+/* Topbar & Surfaces Dark Mode */
+body.dark-mode .admin-topbar,
+body.dark-mode header.admin-topbar,
+body.dark-mode .topbar-content {
+    background: #1e293b !important;
+    background-color: #1e293b !important;
+    border-bottom: 1px solid #334155 !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35) !important;
+}
+
+body.dark-mode .admin-topbar h1,
+body.dark-mode .topbar-content h1,
+body.dark-mode .admin-topbar h2,
+body.dark-mode .topbar-content h2 {
+    color: #f8fafc !important;
+    -webkit-text-fill-color: initial !important;
+}
+
+body.dark-mode .admin-content,
+body.dark-mode .admin-container {
+    background-color: #0f172a !important;
+    color: #f1f5f9 !important;
 }
 
 /* Sidebar Dark Mode Theme */

@@ -293,7 +293,19 @@ body.admin-polish.dark-mode {
 }
 
 body.admin-polish.dark-mode .admin-main {
-    background: #161b23;
+    background: #0f172a;
+}
+
+body.admin-polish.dark-mode .admin-topbar,
+body.admin-polish.dark-mode header.admin-topbar,
+body.admin-polish.dark-mode .topbar-content {
+    background: #1e293b !important;
+    border-bottom: 1px solid #334155 !important;
+}
+
+body.admin-polish.dark-mode .topbar-content h1,
+body.admin-polish.dark-mode .admin-topbar h1 {
+    color: #f8fafc !important;
 }
 
 body.admin-polish.dark-mode .section-header,

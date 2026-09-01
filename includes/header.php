@@ -325,8 +325,9 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
         .btn-register:hover { background:#981b15; border-color:#981b15; color:#ffffff; }
         .icon-btn { width:38px; height:38px; border-radius:10px; border:1px solid var(--line); background:#fff; color:#222a3d; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; transition:var(--transition-fast); position:relative; font-size:.9rem; }
         .icon-btn:hover { background:var(--ink); color:#fff; border-color:var(--ink); }
-        .user-avatar-btn { padding:0; overflow:hidden; }
-        .user-avatar-thumb { width:100%; height:100%; object-fit:cover; border-radius:10px; display:block; }
+        .user-avatar-btn { padding:0; overflow:hidden; border-radius:50% !important; border:2px solid #ffffff !important; box-shadow:0 2px 8px rgba(179,38,30,.2); }
+        .user-avatar-thumb { width:100%; height:100%; object-fit:cover; border-radius:50%; display:block; }
+        .user-avatar-initial { width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#b3261e,#d93829); color:#ffffff; font-weight:800; font-size:.95rem; border-radius:50%; user-select:none; }
         .badge { position:absolute; top:-5px; right:-5px; min-width:19px; height:19px; border-radius:999px; background:var(--rose); color:#fff; border:2px solid #fff; font-size:.68rem; font-weight:700; display:inline-flex; align-items:center; justify-content:center; padding:0 5px; }
         .standard-top { min-height:64px; display:flex; align-items:center; justify-content:space-between; gap:16px; }
         .nav-link,.market-home-link { text-decoration:none; color:#56617a; font-size:.88rem; font-weight:700; min-height:38px; padding:0 12px; border-radius:999px; border:1px solid transparent; display:inline-flex; gap:6px; align-items:center; transition:var(--transition-fast); }
@@ -1244,15 +1245,15 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
         <div class="header-actions">
             <?php if ($is_logged_in_user): ?>
             <div class="user-menu-wrapper">
-                <button class="icon-btn user-avatar-btn" aria-label="Open user menu">
+                <button class="icon-btn user-avatar-btn" aria-label="Open user menu" title="<?php echo htmlspecialchars($viewer_name !== '' ? $viewer_name : 'My Account'); ?>">
                     <?php if ($viewer_profile_image_url !== ''): ?>
                     <img src="<?php echo htmlspecialchars($viewer_profile_image_url); ?>" alt="Profile picture" class="user-avatar-thumb">
                     <?php else: ?>
-                    <i class="fas fa-user-circle"></i>
+                    <span class="user-avatar-initial"><?php echo htmlspecialchars(strtoupper(substr($viewer_name !== '' ? $viewer_name : ($viewer_first_name !== '' ? $viewer_first_name : 'U'), 0, 1))); ?></span>
                     <?php endif; ?>
                 </button>
                 <div class="user-dropdown">
-                    <div class="user-dropdown-header"><div class="user-name"><?php echo htmlspecialchars($viewer_first_name); ?></div><?php if ($viewer_email !== ''): ?><div class="user-email"><?php echo htmlspecialchars($viewer_email); ?></div><?php endif; ?></div>
+                    <div class="user-dropdown-header"><div class="user-name"><?php echo htmlspecialchars($viewer_name !== '' ? $viewer_name : $viewer_first_name); ?></div><?php if ($viewer_email !== ''): ?><div class="user-email"><?php echo htmlspecialchars($viewer_email); ?></div><?php endif; ?></div>
                     <a href="<?php echo $path_prefix; ?>my_account.php" class="user-dropdown-item"><i class="fas fa-user"></i> My Profile</a>
                     <a href="<?php echo $path_prefix; ?>my_account.php#addresses" class="user-dropdown-item"><i class="fas fa-address-book"></i> Address Book</a>
                     <a href="<?php echo $path_prefix; ?>my_orders.php" class="user-dropdown-item"><i class="fas fa-shopping-bag"></i> My Orders</a>
@@ -1440,15 +1441,15 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
         <div class="header-actions">
             <?php if ($is_logged_in_user): ?>
             <div class="user-menu-wrapper">
-                <button class="icon-btn user-avatar-btn" aria-label="Open user menu">
+                <button class="icon-btn user-avatar-btn" aria-label="Open user menu" title="<?php echo htmlspecialchars($viewer_name !== '' ? $viewer_name : 'My Account'); ?>">
                     <?php if ($viewer_profile_image_url !== ''): ?>
                     <img src="<?php echo htmlspecialchars($viewer_profile_image_url); ?>" alt="Profile picture" class="user-avatar-thumb">
                     <?php else: ?>
-                    <i class="fas fa-user-circle"></i>
+                    <span class="user-avatar-initial"><?php echo htmlspecialchars(strtoupper(substr($viewer_name !== '' ? $viewer_name : ($viewer_first_name !== '' ? $viewer_first_name : 'U'), 0, 1))); ?></span>
                     <?php endif; ?>
                 </button>
                 <div class="user-dropdown">
-                    <div class="user-dropdown-header"><div class="user-name"><?php echo htmlspecialchars($viewer_first_name); ?></div><?php if ($viewer_email !== ''): ?><div class="user-email"><?php echo htmlspecialchars($viewer_email); ?></div><?php endif; ?></div>
+                    <div class="user-dropdown-header"><div class="user-name"><?php echo htmlspecialchars($viewer_name !== '' ? $viewer_name : $viewer_first_name); ?></div><?php if ($viewer_email !== ''): ?><div class="user-email"><?php echo htmlspecialchars($viewer_email); ?></div><?php endif; ?></div>
                     <a href="<?php echo $path_prefix; ?>my_account.php" class="user-dropdown-item"><i class="fas fa-user"></i> My Profile</a>
                     <a href="<?php echo $path_prefix; ?>my_account.php#addresses" class="user-dropdown-item"><i class="fas fa-address-book"></i> Address Book</a>
                     <a href="<?php echo $path_prefix; ?>my_orders.php" class="user-dropdown-item"><i class="fas fa-shopping-bag"></i> My Orders</a>
@@ -1636,43 +1637,46 @@ document.addEventListener('DOMContentLoaded', function () {
     const mobileMenuClose = document.getElementById('mobileMenuClose');
 
     // Global Dark / Light Mode Theme Manager
-    const marketThemeToggler = document.getElementById('marketThemeToggler');
-    const applyMarketThemeUI = function (isDark) {
+    window.applyMarketThemeUI = function (isDark) {
         if (isDark) {
             document.documentElement.setAttribute('data-theme', 'dark');
             document.documentElement.classList.add('dark-mode');
-            document.body.classList.add('dark-mode');
+            if (document.body) {
+                document.body.classList.add('dark-mode');
+            }
         } else {
             document.documentElement.setAttribute('data-theme', 'light');
             document.documentElement.classList.remove('dark-mode');
-            document.body.classList.remove('dark-mode');
+            if (document.body) {
+                document.body.classList.remove('dark-mode');
+            }
         }
-        if (marketThemeToggler) {
-            const icon = marketThemeToggler.querySelector('i');
+        try {
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            document.cookie = "theme=" + (isDark ? "dark" : "light") + "; path=/; max-age=31536000; SameSite=Lax";
+        } catch (e) {}
+
+        document.querySelectorAll('#marketThemeToggler, .market-theme-btn, #themeToggler, .theme-toggler').forEach(function(btn) {
+            const icon = btn.querySelector('i');
             if (icon) {
                 icon.className = isDark ? 'fas fa-sun' : 'fas fa-moon';
             }
-            marketThemeToggler.setAttribute('title', isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode');
-        }
+            btn.setAttribute('title', isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode');
+        });
+        window.dispatchEvent(new CustomEvent('themeChanged', { detail: { isDark: isDark } }));
     };
 
     const storedTheme = localStorage.getItem('theme') || (document.cookie.match(/(?:^|;\s*)theme=([^;]*)/) || [])[1];
-    const initialIsDark = storedTheme === 'dark';
-    applyMarketThemeUI(initialIsDark);
+    window.applyMarketThemeUI(storedTheme === 'dark');
 
-    if (marketThemeToggler) {
-        marketThemeToggler.addEventListener('click', function () {
-            const isCurrentlyDark = document.documentElement.classList.contains('dark-mode') || document.body.classList.contains('dark-mode');
-            const nextIsDark = !isCurrentlyDark;
-            const themeStr = nextIsDark ? 'dark' : 'light';
-            
-            localStorage.setItem('theme', themeStr);
-            document.cookie = "theme=" + themeStr + "; path=/; max-age=31536000; SameSite=Lax";
-            applyMarketThemeUI(nextIsDark);
-
-            window.dispatchEvent(new CustomEvent('themeChanged', { detail: { isDark: nextIsDark } }));
-        });
-    }
+    document.addEventListener('click', function (e) {
+        const toggler = e.target.closest('#marketThemeToggler, .market-theme-btn, #themeToggler, .theme-toggler');
+        if (!toggler) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        const isCurrentlyDark = document.documentElement.classList.contains('dark-mode') || document.body.classList.contains('dark-mode');
+        window.applyMarketThemeUI(!isCurrentlyDark);
+    }, true);
 
     const showSwalError = function (message, title) {
         const alertTitle = title || 'Error';

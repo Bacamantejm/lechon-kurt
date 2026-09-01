@@ -712,6 +712,265 @@ include 'includes/header.php';
     padding: 20px 0 56px;
 }
 
+/* ==========================================================================
+   LANDING PAGE DARK MODE THEME ENGINE
+   ========================================================================== */
+body.dark-mode .market-home,
+html.dark-mode .market-home {
+    background: #0f172a !important;
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .market-home::before,
+body.dark-mode .market-home::after {
+    display: none !important;
+}
+
+/* Sidebar & Filters in Dark Mode */
+body.dark-mode .market-sidebar {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4) !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .market-sidebar-section {
+    border-color: #334155 !important;
+}
+
+body.dark-mode .market-sidebar-title,
+body.dark-mode .market-filter-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .market-radio span,
+body.dark-mode .market-check span {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .market-radio:hover span,
+body.dark-mode .market-check:hover span {
+    color: #ffffff !important;
+}
+
+body.dark-mode .market-helper {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .market-detect-btn {
+    background: #334155 !important;
+    border-color: #475569 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .market-detect-btn:hover {
+    background: #475569 !important;
+    color: #ffffff !important;
+}
+
+/* Hero & Promo Cards */
+body.dark-mode .panda-card-pink {
+    background: linear-gradient(135deg, #1e293b 0%, #293548 100%) !important;
+    border-color: #334155 !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3) !important;
+}
+
+body.dark-mode .panda-card-soft {
+    background: linear-gradient(135deg, #1e293b 0%, #293548 100%) !important;
+    border-color: #334155 !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3) !important;
+}
+
+body.dark-mode .panda-card-arch,
+body.dark-mode .panda-card-heart-bg {
+    background: rgba(255, 255, 255, 0.04) !important;
+}
+
+body.dark-mode .panda-card-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .panda-card-desc {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .user-promo-row > div {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25) !important;
+}
+
+body.dark-mode .user-promo-row h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .user-promo-row p {
+    color: #94a3b8 !important;
+}
+
+/* Foodpanda Brand Slider / Hub Carousel */
+body.dark-mode .panda-brand-item {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2) !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .panda-brand-item:hover {
+    border-color: #b3261e !important;
+    background: #283347 !important;
+}
+
+body.dark-mode .panda-brand-name {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .panda-brand-meta {
+    color: #94a3b8 !important;
+}
+
+/* Best Sellers & Partner Deals Section */
+body.dark-mode .bestsellers-section {
+    background: linear-gradient(135deg, #1e293b 0%, #171f2c 100%) !important;
+    border-color: #334155 !important;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3) !important;
+}
+
+body.dark-mode .bestseller-card,
+body.dark-mode .market-store-row,
+body.dark-mode .panda-card-link {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+body.dark-mode .bestseller-card:hover,
+body.dark-mode .market-store-row:hover {
+    border-color: #b3261e !important;
+    transform: translateY(-3px) !important;
+}
+
+body.dark-mode .market-store-row-title,
+body.dark-mode .market-store-name,
+body.dark-mode .product-title,
+body.dark-mode .bestseller-card h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .market-store-row-meta,
+body.dark-mode .market-store-distance,
+body.dark-mode .market-store-time,
+body.dark-mode .product-desc,
+body.dark-mode .market-store-row-desc {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .market-head h2,
+body.dark-mode .market-head h3,
+body.dark-mode .market-head h1 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .market-head p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .foodpanda-pickup-banner {
+    background: linear-gradient(135deg, #1e293b 0%, #172030 100%) !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .foodpanda-pickup-banner h2 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .market-btn-soft {
+    background: #334155 !important;
+    color: #f8fafc !important;
+    border: 1px solid #475569 !important;
+}
+
+body.dark-mode .market-btn-soft:hover {
+    background: #475569 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .market-pagination-note {
+    color: #94a3b8 !important;
+}
+
+/* Auth Popup in Dark Mode */
+body.dark-mode .auth-popup-card {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .auth-popup-tabs {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .auth-popup-tab {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .auth-popup-tab.active {
+    color: #ef4444 !important;
+    border-bottom-color: #ef4444 !important;
+}
+
+body.dark-mode .auth-popup-form label {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .auth-popup-form .form-control {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .auth-popup-form .form-control:focus {
+    background: #020617 !important;
+    border-color: #b3261e !important;
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.3) !important;
+}
+
+body.dark-mode .auth-popup-form .remember-label,
+body.dark-mode .auth-popup-form .auth-link {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .auth-popup-close {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .auth-popup-close:hover {
+    background: #334155 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .reg-choice-card {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .reg-choice-card:hover {
+    background: #1e293b !important;
+    border-color: #b3261e !important;
+}
+
+body.dark-mode .reg-choice-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .reg-choice-desc {
+    color: #94a3b8 !important;
+}
+
 .partner-ad-card {
     border-radius: 20px;
     padding: 22px 24px;
@@ -3140,12 +3399,6 @@ body {
                         <div class="panda-store-header-bar">
                             <div class="panda-store-header-title">
                                 <h2 class="panda-main-heading">All Cavite stores</h2>
-                            </div>
-                            <div class="panda-search-bar-wrap">
-                                <label class="panda-search-bar" for="gridStoreSearch">
-                                    <i class="fas fa-magnifying-glass search-icon"></i>
-                                    <input type="text" id="gridStoreSearch" placeholder="Search stores, whole lechon, belly, cities...">
-                                </label>
                             </div>
                         </div>
 

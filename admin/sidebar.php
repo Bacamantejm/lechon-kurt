@@ -1369,38 +1369,55 @@ if ($is_partner_scoped_admin && $partner_scope_owner_id > 0) {
     }
 
     .admin-profile {
-        gap: 8px;
-        max-width: 220px;
-        padding: 6px 10px 6px 8px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        width: 38px;
+        height: 38px;
+        min-width: 38px;
+        background: transparent;
+        border-radius: 50%;
+        border: none;
+        box-shadow: none;
+        position: relative;
+        cursor: pointer;
+        transition: transform 0.2s ease;
     }
 
-    .admin-profile > span,
-    .admin-profile-name {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+    .admin-profile:hover {
+        transform: scale(1.05);
     }
 
-    .admin-profile-name {
-        flex: 1 1 auto;
-        min-width: 0;
-        font-size: 13px;
-        font-weight: 700;
+    .admin-profile > span:not(.admin-profile-avatar),
+    .admin-profile-name,
+    .admin-profile-caret,
+    .admin-profile > i:not(.admin-profile-dropdown i) {
+        display: none !important;
     }
 
-    .admin-profile > i,
-    .admin-profile-caret {
-        color: var(--primary);
-        font-size: 13px;
-        flex: 0 0 auto;
+    .admin-profile-avatar {
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #b3261e, #d93829);
+        color: #ffffff;
+        font-size: 15px;
+        font-weight: 800;
+        border: 2px solid #ffffff;
+        box-shadow: 0 2px 8px rgba(179, 38, 30, 0.25);
+        user-select: none;
+        object-fit: cover;
     }
 
-    .admin-profile-caret {
-        transition: transform 0.18s ease;
-    }
-
-    .admin-profile.open .admin-profile-caret {
-        transform: rotate(180deg);
+    .admin-profile-fallback {
+        background: linear-gradient(135deg, #b3261e, #d93829);
+        color: #ffffff;
+        font-size: 15px;
+        font-weight: 800;
     }
 
     .admin-profile-dropdown-head {
@@ -1440,6 +1457,283 @@ if ($is_partner_scoped_admin && $partner_scope_owner_id > 0) {
 
     body.dark-mode .admin-profile-dropdown-head small {
         color: #cbd5e1;
+    }
+
+    /* ==========================================================================
+       UNIVERSAL ADMIN DARK MODE ENGINE (All 25+ Modules & Topbars)
+       ========================================================================== */
+    body.dark-mode,
+    html.dark-mode {
+        background-color: #0f172a !important;
+        color: #f1f5f9 !important;
+    }
+
+    body.dark-mode .admin-container,
+    body.dark-mode .admin-content,
+    body.dark-mode .admin-polish,
+    body.dark-mode .biz-shell,
+    body.dark-mode .main-content {
+        background-color: #0f172a !important;
+        color: #f1f5f9 !important;
+    }
+
+    /* Topbar & Header in Dark Mode (Resolves white topbar background) */
+    body.dark-mode .admin-topbar,
+    body.dark-mode header.admin-topbar,
+    body.dark-mode .topbar-content {
+        background: #1e293b !important;
+        background-color: #1e293b !important;
+        border-bottom: 1px solid #334155 !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35) !important;
+    }
+
+    body.dark-mode .admin-topbar h1,
+    body.dark-mode .topbar-content h1,
+    body.dark-mode .admin-topbar h2,
+    body.dark-mode .topbar-content h2,
+    body.dark-mode .admin-topbar span:not(.admin-profile-avatar):not(.badge),
+    body.dark-mode .admin-topbar strong {
+        color: #f8fafc !important;
+        -webkit-text-fill-color: initial !important;
+    }
+
+    body.dark-mode .admin-topbar .sidebar-toggler,
+    body.dark-mode .admin-topbar .topbar-content .sidebar-toggler,
+    body.dark-mode .admin-topbar .theme-toggler,
+    body.dark-mode .admin-topbar .topbar-right .theme-toggler {
+        background: #334155 !important;
+        border-color: #475569 !important;
+        color: #facc15 !important;
+    }
+
+    body.dark-mode .admin-topbar .sidebar-toggler:hover,
+    body.dark-mode .admin-topbar .theme-toggler:hover {
+        background: #475569 !important;
+        color: #fef08a !important;
+    }
+
+    body.dark-mode .admin-topbar .admin-header-actions button,
+    body.dark-mode .admin-topbar .admin-header-actions a,
+    body.dark-mode .admin-topbar .topbar-right button:not(.theme-toggler):not(.admin-profile),
+    body.dark-mode .admin-topbar .topbar-right a {
+        background: #334155 !important;
+        border-color: #475569 !important;
+        color: #f8fafc !important;
+    }
+
+    /* Cards, Panels, Widgets & Containers Across All Modules */
+    body.dark-mode .card,
+    body.dark-mode .stat-card,
+    body.dark-mode .biz-card,
+    body.dark-mode .module-card,
+    body.dark-mode .content-card,
+    body.dark-mode .table-container,
+    body.dark-mode .filter-card,
+    body.dark-mode .order-card,
+    body.dark-mode .preorder-card,
+    body.dark-mode .kiosk-card,
+    body.dark-mode .mrp-card,
+    body.dark-mode .inventory-card,
+    body.dark-mode .schedule-card,
+    body.dark-mode .modal-content,
+    body.dark-mode .box,
+    body.dark-mode .panel,
+    body.dark-mode .widget-card,
+    body.dark-mode .info-card {
+        background: #1e293b !important;
+        background-color: #1e293b !important;
+        border-color: #334155 !important;
+        color: #f1f5f9 !important;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25) !important;
+    }
+
+    body.dark-mode .card-header,
+    body.dark-mode .modal-header,
+    body.dark-mode .modal-footer,
+    body.dark-mode .card-footer,
+    body.dark-mode .table-header {
+        background: #1e293b !important;
+        border-color: #334155 !important;
+        color: #f8fafc !important;
+    }
+
+    /* Headings and Typography */
+    body.dark-mode h1,
+    body.dark-mode h2,
+    body.dark-mode h3,
+    body.dark-mode h4,
+    body.dark-mode h5,
+    body.dark-mode h6,
+    body.dark-mode .card-title,
+    body.dark-mode .modal-title,
+    body.dark-mode .section-title,
+    body.dark-mode strong,
+    body.dark-mode b {
+        color: #f8fafc !important;
+    }
+
+    body.dark-mode p,
+    body.dark-mode span:not(.badge):not(.status-badge):not(.admin-profile-avatar):not(.user-avatar-initial),
+    body.dark-mode li,
+    body.dark-mode td {
+        color: #cbd5e1;
+    }
+
+    body.dark-mode .text-muted,
+    body.dark-mode .text-secondary,
+    body.dark-mode small,
+    body.dark-mode .subtitle {
+        color: #94a3b8 !important;
+    }
+
+    /* Form Inputs, Selects, and Textareas */
+    body.dark-mode input[type="text"],
+    body.dark-mode input[type="email"],
+    body.dark-mode input[type="password"],
+    body.dark-mode input[type="number"],
+    body.dark-mode input[type="date"],
+    body.dark-mode input[type="time"],
+    body.dark-mode input[type="search"],
+    body.dark-mode input[type="tel"],
+    body.dark-mode input[type="file"],
+    body.dark-mode textarea,
+    body.dark-mode select,
+    body.dark-mode .form-control,
+    body.dark-mode .form-select {
+        background: #0f172a !important;
+        background-color: #0f172a !important;
+        border-color: #334155 !important;
+        color: #f8fafc !important;
+    }
+
+    body.dark-mode input:focus,
+    body.dark-mode textarea:focus,
+    body.dark-mode select:focus,
+    body.dark-mode .form-control:focus,
+    body.dark-mode .form-select:focus {
+        background: #020617 !important;
+        border-color: #b3261e !important;
+        box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.3) !important;
+        color: #ffffff !important;
+    }
+
+    body.dark-mode input::placeholder,
+    body.dark-mode textarea::placeholder {
+        color: #64748b !important;
+    }
+
+    body.dark-mode label,
+    body.dark-mode .form-label,
+    body.dark-mode .form-check-label {
+        color: #e2e8f0 !important;
+    }
+
+    body.dark-mode .input-group-text {
+        background: #334155 !important;
+        border-color: #475569 !important;
+        color: #cbd5e1 !important;
+    }
+
+    /* Tables across All Modules */
+    body.dark-mode table,
+    body.dark-mode .table,
+    body.dark-mode .admin-table,
+    body.dark-mode .data-table {
+        color: #e2e8f0 !important;
+        border-color: #334155 !important;
+    }
+
+    body.dark-mode table th,
+    body.dark-mode .table th,
+    body.dark-mode .admin-table th,
+    body.dark-mode .data-table th {
+        background: #0f172a !important;
+        background-color: #0f172a !important;
+        color: #f8fafc !important;
+        border-color: #334155 !important;
+    }
+
+    body.dark-mode table td,
+    body.dark-mode .table td,
+    body.dark-mode .admin-table td,
+    body.dark-mode .data-table td {
+        background: #1e293b !important;
+        background-color: #1e293b !important;
+        color: #e2e8f0 !important;
+        border-color: #334155 !important;
+    }
+
+    body.dark-mode table tbody tr:hover td,
+    body.dark-mode .table tbody tr:hover td,
+    body.dark-mode .admin-table tbody tr:hover td {
+        background: #283449 !important;
+    }
+
+    /* Dropdowns, Menus & Tooltips */
+    body.dark-mode .dropdown-menu {
+        background: #1e293b !important;
+        border-color: #334155 !important;
+        box-shadow: 0 14px 28px rgba(0, 0, 0, 0.45) !important;
+    }
+
+    body.dark-mode .dropdown-item {
+        color: #cbd5e1 !important;
+    }
+
+    body.dark-mode .dropdown-item:hover,
+    body.dark-mode .dropdown-item:focus {
+        background: #2d3748 !important;
+        color: #ffffff !important;
+    }
+
+    body.dark-mode .dropdown-divider {
+        border-color: #334155 !important;
+    }
+
+    /* Pagination */
+    body.dark-mode .pagination .page-link,
+    body.dark-mode .page-item .page-link {
+        background: #1e293b !important;
+        border-color: #334155 !important;
+        color: #cbd5e1 !important;
+    }
+
+    body.dark-mode .pagination .page-item.active .page-link {
+        background: #b3261e !important;
+        border-color: #b3261e !important;
+        color: #ffffff !important;
+    }
+
+    /* Nav Tabs & Pills */
+    body.dark-mode .nav-tabs {
+        border-color: #334155 !important;
+    }
+
+    body.dark-mode .nav-tabs .nav-link {
+        color: #94a3b8 !important;
+        border-color: transparent !important;
+    }
+
+    body.dark-mode .nav-tabs .nav-link:hover {
+        border-color: #334155 #334155 transparent !important;
+        color: #f8fafc !important;
+    }
+
+    body.dark-mode .nav-tabs .nav-link.active {
+        background: #1e293b !important;
+        border-color: #334155 #334155 #1e293b !important;
+        color: #f8fafc !important;
+    }
+
+    /* Module Specific Overrides */
+    body.dark-mode .biz-logo-preview {
+        background: #0f172a !important;
+        border-color: #334155 !important;
+    }
+
+    body.dark-mode .biz-summary-list li {
+        background: #0f172a !important;
+        border-color: #334155 !important;
     }
 </style>
 
@@ -1612,29 +1906,21 @@ if ($is_partner_scoped_admin && $partner_scope_owner_id > 0) {
                 const safeShop = escapeInlineHtml(topbarProfileMenu.currentShop || 'Lechon Delights');
                 const safeMyAccountLink = escapeInlineHtml(topbarProfileMenu.myAccountLink || '../my_account.php');
                 const safeBillingLink = escapeInlineHtml(topbarProfileMenu.billingLink || '');
-                let profileLabel = adminProfile.querySelector('.admin-profile-name');
-                if (!profileLabel) {
-                    profileLabel = document.createElement('span');
-                    profileLabel.className = 'admin-profile-name';
-                    adminProfile.appendChild(profileLabel);
-                }
-                profileLabel.textContent = safeProfileName;
+
                 adminProfile.setAttribute('role', 'button');
                 adminProfile.setAttribute('tabindex', '0');
                 adminProfile.setAttribute('aria-haspopup', 'true');
                 adminProfile.setAttribute('aria-expanded', 'false');
+                adminProfile.setAttribute('title', safeProfileName + ' (' + safeRoleInfo + ')');
 
-                adminProfile.querySelectorAll('i').forEach(icon => icon.remove());
+                // Remove legacy static text / icons from PHP template
+                adminProfile.querySelectorAll('span:not(.admin-profile-avatar), i').forEach(el => el.remove());
 
                 if (!adminProfile.querySelector('.admin-profile-avatar')) {
                     const avatarMarkup = topbarProfile.avatar
                         ? `<img src="${escapeInlineHtml(topbarProfile.avatar)}" alt="${escapeInlineHtml(safeProfileName)} avatar" class="admin-profile-avatar">`
                         : `<span class="admin-profile-avatar admin-profile-fallback">${safeProfileInitials}</span>`;
                     adminProfile.insertAdjacentHTML('afterbegin', avatarMarkup);
-                }
-
-                if (!adminProfile.querySelector('.admin-profile-caret')) {
-                    adminProfile.insertAdjacentHTML('beforeend', '<i class="fas fa-chevron-down admin-profile-caret" aria-hidden="true"></i>');
                 }
 
                 if (!adminProfile.querySelector('.admin-profile-dropdown')) {
@@ -1656,6 +1942,7 @@ if ($is_partner_scoped_admin && $partner_scope_owner_id > 0) {
                             <div class="admin-profile-links">
                                 <a href="${safeMyAccountLink}" class="admin-profile-link"><i class="fas fa-user-circle"></i><span>My Account</span></a>
                                 ${billingMarkup}
+                                <a href="logout.php" class="admin-profile-link" style="color: #b3261e; background: #fff1f0;"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
                             </div>
                         </div>
                     `);
@@ -2520,30 +2807,42 @@ body.dark-mode .sidebar-footer .logout-btn:hover {
 
 document.addEventListener('DOMContentLoaded', function() {
     // 0. Universal Sticky Theme Synchronization
-    function applyAdminTheme(isDark) {
+    window.applyAdminTheme = function(isDark) {
         if (isDark) {
             document.documentElement.classList.add('dark-mode');
-            document.body.classList.add('dark-mode');
+            document.documentElement.setAttribute('data-theme', 'dark');
+            if (document.body) {
+                document.body.classList.add('dark-mode');
+            }
         } else {
             document.documentElement.classList.remove('dark-mode');
-            document.body.classList.remove('dark-mode');
+            document.documentElement.setAttribute('data-theme', 'light');
+            if (document.body) {
+                document.body.classList.remove('dark-mode');
+            }
         }
         try {
             localStorage.setItem('theme', isDark ? 'dark' : 'light');
             document.cookie = "theme=" + (isDark ? "dark" : "light") + "; path=/; max-age=31536000; SameSite=Lax";
         } catch(e) {}
 
-        document.querySelectorAll('#themeToggler, .theme-toggler').forEach(function(btn) {
+        document.querySelectorAll('#themeToggler, .theme-toggler, #marketThemeToggler, .market-theme-btn').forEach(function(btn) {
             const icon = btn.querySelector('i');
             if (icon) {
                 icon.className = isDark ? 'fas fa-sun' : 'fas fa-moon';
             }
+            btn.setAttribute('title', isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode');
         });
         window.dispatchEvent(new CustomEvent('themeChanged', { detail: { isDark: isDark } }));
-    }
+    };
+
+    window.toggleAdminTheme = function() {
+        const isCurrentlyDark = document.body.classList.contains('dark-mode') || document.documentElement.classList.contains('dark-mode');
+        window.applyAdminTheme(!isCurrentlyDark);
+    };
 
     const currentSavedTheme = localStorage.getItem('theme') || (document.cookie.match(/(?:^|;\s*)theme=([^;]*)/) || [])[1];
-    applyAdminTheme(currentSavedTheme === 'dark');
+    window.applyAdminTheme(currentSavedTheme === 'dark');
 
     // 1. Unified Sidebar Collapse & Mobile Drawer Toggle
     const adminContainer = document.querySelector('.admin-container') || document.body;
@@ -2569,7 +2868,8 @@ document.addEventListener('DOMContentLoaded', function() {
             tBtn.className = 'theme-toggler';
             tBtn.id = 'themeToggler';
             tBtn.type = 'button';
-            tBtn.title = 'Toggle Theme';
+            tBtn.title = (currentSavedTheme === 'dark') ? 'Switch to Light Mode' : 'Switch to Dark Mode';
+            tBtn.setAttribute('aria-label', 'Toggle Theme');
             tBtn.innerHTML = (currentSavedTheme === 'dark') ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
             const profile = topbar.querySelector('.admin-profile');
             if (profile && profile.parentNode) {
@@ -2580,15 +2880,14 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Global Event Listener for Theme Toggling
+    // Global Event Listener for Theme Toggling with capture phase to prevent double-toggle interference
     document.addEventListener('click', function(e) {
-        const toggler = e.target.closest('#themeToggler, .theme-toggler');
+        const toggler = e.target.closest('#themeToggler, .theme-toggler, #marketThemeToggler, .market-theme-btn');
         if (!toggler) return;
         e.preventDefault();
-        e.stopPropagation();
-        const isCurrentlyDark = document.body.classList.contains('dark-mode') || document.documentElement.classList.contains('dark-mode');
-        applyAdminTheme(!isCurrentlyDark);
-    });
+        e.stopImmediatePropagation();
+        window.toggleAdminTheme();
+    }, true);
 
     // If no topbar exists on a custom page, create a standalone floating burger button
     if (!document.querySelector('#sidebarToggler, .sidebar-toggler') && sidebar) {
@@ -2979,86 +3278,4 @@ function formatTime(str) {
 </script>
 <?php endif; ?>
 
-<?php if (!empty($_SESSION['login_success_flash'])): ?>
-<style>
-.swal2-container {
-    background: transparent !important;
-    background-color: transparent !important;
-}
-.swal2-container.swal2-backdrop-show,
-.swal2-container.swal2-no-backdrop {
-    background: transparent !important;
-    background-color: transparent !important;
-}
-.swal2-container.swal2-top-end,
-.swal2-container.swal2-top-right {
-    top: 30px !important;
-    right: 24px !important;
-    left: auto !important;
-    bottom: auto !important;
-    padding: 0 !important;
-    z-index: 99999999 !important;
-    overflow: visible !important;
-    pointer-events: none !important;
-    background: transparent !important;
-}
-.swal2-popup.swal2-toast {
-    pointer-events: auto !important;
-    background: #ffffff !important;
-    color: #101828 !important;
-    border: 1px solid #eaecf0 !important;
-    border-radius: 12px !important;
-    box-shadow: 0 10px 25px -3px rgba(16, 24, 40, 0.1), 0 4px 6px -2px rgba(16, 24, 40, 0.05) !important;
-    padding: 12px 18px !important;
-    min-width: 280px !important;
-    max-width: 420px !important;
-    display: flex !important;
-    align-items: center !important;
-    gap: 12px !important;
-}
-.swal2-popup.swal2-toast .swal2-title {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Outfit', sans-serif !important;
-    font-size: 0.92rem !important;
-    font-weight: 600 !important;
-    color: #101828 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    line-height: 1.4 !important;
-}
-.swal2-popup.swal2-toast .swal2-icon {
-    margin: 0 !important;
-    width: 24px !important;
-    height: 24px !important;
-    min-width: 24px !important;
-    border-color: #027a48 !important;
-    color: #027a48 !important;
-}
-.swal2-popup.swal2-toast .swal2-timer-progress-bar {
-    background: #b3261e !important;
-    height: 3px !important;
-}
-</style>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    if (typeof Swal !== 'undefined') {
-        const Toast = Swal.mixin({
-            toast: true,
-            position: 'top-end',
-            backdrop: false,
-            showConfirmButton: false,
-            timer: 4000,
-            timerProgressBar: true,
-            didOpen: (toast) => {
-                toast.addEventListener('mouseenter', Swal.stopTimer);
-                toast.addEventListener('mouseleave', Swal.resumeTimer);
-            }
-        });
-        Toast.fire({
-            icon: 'success',
-            title: <?php echo json_encode($_SESSION['login_success_flash']); ?>
-        });
-    }
-});
-</script>
-<?php unset($_SESSION['login_success_flash']); ?>
-<?php endif; ?>
+<?php require_once __DIR__ . '/../includes/popup_alert.php'; ?>

@@ -1752,6 +1752,213 @@ body {
 .footer {
     margin-top: 0 !important;
 }
+
+/* ==========================================================================
+   AUTHENTICATION (SIGN UP & SIGN IN) DARK MODE THEME
+   ========================================================================== */
+body.dark-mode,
+html.dark-mode,
+body.dark-mode .registration-page,
+html.dark-mode .registration-page {
+    background: #0f172a !important;
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .registration-container {
+    background: #0f172a !important;
+    background-color: #0f172a !important;
+}
+
+/* Left Hero Branding Side */
+body.dark-mode .registration-image-side {
+    background: linear-gradient(145deg, #182234 0%, #1e293b 60%, #0f172a 100%) !important;
+    border-right: 1px solid #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .registration-container.is-login-mode .registration-image-side {
+    border-left: 1px solid #334155 !important;
+    border-right: none !important;
+}
+
+body.dark-mode .hero-water-waves {
+    opacity: 0.12 !important;
+}
+
+body.dark-mode .liquid-wave-seam svg path {
+    fill: rgba(30, 41, 59, 0.4) !important;
+}
+
+body.dark-mode .brand-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .brand-subtitle,
+body.dark-mode .cta-label {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .btn-slide-auth {
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3) !important;
+}
+
+body.dark-mode .btn-slide-auth:hover {
+    background: #334155 !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+}
+
+/* Right Form Side */
+body.dark-mode .registration-form-side,
+body.dark-mode .registration-form-side-container,
+body.dark-mode .registration-body,
+body.dark-mode .registration-header {
+    background: #0f172a !important;
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .registration-header h2,
+body.dark-mode .registration-header span,
+body.dark-mode .form-step h2,
+body.dark-mode .form-step h3,
+body.dark-mode .form-step h4,
+body.dark-mode .form-header h2 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .registration-header p,
+body.dark-mode .form-step p,
+body.dark-mode .form-header p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .registration-intro {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .registration-intro h2 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .registration-intro p {
+    color: #cbd5e1 !important;
+}
+
+/* Progress Steps */
+body.dark-mode .progress-container {
+    background: #334155 !important;
+}
+
+body.dark-mode .step.active .step-label {
+    color: #ef4444 !important;
+}
+
+/* Form Controls & Inputs */
+body.dark-mode .form-control,
+body.dark-mode .form-select,
+body.dark-mode input[type="text"],
+body.dark-mode input[type="email"],
+body.dark-mode input[type="password"],
+body.dark-mode input[type="tel"],
+body.dark-mode input[type="date"],
+body.dark-mode select,
+body.dark-mode textarea {
+    background: #1e293b !important;
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .form-control:focus,
+body.dark-mode .form-select:focus,
+body.dark-mode input:focus,
+body.dark-mode select:focus {
+    background: #0b1120 !important;
+    border-color: #b3261e !important;
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.3) !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode label,
+body.dark-mode .form-group label,
+body.dark-mode .checkbox-label {
+    color: #e2e8f0 !important;
+}
+
+body.dark-mode .password-input-group .toggle-password,
+body.dark-mode .input-with-icon button {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .password-input-group .toggle-password:hover,
+body.dark-mode .input-with-icon button:hover {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .terms-group label,
+body.dark-mode .terms-agreement {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .terms-group a,
+body.dark-mode .terms-agreement a {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .btn-secondary {
+    background: #1e293b !important;
+    color: #f8fafc !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .btn-secondary:hover {
+    background: #334155 !important;
+    border-color: #475569 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .account-type-card {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .account-type-card h3,
+body.dark-mode .account-type-card p {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .account-type-card.selected {
+    background: rgba(179, 38, 30, 0.18) !important;
+    border-color: #b3261e !important;
+}
+
+/* Modals (Webcam & Verification) */
+body.dark-mode #cameraModal > div {
+    background: #1e293b !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode #cameraModal [style*="background: #f8fafc"],
+body.dark-mode #cameraModal [style*="background:#f8fafc"] {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode #cameraModal h3 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .floating-pig {
+    opacity: 0.25 !important;
+}
 </style>
 <div class="registration-page">
     <!-- Liquid Ripple Surge Overlay -->
@@ -2464,10 +2671,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 const data = await response.json();
                 if (data.success) {
                     const userName = data.full_name || 'Customer';
-                    Toast.fire({
-                        icon: 'success',
-                        title: 'Welcome back, ' + userName + '! Redirecting...'
-                    });
+                    if (window.showPopupAlert) {
+                        showPopupAlert('Welcome back, ' + userName + '! Redirecting...', 'success', 3000);
+                    } else if (typeof Toast !== 'undefined') {
+                        Toast.fire({
+                            icon: 'success',
+                            title: 'Welcome back, ' + userName + '! Redirecting...'
+                        });
+                    }
                     if (loginSubmitBtn) {
                         loginSubmitBtn.innerHTML = '<i class="fas fa-check-circle"></i> <span>Success! Redirecting...</span>';
                         loginSubmitBtn.style.background = '#027a48';
@@ -2480,12 +2691,16 @@ document.addEventListener('DOMContentLoaded', function() {
                         loginSubmitBtn.disabled = false;
                         loginSubmitBtn.innerHTML = origBtnHtml;
                     }
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Sign In Failed',
-                        text: data.message || 'Invalid email or password. Please try again.',
-                        confirmButtonColor: '#b3261e'
-                    });
+                    if (window.showPopupAlert) {
+                        showPopupAlert(data.message || 'Invalid email or password. Please try again.', 'error', 4500);
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Sign In Failed',
+                            text: data.message || 'Invalid email or password. Please try again.',
+                            confirmButtonColor: '#b3261e'
+                        });
+                    }
                 }
             } catch (err) {
                 console.error('AJAX Login error:', err);
@@ -2493,12 +2708,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     loginSubmitBtn.disabled = false;
                     loginSubmitBtn.innerHTML = origBtnHtml;
                 }
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Sign In Error',
-                    text: 'Unable to connect to login server. Please try again.',
-                    confirmButtonColor: '#b3261e'
-                });
+                if (window.showPopupAlert) {
+                    showPopupAlert('Unable to connect to login server. Please try again.', 'error', 4500);
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Sign In Error',
+                        text: 'Unable to connect to login server. Please try again.',
+                        confirmButtonColor: '#b3261e'
+                    });
+                }
             }
         });
     }

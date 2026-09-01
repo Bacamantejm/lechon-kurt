@@ -1008,6 +1008,117 @@ body {
 .auth-link a:hover {
     text-decoration: underline !important;
 }
+
+/* ==========================================================================
+   LOGIN PAGE DARK MODE THEME
+   ========================================================================== */
+body.dark-mode,
+html.dark-mode,
+body.dark-mode .login-page-container {
+    background: #0f172a !important;
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .login-wrapper {
+    background: #0f172a !important;
+    background-color: #0f172a !important;
+}
+
+body.dark-mode .login-left {
+    background: linear-gradient(145deg, #182234 0%, #1e293b 60%, #0f172a 100%) !important;
+    border-right: 1px solid #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .login-left h2,
+body.dark-mode .brand-logo h1 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .login-left p,
+body.dark-mode .features-list li {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .login-right {
+    background: #0f172a !important;
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .login-header h2 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .login-header p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .form-group label {
+    color: #e2e8f0 !important;
+}
+
+body.dark-mode .form-control {
+    background: #1e293b !important;
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .form-control:focus {
+    background: #0b1120 !important;
+    border-color: #b3261e !important;
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.3) !important;
+}
+
+body.dark-mode .input-with-icon i,
+body.dark-mode #togglePassword {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .remember-checkbox span {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .forgot-link {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .auth-link {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .btn-secondary {
+    background: #1e293b !important;
+    color: #f8fafc !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .btn-secondary:hover {
+    background: #334155 !important;
+    border-color: #475569 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .social-divider span {
+    background: #0f172a !important;
+    color: #64748b !important;
+}
+
+body.dark-mode .social-btn {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .social-btn:hover {
+    background: #334155 !important;
+}
+
+body.dark-mode .floating-pig {
+    opacity: 0.25 !important;
+}
 </style>
 
 <div class="login-page-container">
