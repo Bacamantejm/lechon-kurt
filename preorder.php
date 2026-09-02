@@ -246,1282 +246,6 @@ $time_slots = ['8:00 AM', '9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '1:00 P
 
 include 'includes/header.php';
 ?>
-
-<section class="page-header">
-    <div class="container">
-        <h1>Pre-Order Your Lechon</h1>
-        <p>Plan ahead and secure your feast for your special celebration</p>
-    </div>
-</section>
-
-<section class="preorder-section">
-    <div class="container">
-        <div class="preorder-container expanded">
-    <div class="checkout-type-switch" aria-label="Checkout Type">
-        <p class="checkout-type-title">Checkout Type</p>
-        <div class="checkout-type-actions">
-            <a href="checkout.php<?php echo htmlspecialchars($store_scope_query); ?>" class="checkout-type-chip">
-                <i class="fas fa-bolt"></i> Order Now
-            </a>
-            <a href="preorder.php<?php echo htmlspecialchars($store_scope_query); ?>" class="checkout-type-chip is-active" aria-current="page">
-                <i class="fas fa-calendar-alt"></i> Pre-Order
-            </a>
-        </div>
-        <p class="checkout-type-note">Need ASAP checkout instead? Switch to order now anytime.</p>
-    </div>
-    <!-- Progress Bar -->
-    <div class="progress-bar-container">
-        <div class="progress-steps">
-            <div class="progress-step active" data-step="1">
-                <div class="progress-step-circle">1</div>
-                <div class="progress-step-label">Product</div>
-            </div>
-            <div class="progress-step" data-step="2">
-                <div class="progress-step-circle">2</div>
-                <div class="progress-step-label">Pick-up</div>
-            </div>
-            <div class="progress-step" data-step="3">
-                <div class="progress-step-circle">3</div>
-                <div class="progress-step-label">Payment</div>
-            </div>
-            <div class="progress-step" data-step="4">
-                <div class="progress-step-circle">4</div>
-                <div class="progress-step-label">Confirm</div>
-            </div>
-        </div>
-    </div>
-
-    <form id="preorderForm" method="POST">
-        <!-- Step 1: Product Selection with Dedicated Pre-Order Cart -->
-        <div class="step-content active" data-step="1">
-            <div class="preorder-step1-layout">
-                <!-- Left Main: Product Catalog -->
-                <div class="preorder-catalog-main">
-                    <div class="step-title">Select Your Pre-Order Items</div>
-                    <?php if ($active_seller_id > 0): ?>
-                        <p class="tenant-scope-note">
-                            Showing products from
-                            <strong><?php echo htmlspecialchars($storefront_name !== '' ? $storefront_name : ('Partner #' . $active_seller_id)); ?></strong>
-                            only.
-                        </p>
-                    <?php endif; ?>
-                    
-                    <!-- Category Filter -->
-                    <div class="category-nav">
-                        <div class="category-list">
-                            <button type="button" class="category-link active" data-category="all">All</button>
-                            <?php foreach ($categories as $cat): ?>
-                                <button type="button" class="category-link" data-category="<?php echo htmlspecialchars($cat); ?>">
-                                    <?php echo htmlspecialchars($cat); ?>
-                                </button>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <div id="productList" class="product-grid">
-                            <?php if (empty($all_products)): ?>
-                                <p class="empty-product-note"><?php echo $active_seller_id > 0 ? 'No active products are currently posted for this partner.' : 'No active products are currently available.'; ?></p>
-                            <?php else: ?>
-                                <?php foreach ($all_products as $p): 
-                                    $imgSrc = (string)($p['image'] ?? 'default.jpg');
-                                    if ($imgSrc !== '' && $imgSrc !== 'default.jpg') {
-                                        if (!str_starts_with($imgSrc, 'http') && !str_contains($imgSrc, '/')) {
-                                            $imgSrc = 'images/menu/' . $imgSrc;
-                                        }
-                                    }
-                                ?>
-                                <div class="product-card" data-product-id="<?php echo (int)$p['id']; ?>" onclick="addToCart(<?php echo (int)$p['id']; ?>)">
-                                    <div class="check-icon"><i class="fas fa-check"></i></div>
-                                    <div class="product-image">
-                                        <?php if ($imgSrc !== '' && $imgSrc !== 'default.jpg'): ?>
-                                            <img src="<?php echo htmlspecialchars($imgSrc); ?>" alt="<?php echo htmlspecialchars($p['name']); ?>">
-                                        <?php else: ?>
-                                            <i class="fas fa-drumstick-bite"></i>
-                                        <?php endif; ?>
-                                    </div>
-                                    <div class="product-info">
-                                        <h4><?php echo htmlspecialchars($p['name']); ?></h4>
-                                        <div class="product-price">₱<?php echo number_format($p['price'], 2); ?></div>
-                                        <button type="button" class="btn btn-outline btn-sm btn-block btn-add-preorder" data-product-id="<?php echo (int)$p['id']; ?>" onclick="event.stopPropagation(); addToCart(<?php echo (int)$p['id']; ?>)">
-                                            <i class="fas fa-plus"></i> Add to Order
-                                        </button>
-                                    </div>
-                                </div>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Right Sidebar: Dedicated Sticky Pre-Order Cart Panel -->
-                <aside class="preorder-cart-sidebar">
-                    <div class="preorder-cart-card">
-                        <div class="preorder-cart-header">
-                            <h4>
-                                <i class="fas fa-calendar-check" style="color:var(--pre-red);"></i>
-                                Pre-Order Cart
-                                <span id="cartCountBadge" class="preorder-cart-badge" style="display:none;">0</span>
-                            </h4>
-                            <button type="button" id="clearCartBtn" class="btn-clear-cart" style="display:none;" onclick="clearCart()">
-                                <i class="fas fa-trash-alt"></i> Clear
-                            </button>
-                        </div>
-                        <p class="preorder-cart-sub">Items selected exclusively for your advance reservation.</p>
-
-                        <div id="preorderCartItems" class="cart-items-container">
-                            <p class="empty-cart-msg"><i class="fas fa-basket-shopping"></i> No items added yet. Click on any dish to add it to your pre-order.</p>
-                        </div>
-
-                        <div class="preorder-cart-totals">
-                            <div class="preorder-total-line">
-                                <span>Estimated Subtotal</span>
-                                <strong id="cartSubtotalDisplay">₱0.00</strong>
-                            </div>
-                            <div class="preorder-total-line">
-                                <span>VAT (12%)</span>
-                                <strong id="cartVatDisplay">₱0.00</strong>
-                            </div>
-                            <div class="preorder-total-line grand-total">
-                                <span>Estimated Total</span>
-                                <strong id="cartTotalDisplay">₱0.00</strong>
-                            </div>
-                        </div>
-
-                        <div class="preorder-cart-actions">
-                            <button type="button" class="btn btn-primary next-btn btn-block">
-                                Continue to Pick-up Details <i class="fas fa-arrow-right"></i>
-                            </button>
-                        </div>
-                    </div>
-                </aside>
-            </div>
-        </div>
-
-        <!-- Step 2: Store Pick-up & Schedule Information -->
-        <div class="step-content" data-step="2">
-            <div class="step-title"><i class="fas fa-store" style="color:var(--pre-red); margin-right:6px;"></i> Store Pick-up Details</div>
-
-            <div class="preorder-pickup-banner">
-                <div class="preorder-pickup-badge"><i class="fas fa-bag-shopping"></i> Self Pick-up Order</div>
-                <p>This pre-order is for store pick-up. Your lechon feast will be freshly roasted and packaged ready for pick-up at your selected branch.</p>
-            </div>
-
-            <!-- Contact Person for Claiming -->
-            <div class="preorder-section-block">
-                <h4 class="preorder-block-title"><i class="fas fa-user-check"></i> Claimant Contact Information</h4>
-                <div class="form-row full">
-                    <div class="form-group">
-                        <label for="fullName">Full Name (Order Claimant) *</label>
-                        <input type="text" id="fullName" name="fullName" placeholder="Enter your full name" value="<?php echo htmlspecialchars($user_profile['full_name']); ?>" required>
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="phone">Mobile Phone Number *</label>
-                        <input type="tel" id="phone" name="phone" placeholder="09XXXXXXXXX" value="<?php echo htmlspecialchars($user_profile['phone']); ?>" required>
-                        <small style="color:#667085; font-size:0.78rem;">We will send SMS updates when your roast is hot & ready for pick-up.</small>
-                    </div>
-                    <div class="form-group">
-                        <label for="email">Email Address *</label>
-                        <input type="email" id="email" name="email" placeholder="your@email.com" value="<?php echo htmlspecialchars($user_profile['email']); ?>" required>
-                        <small style="color:#667085; font-size:0.78rem;">Order receipt and Claim QR Code will be sent here.</small>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Pick-up Store Location & Interactive Map -->
-            <div class="preorder-section-block">
-                <h4 class="preorder-block-title"><i class="fas fa-location-dot"></i> Pick-up Store Branch & Map</h4>
-                
-                <div class="form-group" style="margin-bottom: 14px;">
-                    <label for="storeSelect">Select Fulfillment Branch *</label>
-                    <select id="storeSelect" name="store_id" class="form-control" onchange="onStoreChange(this.value)">
-                        <?php foreach ($stores as $store): ?>
-                            <option value="<?php echo (int)$store['id']; ?>" 
-                                data-name="<?php echo htmlspecialchars($store['store_name']); ?>"
-                                data-address="<?php echo htmlspecialchars($store['address'] . ', ' . $store['city'] . ', ' . $store['province']); ?>"
-                                data-phone="<?php echo htmlspecialchars($store['phone'] ?? ''); ?>"
-                                data-hours="<?php echo htmlspecialchars($store['opening_hours'] ?? '8:00 AM - 8:00 PM'); ?>"
-                                data-lat="<?php echo htmlspecialchars($store['latitude'] ?? '14.3294'); ?>"
-                                data-lng="<?php echo htmlspecialchars($store['longitude'] ?? '120.9367'); ?>"
-                                data-city="<?php echo htmlspecialchars($store['city'] ?? ''); ?>"
-                                data-province="<?php echo htmlspecialchars($store['province'] ?? ''); ?>">
-                                <?php echo htmlspecialchars($store['store_name']); ?> — <?php echo htmlspecialchars($store['address'] . ', ' . $store['city']); ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-
-                <!-- Selected Store Details Card -->
-                <div class="store-details-card" id="storeInfoCard">
-                    <div class="store-details-main">
-                        <div class="store-icon"><i class="fas fa-store"></i></div>
-                        <div class="store-info-text">
-                            <h5 id="storeNameDisplay"><?php echo htmlspecialchars($stores[0]['store_name'] ?? 'Main Branch'); ?></h5>
-                            <p class="store-address-p" id="storeAddressDisplay"><i class="fas fa-location-dot"></i> <?php echo htmlspecialchars(($stores[0]['address'] ?? '') . ', ' . ($stores[0]['city'] ?? '') . ', ' . ($stores[0]['province'] ?? '')); ?></p>
-                            <div class="store-meta-tags">
-                                <span class="store-tag" id="storeHoursDisplay"><i class="fas fa-clock"></i> Hours: <?php echo htmlspecialchars($stores[0]['opening_hours'] ?? '8:00 AM - 8:00 PM'); ?></span>
-                                <?php if (!empty($stores[0]['phone'])): ?>
-                                    <span class="store-tag" id="storePhoneDisplay"><i class="fas fa-phone"></i> <?php echo htmlspecialchars($stores[0]['phone']); ?></span>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                    </div>
-                    <a href="https://www.google.com/maps/dir/?api=1&destination=<?php echo htmlspecialchars($stores[0]['latitude'] ?? '14.3294'); ?>,<?php echo htmlspecialchars($stores[0]['longitude'] ?? '120.9367'); ?>" id="storeDirectionsLink" target="_blank" class="btn-directions">
-                        <i class="fas fa-directions"></i> Get Directions
-                    </a>
-                </div>
-
-                <!-- Store Interactive Leaflet Map -->
-                <div class="store-map-wrapper">
-                    <div id="storePickupMap" style="height: 280px; width: 100%; border-radius: 12px; border: 1px solid #eaecf0; margin-top: 12px; z-index: 1;"></div>
-                    <small style="display:block; margin-top:6px; color:#667085;"><i class="fas fa-circle-info"></i> Map displays the exact store location where you will pick up your feast.</small>
-                </div>
-            </div>
-
-            <!-- Pick-up Date & Time Schedule -->
-            <div class="preorder-section-block">
-                <h4 class="preorder-block-title"><i class="fas fa-calendar-check"></i> Select Roasting &amp; Pick-up Schedule</h4>
-                <p style="color: #667085; font-size: 0.85rem; margin-top: -6px; margin-bottom: 16px;">
-                    Choose an available pick-up date from our store calendar. Available dates and daily roasting batch capacities automatically update in real-time.
-                </p>
-
-                <!-- Hidden inputs for seamless form submission & validation -->
-                <input type="hidden" id="pickupDate" name="pickupDate" value="" required>
-                <input type="hidden" id="pickupTime" name="pickupTime" value="" required>
-
-                <!-- Interactive Calendar Widget -->
-                <div class="preorder-cal-widget" id="preorderCalendarWidget">
-                    <div class="cal-widget-header">
-                        <button type="button" class="cal-nav-btn" id="calPrevMonthBtn" title="Previous Month"><i class="fas fa-chevron-left"></i></button>
-                        <div class="cal-widget-title" id="calMonthTitle"><?php echo htmlspecialchars($initial_calendar_data['month_title']); ?></div>
-                        <button type="button" class="cal-nav-btn" id="calNextMonthBtn" title="Next Month"><i class="fas fa-chevron-right"></i></button>
-                    </div>
-
-                    <div class="cal-schedule-policy-bar">
-                        <span><i class="fas fa-clock"></i> <strong>Lead Time:</strong> <?php echo (int)$preorder_schedule['lead_time_days']; ?> day(s) notice</span>
-                        <span><i class="fas fa-hourglass-half"></i> <strong>Daily Cutoff:</strong> <?php echo date('g:i A', strtotime($preorder_schedule['cutoff_time'])); ?></span>
-                        <span><i class="fas fa-calendar-alt"></i> <strong>Window:</strong> Up to <?php echo (int)$preorder_schedule['max_advance_days']; ?> days ahead</span>
-                    </div>
-
-                    <div class="cal-grid-weekdays">
-                        <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>
-                    </div>
-
-                    <div class="cal-grid-days" id="calDaysGrid">
-                        <!-- Populated by JavaScript and server initial render -->
-                    </div>
-
-                    <div class="cal-legend-bar">
-                        <div class="cal-legend-item"><span class="legend-dot available"></span> Available Date</div>
-                        <div class="cal-legend-item"><span class="legend-dot selected"></span> Selected</div>
-                        <div class="cal-legend-item"><span class="legend-dot disabled"></span> Closed / Cutoff</div>
-                        <div class="cal-legend-item"><span class="legend-dot full"></span> Fully Booked</div>
-                    </div>
-                </div>
-
-                <!-- Available Time Slots for Selected Date -->
-                <div class="preorder-slots-section" id="preorderSlotsSection" style="margin-top: 24px; display: none;">
-                    <h5 style="font-family:'Outfit',sans-serif; font-weight:700; font-size:1rem; color:#101828; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
-                        <i class="fas fa-clock text-danger"></i> Available Pick-up Time Slots for <span id="slotsSelectedDateText" style="color:#b3261e;"></span>
-                    </h5>
-                    <div class="time-slots-grid" id="timeSlotsGrid">
-                        <!-- Time slot cards dynamically injected here -->
-                    </div>
-                </div>
-
-                <!-- Selected Date & Time Confirmation Banner -->
-                <div class="preorder-schedule-selected-badge" id="scheduleSelectedBadge" style="display: none; margin-top: 18px; background: #ecfdf3; border: 1px solid #abefc6; border-radius: 12px; padding: 14px 18px; color: #027a48; align-items: center; gap: 12px;">
-                    <i class="fas fa-circle-check" style="font-size: 1.3rem;"></i>
-                    <div>
-                        <div style="font-weight: 800; font-size: 0.95rem;">Pick-up Schedule Confirmed</div>
-                        <div style="font-size: 0.86rem;" id="scheduleSelectedSummaryText"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Hidden Fields for Backend Compatibility -->
-            <input type="hidden" id="streetAddress" name="streetAddress" value="">
-            <input type="hidden" id="province" name="province" value="">
-            <input type="hidden" id="city" name="city" value="">
-            <input type="hidden" id="barangay" name="barangay" value="Store Pick-up">
-            <input type="hidden" id="preorder_region_name" name="preorder_region_name" value="">
-            <input type="hidden" id="preorder_region_code" name="preorder_region_code" value="">
-            <input type="hidden" id="preorder_province_name" name="preorder_province_name" value="">
-            <input type="hidden" id="preorder_province_code" name="preorder_province_code" value="">
-            <input type="hidden" id="preorder_city_name" name="preorder_city_name" value="">
-            <input type="hidden" id="preorder_city_code" name="preorder_city_code" value="">
-            <input type="hidden" id="preorder_barangay_name" name="preorder_barangay_name" value="Store Pick-up">
-            <input type="hidden" id="preorder_barangay_code" name="preorder_barangay_code" value="">
-            <input type="hidden" id="latitude" name="latitude" value="">
-            <input type="hidden" id="longitude" name="longitude" value="">
-
-            <div class="button-group">
-                <button type="button" class="btn btn-secondary prev-btn">Back</button>
-                <button type="button" class="btn btn-primary next-btn">Proceed to Payment <i class="fas fa-arrow-right"></i></button>
-            </div>
-        </div>
-
-        <!-- Step 3: Payment -->
-        <div class="step-content" data-step="3">
-            <div class="step-title">Payment Method</div>
-
-            <div class="payment-options-grid">
-                <label class="payment-option-card selected">
-                    <input type="radio" name="payment_type" value="full" checked onchange="selectPaymentOption(this)">
-                    <div class="option-content">
-                        <i class="fas fa-money-bill-wave"></i>
-                        <h4>Full Payment</h4>
-                        <p>Pay the full amount now via PayMongo.</p>
-                    </div>
-                </label>
-                <label class="payment-option-card">
-                    <input type="radio" name="payment_type" value="downpayment" onchange="selectPaymentOption(this)">
-                    <div class="option-content">
-                        <i class="fas fa-percentage"></i>
-                        <h4>30% Downpayment</h4>
-                        <p>Pay 30% now, balance upon pickup/delivery.</p>
-                    </div>
-                </label>
-            </div>
-
-            <div class="summary-box">
-                <div class="summary-row">
-                    <span>Items:</span>
-                    <span id="payItemCount">0</span>
-                </div>
-                <div class="summary-row">
-                    <span>Subtotal:</span>
-                    <span id="paySubtotal">PHP 0.00</span>
-                </div>
-                <div class="summary-row">
-                    <span>VAT (12%):</span>
-                    <span id="payVat">PHP 0.00</span>
-                </div>
-                <div class="summary-row total">
-                    <span>Total:</span>
-                    <span id="payTotal">₱0.00</span>
-                </div>
-            </div>
-
-            <div class="button-group">
-                <button type="button" class="btn btn-secondary prev-btn">Back</button>
-                <button type="button" class="btn btn-primary next-btn">Next</button>
-            </div>
-        </div>
-
-        <!-- Step 4: Confirmation -->
-        <div class="step-content" data-step="4">
-            <div class="step-title">Confirm Your Order</div>
-
-            <div class="summary-box" id="confirmSummary">
-                <p>Order Summary will appear here</p>
-            </div>
-
-            <div class="button-group">
-                <button type="button" class="btn btn-secondary prev-btn">Back</button>
-                <button type="submit" class="btn btn-primary">Submit Order</button>
-            </div>
-        </div>
-    </form>
-        </div>
-    </div>
-</section>
-
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-<script>
-const products = <?php echo json_encode($all_products); ?>;
-const activeSellerId = <?php echo (int)$active_seller_id; ?>;
-let cart = []; // Array to store selected items: { id, name, price, quantity, image }
-const VAT_RATE = 0.12;
-let storeMap = null;
-let storeMarker = null;
-let currentStep = 1;
-
-function getPreorderTotals() {
-    const subtotal = cart.reduce((sum, item) => sum + ((parseFloat(item.price) || 0) * (parseInt(item.quantity) || 0)), 0);
-    const vatAmount = Math.round(subtotal * VAT_RATE * 100) / 100;
-    const total = subtotal + vatAmount;
-    return { subtotal, vatAmount, total };
-}
-
-function initStoreMap() {
-    const mapEl = document.getElementById('storePickupMap');
-    if (!mapEl || typeof L === 'undefined') return;
-
-    const storeSelect = document.getElementById('storeSelect');
-    if (!storeSelect) return;
-    const selectedOpt = storeSelect.options[storeSelect.selectedIndex];
-    if (!selectedOpt) return;
-
-    const lat = parseFloat(selectedOpt.dataset.lat) || 14.3294;
-    const lng = parseFloat(selectedOpt.dataset.lng) || 120.9367;
-    const name = selectedOpt.dataset.name || 'Store Branch';
-    const address = selectedOpt.dataset.address || '';
-    const hours = selectedOpt.dataset.hours || '8:00 AM - 8:00 PM';
-    const phone = selectedOpt.dataset.phone || '';
-
-    // Update Card & Directions Link
-    const storeNameEl = document.getElementById('storeNameDisplay');
-    const storeAddrEl = document.getElementById('storeAddressDisplay');
-    const storeHoursEl = document.getElementById('storeHoursDisplay');
-    const storePhoneEl = document.getElementById('storePhoneDisplay');
-    const dirLink = document.getElementById('storeDirectionsLink');
-
-    if (storeNameEl) storeNameEl.textContent = name;
-    if (storeAddrEl) storeAddrEl.innerHTML = '<i class="fas fa-location-dot"></i> ' + address;
-    if (storeHoursEl) storeHoursEl.innerHTML = '<i class="fas fa-clock"></i> Hours: ' + hours;
-    if (storePhoneEl) {
-        if (phone) {
-            storePhoneEl.innerHTML = '<i class="fas fa-phone"></i> ' + phone;
-            storePhoneEl.style.display = 'inline-flex';
-        } else {
-            storePhoneEl.style.display = 'none';
-        }
-    }
-    if (dirLink) dirLink.href = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
-
-    if (!storeMap) {
-        storeMap = L.map('storePickupMap', {
-            scrollWheelZoom: false
-        }).setView([lat, lng], 15);
-
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
-        }).addTo(storeMap);
-
-        const storeIcon = L.divIcon({
-            className: 'store-custom-marker',
-            html: '<div style="background:#b3261e; color:#ffffff; width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 3px 8px rgba(179,38,30,0.35); border:2.5px solid #ffffff;"><i class="fas fa-store" style="font-size:15px;"></i></div>',
-            iconSize: [34, 34],
-            iconAnchor: [17, 17],
-            popupAnchor: [0, -18]
-        });
-
-        storeMarker = L.marker([lat, lng], { icon: storeIcon }).addTo(storeMap);
-        storeMarker.bindPopup(`<strong>${name}</strong><br>${address}<br><small style="color:#b3261e; font-weight:700;">Pick-up Branch</small>`).openPopup();
-    } else {
-        storeMap.setView([lat, lng], 15);
-        if (storeMarker) {
-            storeMarker.setLatLng([lat, lng]);
-            storeMarker.setPopupContent(`<strong>${name}</strong><br>${address}<br><small style="color:#b3261e; font-weight:700;">Pick-up Branch</small>`).openPopup();
-        }
-        setTimeout(() => { storeMap.invalidateSize(); }, 150);
-    }
-}
-
-function onStoreChange(val) {
-    syncPreorderStoreAddress();
-    initStoreMap();
-}
-
-function syncPreorderStoreAddress() {
-    const storeSelect = document.getElementById('storeSelect');
-    if (!storeSelect) return;
-    const selectedOpt = storeSelect.options[storeSelect.selectedIndex];
-    if (!selectedOpt) return;
-
-    const storeName = selectedOpt.dataset.name || selectedOpt.text;
-    const storeAddress = selectedOpt.dataset.address || '';
-    const storeCity = selectedOpt.dataset.city || 'Cavite';
-    const storeProvince = selectedOpt.dataset.province || 'Cavite';
-    const storeLat = selectedOpt.dataset.lat || '14.3294';
-    const storeLng = selectedOpt.dataset.lng || '120.9367';
-
-    const streetAddressInput = document.getElementById('streetAddress');
-    if (streetAddressInput) streetAddressInput.value = 'Store Pick-up: ' + storeName + ' (' + storeAddress + ')';
-    const provinceInput = document.getElementById('province');
-    if (provinceInput) provinceInput.value = storeProvince;
-    const cityInput = document.getElementById('city');
-    if (cityInput) cityInput.value = storeCity;
-    const brgyInput = document.getElementById('barangay');
-    if (brgyInput) brgyInput.value = 'Store Pick-up';
-    const cityNameInput = document.getElementById('preorder_city_name');
-    if (cityNameInput) cityNameInput.value = storeCity;
-    const provNameInput = document.getElementById('preorder_province_name');
-    if (provNameInput) provNameInput.value = storeProvince;
-    const brgyNameInput = document.getElementById('preorder_barangay_name');
-    if (brgyNameInput) brgyNameInput.value = 'Store Pick-up';
-    const latInput = document.getElementById('latitude');
-    if (latInput) latInput.value = storeLat;
-    const lngInput = document.getElementById('longitude');
-    if (lngInput) lngInput.value = storeLng;
-}
-
-function showPreorderToast(msg) {
-    if (typeof Swal !== 'undefined' && typeof Swal.fire === 'function') {
-        Swal.fire({
-            toast: true,
-            position: 'top-end',
-            icon: 'success',
-            title: msg,
-            showConfirmButton: false,
-            timer: 1500
-        });
-        return;
-    }
-    let toast = document.getElementById('preorderToastNotice');
-    if (!toast) {
-        toast = document.createElement('div');
-        toast.id = 'preorderToastNotice';
-        toast.style.cssText = 'position:fixed; top:24px; right:24px; z-index:99999; background:#101828; color:#ffffff; padding:12px 20px; border-radius:10px; font-weight:700; font-size:0.9rem; box-shadow:0 8px 24px rgba(0,0,0,0.2); transition:all 0.3s ease; display:flex; align-items:center; gap:8px;';
-        document.body.appendChild(toast);
-    }
-    toast.innerHTML = '<i class="fas fa-check-circle" style="color:#12b76a;"></i> ' + msg;
-    toast.style.opacity = '1';
-    toast.style.transform = 'translateY(0)';
-    setTimeout(() => {
-        if (toast) {
-            toast.style.opacity = '0';
-            toast.style.transform = 'translateY(-10px)';
-        }
-    }, 1800);
-}
-
-// Pre-Order Roasting Calendar & Time Slot Controller
-let currentCalMonth = <?php echo json_encode($initial_calendar_data['current_month']); ?>;
-let selectedPickupDate = '';
-let selectedPickupTime = '';
-
-async function loadCalendarMonth(monthStr) {
-    const daysGrid = document.getElementById('calDaysGrid');
-    const monthTitle = document.getElementById('calMonthTitle');
-    const prevBtn = document.getElementById('calPrevMonthBtn');
-    const nextBtn = document.getElementById('calNextMonthBtn');
-    
-    if (!daysGrid) return;
-    daysGrid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 20px; color: #667085;"><i class="fas fa-spinner fa-spin"></i> Loading schedule...</div>';
-
-    try {
-        const res = await fetch(`api/preorder_schedule.php?action=get_calendar&seller_id=${activeSellerId}&month=${encodeURIComponent(monthStr || '')}`);
-        const json = await res.json();
-        if (json.success && json.data) {
-            const data = json.data;
-            currentCalMonth = data.current_month;
-            if (monthTitle) monthTitle.textContent = data.month_title;
-            
-            if (prevBtn) {
-                prevBtn.disabled = !data.prev_month;
-                prevBtn.onclick = () => data.prev_month && loadCalendarMonth(data.prev_month);
-            }
-            if (nextBtn) {
-                nextBtn.disabled = !data.next_month;
-                nextBtn.onclick = () => data.next_month && loadCalendarMonth(data.next_month);
-            }
-
-            renderCalendarDays(data);
-        }
-    } catch (e) {
-        console.error('Error loading calendar:', e);
-        daysGrid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 20px; color: #b3261e;">Failed to load schedule. Please try again.</div>';
-    }
-}
-
-function renderCalendarDays(calData) {
-    const daysGrid = document.getElementById('calDaysGrid');
-    if (!daysGrid) return;
-    daysGrid.innerHTML = '';
-
-    // Leading blanks
-    for (let i = 1; i < calData.first_day_weekday; i++) {
-        const blank = document.createElement('div');
-        blank.className = 'cal-day-cell is-blank';
-        daysGrid.appendChild(blank);
-    }
-
-    calData.days.forEach(day => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = `cal-day-cell is-day ${day.available ? 'is-available' : 'is-disabled'}`;
-        if (day.date === selectedPickupDate) {
-            btn.classList.add('is-selected');
-        }
-        btn.title = day.status_reason;
-
-        let statusSub = '';
-        if (day.available) {
-            statusSub = `<span class="cal-day-sub">${day.remaining_capacity} left</span>`;
-        } else if (day.status === 'lead_time_cutoff') {
-            statusSub = `<span class="cal-day-sub muted">Cutoff</span>`;
-        } else if (day.status === 'closed_weekday') {
-            statusSub = `<span class="cal-day-sub muted">Closed</span>`;
-        } else if (day.status === 'fully_booked') {
-            statusSub = `<span class="cal-day-sub full">Full</span>`;
-        } else if (day.status === 'blackout') {
-            statusSub = `<span class="cal-day-sub full">Holiday</span>`;
-        }
-
-        btn.innerHTML = `<span class="cal-day-num">${day.day}</span>${statusSub}`;
-
-        if (day.available) {
-            btn.addEventListener('click', () => {
-                selectCalendarDate(day.date, day);
-            });
-        }
-
-        daysGrid.appendChild(btn);
-    });
-}
-
-async function selectCalendarDate(dateStr, dayData) {
-    selectedPickupDate = dateStr;
-    const pickupDateInput = document.getElementById('pickupDate');
-    if (pickupDateInput) pickupDateInput.value = dateStr;
-
-    // Reset selected time
-    selectedPickupTime = '';
-    const pickupTimeInput = document.getElementById('pickupTime');
-    if (pickupTimeInput) pickupTimeInput.value = '';
-
-    const badge = document.getElementById('scheduleSelectedBadge');
-    if (badge) badge.style.display = 'none';
-
-    document.querySelectorAll('.cal-day-cell.is-day').forEach(cell => cell.classList.remove('is-selected'));
-    const allCells = document.querySelectorAll('.cal-day-cell.is-day');
-    allCells.forEach(cell => {
-        if (cell.title && cell.title.includes(dateStr)) cell.classList.add('is-selected');
-    });
-
-    await loadTimeSlotsForDate(dateStr);
-}
-
-async function loadTimeSlotsForDate(dateStr) {
-    const slotsSection = document.getElementById('preorderSlotsSection');
-    const slotsGrid = document.getElementById('timeSlotsGrid');
-    const dateText = document.getElementById('slotsSelectedDateText');
-
-    if (!slotsSection || !slotsGrid) return;
-
-    slotsSection.style.display = 'block';
-    if (dateText) {
-        const dObj = new Date(dateStr + 'T00:00:00');
-        dateText.textContent = dObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
-    }
-
-    slotsGrid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:15px; color:#667085;"><i class="fas fa-spinner fa-spin"></i> Loading available slots...</div>';
-
-    try {
-        const res = await fetch(`api/preorder_schedule.php?action=get_slots&seller_id=${activeSellerId}&date=${encodeURIComponent(dateStr)}`);
-        const json = await res.json();
-        if (json.success && json.slots) {
-            renderTimeSlots(json.slots);
-        }
-    } catch (e) {
-        console.error('Error loading time slots:', e);
-        slotsGrid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:15px; color:#b3261e;">Failed to load time slots.</div>';
-    }
-}
-
-function renderTimeSlots(slots) {
-    const slotsGrid = document.getElementById('timeSlotsGrid');
-    if (!slotsGrid) return;
-    slotsGrid.innerHTML = '';
-
-    if (slots.length === 0) {
-        slotsGrid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:15px; color:#667085;">No pickup time slots configured for this date.</div>';
-        return;
-    }
-
-    slots.forEach(slot => {
-        const card = document.createElement('button');
-        card.type = 'button';
-        card.className = `time-slot-card ${slot.is_available ? 'is-available' : 'is-disabled'}`;
-        if (slot.time_value === selectedPickupTime) {
-            card.classList.add('is-selected');
-        }
-
-        card.innerHTML = `
-            <div class="slot-time"><i class="fas fa-clock"></i> ${slot.time_value}</div>
-            <div class="slot-label">${slot.display_label}</div>
-            <span class="slot-badge ${slot.is_available ? 'badge-open' : 'badge-full'}">${slot.badge_text}</span>
-        `;
-
-        if (slot.is_available) {
-            card.addEventListener('click', (e) => {
-                selectTimeSlot(slot.time_value, slot.display_label, card);
-            });
-        }
-
-        slotsGrid.appendChild(card);
-    });
-}
-
-function selectTimeSlot(timeVal, label, clickedEl) {
-    selectedPickupTime = timeVal;
-    const pickupTimeInput = document.getElementById('pickupTime');
-    if (pickupTimeInput) pickupTimeInput.value = timeVal;
-
-    document.querySelectorAll('.time-slot-card').forEach(c => c.classList.remove('is-selected'));
-    if (clickedEl) clickedEl.classList.add('is-selected');
-
-    const badge = document.getElementById('scheduleSelectedBadge');
-    const summaryText = document.getElementById('scheduleSelectedSummaryText');
-    if (badge && summaryText && selectedPickupDate) {
-        const dObj = new Date(selectedPickupDate + 'T00:00:00');
-        const formattedDate = dObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-        summaryText.innerHTML = `<strong>${formattedDate}</strong> at <strong>${timeVal}</strong> (${label})`;
-        badge.style.display = 'flex';
-    }
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-    renderProducts('all');
-    setupButtons();
-    setupFilters();
-    setupProgressNavigation();
-    syncPreorderStoreAddress();
-    loadCalendarMonth(currentCalMonth);
-    
-    // Auto-add product if routed with product_id (e.g. from Menu 'Reserve Event Date')
-    const preselectedProductId = <?php echo (int)$requested_product_id; ?>;
-    if (preselectedProductId > 0) {
-        addToCart(preselectedProductId);
-    }
-});
-
-function setupFilters() {
-    const buttons = document.querySelectorAll('.category-link');
-    buttons.forEach(btn => {
-        btn.addEventListener('click', () => {
-            buttons.forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            renderProducts(btn.dataset.category);
-        });
-    });
-}
-
-function renderProducts(category) {
-    const productList = document.getElementById('productList');
-    if (!productList) return;
-    
-    const cat = category || 'all';
-    const filtered = cat === 'all' ? products : products.filter(p => p.category === cat);
-
-    if (filtered.length === 0) {
-        const emptyMessage = activeSellerId > 0
-            ? 'No active products are currently posted for this partner.'
-            : 'No active products are currently available.';
-        productList.innerHTML = `<p class="empty-product-note">${emptyMessage}</p>`;
-        return;
-    }
-    
-    productList.innerHTML = filtered.map(p => {
-        let imageHtml = '';
-        if (p.image && p.image !== 'default.jpg' && p.image !== '') {
-            let imgSrc = p.image;
-            if (!imgSrc.startsWith('http') && !imgSrc.includes('/')) {
-                imgSrc = 'images/menu/' + imgSrc;
-            }
-            imageHtml = `<img src="${imgSrc}" alt="${p.name}">`;
-        } else {
-            imageHtml = `<i class="fas fa-drumstick-bite"></i>`;
-        }
-        
-        const inCart = cart.find(i => String(i.id) === String(p.id) || String(i.product_id) === String(p.product_id));
-        const qty = inCart ? (parseInt(inCart.quantity) || 0) : 0;
-        const isSelected = qty > 0;
-        const priceNum = parseFloat(p.price) || 0;
-        
-        return `
-            <div class="product-card ${isSelected ? 'selected' : ''}" data-product-id="${p.id}" onclick="addToCart(${p.id})">
-                <div class="check-icon"><i class="fas fa-check"></i></div>
-                <div class="product-image">${imageHtml}</div>
-                <div class="product-info">
-                    <h4>${p.name}</h4>
-                    <div class="product-price">₱${priceNum.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
-                    <button type="button" class="btn ${isSelected ? 'btn-primary' : 'btn-outline'} btn-sm btn-block btn-add-preorder" data-product-id="${p.id}" onclick="event.stopPropagation(); addToCart(${p.id})">
-                        ${isSelected ? `<i class="fas fa-check"></i> Added (${qty})` : '<i class="fas fa-plus"></i> Add to Order'}
-                    </button>
-                </div>
-            </div>
-        `;
-    }).join('');
-}
-
-function addToCart(productId) {
-    if (!productId) return;
-    const pIdStr = String(productId);
-    const product = products.find(p => String(p.id) === pIdStr || (p.product_id && String(p.product_id) === pIdStr));
-    if (!product) {
-        console.warn('Product not found for ID:', productId);
-        return;
-    }
-    
-    const existing = cart.find(i => String(i.id) === String(product.id) || (i.product_id && String(i.product_id) === String(product.product_id)));
-    if (existing) {
-        existing.quantity = (parseInt(existing.quantity) || 1) + 1;
-    } else {
-        cart.push({
-            id: product.id,
-            product_id: product.product_id || '',
-            name: product.name,
-            price: parseFloat(product.price) || 0,
-            image: product.image || 'default.jpg',
-            quantity: 1
-        });
-    }
-    
-    showPreorderToast('Added ' + product.name + ' to Pre-Order Cart');
-    
-    updateCartUI();
-    const activeBtn = document.querySelector('.category-link.active');
-    renderProducts(activeBtn ? activeBtn.dataset.category : 'all');
-}
-
-function updateCartItemQty(id, change) {
-    const idx = cart.findIndex(i => String(i.id) === String(id) || String(i.product_id) === String(id));
-    if (idx === -1) return;
-    
-    cart[idx].quantity = (parseInt(cart[idx].quantity) || 1) + change;
-    if (cart[idx].quantity <= 0) {
-        cart.splice(idx, 1);
-    }
-    
-    updateCartUI();
-    const activeBtn = document.querySelector('.category-link.active');
-    renderProducts(activeBtn ? activeBtn.dataset.category : 'all');
-}
-
-function removeFromCart(id) {
-    const idx = cart.findIndex(i => String(i.id) === String(id) || String(i.product_id) === String(id));
-    if (idx !== -1) {
-        cart.splice(idx, 1);
-        updateCartUI();
-        const activeBtn = document.querySelector('.category-link.active');
-        renderProducts(activeBtn ? activeBtn.dataset.category : 'all');
-    }
-}
-
-function clearCart() {
-    if (cart.length === 0) return;
-    cart = [];
-    updateCartUI();
-    const activeBtn = document.querySelector('.category-link.active');
-    renderProducts(activeBtn ? activeBtn.dataset.category : 'all');
-}
-
-function updateCartUI() {
-    const container = document.getElementById('preorderCartItems');
-    const totalDisplay = document.getElementById('cartTotalDisplay');
-    const subtotalDisplay = document.getElementById('cartSubtotalDisplay');
-    const vatDisplay = document.getElementById('cartVatDisplay');
-    const countBadge = document.getElementById('cartCountBadge');
-    const clearBtn = document.getElementById('clearCartBtn');
-
-    if (!container) return;
-    
-    const totals = getPreorderTotals();
-    const itemCount = cart.reduce((sum, item) => sum + (parseInt(item.quantity) || 0), 0);
-    
-    if (cart.length === 0) {
-        container.innerHTML = '<p class="empty-cart-msg"><i class="fas fa-basket-shopping" style="font-size:1.4rem; color:#98a2b3; display:block; margin-bottom:6px;"></i> No items selected yet.<br><span style="font-size:0.78rem; color:#98a2b3;">Select dishes to add to pre-order</span></p>';
-        if (countBadge) countBadge.style.display = 'none';
-        if (clearBtn) clearBtn.style.display = 'none';
-    } else {
-        if (countBadge) {
-            countBadge.textContent = itemCount;
-            countBadge.style.display = 'inline-flex';
-        }
-        if (clearBtn) clearBtn.style.display = 'inline-flex';
-
-        const itemsHtml = cart.map(item => {
-            let imageHtml = '<div class="cart-item-thumb-placeholder"><i class="fas fa-drumstick-bite"></i></div>';
-            if (item.image && item.image !== 'default.jpg' && item.image !== '') {
-                let imgSrc = item.image;
-                if (!imgSrc.startsWith('http') && !imgSrc.includes('/')) {
-                    imgSrc = 'images/menu/' + imgSrc;
-                }
-                imageHtml = `<img src="${imgSrc}" alt="${item.name}" class="cart-item-thumb">`;
-            }
-
-            const itemPrice = parseFloat(item.price) || 0;
-            const itemQty = parseInt(item.quantity) || 1;
-            const itemTotal = itemPrice * itemQty;
-
-            return `
-            <div class="cart-item-row">
-                <div class="cart-item-image-col">${imageHtml}</div>
-                <div class="cart-item-details-col">
-                    <div class="cart-item-name">${item.name}</div>
-                    <div class="cart-item-price-single">₱${itemPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} each</div>
-                    <div class="cart-item-controls">
-                        <button type="button" class="tiny-btn" onclick="updateCartItemQty(${item.id}, -1)"><i class="fas fa-minus"></i></button>
-                        <span class="qty-display">${itemQty}</span>
-                        <button type="button" class="tiny-btn" onclick="updateCartItemQty(${item.id}, 1)"><i class="fas fa-plus"></i></button>
-                    </div>
-                </div>
-                <div class="cart-item-total-col">
-                    <div class="cart-item-price">₱${itemTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
-                    <button type="button" class="remove-item-btn" onclick="removeFromCart(${item.id})" title="Remove item"><i class="fas fa-trash"></i></button>
-                </div>
-            </div>
-            `;
-        }).join('');
-        
-        container.innerHTML = itemsHtml;
-    }
-    
-    if (subtotalDisplay) subtotalDisplay.textContent = '₱' + totals.subtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    if (vatDisplay) vatDisplay.textContent = '₱' + totals.vatAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    if (totalDisplay) totalDisplay.textContent = '₱' + totals.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    updateSummary();
-}
-
-window.addToCart = addToCart;
-window.updateCartItemQty = updateCartItemQty;
-window.removeFromCart = removeFromCart;
-window.clearCart = clearCart;
-window.renderProducts = renderProducts;
-
-function setupProgressNavigation() {
-    document.querySelectorAll('.progress-step').forEach(stepEl => {
-        stepEl.addEventListener('click', function() {
-            const targetStep = parseInt(this.dataset.step, 10);
-            if (this.classList.contains('completed') || this.classList.contains('active')) {
-                goToStep(targetStep);
-            } else {
-                Swal.fire({
-                    toast: true,
-                    position: 'top-end',
-                    icon: 'info',
-                    title: 'Please use the "Next" button to proceed.',
-                    showConfirmButton: false,
-                    timer: 2000
-                });
-            }
-        });
-    });
-}
-
-function updateSummary() {
-    const totals = getPreorderTotals();
-    const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-    
-    const countEl = document.getElementById('payItemCount');
-    if (countEl) countEl.textContent = itemCount;
-    const subtotalElement = document.getElementById('paySubtotal');
-    const vatElement = document.getElementById('payVat');
-    if (subtotalElement) subtotalElement.textContent = '₱' + totals.subtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    if (vatElement) vatElement.textContent = '₱' + totals.vatAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const totalEl = document.getElementById('payTotal');
-    if (totalEl) totalEl.textContent = '₱' + totals.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function setupButtons() {
-    document.querySelectorAll('.next-btn').forEach(btn => {
-        btn.addEventListener('click', nextStep);
-    });
-    document.querySelectorAll('.prev-btn').forEach(btn => {
-        btn.addEventListener('click', prevStep);
-    });
-}
-
-function nextStep() {
-    if (validateStep(currentStep)) {
-        goToStep(currentStep + 1);
-    }
-}
-
-function prevStep() {
-    if (currentStep > 1) {
-        goToStep(currentStep - 1);
-    }
-}
-
-function goToStep(step) {
-    const allSteps = document.querySelectorAll('.step-content');
-    allSteps.forEach(el => el.classList.remove('active'));
-    
-    const targetStep = document.querySelector(`.step-content[data-step="${step}"]`);
-    if (targetStep) {
-        targetStep.classList.add('active');
-    }
-    
-    document.querySelectorAll('.progress-step').forEach((el, idx) => {
-        el.classList.remove('active', 'completed');
-        if (idx + 1 === step) el.classList.add('active');
-        if (idx + 1 < step) el.classList.add('completed');
-    });
-    
-    currentStep = step;
-    window.scrollTo(0, 0);
-
-    if (step === 2) {
-        setTimeout(initStoreMap, 150);
-    }
-}
-
-function validateStep(step) {
-    if (step === 1) {
-        if (cart.length === 0) {
-            Swal.fire({
-                title: 'Selection Required',
-                text: 'Please select at least one product for your pre-order.',
-                icon: 'warning',
-                confirmButtonText: 'Got it'
-            });
-            return false;
-        }
-    } else if (step === 2) {
-        const fullName = document.getElementById('fullName').value.trim();
-        const email = document.getElementById('email').value.trim();
-        const phone = document.getElementById('phone').value.trim();
-        const pickupDate = document.getElementById('pickupDate').value.trim();
-        const pickupTime = document.getElementById('pickupTime').value.trim();
-
-        if (!fullName) {
-            Swal.fire({
-                title: 'Claimant Name Required',
-                text: 'Please enter the full name of the person picking up the order.',
-                icon: 'warning',
-                confirmButtonText: 'OK'
-            });
-            return false;
-        }
-        if (!email) {
-            Swal.fire({
-                title: 'Email Address Required',
-                text: 'Please enter your email address for the order confirmation & claim receipt.',
-                icon: 'warning',
-                confirmButtonText: 'OK'
-            });
-            return false;
-        }
-        if (!phone) {
-            Swal.fire({
-                title: 'Mobile Phone Required',
-                text: 'Please enter your mobile phone number for order readiness SMS alerts.',
-                icon: 'warning',
-                confirmButtonText: 'OK'
-            });
-            return false;
-        }
-        if (!pickupDate) {
-            Swal.fire({
-                title: 'Pick-up Date Required',
-                text: 'Please select your preferred pick-up date.',
-                icon: 'warning',
-                confirmButtonText: 'OK'
-            });
-            return false;
-        }
-        if (!pickupTime) {
-            Swal.fire({
-                title: 'Time Slot Required',
-                text: 'Please select your preferred pick-up time slot.',
-                icon: 'warning',
-                confirmButtonText: 'OK'
-            });
-            return false;
-        }
-        syncPreorderStoreAddress();
-    } else if (step === 3) {
-        populateConfirmation();
-    }
-    return true;
-}
-
-function selectPaymentOption(radio) {
-    document.querySelectorAll('.payment-option-card').forEach(el => el.classList.remove('selected'));
-    radio.closest('.payment-option-card').classList.add('selected');
-    updateSummary();
-}
-
-function populateConfirmation() {
-    const totals = getPreorderTotals();
-    const subtotal = totals.subtotal;
-    const vatAmount = totals.vatAmount;
-    const total = totals.total;
-    const paymentType = document.querySelector('input[name="payment_type"]:checked').value;
-    const paymentAmount = paymentType === 'downpayment' ? total * 0.30 : total;
-    const remaining = total - paymentAmount;
-
-    const fullName = document.getElementById('fullName').value;
-    const email = document.getElementById('email').value;
-    const phone = document.getElementById('phone').value;
-    const pickupDate = document.getElementById('pickupDate').value;
-    const pickupTime = document.getElementById('pickupTime').value;
-
-    const storeSelect = document.getElementById('storeSelect');
-    const selectedStoreOpt = storeSelect ? storeSelect.options[storeSelect.selectedIndex] : null;
-    const storeName = selectedStoreOpt ? (selectedStoreOpt.dataset.name || selectedStoreOpt.text) : 'Main Branch';
-    const storeAddress = selectedStoreOpt ? (selectedStoreOpt.dataset.address || '') : '';
-
-    let itemsTable = `
-        <table class="confirmation-table" style="width:100%; border-collapse: collapse; margin-bottom: 15px;">
-            <thead>
-                <tr style="border-bottom: 1px solid #eaecf0; background-color: #f8f9fa;">
-                    <th style="text-align: left; padding: 10px; font-size: 0.85rem; color:#475467;">Dish / Item</th>
-                    <th style="text-align: center; padding: 10px; font-size: 0.85rem; color:#475467;">Qty</th>
-                    <th style="text-align: right; padding: 10px; font-size: 0.85rem; color:#475467;">Total</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${cart.map(item => `
-                    <tr style="border-bottom: 1px solid #f2f4f7;">
-                        <td style="padding: 10px; font-size: 0.92rem; font-weight:600; color:#101828;">${item.name}</td>
-                        <td style="text-align: center; padding: 10px; font-size: 0.92rem; color:#475467;">${item.quantity}</td>
-                        <td style="text-align: right; padding: 10px; font-size: 0.92rem; font-weight:700; color:#101828;">₱${(item.price * item.quantity).toLocaleString()}</td>
-                    </tr>
-                `).join('')}
-            </tbody>
-        </table>
-    `;
-
-    let summaryHTML = `
-        <h4 style="color: #b3261e; margin-bottom: 16px; font-family:'Outfit', sans-serif; font-size:1.15rem;"><i class="fas fa-clipboard-check"></i> Pre-Order Summary</h4>
-        ${itemsTable}
-        <div class="summary-row">
-            <span>Subtotal:</span>
-            <strong>₱${subtotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong>
-        </div>
-        <div class="summary-row">
-            <span>VAT (12%):</span>
-            <strong>₱${vatAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong>
-        </div>
-        <div class="summary-row total">
-            <span>Grand Total (Incl. VAT):</span>
-            <strong>₱${total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong>
-        </div>
-        <hr style="margin: 16px 0; border: none; border-top: 1px solid #eaecf0;">
-        <h4 style="color: #b3261e; margin: 16px 0; font-family:'Outfit', sans-serif; font-size:1.15rem;"><i class="fas fa-store"></i> Store Pick-up Details</h4>
-        <div class="summary-row">
-            <span><strong>Fulfillment Branch:</strong></span>
-            <span style="color:#101828; font-weight:700;">${storeName}</span>
-        </div>
-        <div class="summary-row">
-            <span><strong>Store Address:</strong></span>
-            <span>${storeAddress}</span>
-        </div>
-        <div class="summary-row">
-            <span><strong>Scheduled Date:</strong></span>
-            <span style="color:#027a48; font-weight:700;">${new Date(pickupDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
-        </div>
-        <div class="summary-row">
-            <span><strong>Pick-up Time Slot:</strong></span>
-            <span style="color:#027a48; font-weight:700;">${pickupTime}</span>
-        </div>
-        <hr style="margin: 16px 0; border: none; border-top: 1px solid #eaecf0;">
-        <h4 style="color: #b3261e; margin: 16px 0; font-family:'Outfit', sans-serif; font-size:1.15rem;"><i class="fas fa-user-check"></i> Claimant Information</h4>
-        <div class="summary-row">
-            <span><strong>Full Name:</strong></span>
-            <span>${fullName}</span>
-        </div>
-        <div class="summary-row">
-            <span><strong>Mobile Phone:</strong></span>
-            <span>${phone}</span>
-        </div>
-        <div class="summary-row">
-            <span><strong>Email:</strong></span>
-            <span>${email}</span>
-        </div>
-        <hr style="margin: 16px 0; border: none; border-top: 1px solid #eaecf0;">
-        <h4 style="color: #b3261e; margin: 16px 0; font-family:'Outfit', sans-serif; font-size:1.15rem;"><i class="fas fa-credit-card"></i> Payment Breakdown</h4>
-        <div class="summary-row">
-            <span><strong>Payment Option:</strong></span>
-            <span>${paymentType === 'downpayment' ? '30% Downpayment' : 'Full Payment'}</span>
-        </div>
-        <div class="summary-row">
-            <span><strong>Amount to Pay Now:</strong></span>
-            <span style="color: #b3261e; font-size:1.1rem; font-weight: 800;">₱${paymentAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-        </div>
-    `;
-
-    if (paymentType === 'downpayment') {
-        summaryHTML += `
-        <div class="summary-row">
-            <span><strong>Remaining Balance (Upon Pick-up):</strong></span>
-            <span style="color:#475467; font-weight:700;">₱${remaining.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-        </div>
-        `;
-    }
-
-    document.getElementById('confirmSummary').innerHTML = summaryHTML;
-}
-
-document.getElementById('preorderForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-    syncPreorderStoreAddress();
-    
-    if (cart.length === 0) {
-        Swal.fire('Error', 'Your cart is empty', 'error');
-        return;
-    }
-
-    const submitBtn = this.querySelector('button[type="submit"]');
-    const originalText = submitBtn.textContent;
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Processing Payment...';
-
-    const formData = {
-        items: cart,
-        full_name: document.getElementById('fullName').value,
-        email: document.getElementById('email').value,
-        phone: document.getElementById('phone').value,
-        street_address: document.getElementById('streetAddress').value,
-        province: document.getElementById('province').value,
-        city: document.getElementById('city').value,
-        barangay: document.getElementById('barangay').value,
-        region_name: document.getElementById('preorder_region_name').value,
-        region_code: document.getElementById('preorder_region_code').value,
-        province_name: document.getElementById('preorder_province_name').value,
-        province_code: document.getElementById('preorder_province_code').value,
-        city_name: document.getElementById('preorder_city_name').value,
-        city_code: document.getElementById('preorder_city_code').value,
-        barangay_name: document.getElementById('preorder_barangay_name').value,
-        barangay_code: document.getElementById('preorder_barangay_code').value,
-        latitude: document.getElementById('latitude').value,
-        longitude: document.getElementById('longitude').value,
-        pickup_date: document.getElementById('pickupDate').value,
-        pickup_time: document.getElementById('pickupTime').value,
-        payment_type: document.querySelector('input[name="payment_type"]:checked').value,
-        seller_id: activeSellerId
-    };
-
-    fetch('process_preorder_payment.php', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(formData)
-    })
-    .then(response => {
-        return response.text().then(text => {
-            try {
-                const parsed = JSON.parse(text);
-                return parsed;
-            } catch (e) {
-                console.error('Invalid JSON response:', text);
-                throw new Error('Server returned invalid response: ' + text.substring(0, 100));
-            }
-        });
-    })
-    .then(data => {
-        if (data.success) {
-            window.location.href = data.checkout_url;
-        } else {
-            const errorMsg = data.error || 'Payment processing failed. Please try again.';
-            console.error('Payment error:', errorMsg);
-            Swal.fire('Error', errorMsg, 'error');
-            submitBtn.disabled = false;
-            submitBtn.textContent = originalText;
-        }
-    })
-    .catch(error => {
-        console.error('Request failed:', error.message);
-        let errorMessage = error.message;
-        if (error.message.includes('JSON')) {
-            errorMessage = 'Server response error. Please check the browser console for details.';
-        }
-        Swal.fire('Error', errorMessage, 'error');
-        submitBtn.disabled = false;
-        submitBtn.textContent = originalText;
-    });
-});
-</script>
-
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
@@ -2249,554 +973,133 @@ body {
     gap: 6px;
 }
 
-.form-group label {
-    font-size: 0.86rem;
+.form-label {
     font-weight: 700;
-    color: #344054;
+    font-size: 0.88rem;
+    color: var(--pre-ink);
 }
 
-input, select, textarea {
-    width: 100%;
+.form-control, .form-select {
     padding: 10px 14px;
     border: 1px solid var(--pre-border-input);
     border-radius: 10px;
-    font-size: 0.9rem;
+    font-size: 0.92rem;
     color: var(--pre-ink);
     background: #ffffff;
-    box-sizing: border-box;
+    outline: none;
     transition: all 0.15s ease;
 }
 
-input:focus, select:focus, textarea:focus {
-    outline: none;
+.form-control:focus, .form-select:focus {
     border-color: var(--pre-red);
-    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.1);
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.12);
 }
 
-/* Quantity Selector */
-.quantity-selector {
-    display: flex;
-    align-items: center;
-    max-width: 130px;
-    border: 1px solid var(--pre-border-input);
-    border-radius: 8px;
-    overflow: hidden;
-    background: #ffffff;
-}
-
-.qty-btn {
-    width: 36px;
-    height: 36px;
-    background: #f8f9fa;
-    border: none;
-    cursor: pointer;
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: #344054;
-    transition: background 0.15s ease;
-}
-
-.qty-btn:hover {
-    background: #eaecf0;
-    color: var(--pre-red);
-}
-
-.quantity-selector input {
-    width: 100%;
-    text-align: center;
-    border: none;
-    font-weight: 700;
-    font-size: 0.95rem;
-    padding: 0;
-}
-
-/* Payment Options */
 .payment-options-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-    margin-bottom: 24px;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+    margin-bottom: 20px;
 }
 
 .payment-option-card {
-    border: 1px solid var(--pre-border);
-    border-radius: 14px;
-    padding: 18px;
+    border: 1px solid var(--pre-border-input);
+    border-radius: 12px;
+    padding: 16px;
     background: #ffffff;
     cursor: pointer;
     transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
 
 .payment-option-card:hover {
-    border-color: #d0d5dd;
+    border-color: var(--pre-red);
+    background: #fff8f0;
 }
 
 .payment-option-card.selected {
+    border-color: var(--pre-red);
     background: #fff1f0;
-    border: 1.5px solid var(--pre-red);
-}
-
-.payment-option-card input {
-    display: none;
-}
-
-.option-content {
-    text-align: center;
-}
-
-.option-content i {
-    font-size: 1.8rem;
-    color: var(--pre-red);
-    margin-bottom: 8px;
-}
-
-.option-content h4 {
-    margin: 0 0 4px;
-    font-size: 1rem;
-    font-weight: 700;
-    color: var(--pre-ink);
-}
-
-.option-content p {
-    margin: 0;
-    font-size: 0.82rem;
-    color: var(--pre-muted);
-}
-
-/* Buttons */
-.button-group {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 24px;
-    gap: 12px;
-}
-
-.btn {
-    padding: 10px 22px;
-    border-radius: 10px;
-    font-weight: 700;
-    font-size: 0.88rem;
-    cursor: pointer;
-    border: none;
-    transition: all 0.15s ease;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    text-decoration: none;
-}
-
-.btn-primary {
-    background: var(--pre-red);
-    color: #ffffff;
-    box-shadow: none;
-}
-
-.btn-primary:hover {
-    background: var(--pre-red-hover);
-    color: #ffffff;
-    transform: none;
-    box-shadow: none;
-}
-
-.btn-secondary, .btn-outline {
-    background: #ffffff;
-    border: 1px solid var(--pre-border-input);
-    color: #344054;
-}
-
-.btn-secondary:hover, .btn-outline:hover {
-    background: #f8f9fa;
-    color: var(--pre-red);
-    border-color: #d0d5dd;
-}
-
-.btn-sm {
-    padding: 6px 12px;
-    font-size: 0.8rem;
-    border-radius: 8px;
-    min-width: auto;
-}
-
-/* Store Pick-up Step 2 Styles */
-.preorder-pickup-banner {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 14px 16px;
-    background: #ecfdf3;
-    border: 1px solid #abefc6;
-    border-radius: 12px;
-    margin-bottom: 20px;
-}
-
-.preorder-pickup-banner i {
-    color: #027a48;
-    font-size: 1.15rem;
-    margin-top: 2px;
-}
-
-.preorder-pickup-banner strong {
-    display: block;
-    color: #027a48;
-    font-size: 0.92rem;
-    font-weight: 700;
-    margin-bottom: 2px;
-}
-
-.preorder-pickup-banner p {
-    margin: 0;
-    font-size: 0.82rem;
-    color: #027a48;
-    line-height: 1.4;
-}
-
-.preorder-section-block {
-    background: #ffffff;
-    border: 1px solid var(--pre-border);
-    border-radius: 14px;
-    padding: 18px 20px;
-    margin-bottom: 20px;
-}
-
-.preorder-block-title {
-    font-size: 0.95rem;
-    font-weight: 800;
-    color: var(--pre-ink);
-    margin: 0 0 14px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid #f2f4f7;
-}
-
-.preorder-block-title i {
-    color: var(--pre-red);
+    box-shadow: 0 0 0 2px rgba(179, 38, 30, 0.2);
 }
 
 .store-details-card {
     background: #f8f9fa;
     border: 1px solid var(--pre-border);
-    border-radius: 12px;
-    padding: 14px 16px;
-    margin-top: 12px;
-    margin-bottom: 16px;
+    border-radius: 14px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    justify-content: space-between;
     gap: 16px;
 }
 
-.store-details-main {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-}
-
-.store-details-main .store-icon {
-    width: 38px;
-    height: 38px;
-    background: #fff1f0;
-    border: 1px solid #fee4e2;
-    color: var(--pre-red);
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1rem;
-    flex-shrink: 0;
-}
-
-.store-info-text h4 {
-    margin: 0 0 4px;
-    font-size: 0.95rem;
+.store-details-info h4 {
+    margin: 0 0 6px;
+    font-size: 1.05rem;
     font-weight: 800;
     color: var(--pre-ink);
 }
 
-.store-info-text p {
-    margin: 0 0 8px;
-    font-size: 0.84rem;
+.store-details-info p {
+    margin: 0;
+    font-size: 0.86rem;
     color: var(--pre-muted);
 }
 
-.store-meta-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-
-.store-tag {
-    font-size: 0.76rem;
-    padding: 3px 8px;
-    background: #ffffff;
-    border: 1px solid var(--pre-border-input);
-    border-radius: 6px;
-    color: #475467;
-    font-weight: 600;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.btn-directions {
-    padding: 8px 14px;
-    font-size: 0.8rem;
-    white-space: nowrap;
-}
-
-.store-map-wrapper {
-    position: relative;
-    border: 1px solid var(--pre-border);
-    border-radius: 12px;
-    overflow: hidden;
-    margin-bottom: 16px;
-}
-
-.store-map-container {
-    width: 100%;
-    height: 240px;
-    background: #e2e8f0;
-}
-
-.store-map-note {
-    position: absolute;
-    bottom: 8px;
-    left: 8px;
-    background: rgba(255, 255, 255, 0.92);
-    backdrop-filter: blur(4px);
-    border: 1px solid #eaecf0;
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-size: 0.76rem;
-    font-weight: 700;
-    color: #344054;
-    z-index: 400;
-}
-
-/* Interactive Pre-Order Roasting Calendar Widget */
-.preorder-cal-widget {
-    background: #ffffff;
-    border: 1px solid #eaecf0;
-    border-radius: 14px;
-    padding: 20px;
-    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
-}
-.cal-widget-header {
+.button-group {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    margin-bottom: 14px;
+    gap: 12px;
+    margin-top: 24px;
 }
-.cal-widget-title {
-    font-family: 'Outfit', sans-serif;
-    font-size: 1.15rem;
-    font-weight: 800;
-    color: #101828;
-}
-.cal-nav-btn {
-    width: 36px;
-    height: 36px;
-    border-radius: 8px;
-    border: 1px solid #d0d5dd;
-    background: #ffffff;
-    color: #344054;
+
+.btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-.cal-nav-btn:hover:not(:disabled) {
-    background: #f8f9fa;
-    border-color: #b3261e;
-    color: #b3261e;
-}
-.cal-nav-btn:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-}
-.cal-schedule-policy-bar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 14px;
-    background: #f8f9fa;
-    border: 1px solid #eaecf0;
-    border-radius: 8px;
-    padding: 8px 14px;
-    font-size: 0.78rem;
-    color: #475467;
-    margin-bottom: 16px;
-}
-.cal-schedule-policy-bar span {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-}
-.cal-schedule-policy-bar span i {
-    color: #b3261e;
-}
-.cal-grid-weekdays {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    text-align: center;
-    font-size: 0.78rem;
-    font-weight: 800;
-    color: #667085;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 8px;
-}
-.cal-grid-days {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 6px;
-}
-.cal-day-cell {
-    border: 1px solid #eaecf0;
+    gap: 8px;
+    padding: 10px 22px;
     border-radius: 10px;
-    min-height: 64px;
-    padding: 6px 4px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: space-between;
-    background: #ffffff;
-    transition: all 0.15s ease-in-out;
-    cursor: pointer;
-}
-.cal-day-cell.is-blank {
-    background: transparent;
-    border-color: transparent;
-    cursor: default;
-}
-.cal-day-cell.is-available {
-    background: #f8fdf9;
-    border-color: #d1fadf;
-    color: #027a48;
-}
-.cal-day-cell.is-available:hover {
-    border-color: #12b76a;
-    background: #ecfdf3;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 6px rgba(18, 183, 106, 0.15);
-}
-.cal-day-cell.is-selected {
-    background: #b3261e !important;
-    border-color: #b3261e !important;
-    color: #ffffff !important;
-    transform: scale(1.02);
-    box-shadow: 0 4px 12px rgba(179, 38, 30, 0.25);
-}
-.cal-day-cell.is-selected .cal-day-sub {
-    color: #ffffff !important;
-    opacity: 0.95;
-}
-.cal-day-cell.is-disabled {
-    background: #f8f9fa;
-    border-color: #eaecf0;
-    color: #98a2b3;
-    cursor: not-allowed;
-    opacity: 0.7;
-}
-.cal-day-num {
-    font-size: 0.95rem;
-    font-weight: 800;
-    line-height: 1;
-}
-.cal-day-sub {
-    font-size: 0.64rem;
     font-weight: 700;
-    line-height: 1;
-    white-space: nowrap;
+    font-size: 0.92rem;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.15s ease;
 }
-.cal-day-sub.muted { color: #98a2b3; }
-.cal-day-sub.full { color: #b3261e; }
-.cal-legend-bar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 16px;
-    margin-top: 16px;
-    padding-top: 12px;
-    border-top: 1px solid #eaecf0;
-    font-size: 0.75rem;
-    color: #667085;
-}
-.cal-legend-item {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-}
-.legend-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 3px;
-    display: inline-block;
-}
-.legend-dot.available { background: #ecfdf3; border: 1px solid #a6f4c5; }
-.legend-dot.selected { background: #b3261e; border: 1px solid #b3261e; }
-.legend-dot.disabled { background: #f2f4f7; border: 1px solid #d0d5dd; }
-.legend-dot.full { background: #fff1f0; border: 1px solid #fee4e2; }
 
-/* Time Slots Grid */
-.time-slots-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 10px;
+.btn-primary {
+    background: var(--pre-red);
+    color: #ffffff;
+    border-color: var(--pre-red);
 }
-.time-slot-card {
-    border: 1px solid #d0d5dd;
-    border-radius: 10px;
-    padding: 12px 14px;
+
+.btn-primary:hover {
+    background: var(--pre-red-hover);
+    border-color: var(--pre-red-hover);
+}
+
+.btn-secondary {
     background: #ffffff;
-    text-align: left;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    cursor: pointer;
-    transition: all 0.2s;
+    border-color: var(--pre-border-input);
+    color: #344054;
 }
-.time-slot-card.is-available:hover {
-    border-color: #b3261e;
-    background: #fffafa;
-}
-.time-slot-card.is-selected {
-    border-color: #b3261e !important;
-    background: #fff1f0 !important;
-    box-shadow: 0 0 0 2px rgba(179, 38, 30, 0.2);
-}
-.time-slot-card.is-selected .slot-time {
-    color: #b3261e;
-}
-.time-slot-card.is-disabled {
+
+.btn-secondary:hover {
     background: #f8f9fa;
-    border-color: #eaecf0;
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-.slot-time {
-    font-size: 0.95rem;
-    font-weight: 800;
+    border-color: #d0d5dd;
     color: #101828;
-    display: flex;
-    align-items: center;
-    gap: 6px;
 }
-.slot-label {
-    font-size: 0.74rem;
-    color: #667085;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
+
 .slot-badge {
-    font-size: 0.68rem;
-    font-weight: 700;
-    padding: 2px 6px;
-    border-radius: 999px;
     display: inline-block;
-    align-self: flex-start;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-weight: 700;
     margin-top: 2px;
 }
 .slot-badge.badge-open {
@@ -2813,6 +1116,8 @@ input:focus, select:focus, textarea:focus {
 @media (max-width: 768px) {
     .page-header h1 { font-size: 1.6rem; }
     .preorder-container { padding: 16px; }
+    .preorder-step1-layout { grid-template-columns: 1fr; }
+    .preorder-cart-sidebar { position: static; }
     .form-row { grid-template-columns: 1fr; gap: 12px; }
     .button-group { flex-direction: column-reverse; }
     .btn { width: 100%; }
@@ -2823,6 +1128,2034 @@ input:focus, select:focus, textarea:focus {
     .store-details-card { flex-direction: column; align-items: flex-start; }
     .btn-directions { width: 100%; }
 }
-</style>
-<?php include 'includes/footer.php'; ?>
 
+/* ==========================================================================
+   PREORDER DARK MODE THEME ENGINE
+   ========================================================================== */
+html.dark-mode body,
+body.dark-mode {
+    background: #0f172a !important;
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .page-header {
+    background: #1e293b !important;
+    border-bottom: 1px solid #334155 !important;
+}
+
+body.dark-mode .page-header h1 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .page-header p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .preorder-section {
+    background: #0f172a !important;
+}
+
+body.dark-mode .preorder-container {
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .checkout-type-switch {
+    background: #111827 !important;
+    border: 1px solid #334155 !important;
+}
+
+body.dark-mode .checkout-type-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .checkout-type-note {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .checkout-type-chip {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .checkout-type-chip:hover {
+    background: #334155 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .checkout-type-chip.is-active {
+    background: #b3261e !important;
+    color: #ffffff !important;
+    border-color: #b3261e !important;
+}
+
+body.dark-mode .progress-bar-container {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .progress-steps::before {
+    background: #334155 !important;
+}
+
+body.dark-mode .progress-step-circle {
+    background: #1e293b !important;
+    border-color: #475569 !important;
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .progress-step.active .progress-step-circle {
+    background: #b3261e !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .progress-step.completed .progress-step-circle {
+    background: #027a48 !important;
+    border-color: #027a48 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .progress-step-label {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .progress-step.active .progress-step-label {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .progress-step.completed .progress-step-label {
+    color: #027a48 !important;
+}
+
+body.dark-mode .step-content {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .step-title {
+    color: #f8fafc !important;
+    border-bottom-color: #334155 !important;
+}
+
+body.dark-mode .tenant-scope-note {
+    background: rgba(23, 92, 211, 0.15) !important;
+    border-color: #175cd3 !important;
+    color: #93c5fd !important;
+}
+
+body.dark-mode .autofill-note {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .category-nav {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .category-link {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .category-link:hover {
+    background: #334155 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .category-link.active {
+    background: #b3261e !important;
+    color: #ffffff !important;
+    border-color: #b3261e !important;
+}
+
+body.dark-mode .product-card {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+body.dark-mode .product-card:hover {
+    border-color: #475569 !important;
+}
+
+body.dark-mode .product-image {
+    background: #0f172a !important;
+}
+
+body.dark-mode .product-info h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .product-price {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .product-desc {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .preorder-cart-card {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+body.dark-mode .preorder-cart-header h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .preorder-cart-sub {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .empty-cart-msg {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .cart-item-row {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .cart-item-name {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cart-item-price-single {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .tiny-btn {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .tiny-btn:hover {
+    background: #334155 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .qty-display {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cart-item-price {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .preorder-cart-totals {
+    border-top-color: #334155 !important;
+}
+
+body.dark-mode .preorder-total-line {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .preorder-total-line strong {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .preorder-total-line.grand-total {
+    color: #f8fafc !important;
+    border-top-color: #334155 !important;
+}
+
+body.dark-mode .preorder-total-line.grand-total strong {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .btn-clear-cart {
+    border-color: #334155 !important;
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .btn-clear-cart:hover {
+    background: rgba(179, 38, 30, 0.2) !important;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+    color: #ef4444 !important;
+}
+
+body.dark-mode .summary-box {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .summary-row {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .summary-row.total {
+    border-top-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .summary-row.total span:last-child {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .form-label,
+body.dark-mode label {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .form-control,
+body.dark-mode .form-select {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .form-control:focus,
+body.dark-mode .form-select:focus {
+    background: #0f172a !important;
+    border-color: #b3261e !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .payment-option-card {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .payment-option-card:hover {
+    border-color: #475569 !important;
+}
+
+body.dark-mode .payment-option-card.selected {
+    border-color: #b3261e !important;
+    background: rgba(179, 38, 30, 0.1) !important;
+}
+
+body.dark-mode .store-details-card {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .store-details-info h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .store-details-info p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .btn-secondary {
+    background: #334155 !important;
+    border-color: #475569 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .btn-secondary:hover {
+    background: #475569 !important;
+    color: #ffffff !important;
+}
+
+/* ==========================================================================
+   PRE-ORDER INTERACTIVE CALENDAR & TIME SLOTS STYLES
+   ========================================================================== */
+.preorder-cal-widget {
+    background: #ffffff;
+    border: 1px solid #eaecf0;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+}
+
+.cal-widget-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #eaecf0;
+}
+
+.cal-widget-title {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 800;
+    font-size: 1.15rem;
+    color: #101828;
+    letter-spacing: -0.01em;
+}
+
+.cal-nav-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    border: 1px solid #d0d5dd;
+    background: #ffffff;
+    color: #344054;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s ease;
+}
+
+.cal-nav-btn:hover:not(:disabled) {
+    background: #f8f9fa;
+    border-color: #98a2b3;
+    color: #101828;
+}
+
+.cal-nav-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.cal-schedule-policy-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 10px 14px;
+    background: #f8f9fa;
+    border: 1px solid #eaecf0;
+    border-radius: 10px;
+    font-size: 0.82rem;
+    color: #475467;
+    margin-bottom: 16px;
+}
+
+.cal-schedule-policy-bar span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.cal-schedule-policy-bar strong {
+    color: #101828;
+}
+
+.cal-grid-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+    margin-bottom: 8px;
+    text-align: center;
+}
+
+.cal-grid-weekdays div {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #667085;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 6px 0;
+}
+
+.cal-grid-days {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+}
+
+.cal-day-cell {
+    aspect-ratio: 1;
+    min-height: 52px;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    border: 1px solid #eaecf0;
+    background: #ffffff;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    text-decoration: none;
+    position: relative;
+}
+
+.cal-day-cell.is-blank {
+    background: transparent;
+    border-color: transparent;
+    cursor: default;
+}
+
+.cal-day-num {
+    font-weight: 800;
+    font-size: 0.95rem;
+    color: #101828;
+    line-height: 1.1;
+}
+
+.cal-day-sub {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #027a48;
+    margin-top: 2px;
+    line-height: 1;
+}
+
+.cal-day-sub.muted {
+    color: #98a2b3;
+}
+
+.cal-day-sub.full {
+    color: #b3261e;
+}
+
+.cal-day-cell.is-available {
+    background: #ffffff;
+    border-color: #abefc6;
+}
+
+.cal-day-cell.is-available:hover {
+    border-color: #b3261e;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(179, 38, 30, 0.12);
+}
+
+.cal-day-cell.is-disabled {
+    background: #f8f9fa;
+    border-color: #eaecf0;
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.cal-day-cell.is-disabled .cal-day-num {
+    color: #98a2b3;
+}
+
+.cal-day-cell.is-selected {
+    background: #b3261e !important;
+    border-color: #b3261e !important;
+    box-shadow: 0 4px 12px rgba(179, 38, 30, 0.35) !important;
+}
+
+.cal-day-cell.is-selected .cal-day-num {
+    color: #ffffff !important;
+}
+
+.cal-day-cell.is-selected .cal-day-sub {
+    color: #fedf89 !important;
+}
+
+.cal-legend-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid #eaecf0;
+    justify-content: center;
+}
+
+.cal-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: #475467;
+    font-weight: 600;
+}
+
+.legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.legend-dot.available {
+    background: #12b76a;
+    border: 1px solid #027a48;
+}
+
+.legend-dot.selected {
+    background: #b3261e;
+}
+
+.legend-dot.disabled {
+    background: #d0d5dd;
+}
+
+.legend-dot.full {
+    background: #f04438;
+}
+
+/* Time Slots Grid */
+.time-slots-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 10px;
+}
+
+.time-slot-card {
+    background: #ffffff;
+    border: 1.5px solid #eaecf0;
+    border-radius: 12px;
+    padding: 12px 10px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.time-slot-card:hover:not(.is-disabled) {
+    border-color: #b3261e;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(179, 38, 30, 0.12);
+}
+
+.time-slot-card.is-selected {
+    background: #fff1f0;
+    border-color: #b3261e;
+    box-shadow: 0 0 0 2px rgba(179, 38, 30, 0.2);
+}
+
+.time-slot-card.is-disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    background: #f8f9fa;
+}
+
+.slot-time {
+    font-weight: 800;
+    font-size: 0.92rem;
+    color: #101828;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.slot-time i {
+    font-size: 0.8rem;
+    color: #b3261e;
+}
+
+.slot-label {
+    font-size: 0.75rem;
+    color: #667085;
+}
+
+.slot-badge {
+    font-size: 0.68rem;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 999px;
+    margin-top: 2px;
+}
+
+.slot-badge.badge-open {
+    background: #ecfdf3;
+    color: #027a48;
+}
+
+.slot-badge.badge-full {
+    background: #fef3f2;
+    color: #b42318;
+}
+
+/* Dark Mode Overrides for Calendar Widget & Time Slots */
+body.dark-mode .preorder-cal-widget {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+body.dark-mode .cal-widget-header {
+    border-bottom-color: #334155 !important;
+}
+
+body.dark-mode .cal-widget-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cal-nav-btn {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cal-nav-btn:hover:not(:disabled) {
+    background: #334155 !important;
+    border-color: #475569 !important;
+}
+
+body.dark-mode .cal-schedule-policy-bar {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .cal-schedule-policy-bar strong {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cal-grid-weekdays div {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .cal-day-cell {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .cal-day-cell.is-available {
+    background: #111827 !important;
+    border-color: #166534 !important;
+}
+
+body.dark-mode .cal-day-cell.is-available:hover {
+    border-color: #ef4444 !important;
+    background: #1e293b !important;
+}
+
+body.dark-mode .cal-day-num {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cal-day-sub {
+    color: #4ade80 !important;
+}
+
+body.dark-mode .cal-day-sub.muted {
+    color: #64748b !important;
+}
+
+body.dark-mode .cal-day-sub.full {
+    color: #f87171 !important;
+}
+
+body.dark-mode .cal-day-cell.is-disabled {
+    background: rgba(15, 23, 42, 0.6) !important;
+    border-color: #1e293b !important;
+    opacity: 0.4;
+}
+
+body.dark-mode .cal-day-cell.is-disabled .cal-day-num {
+    color: #64748b !important;
+}
+
+body.dark-mode .cal-day-cell.is-selected {
+    background: #b3261e !important;
+    border-color: #b3261e !important;
+}
+
+body.dark-mode .cal-legend-bar {
+    border-top-color: #334155 !important;
+}
+
+body.dark-mode .cal-legend-item {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .time-slot-card {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .time-slot-card:hover:not(.is-disabled) {
+    border-color: #ef4444 !important;
+}
+
+body.dark-mode .time-slot-card.is-selected {
+    background: rgba(179, 38, 30, 0.2) !important;
+    border-color: #ef4444 !important;
+}
+
+body.dark-mode .time-slot-card.is-disabled {
+    background: rgba(15, 23, 42, 0.6) !important;
+    border-color: #1e293b !important;
+}
+
+body.dark-mode .slot-time {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .slot-label {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .preorder-schedule-selected-badge {
+    background: rgba(2, 122, 72, 0.15) !important;
+    border-color: rgba(74, 222, 128, 0.4) !important;
+    color: #4ade80 !important;
+}
+</style>
+
+<section class="page-header">
+    <div class="container">
+        <h1>Pre-Order Your Lechon</h1>
+        <p>Plan ahead and secure your feast for your special celebration</p>
+    </div>
+</section>
+
+<section class="preorder-section">
+    <div class="container">
+        <div class="preorder-container expanded">
+    <div class="checkout-type-switch" aria-label="Checkout Type">
+        <p class="checkout-type-title">Checkout Type</p>
+        <div class="checkout-type-actions">
+            <a href="checkout.php<?php echo htmlspecialchars($store_scope_query); ?>" class="checkout-type-chip">
+                <i class="fas fa-bolt"></i> Order Now
+            </a>
+            <a href="preorder.php<?php echo htmlspecialchars($store_scope_query); ?>" class="checkout-type-chip is-active" aria-current="page">
+                <i class="fas fa-calendar-alt"></i> Pre-Order
+            </a>
+        </div>
+        <p class="checkout-type-note">Need ASAP checkout instead? Switch to order now anytime.</p>
+    </div>
+    <!-- Progress Bar -->
+    <div class="progress-bar-container">
+        <div class="progress-steps">
+            <div class="progress-step active" data-step="1">
+                <div class="progress-step-circle">1</div>
+                <div class="progress-step-label">Product</div>
+            </div>
+            <div class="progress-step" data-step="2">
+                <div class="progress-step-circle">2</div>
+                <div class="progress-step-label">Pick-up</div>
+            </div>
+            <div class="progress-step" data-step="3">
+                <div class="progress-step-circle">3</div>
+                <div class="progress-step-label">Payment</div>
+            </div>
+            <div class="progress-step" data-step="4">
+                <div class="progress-step-circle">4</div>
+                <div class="progress-step-label">Confirm</div>
+            </div>
+        </div>
+    </div>
+
+    <form id="preorderForm" method="POST">
+        <!-- Step 1: Product Selection with Dedicated Pre-Order Cart -->
+        <div class="step-content active" data-step="1">
+            <div class="preorder-step1-layout">
+                <!-- Left Main: Product Catalog -->
+                <div class="preorder-catalog-main">
+                    <div class="step-title">Select Your Pre-Order Items</div>
+                    <?php if ($active_seller_id > 0): ?>
+                        <p class="tenant-scope-note">
+                            Showing products from
+                            <strong><?php echo htmlspecialchars($storefront_name !== '' ? $storefront_name : ('Partner #' . $active_seller_id)); ?></strong>
+                            only.
+                        </p>
+                    <?php endif; ?>
+                    
+                    <!-- Category Filter -->
+                    <div class="category-nav">
+                        <div class="category-list">
+                            <button type="button" class="category-link active" data-category="all">All</button>
+                            <?php foreach ($categories as $cat): ?>
+                                <button type="button" class="category-link" data-category="<?php echo htmlspecialchars($cat); ?>">
+                                    <?php echo htmlspecialchars($cat); ?>
+                                </button>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <div id="productList" class="product-grid">
+                            <?php if (empty($all_products)): ?>
+                                <p class="empty-product-note"><?php echo $active_seller_id > 0 ? 'No active products are currently posted for this partner.' : 'No active products are currently available.'; ?></p>
+                            <?php else: ?>
+                                <?php foreach ($all_products as $p): 
+                                    $imgSrc = (string)($p['image'] ?? 'default.jpg');
+                                    if ($imgSrc !== '' && $imgSrc !== 'default.jpg') {
+                                        if (!str_starts_with($imgSrc, 'http') && !str_contains($imgSrc, '/')) {
+                                            $imgSrc = 'images/menu/' . $imgSrc;
+                                        }
+                                    }
+                                ?>
+                                <div class="product-card" data-product-id="<?php echo (int)$p['id']; ?>" onclick="addToCart(<?php echo (int)$p['id']; ?>)">
+                                    <div class="check-icon"><i class="fas fa-check"></i></div>
+                                    <div class="product-image">
+                                        <?php if ($imgSrc !== '' && $imgSrc !== 'default.jpg'): ?>
+                                            <img src="<?php echo htmlspecialchars($imgSrc); ?>" alt="<?php echo htmlspecialchars($p['name']); ?>">
+                                        <?php else: ?>
+                                            <i class="fas fa-drumstick-bite"></i>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div class="product-info">
+                                        <h4><?php echo htmlspecialchars($p['name']); ?></h4>
+                                        <div class="product-price">₱<?php echo number_format($p['price'], 2); ?></div>
+                                        <button type="button" class="btn btn-outline btn-sm btn-block btn-add-preorder" data-product-id="<?php echo (int)$p['id']; ?>" onclick="event.stopPropagation(); addToCart(<?php echo (int)$p['id']; ?>)">
+                                            <i class="fas fa-plus"></i> Add to Order
+                                        </button>
+                                    </div>
+                                </div>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Sidebar: Dedicated Sticky Pre-Order Cart Panel -->
+                <aside class="preorder-cart-sidebar">
+                    <div class="preorder-cart-card">
+                        <div class="preorder-cart-header">
+                            <h4>
+                                <i class="fas fa-calendar-check" style="color:var(--pre-red);"></i>
+                                Pre-Order Cart
+                                <span id="cartCountBadge" class="preorder-cart-badge" style="display:none;">0</span>
+                            </h4>
+                            <button type="button" id="clearCartBtn" class="btn-clear-cart" style="display:none;" onclick="clearCart()">
+                                <i class="fas fa-trash-alt"></i> Clear
+                            </button>
+                        </div>
+                        <p class="preorder-cart-sub">Items selected exclusively for your advance reservation.</p>
+
+                        <div id="preorderCartItems" class="cart-items-container">
+                            <p class="empty-cart-msg"><i class="fas fa-basket-shopping"></i> No items added yet. Click on any dish to add it to your pre-order.</p>
+                        </div>
+
+                        <div class="preorder-cart-totals">
+                            <div class="preorder-total-line">
+                                <span>Estimated Subtotal</span>
+                                <strong id="cartSubtotalDisplay">₱0.00</strong>
+                            </div>
+                            <div class="preorder-total-line">
+                                <span>VAT (12%)</span>
+                                <strong id="cartVatDisplay">₱0.00</strong>
+                            </div>
+                            <div class="preorder-total-line grand-total">
+                                <span>Estimated Total</span>
+                                <strong id="cartTotalDisplay">₱0.00</strong>
+                            </div>
+                        </div>
+
+                        <div class="preorder-cart-actions">
+                            <button type="button" class="btn btn-primary next-btn btn-block">
+                                Continue to Pick-up Details <i class="fas fa-arrow-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </aside>
+            </div>
+        </div>
+
+        <!-- Step 2: Store Pick-up & Schedule Information -->
+        <div class="step-content" data-step="2">
+            <div class="step-title"><i class="fas fa-store" style="color:var(--pre-red); margin-right:6px;"></i> Store Pick-up Details</div>
+
+            <div class="preorder-pickup-banner">
+                <div class="preorder-pickup-badge"><i class="fas fa-bag-shopping"></i> Self Pick-up Order</div>
+                <p>This pre-order is for store pick-up. Your lechon feast will be freshly roasted and packaged ready for pick-up at your selected branch.</p>
+            </div>
+
+            <!-- Contact Person for Claiming -->
+            <div class="preorder-section-block">
+                <h4 class="preorder-block-title"><i class="fas fa-user-check"></i> Claimant Contact Information</h4>
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label for="fullName">Full Name (Order Claimant) *</label>
+                        <input type="text" id="fullName" name="fullName" placeholder="Enter your full name" value="<?php echo htmlspecialchars($user_profile['full_name']); ?>" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="phone">Mobile Phone Number *</label>
+                        <input type="tel" id="phone" name="phone" placeholder="09XXXXXXXXX" value="<?php echo htmlspecialchars($user_profile['phone']); ?>" required>
+                        <small style="color:#667085; font-size:0.78rem;">We will send SMS updates when your roast is hot & ready for pick-up.</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="email">Email Address *</label>
+                        <input type="email" id="email" name="email" placeholder="your@email.com" value="<?php echo htmlspecialchars($user_profile['email']); ?>" required>
+                        <small style="color:#667085; font-size:0.78rem;">Order receipt and Claim QR Code will be sent here.</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pick-up Store Location & Interactive Map -->
+            <div class="preorder-section-block">
+                <h4 class="preorder-block-title"><i class="fas fa-location-dot"></i> Pick-up Store Branch & Map</h4>
+                
+                <div class="form-group" style="margin-bottom: 14px;">
+                    <label for="storeSelect">Select Fulfillment Branch *</label>
+                    <select id="storeSelect" name="store_id" class="form-control" onchange="onStoreChange(this.value)">
+                        <?php foreach ($stores as $store): ?>
+                            <option value="<?php echo (int)$store['id']; ?>" 
+                                data-name="<?php echo htmlspecialchars($store['store_name']); ?>"
+                                data-address="<?php echo htmlspecialchars($store['address'] . ', ' . $store['city'] . ', ' . $store['province']); ?>"
+                                data-phone="<?php echo htmlspecialchars($store['phone'] ?? ''); ?>"
+                                data-hours="<?php echo htmlspecialchars($store['opening_hours'] ?? '8:00 AM - 8:00 PM'); ?>"
+                                data-lat="<?php echo htmlspecialchars($store['latitude'] ?? '14.3294'); ?>"
+                                data-lng="<?php echo htmlspecialchars($store['longitude'] ?? '120.9367'); ?>"
+                                data-city="<?php echo htmlspecialchars($store['city'] ?? ''); ?>"
+                                data-province="<?php echo htmlspecialchars($store['province'] ?? ''); ?>">
+                                <?php echo htmlspecialchars($store['store_name']); ?> — <?php echo htmlspecialchars($store['address'] . ', ' . $store['city']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <!-- Selected Store Details Card -->
+                <div class="store-details-card" id="storeInfoCard">
+                    <div class="store-details-main">
+                        <div class="store-icon"><i class="fas fa-store"></i></div>
+                        <div class="store-info-text">
+                            <h5 id="storeNameDisplay"><?php echo htmlspecialchars($stores[0]['store_name'] ?? 'Main Branch'); ?></h5>
+                            <p class="store-address-p" id="storeAddressDisplay"><i class="fas fa-location-dot"></i> <?php echo htmlspecialchars(($stores[0]['address'] ?? '') . ', ' . ($stores[0]['city'] ?? '') . ', ' . ($stores[0]['province'] ?? '')); ?></p>
+                            <div class="store-meta-tags">
+                                <span class="store-tag" id="storeHoursDisplay"><i class="fas fa-clock"></i> Hours: <?php echo htmlspecialchars($stores[0]['opening_hours'] ?? '8:00 AM - 8:00 PM'); ?></span>
+                                <?php if (!empty($stores[0]['phone'])): ?>
+                                    <span class="store-tag" id="storePhoneDisplay"><i class="fas fa-phone"></i> <?php echo htmlspecialchars($stores[0]['phone']); ?></span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                    <a href="https://www.google.com/maps/dir/?api=1&destination=<?php echo htmlspecialchars($stores[0]['latitude'] ?? '14.3294'); ?>,<?php echo htmlspecialchars($stores[0]['longitude'] ?? '120.9367'); ?>" id="storeDirectionsLink" target="_blank" class="btn-directions">
+                        <i class="fas fa-directions"></i> Get Directions
+                    </a>
+                </div>
+
+                <!-- Store Interactive Leaflet Map -->
+                <div class="store-map-wrapper">
+                    <div id="storePickupMap" style="height: 280px; width: 100%; border-radius: 12px; border: 1px solid #eaecf0; margin-top: 12px; z-index: 1;"></div>
+                    <small style="display:block; margin-top:6px; color:#667085;"><i class="fas fa-circle-info"></i> Map displays the exact store location where you will pick up your feast.</small>
+                </div>
+            </div>
+
+            <!-- Pick-up Date & Time Schedule -->
+            <div class="preorder-section-block">
+                <h4 class="preorder-block-title"><i class="fas fa-calendar-check"></i> Select Roasting &amp; Pick-up Schedule</h4>
+                <p style="color: #667085; font-size: 0.85rem; margin-top: -6px; margin-bottom: 16px;">
+                    Choose an available pick-up date from our store calendar. Available dates and daily roasting batch capacities automatically update in real-time.
+                </p>
+
+                <!-- Hidden inputs for seamless form submission & validation -->
+                <input type="hidden" id="pickupDate" name="pickupDate" value="" required>
+                <input type="hidden" id="pickupTime" name="pickupTime" value="" required>
+
+                <!-- Interactive Calendar Widget -->
+                <div class="preorder-cal-widget" id="preorderCalendarWidget">
+                    <div class="cal-widget-header">
+                        <button type="button" class="cal-nav-btn" id="calPrevMonthBtn" title="Previous Month"><i class="fas fa-chevron-left"></i></button>
+                        <div class="cal-widget-title" id="calMonthTitle"><?php echo htmlspecialchars($initial_calendar_data['month_title']); ?></div>
+                        <button type="button" class="cal-nav-btn" id="calNextMonthBtn" title="Next Month"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+
+                    <div class="cal-schedule-policy-bar">
+                        <span><i class="fas fa-clock"></i> <strong>Lead Time:</strong> <?php echo (int)$preorder_schedule['lead_time_days']; ?> day(s) notice</span>
+                        <span><i class="fas fa-hourglass-half"></i> <strong>Daily Cutoff:</strong> <?php echo date('g:i A', strtotime($preorder_schedule['cutoff_time'])); ?></span>
+                        <span><i class="fas fa-calendar-alt"></i> <strong>Window:</strong> Up to <?php echo (int)$preorder_schedule['max_advance_days']; ?> days ahead</span>
+                    </div>
+
+                    <div class="cal-grid-weekdays">
+                        <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>
+                    </div>
+
+                    <div class="cal-grid-days" id="calDaysGrid">
+                        <!-- Populated by JavaScript and server initial render -->
+                    </div>
+
+                    <div class="cal-legend-bar">
+                        <div class="cal-legend-item"><span class="legend-dot available"></span> Available Date</div>
+                        <div class="cal-legend-item"><span class="legend-dot selected"></span> Selected</div>
+                        <div class="cal-legend-item"><span class="legend-dot disabled"></span> Closed / Cutoff</div>
+                        <div class="cal-legend-item"><span class="legend-dot full"></span> Fully Booked</div>
+                    </div>
+                </div>
+
+                <!-- Available Time Slots for Selected Date -->
+                <div class="preorder-slots-section" id="preorderSlotsSection" style="margin-top: 24px; display: none;">
+                    <h5 style="font-family:'Outfit',sans-serif; font-weight:700; font-size:1rem; color:#101828; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+                        <i class="fas fa-clock text-danger"></i> Available Pick-up Time Slots for <span id="slotsSelectedDateText" style="color:#b3261e;"></span>
+                    </h5>
+                    <div class="time-slots-grid" id="timeSlotsGrid">
+                        <!-- Time slot cards dynamically injected here -->
+                    </div>
+                </div>
+
+                <!-- Selected Date & Time Confirmation Banner -->
+                <div class="preorder-schedule-selected-badge" id="scheduleSelectedBadge" style="display: none; margin-top: 18px; background: #ecfdf3; border: 1px solid #abefc6; border-radius: 12px; padding: 14px 18px; color: #027a48; align-items: center; gap: 12px;">
+                    <i class="fas fa-circle-check" style="font-size: 1.3rem;"></i>
+                    <div>
+                        <div style="font-weight: 800; font-size: 0.95rem;">Pick-up Schedule Confirmed</div>
+                        <div style="font-size: 0.86rem;" id="scheduleSelectedSummaryText"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hidden Fields for Backend Compatibility -->
+            <input type="hidden" id="streetAddress" name="streetAddress" value="">
+            <input type="hidden" id="province" name="province" value="">
+            <input type="hidden" id="city" name="city" value="">
+            <input type="hidden" id="barangay" name="barangay" value="Store Pick-up">
+            <input type="hidden" id="preorder_region_name" name="preorder_region_name" value="">
+            <input type="hidden" id="preorder_region_code" name="preorder_region_code" value="">
+            <input type="hidden" id="preorder_province_name" name="preorder_province_name" value="">
+            <input type="hidden" id="preorder_province_code" name="preorder_province_code" value="">
+            <input type="hidden" id="preorder_city_name" name="preorder_city_name" value="">
+            <input type="hidden" id="preorder_city_code" name="preorder_city_code" value="">
+            <input type="hidden" id="preorder_barangay_name" name="preorder_barangay_name" value="Store Pick-up">
+            <input type="hidden" id="preorder_barangay_code" name="preorder_barangay_code" value="">
+            <input type="hidden" id="latitude" name="latitude" value="">
+            <input type="hidden" id="longitude" name="longitude" value="">
+
+            <div class="button-group">
+                <button type="button" class="btn btn-secondary prev-btn">Back</button>
+                <button type="button" class="btn btn-primary next-btn">Proceed to Payment <i class="fas fa-arrow-right"></i></button>
+            </div>
+        </div>
+
+        <!-- Step 3: Payment -->
+        <div class="step-content" data-step="3">
+            <div class="step-title">Payment Method</div>
+
+            <div class="payment-options-grid">
+                <label class="payment-option-card selected">
+                    <input type="radio" name="payment_type" value="full" checked onchange="selectPaymentOption(this)">
+                    <div class="option-content">
+                        <i class="fas fa-money-bill-wave"></i>
+                        <h4>Full Payment</h4>
+                        <p>Pay the full amount now via PayMongo.</p>
+                    </div>
+                </label>
+                <label class="payment-option-card">
+                    <input type="radio" name="payment_type" value="downpayment" onchange="selectPaymentOption(this)">
+                    <div class="option-content">
+                        <i class="fas fa-percentage"></i>
+                        <h4>30% Downpayment</h4>
+                        <p>Pay 30% now, balance upon pickup/delivery.</p>
+                    </div>
+                </label>
+            </div>
+
+            <div class="summary-box">
+                <div class="summary-row">
+                    <span>Items:</span>
+                    <span id="payItemCount">0</span>
+                </div>
+                <div class="summary-row">
+                    <span>Subtotal:</span>
+                    <span id="paySubtotal">PHP 0.00</span>
+                </div>
+                <div class="summary-row">
+                    <span>VAT (12%):</span>
+                    <span id="payVat">PHP 0.00</span>
+                </div>
+                <div class="summary-row total">
+                    <span>Total:</span>
+                    <span id="payTotal">₱0.00</span>
+                </div>
+            </div>
+
+            <div class="button-group">
+                <button type="button" class="btn btn-secondary prev-btn">Back</button>
+                <button type="button" class="btn btn-primary next-btn">Next</button>
+            </div>
+        </div>
+
+        <!-- Step 4: Confirmation -->
+        <div class="step-content" data-step="4">
+            <div class="step-title">Confirm Your Order</div>
+
+            <div class="summary-box" id="confirmSummary">
+                <p>Order Summary will appear here</p>
+            </div>
+
+            <div class="button-group">
+                <button type="button" class="btn btn-secondary prev-btn">Back</button>
+                <button type="submit" class="btn btn-primary">Submit Order</button>
+            </div>
+        </div>
+    </form>
+        </div>
+    </div>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+const products = <?php echo json_encode($all_products); ?>;
+const activeSellerId = <?php echo (int)$active_seller_id; ?>;
+let cart = []; // Array to store selected items: { id, name, price, quantity, image }
+const VAT_RATE = 0.12;
+let storeMap = null;
+let storeMarker = null;
+let currentStep = 1;
+
+function getPreorderTotals() {
+    const subtotal = cart.reduce((sum, item) => sum + ((parseFloat(item.price) || 0) * (parseInt(item.quantity) || 0)), 0);
+    const vatAmount = Math.round(subtotal * VAT_RATE * 100) / 100;
+    const total = subtotal + vatAmount;
+    return { subtotal, vatAmount, total };
+}
+
+function initStoreMap() {
+    const mapEl = document.getElementById('storePickupMap');
+    if (!mapEl || typeof L === 'undefined') return;
+
+    const storeSelect = document.getElementById('storeSelect');
+    if (!storeSelect) return;
+    const selectedOpt = storeSelect.options[storeSelect.selectedIndex];
+    if (!selectedOpt) return;
+
+    const lat = parseFloat(selectedOpt.dataset.lat) || 14.3294;
+    const lng = parseFloat(selectedOpt.dataset.lng) || 120.9367;
+    const name = selectedOpt.dataset.name || 'Store Branch';
+    const address = selectedOpt.dataset.address || '';
+    const hours = selectedOpt.dataset.hours || '8:00 AM - 8:00 PM';
+    const phone = selectedOpt.dataset.phone || '';
+
+    // Update Card & Directions Link
+    const storeNameEl = document.getElementById('storeNameDisplay');
+    const storeAddrEl = document.getElementById('storeAddressDisplay');
+    const storeHoursEl = document.getElementById('storeHoursDisplay');
+    const storePhoneEl = document.getElementById('storePhoneDisplay');
+    const dirLink = document.getElementById('storeDirectionsLink');
+
+    if (storeNameEl) storeNameEl.textContent = name;
+    if (storeAddrEl) storeAddrEl.innerHTML = '<i class="fas fa-location-dot"></i> ' + address;
+    if (storeHoursEl) storeHoursEl.innerHTML = '<i class="fas fa-clock"></i> Hours: ' + hours;
+    if (storePhoneEl) {
+        if (phone) {
+            storePhoneEl.innerHTML = '<i class="fas fa-phone"></i> ' + phone;
+            storePhoneEl.style.display = 'inline-flex';
+        } else {
+            storePhoneEl.style.display = 'none';
+        }
+    }
+    if (dirLink) dirLink.href = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+
+    if (!storeMap) {
+        storeMap = L.map('storePickupMap', {
+            scrollWheelZoom: false
+        }).setView([lat, lng], 15);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(storeMap);
+
+        const storeIcon = L.divIcon({
+            className: 'store-custom-marker',
+            html: '<div style="background:#b3261e; color:#ffffff; width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 3px 8px rgba(179,38,30,0.35); border:2.5px solid #ffffff;"><i class="fas fa-store" style="font-size:15px;"></i></div>',
+            iconSize: [34, 34],
+            iconAnchor: [17, 17],
+            popupAnchor: [0, -18]
+        });
+
+        storeMarker = L.marker([lat, lng], { icon: storeIcon }).addTo(storeMap);
+        storeMarker.bindPopup(`<strong>${name}</strong><br>${address}<br><small style="color:#b3261e; font-weight:700;">Pick-up Branch</small>`).openPopup();
+    } else {
+        storeMap.setView([lat, lng], 15);
+        if (storeMarker) {
+            storeMarker.setLatLng([lat, lng]);
+            storeMarker.setPopupContent(`<strong>${name}</strong><br>${address}<br><small style="color:#b3261e; font-weight:700;">Pick-up Branch</small>`).openPopup();
+        }
+        setTimeout(() => { storeMap.invalidateSize(); }, 150);
+    }
+}
+
+function onStoreChange(val) {
+    syncPreorderStoreAddress();
+    initStoreMap();
+}
+
+function syncPreorderStoreAddress() {
+    const storeSelect = document.getElementById('storeSelect');
+    if (!storeSelect) return;
+    const selectedOpt = storeSelect.options[storeSelect.selectedIndex];
+    if (!selectedOpt) return;
+
+    const storeName = selectedOpt.dataset.name || selectedOpt.text;
+    const storeAddress = selectedOpt.dataset.address || '';
+    const storeCity = selectedOpt.dataset.city || 'Cavite';
+    const storeProvince = selectedOpt.dataset.province || 'Cavite';
+    const storeLat = selectedOpt.dataset.lat || '14.3294';
+    const storeLng = selectedOpt.dataset.lng || '120.9367';
+
+    const streetAddressInput = document.getElementById('streetAddress');
+    if (streetAddressInput) streetAddressInput.value = 'Store Pick-up: ' + storeName + ' (' + storeAddress + ')';
+    const provinceInput = document.getElementById('province');
+    if (provinceInput) provinceInput.value = storeProvince;
+    const cityInput = document.getElementById('city');
+    if (cityInput) cityInput.value = storeCity;
+    const brgyInput = document.getElementById('barangay');
+    if (brgyInput) brgyInput.value = 'Store Pick-up';
+    const cityNameInput = document.getElementById('preorder_city_name');
+    if (cityNameInput) cityNameInput.value = storeCity;
+    const provNameInput = document.getElementById('preorder_province_name');
+    if (provNameInput) provNameInput.value = storeProvince;
+    const brgyNameInput = document.getElementById('preorder_barangay_name');
+    if (brgyNameInput) brgyNameInput.value = 'Store Pick-up';
+    const latInput = document.getElementById('latitude');
+    if (latInput) latInput.value = storeLat;
+    const lngInput = document.getElementById('longitude');
+    if (lngInput) lngInput.value = storeLng;
+}
+
+function showPreorderToast(msg) {
+    if (window.showToast) {
+        window.showToast(msg, 'success', 2500);
+        return;
+    }
+    if (typeof Swal !== 'undefined' && typeof Swal.fire === 'function') {
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: 'success',
+            title: msg,
+            showConfirmButton: false,
+            timer: 1500
+        });
+        return;
+    }
+    let toast = document.getElementById('preorderToastNotice');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'preorderToastNotice';
+        toast.style.cssText = 'position:fixed; top:24px; right:24px; z-index:99999; background:#101828; color:#ffffff; padding:12px 20px; border-radius:10px; font-weight:700; font-size:0.9rem; box-shadow:0 8px 24px rgba(0,0,0,0.2); transition:all 0.3s ease; display:flex; align-items:center; gap:8px;';
+        document.body.appendChild(toast);
+    }
+    toast.innerHTML = '<i class="fas fa-check-circle" style="color:#12b76a;"></i> ' + msg;
+    toast.style.opacity = '1';
+    toast.style.transform = 'translateY(0)';
+    setTimeout(() => {
+        if (toast) {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateY(-10px)';
+        }
+    }, 1800);
+}
+
+// Pre-Order Roasting Calendar & Time Slot Controller
+let currentCalMonth = <?php echo json_encode($initial_calendar_data['current_month']); ?>;
+let selectedPickupDate = '';
+let selectedPickupTime = '';
+
+async function loadCalendarMonth(monthStr) {
+    const daysGrid = document.getElementById('calDaysGrid');
+    const monthTitle = document.getElementById('calMonthTitle');
+    const prevBtn = document.getElementById('calPrevMonthBtn');
+    const nextBtn = document.getElementById('calNextMonthBtn');
+    
+    if (!daysGrid) return;
+    daysGrid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 20px; color: #667085;"><i class="fas fa-spinner fa-spin"></i> Loading schedule...</div>';
+
+    try {
+        const res = await fetch(`api/preorder_schedule.php?action=get_calendar&seller_id=${activeSellerId}&month=${encodeURIComponent(monthStr || '')}`);
+        const json = await res.json();
+        if (json.success && json.data) {
+            const data = json.data;
+            currentCalMonth = data.current_month;
+            if (monthTitle) monthTitle.textContent = data.month_title;
+            
+            if (prevBtn) {
+                prevBtn.disabled = !data.prev_month;
+                prevBtn.onclick = () => data.prev_month && loadCalendarMonth(data.prev_month);
+            }
+            if (nextBtn) {
+                nextBtn.disabled = !data.next_month;
+                nextBtn.onclick = () => data.next_month && loadCalendarMonth(data.next_month);
+            }
+
+            renderCalendarDays(data);
+        }
+    } catch (e) {
+        console.error('Error loading calendar:', e);
+        daysGrid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 20px; color: #b3261e;">Failed to load schedule. Please try again.</div>';
+    }
+}
+
+function renderCalendarDays(calData) {
+    const daysGrid = document.getElementById('calDaysGrid');
+    if (!daysGrid) return;
+    daysGrid.innerHTML = '';
+
+    // Leading blanks
+    for (let i = 1; i < calData.first_day_weekday; i++) {
+        const blank = document.createElement('div');
+        blank.className = 'cal-day-cell is-blank';
+        daysGrid.appendChild(blank);
+    }
+
+    calData.days.forEach(day => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `cal-day-cell is-day ${day.available ? 'is-available' : 'is-disabled'}`;
+        if (day.date === selectedPickupDate) {
+            btn.classList.add('is-selected');
+        }
+        btn.title = day.status_reason;
+
+        let statusSub = '';
+        if (day.available) {
+            statusSub = `<span class="cal-day-sub">${day.remaining_capacity} left</span>`;
+        } else if (day.status === 'lead_time_cutoff') {
+            statusSub = `<span class="cal-day-sub muted">Cutoff</span>`;
+        } else if (day.status === 'closed_weekday') {
+            statusSub = `<span class="cal-day-sub muted">Closed</span>`;
+        } else if (day.status === 'fully_booked') {
+            statusSub = `<span class="cal-day-sub full">Full</span>`;
+        } else if (day.status === 'blackout') {
+            statusSub = `<span class="cal-day-sub full">Holiday</span>`;
+        }
+
+        btn.innerHTML = `<span class="cal-day-num">${day.day}</span>${statusSub}`;
+
+        if (day.available) {
+            btn.addEventListener('click', () => {
+                selectCalendarDate(day.date, day);
+            });
+        }
+
+        daysGrid.appendChild(btn);
+    });
+}
+
+async function selectCalendarDate(dateStr, dayData) {
+    selectedPickupDate = dateStr;
+    const pickupDateInput = document.getElementById('pickupDate');
+    if (pickupDateInput) pickupDateInput.value = dateStr;
+
+    // Reset selected time
+    selectedPickupTime = '';
+    const pickupTimeInput = document.getElementById('pickupTime');
+    if (pickupTimeInput) pickupTimeInput.value = '';
+
+    const badge = document.getElementById('scheduleSelectedBadge');
+    if (badge) badge.style.display = 'none';
+
+    document.querySelectorAll('.cal-day-cell.is-day').forEach(cell => cell.classList.remove('is-selected'));
+    const allCells = document.querySelectorAll('.cal-day-cell.is-day');
+    allCells.forEach(cell => {
+        if (cell.title && cell.title.includes(dateStr)) cell.classList.add('is-selected');
+    });
+
+    await loadTimeSlotsForDate(dateStr);
+}
+
+async function loadTimeSlotsForDate(dateStr) {
+    const slotsSection = document.getElementById('preorderSlotsSection');
+    const slotsGrid = document.getElementById('timeSlotsGrid');
+    const dateText = document.getElementById('slotsSelectedDateText');
+
+    if (!slotsSection || !slotsGrid) return;
+
+    slotsSection.style.display = 'block';
+    if (dateText) {
+        const dObj = new Date(dateStr + 'T00:00:00');
+        dateText.textContent = dObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    slotsGrid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:15px; color:#667085;"><i class="fas fa-spinner fa-spin"></i> Loading available slots...</div>';
+
+    try {
+        const res = await fetch(`api/preorder_schedule.php?action=get_slots&seller_id=${activeSellerId}&date=${encodeURIComponent(dateStr)}`);
+        const json = await res.json();
+        if (json.success && json.slots) {
+            renderTimeSlots(json.slots);
+        }
+    } catch (e) {
+        console.error('Error loading time slots:', e);
+        slotsGrid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:15px; color:#b3261e;">Failed to load time slots.</div>';
+    }
+}
+
+function renderTimeSlots(slots) {
+    const slotsGrid = document.getElementById('timeSlotsGrid');
+    if (!slotsGrid) return;
+    slotsGrid.innerHTML = '';
+
+    if (slots.length === 0) {
+        slotsGrid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:15px; color:#667085;">No pickup time slots configured for this date.</div>';
+        return;
+    }
+
+    slots.forEach(slot => {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = `time-slot-card ${slot.is_available ? 'is-available' : 'is-disabled'}`;
+        if (slot.time_value === selectedPickupTime) {
+            card.classList.add('is-selected');
+        }
+
+        card.innerHTML = `
+            <div class="slot-time"><i class="fas fa-clock"></i> ${slot.time_value}</div>
+            <div class="slot-label">${slot.display_label}</div>
+            <span class="slot-badge ${slot.is_available ? 'badge-open' : 'badge-full'}">${slot.badge_text}</span>
+        `;
+
+        if (slot.is_available) {
+            card.addEventListener('click', (e) => {
+                selectTimeSlot(slot.time_value, slot.display_label, card);
+            });
+        }
+
+        slotsGrid.appendChild(card);
+    });
+}
+
+function selectTimeSlot(timeVal, label, clickedEl) {
+    selectedPickupTime = timeVal;
+    const pickupTimeInput = document.getElementById('pickupTime');
+    if (pickupTimeInput) pickupTimeInput.value = timeVal;
+
+    document.querySelectorAll('.time-slot-card').forEach(c => c.classList.remove('is-selected'));
+    if (clickedEl) clickedEl.classList.add('is-selected');
+
+    const badge = document.getElementById('scheduleSelectedBadge');
+    const summaryText = document.getElementById('scheduleSelectedSummaryText');
+    if (badge && summaryText && selectedPickupDate) {
+        const dObj = new Date(selectedPickupDate + 'T00:00:00');
+        const formattedDate = dObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+        summaryText.innerHTML = `<strong>${formattedDate}</strong> at <strong>${timeVal}</strong> (${label})`;
+        badge.style.display = 'flex';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    renderProducts('all');
+    setupButtons();
+    setupFilters();
+    setupProgressNavigation();
+    syncPreorderStoreAddress();
+    loadCalendarMonth(currentCalMonth);
+    
+    // Auto-add product if routed with product_id (e.g. from Menu 'Reserve Event Date')
+    const preselectedProductId = <?php echo (int)$requested_product_id; ?>;
+    if (preselectedProductId > 0) {
+        addToCart(preselectedProductId);
+    }
+});
+
+function setupFilters() {
+    const buttons = document.querySelectorAll('.category-link');
+    buttons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            buttons.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            renderProducts(btn.dataset.category);
+        });
+    });
+}
+
+function renderProducts(category) {
+    const productList = document.getElementById('productList');
+    if (!productList) return;
+    
+    const cat = category || 'all';
+    const filtered = cat === 'all' ? products : products.filter(p => p.category === cat);
+
+    if (filtered.length === 0) {
+        const emptyMessage = activeSellerId > 0
+            ? 'No active products are currently posted for this partner.'
+            : 'No active products are currently available.';
+        productList.innerHTML = `<p class="empty-product-note">${emptyMessage}</p>`;
+        return;
+    }
+    
+    productList.innerHTML = filtered.map(p => {
+        let imageHtml = '';
+        if (p.image && p.image !== 'default.jpg' && p.image !== '') {
+            let imgSrc = p.image;
+            if (!imgSrc.startsWith('http') && !imgSrc.includes('/')) {
+                imgSrc = 'images/menu/' + imgSrc;
+            }
+            imageHtml = `<img src="${imgSrc}" alt="${p.name}">`;
+        } else {
+            imageHtml = `<i class="fas fa-drumstick-bite"></i>`;
+        }
+        
+        const inCart = cart.find(i => String(i.id) === String(p.id) || String(i.product_id) === String(p.product_id));
+        const qty = inCart ? (parseInt(inCart.quantity) || 0) : 0;
+        const isSelected = qty > 0;
+        const priceNum = parseFloat(p.price) || 0;
+        
+        return `
+            <div class="product-card ${isSelected ? 'selected' : ''}" data-product-id="${p.id}" onclick="addToCart(${p.id})">
+                <div class="check-icon"><i class="fas fa-check"></i></div>
+                <div class="product-image">${imageHtml}</div>
+                <div class="product-info">
+                    <h4>${p.name}</h4>
+                    <div class="product-price">₱${priceNum.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+                    <button type="button" class="btn ${isSelected ? 'btn-primary' : 'btn-outline'} btn-sm btn-block btn-add-preorder" data-product-id="${p.id}" onclick="event.stopPropagation(); addToCart(${p.id})">
+                        ${isSelected ? `<i class="fas fa-check"></i> Added (${qty})` : '<i class="fas fa-plus"></i> Add to Order'}
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function addToCart(productId) {
+    if (!productId) return;
+    const pIdStr = String(productId);
+    const product = products.find(p => String(p.id) === pIdStr || (p.product_id && String(p.product_id) === pIdStr));
+    if (!product) {
+        console.warn('Product not found for ID:', productId);
+        return;
+    }
+    
+    const existing = cart.find(i => String(i.id) === String(product.id) || (i.product_id && String(i.product_id) === String(product.product_id)));
+    if (existing) {
+        existing.quantity = (parseInt(existing.quantity) || 1) + 1;
+    } else {
+        cart.push({
+            id: product.id,
+            product_id: product.product_id || '',
+            name: product.name,
+            price: parseFloat(product.price) || 0,
+            image: product.image || 'default.jpg',
+            quantity: 1
+        });
+    }
+    
+    showPreorderToast('Added ' + product.name + ' to Pre-Order Cart');
+    
+    updateCartUI();
+    const activeBtn = document.querySelector('.category-link.active');
+    renderProducts(activeBtn ? activeBtn.dataset.category : 'all');
+}
+
+function updateCartItemQty(id, change) {
+    const idx = cart.findIndex(i => String(i.id) === String(id) || String(i.product_id) === String(id));
+    if (idx === -1) return;
+    
+    cart[idx].quantity = (parseInt(cart[idx].quantity) || 1) + change;
+    if (cart[idx].quantity <= 0) {
+        cart.splice(idx, 1);
+    }
+    
+    updateCartUI();
+    const activeBtn = document.querySelector('.category-link.active');
+    renderProducts(activeBtn ? activeBtn.dataset.category : 'all');
+}
+
+function removeFromCart(id) {
+    const idx = cart.findIndex(i => String(i.id) === String(id) || String(i.product_id) === String(id));
+    if (idx !== -1) {
+        cart.splice(idx, 1);
+        updateCartUI();
+        const activeBtn = document.querySelector('.category-link.active');
+        renderProducts(activeBtn ? activeBtn.dataset.category : 'all');
+    }
+}
+
+function clearCart() {
+    if (cart.length === 0) return;
+    cart = [];
+    updateCartUI();
+    const activeBtn = document.querySelector('.category-link.active');
+    renderProducts(activeBtn ? activeBtn.dataset.category : 'all');
+}
+
+function updateCartUI() {
+    const container = document.getElementById('preorderCartItems');
+    const totalDisplay = document.getElementById('cartTotalDisplay');
+    const subtotalDisplay = document.getElementById('cartSubtotalDisplay');
+    const vatDisplay = document.getElementById('cartVatDisplay');
+    const countBadge = document.getElementById('cartCountBadge');
+    const clearBtn = document.getElementById('clearCartBtn');
+
+    if (!container) return;
+    
+    const totals = getPreorderTotals();
+    const itemCount = cart.reduce((sum, item) => sum + (parseInt(item.quantity) || 0), 0);
+    
+    if (cart.length === 0) {
+        container.innerHTML = '<p class="empty-cart-msg"><i class="fas fa-basket-shopping" style="font-size:1.4rem; color:#98a2b3; display:block; margin-bottom:6px;"></i> No items selected yet.<br><span style="font-size:0.78rem; color:#98a2b3;">Select dishes to add to pre-order</span></p>';
+        if (countBadge) countBadge.style.display = 'none';
+        if (clearBtn) clearBtn.style.display = 'none';
+    } else {
+        if (countBadge) {
+            countBadge.textContent = itemCount;
+            countBadge.style.display = 'inline-flex';
+        }
+        if (clearBtn) clearBtn.style.display = 'inline-flex';
+
+        const itemsHtml = cart.map(item => {
+            let imageHtml = '<div class="cart-item-thumb-placeholder"><i class="fas fa-drumstick-bite"></i></div>';
+            if (item.image && item.image !== 'default.jpg' && item.image !== '') {
+                let imgSrc = item.image;
+                if (!imgSrc.startsWith('http') && !imgSrc.includes('/')) {
+                    imgSrc = 'images/menu/' + imgSrc;
+                }
+                imageHtml = `<img src="${imgSrc}" alt="${item.name}" class="cart-item-thumb">`;
+            }
+
+            const itemPrice = parseFloat(item.price) || 0;
+            const itemQty = parseInt(item.quantity) || 1;
+            const itemTotal = itemPrice * itemQty;
+
+            return `
+            <div class="cart-item-row">
+                <div class="cart-item-image-col">${imageHtml}</div>
+                <div class="cart-item-details-col">
+                    <div class="cart-item-name">${item.name}</div>
+                    <div class="cart-item-price-single">₱${itemPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} each</div>
+                    <div class="cart-item-controls">
+                        <button type="button" class="tiny-btn" onclick="updateCartItemQty(${item.id}, -1)"><i class="fas fa-minus"></i></button>
+                        <span class="qty-display">${itemQty}</span>
+                        <button type="button" class="tiny-btn" onclick="updateCartItemQty(${item.id}, 1)"><i class="fas fa-plus"></i></button>
+                    </div>
+                </div>
+                <div class="cart-item-total-col">
+                    <div class="cart-item-price">₱${itemTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+                    <button type="button" class="remove-item-btn" onclick="removeFromCart(${item.id})" title="Remove item"><i class="fas fa-trash"></i></button>
+                </div>
+            </div>
+            `;
+        }).join('');
+        
+        container.innerHTML = itemsHtml;
+    }
+    
+    if (subtotalDisplay) subtotalDisplay.textContent = '₱' + totals.subtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (vatDisplay) vatDisplay.textContent = '₱' + totals.vatAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (totalDisplay) totalDisplay.textContent = '₱' + totals.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    updateSummary();
+}
+
+window.addToCart = addToCart;
+window.updateCartItemQty = updateCartItemQty;
+window.removeFromCart = removeFromCart;
+window.clearCart = clearCart;
+window.renderProducts = renderProducts;
+
+function setupProgressNavigation() {
+    document.querySelectorAll('.progress-step').forEach(stepEl => {
+        stepEl.addEventListener('click', function() {
+            const targetStep = parseInt(this.dataset.step, 10);
+            if (this.classList.contains('completed') || this.classList.contains('active')) {
+                goToStep(targetStep);
+            } else {
+                Swal.fire({
+                    toast: true,
+                    position: 'top-end',
+                    icon: 'info',
+                    title: 'Please use the "Next" button to proceed.',
+                    showConfirmButton: false,
+                    timer: 2000
+                });
+            }
+        });
+    });
+}
+
+function updateSummary() {
+    const totals = getPreorderTotals();
+    const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+    
+    const countEl = document.getElementById('payItemCount');
+    if (countEl) countEl.textContent = itemCount;
+    const subtotalElement = document.getElementById('paySubtotal');
+    const vatElement = document.getElementById('payVat');
+    if (subtotalElement) subtotalElement.textContent = '₱' + totals.subtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (vatElement) vatElement.textContent = '₱' + totals.vatAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const totalEl = document.getElementById('payTotal');
+    if (totalEl) totalEl.textContent = '₱' + totals.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function setupButtons() {
+    document.querySelectorAll('.next-btn').forEach(btn => {
+        btn.addEventListener('click', nextStep);
+    });
+    document.querySelectorAll('.prev-btn').forEach(btn => {
+        btn.addEventListener('click', prevStep);
+    });
+}
+
+function nextStep() {
+    if (validateStep(currentStep)) {
+        goToStep(currentStep + 1);
+    }
+}
+
+function prevStep() {
+    if (currentStep > 1) {
+        goToStep(currentStep - 1);
+    }
+}
+
+function goToStep(step) {
+    const allSteps = document.querySelectorAll('.step-content');
+    allSteps.forEach(el => el.classList.remove('active'));
+    
+    const targetStep = document.querySelector(`.step-content[data-step="${step}"]`);
+    if (targetStep) {
+        targetStep.classList.add('active');
+    }
+    
+    document.querySelectorAll('.progress-step').forEach((el, idx) => {
+        el.classList.remove('active', 'completed');
+        if (idx + 1 === step) el.classList.add('active');
+        if (idx + 1 < step) el.classList.add('completed');
+    });
+    
+    currentStep = step;
+    window.scrollTo(0, 0);
+
+    if (step === 2) {
+        setTimeout(initStoreMap, 150);
+    }
+}
+
+function validateStep(step) {
+    if (step === 1) {
+        if (cart.length === 0) {
+            if (window.showToast) {
+                window.showToast('Please select at least one product for your pre-order.', 'alert');
+            } else if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    title: 'Selection Required',
+                    text: 'Please select at least one product for your pre-order.',
+                    icon: 'warning',
+                    confirmButtonText: 'Got it'
+                });
+            }
+            return false;
+        }
+    } else if (step === 2) {
+        const fullName = document.getElementById('fullName').value.trim();
+        const email = document.getElementById('email').value.trim();
+        const phone = document.getElementById('phone').value.trim();
+        const pickupDate = document.getElementById('pickupDate').value.trim();
+        const pickupTime = document.getElementById('pickupTime').value.trim();
+
+        if (!fullName) {
+            if (window.showToast) window.showToast('Please enter the full name of the person picking up the order.', 'alert');
+            else Swal.fire({ title: 'Claimant Name Required', text: 'Please enter full name.', icon: 'warning' });
+            return false;
+        }
+        if (!email) {
+            if (window.showToast) window.showToast('Please enter your email address for order confirmation.', 'alert');
+            else Swal.fire({ title: 'Email Required', text: 'Please enter email address.', icon: 'warning' });
+            return false;
+        }
+        if (!phone) {
+            if (window.showToast) window.showToast('Please enter your mobile phone number.', 'alert');
+            else Swal.fire({ title: 'Phone Required', text: 'Please enter mobile phone number.', icon: 'warning' });
+            return false;
+        }
+        if (!pickupDate) {
+            if (window.showToast) window.showToast('Please select your preferred pick-up date.', 'alert');
+            else Swal.fire({ title: 'Pick-up Date Required', text: 'Please select pick-up date.', icon: 'warning' });
+            return false;
+        }
+        if (!pickupTime) {
+            if (window.showToast) window.showToast('Please select your preferred pick-up time slot.', 'alert');
+            else Swal.fire({ title: 'Time Slot Required', text: 'Please select time slot.', icon: 'warning' });
+            return false;
+        }
+        syncPreorderStoreAddress();
+    } else if (step === 3) {
+        populateConfirmation();
+    }
+    return true;
+}
+
+function selectPaymentOption(radio) {
+    document.querySelectorAll('.payment-option-card').forEach(el => el.classList.remove('selected'));
+    radio.closest('.payment-option-card').classList.add('selected');
+    updateSummary();
+}
+
+function populateConfirmation() {
+    const totals = getPreorderTotals();
+    const subtotal = totals.subtotal;
+    const vatAmount = totals.vatAmount;
+    const total = totals.total;
+    const paymentType = document.querySelector('input[name="payment_type"]:checked').value;
+    const paymentAmount = paymentType === 'downpayment' ? total * 0.30 : total;
+    const remaining = total - paymentAmount;
+
+    const fullName = document.getElementById('fullName').value;
+    const email = document.getElementById('email').value;
+    const phone = document.getElementById('phone').value;
+    const pickupDate = document.getElementById('pickupDate').value;
+    const pickupTime = document.getElementById('pickupTime').value;
+
+    const storeSelect = document.getElementById('storeSelect');
+    const selectedStoreOpt = storeSelect ? storeSelect.options[storeSelect.selectedIndex] : null;
+    const storeName = selectedStoreOpt ? (selectedStoreOpt.dataset.name || selectedStoreOpt.text) : 'Main Branch';
+    const storeAddress = selectedStoreOpt ? (selectedStoreOpt.dataset.address || '') : '';
+
+    let itemsTable = `
+        <table class="confirmation-table" style="width:100%; border-collapse: collapse; margin-bottom: 15px;">
+            <thead>
+                <tr style="border-bottom: 1px solid #eaecf0; background-color: #f8f9fa;">
+                    <th style="text-align: left; padding: 10px; font-size: 0.85rem; color:#475467;">Dish / Item</th>
+                    <th style="text-align: center; padding: 10px; font-size: 0.85rem; color:#475467;">Qty</th>
+                    <th style="text-align: right; padding: 10px; font-size: 0.85rem; color:#475467;">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${cart.map(item => `
+                    <tr style="border-bottom: 1px solid #f2f4f7;">
+                        <td style="padding: 10px; font-size: 0.92rem; font-weight:600; color:#101828;">${item.name}</td>
+                        <td style="text-align: center; padding: 10px; font-size: 0.92rem; color:#475467;">${item.quantity}</td>
+                        <td style="text-align: right; padding: 10px; font-size: 0.92rem; font-weight:700; color:#101828;">₱${(item.price * item.quantity).toLocaleString()}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+
+    let summaryHTML = `
+        <h4 style="color: #b3261e; margin-bottom: 16px; font-family:'Outfit', sans-serif; font-size:1.15rem;"><i class="fas fa-clipboard-check"></i> Pre-Order Summary</h4>
+        ${itemsTable}
+        <div class="summary-row">
+            <span>Subtotal:</span>
+            <strong>₱${subtotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong>
+        </div>
+        <div class="summary-row">
+            <span>VAT (12%):</span>
+            <strong>₱${vatAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong>
+        </div>
+        <div class="summary-row total">
+            <span>Grand Total (Incl. VAT):</span>
+            <strong>₱${total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong>
+        </div>
+        <hr style="margin: 16px 0; border: none; border-top: 1px solid #eaecf0;">
+        <h4 style="color: #b3261e; margin: 16px 0; font-family:'Outfit', sans-serif; font-size:1.15rem;"><i class="fas fa-store"></i> Store Pick-up Details</h4>
+        <div class="summary-row">
+            <span><strong>Fulfillment Branch:</strong></span>
+            <span style="color:#101828; font-weight:700;">${storeName}</span>
+        </div>
+        <div class="summary-row">
+            <span><strong>Store Address:</strong></span>
+            <span>${storeAddress}</span>
+        </div>
+        <div class="summary-row">
+            <span><strong>Scheduled Date:</strong></span>
+            <span style="color:#027a48; font-weight:700;">${new Date(pickupDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+        </div>
+        <div class="summary-row">
+            <span><strong>Pick-up Time Slot:</strong></span>
+            <span style="color:#027a48; font-weight:700;">${pickupTime}</span>
+        </div>
+        <hr style="margin: 16px 0; border: none; border-top: 1px solid #eaecf0;">
+        <h4 style="color: #b3261e; margin: 16px 0; font-family:'Outfit', sans-serif; font-size:1.15rem;"><i class="fas fa-user-check"></i> Claimant Information</h4>
+        <div class="summary-row">
+            <span><strong>Full Name:</strong></span>
+            <span>${fullName}</span>
+        </div>
+        <div class="summary-row">
+            <span><strong>Mobile Phone:</strong></span>
+            <span>${phone}</span>
+        </div>
+        <div class="summary-row">
+            <span><strong>Email:</strong></span>
+            <span>${email}</span>
+        </div>
+        <hr style="margin: 16px 0; border: none; border-top: 1px solid #eaecf0;">
+        <h4 style="color: #b3261e; margin: 16px 0; font-family:'Outfit', sans-serif; font-size:1.15rem;"><i class="fas fa-credit-card"></i> Payment Breakdown</h4>
+        <div class="summary-row">
+            <span><strong>Payment Option:</strong></span>
+            <span>${paymentType === 'downpayment' ? '30% Downpayment' : 'Full Payment'}</span>
+        </div>
+        <div class="summary-row">
+            <span><strong>Amount to Pay Now:</strong></span>
+            <span style="color: #b3261e; font-size:1.1rem; font-weight: 800;">₱${paymentAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+        </div>
+    `;
+
+    if (paymentType === 'downpayment') {
+        summaryHTML += `
+        <div class="summary-row">
+            <span><strong>Remaining Balance (Upon Pick-up):</strong></span>
+            <span style="color:#475467; font-weight:700;">₱${remaining.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+        </div>
+        `;
+    }
+
+    document.getElementById('confirmSummary').innerHTML = summaryHTML;
+}
+
+document.getElementById('preorderForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    syncPreorderStoreAddress();
+    
+    if (cart.length === 0) {
+        Swal.fire('Error', 'Your cart is empty', 'error');
+        return;
+    }
+
+    const submitBtn = this.querySelector('button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Processing Payment...';
+
+    const formData = {
+        items: cart,
+        full_name: document.getElementById('fullName').value,
+        email: document.getElementById('email').value,
+        phone: document.getElementById('phone').value,
+        street_address: document.getElementById('streetAddress').value,
+        province: document.getElementById('province').value,
+        city: document.getElementById('city').value,
+        barangay: document.getElementById('barangay').value,
+        region_name: document.getElementById('preorder_region_name').value,
+        region_code: document.getElementById('preorder_region_code').value,
+        province_name: document.getElementById('preorder_province_name').value,
+        province_code: document.getElementById('preorder_province_code').value,
+        city_name: document.getElementById('preorder_city_name').value,
+        city_code: document.getElementById('preorder_city_code').value,
+        barangay_name: document.getElementById('preorder_barangay_name').value,
+        barangay_code: document.getElementById('preorder_barangay_code').value,
+        latitude: document.getElementById('latitude').value,
+        longitude: document.getElementById('longitude').value,
+        pickup_date: document.getElementById('pickupDate').value,
+        pickup_time: document.getElementById('pickupTime').value,
+        payment_type: document.querySelector('input[name="payment_type"]:checked').value,
+        seller_id: activeSellerId
+    };
+
+    fetch('process_preorder_payment.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(formData)
+    })
+    .then(response => {
+        return response.text().then(text => {
+            try {
+                const parsed = JSON.parse(text);
+                return parsed;
+            } catch (e) {
+                console.error('Invalid JSON response:', text);
+                throw new Error('Server returned invalid response: ' + text.substring(0, 100));
+            }
+        });
+    })
+    .then(data => {
+        if (data.success) {
+            window.location.href = data.checkout_url;
+        } else {
+            const errorMsg = data.error || 'Payment processing failed. Please try again.';
+            console.error('Payment error:', errorMsg);
+            Swal.fire('Error', errorMsg, 'error');
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
+        }
+    })
+    .catch(error => {
+        console.error('Request failed:', error.message);
+        let errorMessage = error.message;
+        if (error.message.includes('JSON')) {
+            errorMessage = 'Server response error. Please check the browser console for details.';
+        }
+        Swal.fire('Error', errorMessage, 'error');
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
+    });
+});
+</script>
+
+
+<?php include 'includes/footer.php'; ?>

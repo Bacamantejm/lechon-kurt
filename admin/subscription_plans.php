@@ -141,7 +141,8 @@ $featured_plan_code = 'growth';
     $renewsAtRaw = (string)($subscription['renews_at'] ?? '');
     $renewsAtFormatted = !empty($renewsAtRaw) ? date('M d, Y', strtotime($renewsAtRaw)) : 'N/A';
     $daysRemaining = !empty($renewsAtRaw) ? (int)ceil((strtotime($renewsAtRaw) - time()) / 86400) : 0;
-    $statusClass = ($activeStatus === 'active' || $activeStatus === 'trial') ? 'status-active' : ($activeStatus === 'past_due' ? 'status-overdue' : 'status-pending');
+    $isCancelled = ($activeStatus === 'cancelled' || $activeStatus === 'canceled');
+    $statusClass = ($activeStatus === 'active' || $activeStatus === 'trial') ? 'status-active' : ($isCancelled ? 'status-cancelled' : ($activeStatus === 'past_due' ? 'status-overdue' : 'status-pending'));
 ?>
 <div class="active-subscription-hero-card">
     <div class="hero-card-left">
@@ -152,14 +153,14 @@ $featured_plan_code = 'growth';
             <div class="hero-plan-title-row">
                 <h2 class="hero-plan-title"><?php echo htmlspecialchars($activePlanName); ?> Plan</h2>
                 <span class="hero-status-pill <?php echo $statusClass; ?>">
-                    <i class="fas fa-check-circle"></i> <?php echo strtoupper($activeStatus); ?>
+                    <i class="<?php echo $isCancelled ? 'fas fa-ban' : 'fas fa-check-circle'; ?>"></i> <?php echo strtoupper($activeStatus); ?>
                 </span>
                 <span class="hero-cycle-pill"><?php echo htmlspecialchars($activeCycle); ?> Billing</span>
             </div>
             <div class="hero-plan-dates-row">
                 <span><i class="fas fa-calendar-check"></i> Subscribed: <strong><?php echo htmlspecialchars($startedAtFormatted); ?></strong></span>
                 <span class="dates-sep">&bull;</span>
-                <span><i class="fas fa-credit-card"></i> Next Renewal / Due Date: <strong class="text-accent-danger"><?php echo htmlspecialchars($renewsAtFormatted); ?></strong></span>
+                <span><i class="fas fa-credit-card"></i> <?php echo $isCancelled ? 'Active Until / Terminates On:' : 'Next Renewal / Due Date:'; ?> <strong class="text-accent-danger"><?php echo htmlspecialchars($renewsAtFormatted); ?></strong></span>
             </div>
         </div>
     </div>
@@ -173,13 +174,15 @@ $featured_plan_code = 'growth';
         <a href="partner_billing.php" class="hero-billing-btn">
             <i class="fas fa-file-invoice-dollar"></i> Manage Billing &amp; Invoices
         </a>
-        <form method="POST" action="subscription_plans.php" style="display:inline-block;" onsubmit="return confirmSubscriptionCancellation('<?php echo htmlspecialchars($activePlanName, ENT_QUOTES, 'UTF-8'); ?>', '<?php echo htmlspecialchars($renewsAtFormatted, ENT_QUOTES, 'UTF-8'); ?>');">
+        <?php if (!$isCancelled): ?>
+        <form method="POST" action="subscription_plans.php" style="display:inline-block;" onsubmit="return confirmSubscriptionCancellation(event, '<?php echo htmlspecialchars($activePlanName, ENT_QUOTES, 'UTF-8'); ?>', '<?php echo htmlspecialchars($renewsAtFormatted, ENT_QUOTES, 'UTF-8'); ?>');">
             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
             <input type="hidden" name="action" value="cancel_active_subscription">
             <button type="submit" class="hero-billing-btn" style="background:#fff1f0; border-color:#fee4e2; color:#b3261e; cursor:pointer;">
                 <i class="fas fa-ban"></i> Cancel Subscription
             </button>
         </form>
+        <?php endif; ?>
     </div>
 </div>
 <?php endif; ?>
@@ -268,13 +271,19 @@ $hasBranding = (int)($plan['includes_custom_branding'] ?? 0) === 1;
                 <button type="button" class="sp-pill-button sp-btn-current-active" disabled>
                     <i class="fas fa-check-circle"></i> Current Active Plan
                 </button>
-                <form method="POST" action="subscription_plans.php" style="width:100%; text-align:center;" onsubmit="return confirmSubscriptionCancellation('<?php echo htmlspecialchars((string)$plan['plan_name'], ENT_QUOTES, 'UTF-8'); ?>', '<?php echo htmlspecialchars($renewsAtFormatted, ENT_QUOTES, 'UTF-8'); ?>');">
+                <?php if (!$isCancelled): ?>
+                <form method="POST" action="subscription_plans.php" style="width:100%; text-align:center;" onsubmit="return confirmSubscriptionCancellation(event, '<?php echo htmlspecialchars((string)$plan['plan_name'], ENT_QUOTES, 'UTF-8'); ?>', '<?php echo htmlspecialchars($renewsAtFormatted, ENT_QUOTES, 'UTF-8'); ?>');">
                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
                     <input type="hidden" name="action" value="cancel_active_subscription">
                     <button type="submit" style="background:none; border:none; color:#b3261e; font-size:0.82rem; font-weight:700; text-decoration:underline; cursor:pointer; padding:4px;">
                         <i class="fas fa-times-circle"></i> Cancel Subscription
                     </button>
                 </form>
+                <?php else: ?>
+                <div style="text-align:center; font-size:0.8rem; color:#b54708; font-weight:700; padding:4px;">
+                    <i class="fas fa-clock"></i> Access until <?php echo htmlspecialchars($renewsAtFormatted); ?>
+                </div>
+                <?php endif; ?>
             </div>
         <?php else: ?>
             <button type="button" 
@@ -1049,24 +1058,388 @@ $hasBranding = (int)($plan['includes_custom_branding'] ?? 0) === 1;
     box-shadow: 0 6px 18px rgba(179, 38, 30, 0.3);
 }
 
-@media (max-width: 576px) {
-    .sub-cycle-toggle-grid { grid-template-columns: 1fr; }
-    .sub-pay-grid { grid-template-columns: 1fr 1fr; }
-    .sub-total-bar { flex-direction: column; gap: 12px; align-items: stretch; text-align: center; }
-    .sub-btn-pay { width: 100%; justify-content: center; }
+/* ==========================================================================
+   SUBSCRIPTION PLANS DARK MODE THEME ENGINE
+   ========================================================================== */
+html.dark-mode body,
+body.dark-mode {
+    background: #0f172a !important;
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .plans-shell {
+    background: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .active-subscription-hero-card {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+}
+
+body.dark-mode .hero-crown-mark {
+    background: rgba(2, 122, 72, 0.2) !important;
+    border-color: rgba(2, 122, 72, 0.4) !important;
+    color: #4ade80 !important;
+}
+
+body.dark-mode .hero-plan-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .hero-cycle-pill {
+    background: #334155 !important;
+    color: #cbd5e1 !important;
+    border-color: #475569 !important;
+}
+
+body.dark-mode .hero-plan-dates-row {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .hero-plan-dates-row strong {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .dates-sep {
+    color: #475569 !important;
+}
+
+body.dark-mode .hero-countdown-box {
+    background: rgba(2, 122, 72, 0.2) !important;
+    border-color: rgba(2, 122, 72, 0.4) !important;
+    color: #4ade80 !important;
+}
+
+body.dark-mode .hero-billing-btn {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .hero-billing-btn:hover {
+    background: #334155 !important;
+    color: #ffffff !important;
+    border-color: #475569 !important;
+}
+
+body.dark-mode .sp-minimal-card,
+body.dark-mode .plan-card,
+body.dark-mode .plans-card {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+body.dark-mode .sp-minimal-card:hover,
+body.dark-mode .plan-card:hover {
+    border-color: #475569 !important;
+}
+
+body.dark-mode .sp-featured-card,
+body.dark-mode .plan-card.featured {
+    border-color: #b3261e !important;
+    background: #1e293b !important;
+}
+
+body.dark-mode .is-current-active-plan {
+    border-color: #027a48 !important;
+    background: #1e293b !important;
+}
+
+body.dark-mode .sp-top-pill {
+    background: #334155 !important;
+    border-color: #475569 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .sp-pill-featured {
+    background: #b3261e !important;
+    color: #ffffff !important;
+    border-color: #b3261e !important;
+}
+
+body.dark-mode .sp-brand-sub {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .sp-plan-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .sp-price-main {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .sp-price-sub {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .sp-price-annual {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .sp-divider {
+    background: #334155 !important;
+}
+
+body.dark-mode .sp-bullet-list {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .sp-bullet-list li {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .plan-features li {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .plan-note {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .plan-card h3 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .plan-card p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .plan-price {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .plan-price-label {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .plans-btn-secondary {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .plans-btn-secondary:hover {
+    background: #334155 !important;
+    color: #ffffff !important;
+    border-color: #475569 !important;
+}
+
+body.dark-mode .mode-toggle,
+body.dark-mode .sticky-toggle {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .mode-btn,
+body.dark-mode .sticky-btn {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .mode-btn.active,
+body.dark-mode .sticky-btn.active {
+    background: #b3261e !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .hero-meta-box {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .hero-meta-box strong {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .hero-meta-box span {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .sticky-card {
+    background: rgba(30, 41, 59, 0.95) !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .sticky-copy strong {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .sticky-copy span {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .calc-pane,
+body.dark-mode .calc-result {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .calc-meta div {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .calc-meta strong {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .calc-meta span {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .matrix-table th {
+    background: #111827 !important;
+    color: #f8fafc !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .matrix-table td {
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .workflow-step {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .workflow-step strong {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .sub-modal-card {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .sub-modal-header {
+    border-bottom-color: #334155 !important;
+}
+
+body.dark-mode .sub-modal-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .sub-modal-close {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .sub-field-label {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .sub-cycle-content {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .sub-cycle-name {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .sub-cycle-desc {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .sub-cycle-option input[type="radio"]:checked + .sub-cycle-content {
+    border-color: #b3261e !important;
+    background: rgba(179, 38, 30, 0.15) !important;
+}
+
+body.dark-mode .sub-pay-card {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .sub-pay-card span {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .sub-pay-option input[type="radio"]:checked + .sub-pay-card {
+    border-color: #b3261e !important;
+    background: rgba(179, 38, 30, 0.15) !important;
+}
+
+body.dark-mode .sub-terms-card {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .sub-terms-top {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .sub-terms-list {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .sub-agree-checkbox-wrap {
+    color: #f8fafc !important;
+    border-top-color: #334155 !important;
+}
+
+body.dark-mode .sub-total-bar {
+    border-top-color: #334155 !important;
+}
+
+body.dark-mode .sub-total-copy span {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .sub-total-copy strong {
+    color: #f8fafc !important;
 }
 </style>
 
 <script src="../js/bootstrap.bundle.min.js"></script>
 <script>
-function confirmSubscriptionCancellation(planName, renewsDate) {
-    return confirm(
-        "Are you sure you want to cancel your " + planName + " subscription?\n\n" +
-        "• Non-Refundable: In accordance with our Terms of Agreement, subscription payments are non-refundable.\n" +
-        "• Continued Access: Your shop will retain 100% full active access to all " + planName + " features and discounts until " + renewsDate + ".\n" +
-        "• Auto-Termination: After " + renewsDate + ", recurring charges will stop and your plan will conclude.\n\n" +
-        "Click OK to confirm cancellation."
-    );
+function confirmSubscriptionCancellation(e, planName, renewsDate) {
+    if (e && typeof e.preventDefault === 'function') e.preventDefault();
+    const form = e ? (e.target || e.currentTarget) : null;
+    if (form && form.dataset.confirmed === '1') {
+        return true;
+    }
+
+    const htmlContent = `
+        <p style="margin-bottom: 12px; font-weight: 700;">Are you sure you want to cancel your <strong>${planName}</strong> subscription?</p>
+        <div style="text-align: left; background: rgba(0,0,0,0.04); padding: 12px 14px; border-radius: 12px; font-size: 0.85rem; line-height: 1.6; margin-bottom: 8px;">
+            <div style="margin-bottom: 6px;"><i class="fas fa-exclamation-circle" style="color:#b3261e; width:16px;"></i> <strong>Non-Refundable:</strong> Payments are non-refundable per terms.</div>
+            <div style="margin-bottom: 6px;"><i class="fas fa-check-circle" style="color:#027a48; width:16px;"></i> <strong>Continued Access:</strong> You retain 100% full active access until <strong>${renewsDate}</strong>.</div>
+            <div><i class="fas fa-clock" style="color:#b54708; width:16px;"></i> <strong>Auto-Termination:</strong> Recurring billing will stop automatically.</div>
+        </div>
+    `;
+
+    if (window.showConfirmDialog) {
+        window.showConfirmDialog({
+            title: 'Cancel Subscription',
+            html: htmlContent,
+            icon: 'warning',
+            confirmText: 'Yes, Cancel Plan',
+            confirmColor: '#b3261e',
+            cancelText: 'Keep My Plan'
+        }).then((confirmed) => {
+            if (confirmed && form) {
+                form.dataset.confirmed = '1';
+                form.submit();
+            }
+        });
+    } else if (confirm("Are you sure you want to cancel your " + planName + " subscription?")) {
+        if (form) {
+            form.dataset.confirmed = '1';
+            form.submit();
+        }
+    }
+    return false;
 }
 
 let currentModalPlan = {

@@ -6293,32 +6293,198 @@ body.dark-mode .cart-summary-line {
     border-color: #334155 !important;
 }
 
-/* Modals in Dark Mode */
-body.dark-mode .preview-modal-content,
-body.dark-mode .product-preview-modal .preview-modal-content {
-    background: #1e293b !important;
+/* ==========================================================================
+   PRODUCT PREVIEW & REVIEWS MODAL DARK MODE ENGINE
+   ========================================================================== */
+body.dark-mode .product-preview-modal .preview-modal-content,
+body.dark-mode .preview-modal-content {
+    background-color: #1e293b !important;
+    border: 1px solid #334155 !important;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .preview-body {
+    background-color: #1e293b !important;
+}
+
+body.dark-mode .preview-image {
+    background-color: #0f172a !important;
+}
+
+body.dark-mode .preview-close {
+    background-color: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .preview-close:hover {
+    background-color: #b3261e !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .preview-details {
+    background-color: #1e293b !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .preview-details h3,
+body.dark-mode #previewProductName {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .preview-description,
+body.dark-mode #previewDescription {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .preview-price-section {
+    background-color: #111827 !important;
     border: 1px solid #334155 !important;
     color: #f8fafc !important;
 }
-body.dark-mode .preview-modal-content h2,
-body.dark-mode .preview-modal-content h3,
-body.dark-mode .preview-modal-content h4 {
-    color: #f8fafc !important;
-}
-body.dark-mode .preview-modal-content p,
-body.dark-mode .preview-modal-content span {
+
+body.dark-mode .preview-price-section h4 {
     color: #cbd5e1 !important;
 }
+
+body.dark-mode .preview-price-section .price-amount,
+body.dark-mode #previewPrice {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .size-selection label,
+body.dark-mode .addons-selection label,
+body.dark-mode .quantity-selection label {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .size-preview-btn {
+    background-color: #111827 !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .size-preview-btn:hover {
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .size-preview-btn.active {
+    background-color: #b3261e !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 14px rgba(179, 38, 30, 0.4) !important;
+}
+
+body.dark-mode .size-preview-btn .size-info {
+    color: #cbd5e1 !important;
+    opacity: 0.9 !important;
+}
+
+body.dark-mode .addon-checkbox {
+    background-color: #111827 !important;
+    border: 1px solid #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .addon-checkbox:hover {
+    background-color: #1e293b !important;
+    border-color: #475569 !important;
+}
+
+body.dark-mode .addon-checkbox span {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .quantity-control {
+    border-color: #334155 !important;
+    background-color: #111827 !important;
+}
+
+body.dark-mode .quantity-control button,
+body.dark-mode .qty-minus,
+body.dark-mode .qty-plus {
+    background-color: #1e293b !important;
+    color: #f8fafc !important;
+    border: 1px solid #334155 !important;
+}
+
+body.dark-mode .quantity-control button:hover,
+body.dark-mode .qty-minus:hover,
+body.dark-mode .qty-plus:hover {
+    background-color: #334155 !important;
+}
+
+body.dark-mode .quantity-control input,
+body.dark-mode .qty-input {
+    background-color: #111827 !important;
+    color: #f8fafc !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .order-summary,
+body.dark-mode #previewOrderSummary {
+    background-color: #111827 !important;
+    border: 1px solid #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .order-summary h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .summary-details p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .summary-details p span {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .summary-details .summary-total {
+    border-top-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .summary-details .summary-total span,
+body.dark-mode #summaryTotal {
+    color: #ef4444 !important;
+}
+
+/* Reviews Modal Dark Mode */
+body.dark-mode #storefrontReviewsModal .preview-modal-content {
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode #storefrontReviewsModal h2 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode #storefrontReviewsModal [style*="background:#fff9f2"],
+body.dark-mode #storefrontReviewsModal [style*="background: #fff9f2"] {
+    background-color: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode #storefrontReviewsModal [style*="color:#171922"] {
+    color: #f8fafc !important;
+}
+
 body.dark-mode .store-review-item {
     background: #111827 !important;
     border-color: #334155 !important;
     color: #f8fafc !important;
 }
+
 body.dark-mode .store-review-filter-btn {
     background: #0f172a !important;
     border-color: #334155 !important;
     color: #cbd5e1 !important;
 }
+
 body.dark-mode .store-review-filter-btn.active {
     background: #b3261e !important;
     border-color: #b3261e !important;

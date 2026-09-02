@@ -2304,3 +2304,141 @@ body.dark-mode .hr-workspace-link.active {
         width: 90vw !important;
     }
 }
+
+/* ==========================================================================
+   UNIVERSAL ADMIN DARK MODE ENGINE
+   ========================================================================== */
+html.dark-mode body,
+body.dark-mode {
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .admin-container,
+body.dark-mode .admin-content,
+body.dark-mode .admin-main,
+body.dark-mode .plans-shell {
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .card,
+body.dark-mode .card-header,
+body.dark-mode .card-body,
+body.dark-mode .card-footer,
+body.dark-mode .stat-card,
+body.dark-mode .module-card,
+body.dark-mode .overview-card,
+body.dark-mode .table-responsive,
+body.dark-mode .modal-content,
+body.dark-mode .modal-header,
+body.dark-mode .modal-footer,
+body.dark-mode .settings-card,
+body.dark-mode .biz-card,
+body.dark-mode .sp-minimal-card,
+body.dark-mode .plan-card,
+body.dark-mode .plans-card,
+body.dark-mode .active-subscription-hero-card {
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+body.dark-mode h1,
+body.dark-mode h2,
+body.dark-mode h3,
+body.dark-mode h4,
+body.dark-mode h5,
+body.dark-mode h6,
+body.dark-mode strong,
+body.dark-mode b,
+body.dark-mode label,
+body.dark-mode .card-title,
+body.dark-mode .modal-title,
+body.dark-mode .sp-plan-title,
+body.dark-mode .sp-price-main,
+body.dark-mode .hero-plan-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode p,
+body.dark-mode span,
+body.dark-mode .text-muted,
+body.dark-mode .small,
+body.dark-mode .sp-price-sub,
+body.dark-mode .sp-brand-sub,
+body.dark-mode .hero-plan-dates-row {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .admin-table,
+body.dark-mode table.table {
+    color: #f8fafc !important;
+    background-color: #1e293b !important;
+}
+
+body.dark-mode .admin-table th,
+body.dark-mode table.table th {
+    background-color: #111827 !important;
+    color: #f8fafc !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .admin-table td,
+body.dark-mode table.table td {
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+    background-color: transparent !important;
+}
+
+body.dark-mode .form-control,
+body.dark-mode .form-select,
+body.dark-mode input[type="text"],
+body.dark-mode input[type="email"],
+body.dark-mode input[type="password"],
+body.dark-mode input[type="number"],
+body.dark-mode input[type="date"],
+body.dark-mode input[type="time"],
+body.dark-mode select,
+body.dark-mode textarea {
+    background-color: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .form-control:focus,
+body.dark-mode .form-select:focus,
+body.dark-mode input:focus,
+body.dark-mode select:focus,
+body.dark-mode textarea:focus {
+    background-color: #0f172a !important;
+    border-color: #b3261e !important;
+    color: #f8fafc !important;
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.25) !important;
+}
+
+body.dark-mode .btn-secondary,
+body.dark-mode .btn-outline-secondary {
+    background-color: #334155 !important;
+    border-color: #475569 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .btn-secondary:hover,
+body.dark-mode .btn-outline-secondary:hover {
+    background-color: #475569 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .pagination .page-link {
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .pagination .page-item.active .page-link {
+    background-color: #b3261e !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+}

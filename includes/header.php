@@ -1853,6 +1853,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const showSwalError = function (message, title) {
         const alertTitle = title || 'Error';
         const alertMessage = message || 'Please check your input and try again.';
+        if (window.showToast) {
+            window.showToast((alertTitle !== 'Error' ? alertTitle + ': ' : '') + alertMessage, 'error');
+            return;
+        }
         if (typeof Swal !== 'undefined') {
             Swal.fire({
                 icon: 'error',

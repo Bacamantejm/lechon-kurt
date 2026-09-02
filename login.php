@@ -1569,21 +1569,29 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     <?php if ($error): ?>
-    Swal.fire({
-        icon: 'error',
-        title: 'Login Error',
-        text: '<?php echo addslashes($error); ?>',
-        confirmButtonColor: '#b3261e'
-    });
+    if (window.showPopupAlert) {
+        window.showPopupAlert(<?php echo json_encode($error); ?>, 'error', 5000);
+    } else if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            icon: 'error',
+            title: 'Login Error',
+            text: <?php echo json_encode($error); ?>,
+            confirmButtonColor: '#b3261e'
+        });
+    }
     <?php endif; ?>
     
     <?php if ($success): ?>
-    Swal.fire({
-        icon: 'success',
-        title: 'Success!',
-        html: '<?php echo addslashes($success); ?>',
-        confirmButtonColor: '#b3261e'
-    });
+    if (window.showPopupAlert) {
+        window.showPopupAlert(<?php echo json_encode($success); ?>, 'success', 4000);
+    } else if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            icon: 'success',
+            title: 'Success!',
+            html: <?php echo json_encode($success); ?>,
+            confirmButtonColor: '#b3261e'
+        });
+    }
     <?php endif; ?>
 });
 </script>

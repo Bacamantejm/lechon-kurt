@@ -112,6 +112,8 @@ include 'includes/header.php';
 
         <?php if ($active_partner_subscription): ?>
         <?php
+            $activeStatus = strtolower(trim((string)($active_partner_subscription['subscription_status'] ?? 'active')));
+            $isCancelled = ($activeStatus === 'cancelled' || $activeStatus === 'canceled');
             $activePlanName = (string)($active_partner_subscription['plan_name'] ?? 'Partner Plan');
             $activeCycle = ucfirst((string)($active_partner_subscription['billing_cycle'] ?? 'monthly'));
             $subStarted = !empty($active_partner_subscription['started_at']) ? date('M d, Y', strtotime((string)$active_partner_subscription['started_at'])) : 'Recently';
@@ -124,12 +126,14 @@ include 'includes/header.php';
                 <div>
                     <div class="active-banner-title">
                         <h2>Your Current Active Plan: <?php echo htmlspecialchars($activePlanName); ?></h2>
-                        <span class="active-pill-status"><i class="fas fa-check-circle"></i> ACTIVE (<?php echo htmlspecialchars($activeCycle); ?>)</span>
+                        <span class="active-pill-status" style="<?php echo $isCancelled ? 'background:#fff1f0; color:#b3261e; border:1px solid #fee4e2;' : ''; ?>">
+                            <i class="<?php echo $isCancelled ? 'fas fa-ban' : 'fas fa-check-circle'; ?>"></i> <?php echo strtoupper($activeStatus); ?> (<?php echo htmlspecialchars($activeCycle); ?>)
+                        </span>
                     </div>
                     <p class="active-banner-dates">
                         <span><i class="fas fa-calendar-check"></i> Subscribed: <strong><?php echo htmlspecialchars($subStarted); ?></strong></span>
                         <span class="dates-divider">&bull;</span>
-                        <span><i class="fas fa-credit-card"></i> Next Renewal / Due Date: <strong style="color:#b3261e;"><?php echo htmlspecialchars($subRenews); ?></strong></span>
+                        <span><i class="fas fa-credit-card"></i> <?php echo $isCancelled ? 'Active Until / Terminates On:' : 'Next Renewal / Due Date:'; ?> <strong style="color:#b3261e;"><?php echo htmlspecialchars($subRenews); ?></strong></span>
                     </p>
                 </div>
             </div>
@@ -142,13 +146,15 @@ include 'includes/header.php';
                 <a href="admin/subscription_plans.php" class="btn-manage-sub">
                     <i class="fas fa-sliders-h"></i> Dashboard
                 </a>
-                <form method="POST" action="subscription_plans.php" style="display:inline-block;" onsubmit="return confirmSubscriptionCancellation('<?php echo htmlspecialchars($activePlanName, ENT_QUOTES, 'UTF-8'); ?>', '<?php echo htmlspecialchars($subRenews, ENT_QUOTES, 'UTF-8'); ?>');">
+                <?php if (!$isCancelled): ?>
+                <form method="POST" action="subscription_plans.php" style="display:inline-block;" onsubmit="return confirmSubscriptionCancellation(event, '<?php echo htmlspecialchars($activePlanName, ENT_QUOTES, 'UTF-8'); ?>', '<?php echo htmlspecialchars($subRenews, ENT_QUOTES, 'UTF-8'); ?>');">
                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
                     <input type="hidden" name="action" value="cancel_active_subscription">
                     <button type="submit" class="btn-cancel-sub">
                         <i class="fas fa-ban"></i> Cancel Subscription
                     </button>
                 </form>
+                <?php endif; ?>
             </div>
         </div>
         <?php endif; ?>
@@ -273,13 +279,19 @@ include 'includes/header.php';
                             <a href="admin/subscription_plans.php" class="sp-pill-button sp-btn-current-active">
                                 <i class="fas fa-check-circle"></i> Current Active Plan
                             </a>
-                            <form method="POST" action="subscription_plans.php" style="width:100%; text-align:center;" onsubmit="return confirmSubscriptionCancellation('<?php echo htmlspecialchars((string)$plan['plan_name'], ENT_QUOTES, 'UTF-8'); ?>', '<?php echo htmlspecialchars($subRenews, ENT_QUOTES, 'UTF-8'); ?>');">
+                            <?php if (!$isCancelled): ?>
+                            <form method="POST" action="subscription_plans.php" style="width:100%; text-align:center;" onsubmit="return confirmSubscriptionCancellation(event, '<?php echo htmlspecialchars((string)$plan['plan_name'], ENT_QUOTES, 'UTF-8'); ?>', '<?php echo htmlspecialchars($subRenews, ENT_QUOTES, 'UTF-8'); ?>');">
                                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
                                 <input type="hidden" name="action" value="cancel_active_subscription">
                                 <button type="submit" class="btn-card-cancel">
                                     <i class="fas fa-times-circle"></i> Cancel Subscription
                                 </button>
                             </form>
+                            <?php else: ?>
+                            <div style="text-align:center; font-size:0.8rem; color:#b54708; font-weight:700; padding:4px;">
+                                <i class="fas fa-clock"></i> Access until <?php echo htmlspecialchars($subRenews); ?>
+                            </div>
+                            <?php endif; ?>
                         </div>
                     <?php else: ?>
                         <a href="<?php echo htmlspecialchars($monthlyHref); ?>" 
@@ -1342,14 +1354,43 @@ include 'includes/header.php';
 </style>
 
 <script>
-function confirmSubscriptionCancellation(planName, renewsDate) {
-    return confirm(
-        "Are you sure you want to cancel your " + planName + " subscription?\n\n" +
-        "• Non-Refundable: In accordance with our Terms of Agreement, subscription payments are non-refundable.\n" +
-        "• Continued Access: Your shop will retain 100% full active access to all " + planName + " features and discounts until " + renewsDate + ".\n" +
-        "• Auto-Termination: After " + renewsDate + ", recurring charges will stop and your plan will conclude.\n\n" +
-        "Click OK to confirm cancellation."
-    );
+function confirmSubscriptionCancellation(e, planName, renewsDate) {
+    if (e && typeof e.preventDefault === 'function') e.preventDefault();
+    const form = e ? (e.target || e.currentTarget) : null;
+    if (form && form.dataset.confirmed === '1') {
+        return true;
+    }
+
+    const htmlContent = `
+        <p style="margin-bottom: 12px; font-weight: 700;">Are you sure you want to cancel your <strong>${planName}</strong> subscription?</p>
+        <div style="text-align: left; background: rgba(0,0,0,0.04); padding: 12px 14px; border-radius: 12px; font-size: 0.85rem; line-height: 1.6; margin-bottom: 8px;">
+            <div style="margin-bottom: 6px;"><i class="fas fa-exclamation-circle" style="color:#b3261e; width:16px;"></i> <strong>Non-Refundable:</strong> Payments are non-refundable per terms.</div>
+            <div style="margin-bottom: 6px;"><i class="fas fa-check-circle" style="color:#027a48; width:16px;"></i> <strong>Continued Access:</strong> You retain 100% full active access until <strong>${renewsDate}</strong>.</div>
+            <div><i class="fas fa-clock" style="color:#b54708; width:16px;"></i> <strong>Auto-Termination:</strong> Recurring billing will stop automatically.</div>
+        </div>
+    `;
+
+    if (window.showConfirmDialog) {
+        window.showConfirmDialog({
+            title: 'Cancel Subscription',
+            html: htmlContent,
+            icon: 'warning',
+            confirmText: 'Yes, Cancel Plan',
+            confirmColor: '#b3261e',
+            cancelText: 'Keep My Plan'
+        }).then((confirmed) => {
+            if (confirmed && form) {
+                form.dataset.confirmed = '1';
+                form.submit();
+            }
+        });
+    } else if (confirm("Are you sure you want to cancel your " + planName + " subscription?")) {
+        if (form) {
+            form.dataset.confirmed = '1';
+            form.submit();
+        }
+    }
+    return false;
 }
 
 (function () {

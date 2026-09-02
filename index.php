@@ -4177,15 +4177,9 @@ document.addEventListener('DOMContentLoaded', function () {
     applyFilters(heroSearch || gridSearch || headerSearch);
 
     <?php if ($show_welcome): ?>
-    Swal.fire({
-        icon: 'success',
-        title: 'Welcome!',
-        html: '<p style="font-size:1.05rem;margin-bottom:10px;color:#2b2f3a;">Registration successful.</p><p style="font-size:.95rem;color:#667085;">You are now signed in as <strong><?php echo htmlspecialchars($user_email, ENT_QUOTES); ?></strong>.</p><p style="font-size:.9rem;color:#7a8395;margin-top:14px;">Explore the marketplace and start browsing stores.</p>',
-        confirmButtonColor: '#d81b60',
-        confirmButtonText: 'Explore now',
-        allowOutsideClick: false,
-        allowEscapeKey: false
-    });
+    if (window.showPopupAlert) {
+        window.showPopupAlert('Welcome! You are now signed in as <?php echo htmlspecialchars($user_email, ENT_QUOTES); ?>.', 'success', 5000);
+    }
     <?php endif; ?>
 });
 </script>
@@ -4532,12 +4526,16 @@ document.addEventListener('DOMContentLoaded', function() {
             const remember = document.getElementById('popupRememberMe').checked;
             
             if (!email || !password) {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Missing Information',
-                    text: 'Please enter both email and password.',
-                    confirmButtonColor: '#b3261e'
-                });
+                if (window.showPopupAlert) {
+                    window.showPopupAlert('Please enter both email and password.', 'alert');
+                } else if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Missing Information',
+                        text: 'Please enter both email and password.',
+                        confirmButtonColor: '#b3261e'
+                    });
+                }
                 return;
             }
             
@@ -4571,19 +4569,27 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.includes('alert-error') || data.includes('Invalid email or password')) {
                     const errorMatch = data.match(/alert-error.*?<div>(.*?)<\/div>/s);
                     const errMsg = errorMatch ? errorMatch[1].trim() : 'Invalid email or password';
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Sign In Failed',
-                        text: errMsg,
-                        confirmButtonColor: '#b3261e'
-                    });
+                    if (window.showPopupAlert) {
+                        window.showPopupAlert(errMsg, 'error');
+                    } else if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Sign In Failed',
+                            text: errMsg,
+                            confirmButtonColor: '#b3261e'
+                        });
+                    }
                 } else {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Error',
-                        text: 'An unexpected error occurred. Please try again.',
-                        confirmButtonColor: '#b3261e'
-                    });
+                    if (window.showPopupAlert) {
+                        window.showPopupAlert('An unexpected error occurred. Please try again.', 'error');
+                    } else if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: 'An unexpected error occurred. Please try again.',
+                            confirmButtonColor: '#b3261e'
+                        });
+                    }
                 }
                 
                 if (submitBtn) {
@@ -4593,12 +4599,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             })
             .catch(err => {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Connection Error',
-                    text: 'Could not connect to authentication server.',
-                    confirmButtonColor: '#b3261e'
-                });
+                if (window.showPopupAlert) {
+                    window.showPopupAlert('Could not connect to authentication server.', 'error');
+                } else if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Connection Error',
+                        text: 'Could not connect to authentication server.',
+                        confirmButtonColor: '#b3261e'
+                    });
+                }
                 if (submitBtn) {
                     submitBtn.disabled = false;
                     const span = submitBtn.querySelector('span');
@@ -4623,22 +4633,8 @@ function copyWelcomePromoCode(code, btn) {
                 btn.classList.remove('copied');
             }, 2500);
         }
-        if (typeof Swal !== 'undefined') {
-            const Toast = Swal.mixin({
-                toast: true,
-                position: 'top-end',
-                showConfirmButton: false,
-                timer: 3500,
-                timerProgressBar: true,
-                didOpen: (toast) => {
-                    toast.onmouseenter = Swal.stopTimer;
-                    toast.onmouseleave = Swal.resumeTimer;
-                }
-            });
-            Toast.fire({
-                icon: 'success',
-                title: 'Code ' + textToCopy + ' copied! Apply at checkout.'
-            });
+        if (window.showPopupAlert) {
+            window.showPopupAlert('Code ' + textToCopy + ' copied! Apply at checkout.', 'success', 3000);
         }
     };
 
@@ -4680,22 +4676,13 @@ function claimAndUseWelcomeDeal(code, targetUrl) {
         navigator.clipboard.writeText(textToCopy).catch(() => {});
     }
 
-    if (typeof Swal !== 'undefined') {
-        Swal.fire({
-            icon: 'success',
-            title: 'Deal Claimed!',
-            html: 'Voucher code <strong>' + textToCopy + '</strong> has been activated for your next order.',
-            showConfirmButton: true,
-            confirmButtonText: 'Continue to Menu',
-            confirmButtonColor: '#b3261e',
-            timer: 2200,
-            timerProgressBar: true
-        }).then(() => {
-            proceedToTarget();
-        });
-    } else {
-        proceedToTarget();
+    if (window.showPopupAlert) {
+        window.showPopupAlert('Deal Claimed! Voucher code ' + textToCopy + ' activated for your order.', 'success', 2500);
     }
+
+    setTimeout(function() {
+        proceedToTarget();
+    }, 800);
 
     function proceedToTarget() {
         if (!targetUrl || targetUrl === '#marketplaceStores') {

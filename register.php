@@ -3943,12 +3943,16 @@ document.addEventListener('DOMContentLoaded', function() {
             updateProgressBar();
         }
 
-        Swal.fire({
-            icon: 'error',
-            title: 'Registration failed',
-            text: serverRegistrationError,
-            confirmButtonColor: '#b3261e'
-        });
+        if (window.showPopupAlert) {
+            window.showPopupAlert(serverRegistrationError, 'error', 5000);
+        } else if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: 'Registration failed',
+                text: serverRegistrationError,
+                confirmButtonColor: '#b3261e'
+            });
+        }
     }
 });
 </script>

@@ -676,9 +676,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 await loadCart();
                 if (result.success) {
                     document.dispatchEvent(new CustomEvent('cartUpdated'));
+                    if (window.showToast) window.showToast('Cart updated', 'success');
                 } else if (result.message) {
-                    if (window.swalConfirmAction && typeof Swal !== 'undefined') {
-                        Swal.fire({ icon: 'error', title: 'Cart Update Failed', text: result.message, confirmButtonColor: '#c62828' });
+                    if (window.showToast) {
+                        window.showToast(result.message, 'error');
                     } else {
                         alert(result.message);
                     }
@@ -709,9 +710,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 await loadCart();
                 if (result.success) {
                     document.dispatchEvent(new CustomEvent('cartUpdated'));
+                    if (window.showToast) window.showToast('Cart cleared', 'success');
                 } else if (result.message) {
-                    if (window.swalConfirmAction && typeof Swal !== 'undefined') {
-                        Swal.fire({ icon: 'error', title: 'Unable to Clear Cart', text: result.message, confirmButtonColor: '#c62828' });
+                    if (window.showToast) {
+                        window.showToast(result.message, 'error');
                     } else {
                         alert(result.message);
                     }

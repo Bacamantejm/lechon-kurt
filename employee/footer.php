@@ -3,25 +3,7 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
-<?php
-if (isset($_SESSION['message'])) {
-    $type = $_SESSION['msg_type'];
-    $msg = $_SESSION['message'];
-    $swal_icon = ($type == 'danger') ? 'error' : $type;
-    $swal_title = ($type == 'success') ? 'Success!' : 'Notice';
-    
-    echo "<script>
-        Swal.fire({
-            icon: '$swal_icon',
-            title: '$swal_title',
-            text: '$msg',
-            confirmButtonColor: '#1976d2'
-        });
-    </script>";
-    unset($_SESSION['message']);
-    unset($_SESSION['msg_type']);
-}
-?>
+<?php require_once __DIR__ . '/../includes/popup_alert.php'; ?>
 
 <script>
     window.swalConfirmAction = window.swalConfirmAction || function(options) {
