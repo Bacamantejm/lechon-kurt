@@ -972,9 +972,9 @@ include 'includes/header.php';
     margin-top: 30px;
 }
 
-/* Password Strength */
+/* Password Strength & Live Requirements */
 .password-strength {
-    margin-top: 12px;
+    margin-top: 10px;
     font-size: 0.9rem;
 }
 
@@ -983,37 +983,100 @@ include 'includes/header.php';
     align-items: center;
     gap: 10px;
     margin-top: 8px;
+    margin-bottom: 8px;
 }
 
 .strength-text {
     font-weight: 600;
-    min-width: 50px;
+    font-size: 0.82rem;
+    min-width: 48px;
+    color: #64748b;
 }
 
 .strength-bars {
     display: flex;
-    gap: 4px;
+    gap: 5px;
     flex: 1;
 }
 
 .strength-bar {
     flex: 1;
-    height: 6px;
-    background-color: #e0e0e0;
+    height: 5px;
+    background-color: #e2e8f0;
     border-radius: 3px;
-    transition: all 0.3s;
+    transition: background-color 0.25s ease;
 }
 
 .strength-bar.weak {
-    background-color: #ff5252;
+    background-color: #ef4444;
 }
 
 .strength-bar.medium {
-    background-color: #ff9800;
+    background-color: #f59e0b;
 }
 
 .strength-bar.strong {
-    background-color: #4caf50;
+    background-color: #10b981;
+}
+
+.password-requirements {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 6px 12px;
+    padding: 10px 12px;
+    background: #f8fafc;
+    border: 1px solid #eaecf0;
+    border-radius: 8px;
+    margin-top: 8px;
+}
+
+.req-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.8rem;
+    color: #64748b;
+    transition: color 0.2s ease;
+}
+
+.req-item i {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.req-item.met {
+    color: #027a48;
+    font-weight: 500;
+}
+
+.req-item.met i {
+    color: #027a48;
+}
+
+body.dark-mode .password-requirements {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .req-item {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .req-item i {
+    color: #64748b !important;
+}
+
+body.dark-mode .req-item.met {
+    color: #34d399 !important;
+}
+
+body.dark-mode .req-item.met i {
+    color: #34d399 !important;
+}
+
+body.dark-mode .strength-bar {
+    background-color: #334155;
 }
 
 /* Verification Note */
@@ -2359,7 +2422,24 @@ body.dark-mode .floating-pig {
                                     autocomplete="new-password">
                                 <button type="button" class="toggle-password" data-target="password"><i class="fas fa-eye"></i></button>
                             </div>
-                            <div class="password-strength" id="passwordStrength"></div>
+                            <div class="password-strength" id="passwordStrength">
+                                <div class="strength-indicator">
+                                    <div class="strength-bars">
+                                        <div class="strength-bar" id="strengthBar1"></div>
+                                        <div class="strength-bar" id="strengthBar2"></div>
+                                        <div class="strength-bar" id="strengthBar3"></div>
+                                        <div class="strength-bar" id="strengthBar4"></div>
+                                    </div>
+                                    <span class="strength-text" id="strengthText">Weak</span>
+                                </div>
+                                <div class="password-requirements" id="passwordRequirements">
+                                    <div class="req-item" id="reqLength"><i class="fas fa-circle-dot"></i> <span>8-16 characters</span></div>
+                                    <div class="req-item" id="reqUpper"><i class="fas fa-circle-dot"></i> <span>Uppercase letter (A-Z)</span></div>
+                                    <div class="req-item" id="reqLower"><i class="fas fa-circle-dot"></i> <span>Lowercase letter (a-z)</span></div>
+                                    <div class="req-item" id="reqNumber"><i class="fas fa-circle-dot"></i> <span>Number (0-9)</span></div>
+                                    <div class="req-item" id="reqSpecial"><i class="fas fa-circle-dot"></i> <span>Special symbol (!@#$%^&*)</span></div>
+                                </div>
+                            </div>
                         </div>
                         
                         <div class="form-group mb-4">
@@ -3581,8 +3661,41 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const passwordInput = document.getElementById('password');
     if (passwordInput) {
-        passwordInput.addEventListener('input', function() {
+        function updateLivePasswordFeedback() {
             const password = passwordInput.value;
+            const hasLength = password.length >= 8 && password.length <= 72;
+            const hasUpper = /[A-Z]/.test(password);
+            const hasLower = /[a-z]/.test(password);
+            const hasNumber = /\d/.test(password);
+            const hasSpecial = /[^A-Za-z\d]/.test(password);
+
+            const setReq = (id, isMet) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                if (isMet) {
+                    el.classList.add('met');
+                    const icon = el.querySelector('i');
+                    if (icon) icon.className = 'fas fa-circle-check';
+                } else {
+                    el.classList.remove('met');
+                    const icon = el.querySelector('i');
+                    if (icon) icon.className = 'fas fa-circle-dot';
+                }
+            };
+
+            setReq('reqLength', hasLength);
+            setReq('reqUpper', hasUpper);
+            setReq('reqLower', hasLower);
+            setReq('reqNumber', hasNumber);
+            setReq('reqSpecial', hasSpecial);
+
+            let score = 0;
+            if (password.length >= 8) score += 1;
+            if (hasUpper && hasLower) score += 1;
+            if (hasNumber) score += 1;
+            if (hasSpecial) score += 1;
+            score = Math.min(score, 4);
+
             const bars = [
                 document.getElementById('strengthBar1'),
                 document.getElementById('strengthBar2'),
@@ -3590,14 +3703,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.getElementById('strengthBar4')
             ];
             const strengthText = document.getElementById('strengthText');
-            const checks = [/[a-z]/, /[A-Z]/, /\d/, /[^A-Za-z\d]/];
-            let score = password.length >= 8 ? 1 : 0;
-            checks.forEach(function(regex) {
-                if (regex.test(password)) {
-                    score += 1;
-                }
-            });
-            score = Math.min(score, 4);
 
             bars.forEach(function(bar) {
                 if (bar) {
@@ -3607,21 +3712,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
             let label = 'Weak';
             let cssClass = 'weak';
-            let color = '#ff5252';
+            let color = '#ef4444';
 
-            if (score >= 3) {
+            if (score === 2 || score === 3) {
                 label = 'Fair';
                 cssClass = 'medium';
-                color = '#ff9800';
-            }
-            if (score >= 4) {
+                color = '#f59e0b';
+            } else if (score >= 4 && hasLength && hasUpper && hasLower && hasNumber && hasSpecial) {
                 label = 'Strong';
                 cssClass = 'strong';
-                color = '#4caf50';
+                color = '#10b981';
             }
+
             if (!password.length) {
                 label = 'Weak';
-                color = '#666';
+                color = '#64748b';
             }
 
             for (let i = 0; i < score; i += 1) {
@@ -3633,7 +3738,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 strengthText.textContent = label;
                 strengthText.style.color = color;
             }
-        });
+        }
+
+        passwordInput.addEventListener('input', updateLivePasswordFeedback);
+        passwordInput.addEventListener('change', updateLivePasswordFeedback);
     }
 
     const registrationForm = document.getElementById('registrationForm');
