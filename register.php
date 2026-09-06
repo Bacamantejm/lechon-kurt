@@ -309,13 +309,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $last_name = preg_replace('/\s+/', ' ', trim($_POST['last_name'] ?? ''));
     $middle_name = preg_replace('/\s+/', ' ', trim($_POST['middle_name'] ?? ''));
     $nickname = preg_replace('/\s+/', ' ', trim($_POST['nickname'] ?? ''));
-    $birth_date = trim($_POST['birth_date'] ?? '');
+    $birth_date = trim($_POST['birth_date'] ?? $_POST['dob'] ?? '');
     $gender = strtolower(trim($_POST['gender'] ?? ''));
     $email = strtolower(trim($_POST['email'] ?? ''));
     $phone = trim($_POST['phone'] ?? '');
     $password = $_POST['password'] ?? '';
     $confirm_password = $_POST['confirm_password'] ?? '';
-    $accept_terms = isset($_POST['accept_terms']);
+    $accept_terms = !empty($_POST['accept_terms']) 
+        || !empty($_POST['terms']) 
+        || (isset($_POST['accept_terms']) && $_POST['accept_terms'] !== '' && $_POST['accept_terms'] !== '0')
+        || (isset($_POST['terms']) && $_POST['terms'] !== '' && $_POST['terms'] !== '0');
     $valid_id_type = trim($_POST['valid_id_type'] ?? '');
     $valid_id_front = $_FILES['valid_id_front'] ?? null;
     $valid_id_back = $_FILES['valid_id_back'] ?? null;
@@ -325,7 +328,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $business_type = 'restaurant';
 $business_registration = trim($_POST['business_registration'] ?? '');
     $website = null;
-    $tax_id = trim($_POST['tax_id'] ?? '');
+    $tax_id = trim($_POST['tax_id'] ?? $_POST['tin_number'] ?? '');
     $street_address = trim($_POST['street_address'] ?? '');
     $address = trim($_POST['address'] ?? '');
     $latitude = trim($_POST['latitude'] ?? '');
@@ -374,6 +377,12 @@ $business_registration = trim($_POST['business_registration'] ?? '');
             $error = 'Please enter your first and last name.';
         } elseif (!preg_match('/^[\p{L}\p{M}\'\-\s]{2,60}$/u', $first_name) || !preg_match('/^[\p{L}\p{M}\'\-\s]{2,60}$/u', $last_name)) {
             $error = 'Please enter a valid first and last name.';
+        } elseif (!empty($birth_date) && (
+            ($dob_time = strtotime($birth_date)) === false || 
+            $dob_time > strtotime('-10 years') || 
+            $dob_time < strtotime('-100 years')
+        )) {
+            $error = 'Please enter a valid date of birth. You must be at least 10 years old to register.';
         } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $error = 'Please enter a valid email address.';
         } elseif (!preg_match('/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,72}$/', $password)) {
@@ -2022,6 +2031,11 @@ body.dark-mode .terms-agreement {
     color: #94a3b8 !important;
 }
 
+body.dark-mode #termsGroup {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+
 body.dark-mode .terms-group a,
 body.dark-mode .terms-agreement a {
     color: #ef4444 !important;
@@ -2221,6 +2235,8 @@ body.dark-mode .floating-pig {
                             <div class="form-group">
                                 <label for="dob">Date of Birth</label>
                                 <input type="date" id="dob" name="dob" class="form-control"
+                                    min="<?php echo date('Y-m-d', strtotime('-100 years')); ?>"
+                                    max="<?php echo date('Y-m-d', strtotime('-10 years')); ?>"
                                     value="<?php echo htmlspecialchars($form_data['dob'] ?? ''); ?>">
                             </div>
                             <div class="form-group">
@@ -2453,10 +2469,10 @@ body.dark-mode .floating-pig {
                         </div>
 
                         <!-- Terms & Conditions Checkbox -->
-                        <div class="terms-group mb-4">
-                            <label class="checkbox-label" style="font-size: 0.9rem; color: #555;">
-                                <input type="checkbox" id="terms" name="terms" required style="accent-color: #b3261e; margin-right: 8px;">
-                                I agree to the <a href="terms_of_service.php" target="_blank" style="color: #b3261e; text-decoration: underline;">Terms & Conditions</a> and <a href="privacy_policy.php" target="_blank" style="color: #b3261e; text-decoration: underline;">Privacy Policy</a>.
+                        <div class="terms-group mb-4" id="termsGroup" style="display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; background: #f8fafc; border: 1px solid #eaecf0; border-radius: 10px; transition: all 0.2s ease;">
+                            <input type="checkbox" id="terms" name="accept_terms" value="1" required <?php echo (!empty($_POST['accept_terms']) || !empty($_POST['terms']) || !empty($accept_terms)) ? 'checked' : ''; ?> style="accent-color: #b3261e; width: 18px; height: 18px; min-width: 18px; margin-top: 2px; cursor: pointer;">
+                            <label for="terms" style="font-size: 0.9rem; color: #475467; cursor: pointer; margin: 0; line-height: 1.5; user-select: none;">
+                                I agree to the <a href="terms_of_service.php" class="terms-legal-link" target="_blank" style="color: #b3261e; font-weight: 600; text-decoration: underline;">Terms &amp; Conditions</a> and <a href="privacy_policy.php" class="terms-legal-link" target="_blank" style="color: #b3261e; font-weight: 600; text-decoration: underline;">Privacy Policy</a>.
                             </label>
                         </div>
                         
@@ -3262,6 +3278,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function validateStep1() {
         const firstName = ((document.getElementById('firstName') || {}).value || '').trim();
         const lastName = ((document.getElementById('lastName') || {}).value || '').trim();
+        const dobInput = document.getElementById('dob');
 
         if (!firstName || !lastName) {
             showError('Missing Information', 'Please enter your First Name and Last Name.');
@@ -3271,6 +3288,18 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!isValidName(firstName) || !isValidName(lastName)) {
             showError('Invalid Name', 'Please use valid characters (letters, spaces, dots, hyphens) for your name.');
             return false;
+        }
+
+        if (dobInput && dobInput.value) {
+            const birthDate = new Date(dobInput.value);
+            const today = new Date();
+            const minAgeDate = new Date(today.getFullYear() - 10, today.getMonth(), today.getDate());
+            const maxAgeDate = new Date(today.getFullYear() - 100, today.getMonth(), today.getDate());
+
+            if (isNaN(birthDate.getTime()) || birthDate > minAgeDate || birthDate < maxAgeDate) {
+                showError('Invalid Date of Birth', 'You must be at least 10 years old to register.');
+                return false;
+            }
         }
 
         return true;
@@ -3526,7 +3555,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const phone = ((document.getElementById('phone') || {}).value || '').trim();
         const passwordInput = document.getElementById('password');
         const confirmPasswordInput = document.getElementById('confirmPassword');
-        const termsInput = document.getElementById('terms') || document.getElementById('acceptTerms');
+        const termsInput = document.getElementById('terms') || document.querySelector('input[name="accept_terms"]') || document.querySelector('input[name="terms"]');
+        const termsGroup = document.getElementById('termsGroup');
         const password = passwordInput ? passwordInput.value : '';
         const confirmPassword = confirmPasswordInput ? confirmPasswordInput.value : '';
 
@@ -3565,13 +3595,43 @@ document.addEventListener('DOMContentLoaded', function() {
             return false;
         }
 
-        if (!termsInput || !termsInput.checked) {
+        const isTermsChecked = Boolean(termsInput && termsInput.checked);
+        if (!isTermsChecked) {
+            if (termsGroup) {
+                termsGroup.style.borderColor = '#b3261e';
+                termsGroup.style.background = '#fff1f0';
+            }
+            if (termsInput) {
+                termsInput.focus();
+            }
             showError('Terms Required', 'Please accept the Terms of Service and Privacy Policy.');
             return false;
+        } else {
+            if (termsGroup) {
+                termsGroup.style.borderColor = '#eaecf0';
+                termsGroup.style.background = '#f8fafc';
+            }
         }
 
         return true;
     }
+
+    const termsInputEl = document.getElementById('terms');
+    const termsGroupEl = document.getElementById('termsGroup');
+    if (termsInputEl) {
+        termsInputEl.addEventListener('change', function() {
+            if (this.checked && termsGroupEl) {
+                termsGroupEl.style.borderColor = '#eaecf0';
+                termsGroupEl.style.background = '#f8fafc';
+            }
+        });
+    }
+
+    document.querySelectorAll('.terms-legal-link').forEach(function(link) {
+        link.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+    });
 
     accountTypeCards.forEach(function(card) {
         card.addEventListener('click', function() {
@@ -3752,7 +3812,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 return false;
             }
 
-            const submitBtn = document.getElementById('submitRegistration');
+            const submitBtn = document.getElementById('submitBtn') || document.getElementById('submitRegistration');
             if (submitBtn) {
                 submitBtn.classList.add('loading');
                 submitBtn.disabled = true;
@@ -4035,7 +4095,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (serverRegistrationError) {
         let targetStep = 1;
         const loweredError = serverRegistrationError.toLowerCase();
-        if (/(name)/.test(loweredError)) {
+        if (/(name|birth|dob|age)/.test(loweredError)) {
             targetStep = 1;
         } else if (/(email|mobile|phone|valid id|government id|front|back)/.test(loweredError)) {
             targetStep = 2;
