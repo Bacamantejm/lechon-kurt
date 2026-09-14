@@ -68,6 +68,22 @@ function preorderExtractAddressParts($rawAddress) {
 
 $requested_seller_id = isset($_GET['seller_id']) ? (int)$_GET['seller_id'] : 0;
 $requested_product_id = isset($_GET['product_id']) ? (int)$_GET['product_id'] : 0;
+// Cart prefill from checkout.php switch — format: "id:qty,id:qty,..."
+$prefill_cart_items = [];
+if (!empty($_GET['prefill'])) {
+    $prefill_raw = (string)$_GET['prefill'];
+    foreach (explode(',', $prefill_raw) as $prefill_pair) {
+        $prefill_pair = trim($prefill_pair);
+        if (strpos($prefill_pair, ':') !== false) {
+            [$pfid, $pfqty] = explode(':', $prefill_pair, 2);
+            $pfid  = (int)$pfid;
+            $pfqty = max(1, (int)$pfqty);
+            if ($pfid > 0) {
+                $prefill_cart_items[] = ['id' => $pfid, 'qty' => $pfqty];
+            }
+        }
+    }
+}
 
 if ($requested_product_id > 0 && $requested_seller_id <= 0) {
     $p_stmt = mysqli_prepare($conn, "SELECT seller_id FROM products WHERE id = ? LIMIT 1");
@@ -163,10 +179,19 @@ if ($prefill_province === '') {
 
 // Fetch products for pre-ordering (load full catalog with seller association and live inventory)
 $products_sql = "SELECT p.id, p.product_id, p.seller_id, p.name, p.description, p.price, p.image, p.category,
-                        COALESCE(i.current_stock, p.stock) AS stock
+                        COALESCE(latest_i.current_stock, p.stock) AS stock
                  FROM products p
-                 LEFT JOIN inventory i ON p.id = i.product_id AND i.inventory_date = CURDATE() AND i.is_archived = 0
-                 WHERE p.is_active = 1
+                 LEFT JOIN (
+                     SELECT i.product_id, i.current_stock
+                     FROM inventory i
+                     INNER JOIN (
+                         SELECT product_id, MAX(inventory_date) AS max_date
+                         FROM inventory
+                         WHERE is_archived = 0
+                         GROUP BY product_id
+                     ) im ON i.product_id = im.product_id AND i.inventory_date = im.max_date AND i.is_archived = 0
+                 ) latest_i ON p.id = latest_i.product_id
+                  WHERE p.is_active = 1" . ($active_seller_id > 0 ? " AND p.seller_id = $active_seller_id" : "") . "
                    AND (p.is_archived = 0 OR p.is_archived IS NULL)
                  ORDER BY p.category, p.name ASC";
 $products_result = mysqli_query($conn, $products_sql);
@@ -679,6 +704,27 @@ body {
     border-color: #d0d5dd;
     box-shadow: 0 4px 12px rgba(16, 24, 40, 0.08);
 }
+
+/* Sold out styling */
+.product-card.product-sold-out {
+    position: relative;
+    opacity: 0.6;
+    pointer-events: none;
+}
+.product-card.product-sold-out .product-image::after {
+    content: "SOLD OUT";
+    position: absolute;
+    inset: 0;
+    background: rgba(16,24,40,0.65);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+}
+
 
 .product-image {
     height: 150px;
@@ -3134,6 +3180,28 @@ const products = <?php echo json_encode($all_products); ?>;
 const activeSellerId = <?php echo (int)$active_seller_id; ?>;
 const stores = <?php echo json_encode($stores); ?>;
 let cart = []; // Array to store selected items: { id, name, price, quantity, image }
+
+// Pre-populate cart from checkout.php switch (prefill param)
+(function() {
+    const prefill = <?php echo json_encode($prefill_cart_items); ?>;
+    if (!prefill || prefill.length === 0) return;
+    prefill.forEach(function(pf) {
+        const prod = products.find(function(p) { return p.id === pf.id; });
+        if (!prod) return;
+        const stock = typeof prod.stock !== 'undefined' ? parseInt(prod.stock) : 0;
+        if (stock <= 0) return; // skip sold-out
+        const qty = Math.min(pf.qty, stock);
+        cart.push({
+            id: prod.id,
+            product_id: prod.product_id || '',
+            name: prod.name,
+            price: prod.price,
+            quantity: qty,
+            image: prod.image || ''
+        });
+    });
+})();
+
 const VAT_RATE = 0.12;
 let storeMap = null;
 let storeMarker = null;
@@ -3726,9 +3794,11 @@ function selectTimeSlot(timeVal, label, clickedEl) {
 
 document.addEventListener('DOMContentLoaded', function() {
     renderProducts('all');
+    updateCartUI(); // Reflect any prefilled cart items (from checkout switch)
     setupButtons();
     setupFilters();
     setupProgressNavigation();
+
     prioritizeAndSelectNearbyReservationStore();
     loadCalendarMonth(currentCalMonth);
 

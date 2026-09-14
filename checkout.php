@@ -24,7 +24,19 @@ if (empty($_SESSION['cart']) || !is_array($_SESSION['cart'])) {
 // Get user information
 $user_id = (int)($_SESSION['user_id'] ?? 0);
 $storefront_seller_id = isset($_SESSION['storefront_seller_id']) ? (int)$_SESSION['storefront_seller_id'] : 0;
-$preorder_switch_link = 'preorder.php' . ($storefront_seller_id > 0 ? '?seller_id=' . $storefront_seller_id : '');
+// Build compact cart prefill param: "id:qty,id:qty,..."
+$_co_prefill_parts = [];
+if (!empty($_SESSION['cart']) && is_array($_SESSION['cart'])) {
+    foreach ($_SESSION['cart'] as $_co_item) {
+        $pid = (int)($_co_item['id'] ?? 0);
+        $qty = max(1, (int)($_co_item['quantity'] ?? 1));
+        if ($pid > 0) {
+            $_co_prefill_parts[] = $pid . ':' . $qty;
+        }
+    }
+}
+$_co_prefill_param = count($_co_prefill_parts) > 0 ? '&prefill=' . urlencode(implode(',', $_co_prefill_parts)) : '';
+$preorder_switch_link = 'preorder.php' . ($storefront_seller_id > 0 ? '?seller_id=' . $storefront_seller_id . $_co_prefill_param : (count($_co_prefill_parts) > 0 ? '?prefill=' . urlencode(implode(',', $_co_prefill_parts)) : ''));
 pvEnsureVoucherSchema($conn);
 caEnsureUserSavedAddressSchema($conn);
 
@@ -306,7 +318,7 @@ $checkout_tenant_message = $checkout_tenant_blocked
 if (!$checkout_tenant_blocked && (int)($checkout_tenant_scope['seller_id'] ?? 0) > 0) {
     $storefront_seller_id = (int)$checkout_tenant_scope['seller_id'];
     $_SESSION['storefront_seller_id'] = $storefront_seller_id;
-    $preorder_switch_link = 'preorder.php?seller_id=' . $storefront_seller_id;
+    $preorder_switch_link = 'preorder.php?seller_id=' . $storefront_seller_id . $_co_prefill_param;
 }
 $total = max(0, $subtotal + $vat_amount + $delivery_fee - $voucher_discount);
 
