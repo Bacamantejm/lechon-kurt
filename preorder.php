@@ -161,53 +161,28 @@ if ($prefill_province === '') {
     $prefill_province = 'Cavite';
 }
 
-// Fetch products with optional tenant/storefront scope
-$products_base_sql = "SELECT id, product_id, name, description, price, image, category
-                      FROM products
-                      WHERE is_active = 1
-                        AND (is_archived = 0 OR is_archived IS NULL)";
+// Fetch products for pre-ordering (load full catalog with seller association)
+$products_sql = "SELECT id, product_id, seller_id, name, description, price, image, category
+                 FROM products
+                 WHERE is_active = 1
+                   AND (is_archived = 0 OR is_archived IS NULL)
+                 ORDER BY category, name ASC";
+$products_result = mysqli_query($conn, $products_sql);
 $all_products = [];
-
-if ($active_seller_id > 0) {
-    $products_sql = $products_base_sql . " AND seller_id = ? ORDER BY category, name ASC";
-    $products_stmt = mysqli_prepare($conn, $products_sql);
-    if ($products_stmt) {
-        mysqli_stmt_bind_param($products_stmt, "i", $active_seller_id);
-        mysqli_stmt_execute($products_stmt);
-        $products_result = mysqli_stmt_get_result($products_stmt);
-        if ($products_result) {
-            while ($row = mysqli_fetch_assoc($products_result)) {
-                $all_products[] = [
-                    'id' => (int)$row['id'],
-                    'product_id' => (string)($row['product_id'] ?? ''),
-                    'name' => (string)($row['name'] ?? ''),
-                    'description' => (string)($row['description'] ?? ''),
-                    'price' => (float)($row['price'] ?? 0),
-                    'image' => (string)($row['image'] ?? 'default.jpg'),
-                    'category' => (string)($row['category'] ?? 'lechon')
-                ];
-            }
-            mysqli_free_result($products_result);
-        }
-        mysqli_stmt_close($products_stmt);
+if ($products_result) {
+    while ($row = mysqli_fetch_assoc($products_result)) {
+        $all_products[] = [
+            'id' => (int)$row['id'],
+            'product_id' => (string)($row['product_id'] ?? ''),
+            'seller_id' => (int)($row['seller_id'] ?? 1),
+            'name' => (string)($row['name'] ?? ''),
+            'description' => (string)($row['description'] ?? ''),
+            'price' => (float)($row['price'] ?? 0),
+            'image' => (string)($row['image'] ?? 'default.jpg'),
+            'category' => (string)($row['category'] ?? 'lechon')
+        ];
     }
-} else {
-    $products_sql = $products_base_sql . " ORDER BY category, name ASC";
-    $products_result = mysqli_query($conn, $products_sql);
-    if ($products_result) {
-        while ($row = mysqli_fetch_assoc($products_result)) {
-            $all_products[] = [
-                'id' => (int)$row['id'],
-                'product_id' => (string)($row['product_id'] ?? ''),
-                'name' => (string)($row['name'] ?? ''),
-                'description' => (string)($row['description'] ?? ''),
-                'price' => (float)($row['price'] ?? 0),
-                'image' => (string)($row['image'] ?? 'default.jpg'),
-                'category' => (string)($row['category'] ?? 'lechon')
-            ];
-        }
-        mysqli_free_result($products_result);
-    }
+    mysqli_free_result($products_result);
 }
 
 // Get distinct categories for filter
@@ -220,27 +195,133 @@ sort($categories);
 
 $store_scope_query = $active_seller_id > 0 ? '?seller_id=' . $active_seller_id : '';
 
-// Fetch active store locations for pick-up
-$stores = [];
-$store_sql = "SELECT store_id AS id, store_id, owner_user_id, store_name, address, city, province, phone, opening_hours, opening_time, closing_time, latitude, longitude FROM store_locations WHERE is_active = 1";
-if ($active_seller_id > 0) {
-    $store_sql .= " AND (owner_user_id = " . (int)$active_seller_id . " OR store_id = " . (int)$active_seller_id . ")";
-}
-$store_sql .= " ORDER BY store_name ASC";
-$store_query_res = mysqli_query($conn, $store_sql);
-if ($store_query_res && mysqli_num_rows($store_query_res) > 0) {
-    while ($s = mysqli_fetch_assoc($store_query_res)) {
-        $stores[] = $s;
-    }
-}
-if (empty($stores)) {
-    $all_s_res = mysqli_query($conn, "SELECT store_id AS id, store_id, owner_user_id, store_name, address, city, province, phone, opening_hours, opening_time, closing_time, latitude, longitude FROM store_locations WHERE is_active = 1 ORDER BY store_name ASC");
-    if ($all_s_res) {
-        while ($s = mysqli_fetch_assoc($all_s_res)) {
-            $stores[] = $s;
+function preorderGetStoreImage($store_id, $store_name, $custom_image = '') {
+    $custom = trim((string)$custom_image);
+    if ($custom !== '' && $custom !== 'default.jpg') {
+        if (str_starts_with($custom, 'http') || str_starts_with($custom, 'images/') || str_starts_with($custom, 'uploads/')) {
+            return $custom;
+        }
+        if (file_exists('uploads/business_logos/' . $custom)) {
+            return 'uploads/business_logos/' . $custom;
+        }
+        if (file_exists('images/' . $custom)) {
+            return 'images/' . $custom;
         }
     }
+    
+    $image_map = [
+        1 => 'images/store-bg.jpg',               // Dasmariñas Central Branch
+        2 => 'images/panda_preorder_lechon.jpg',  // Bacoor Express Branch
+        3 => 'images/about-us-bg.jpg',             // Imus Heritage Branch
+        4 => 'images/hero-bg.jpg',                 // Tagaytay Ridge Branch
+        5 => 'images/panda_fresh_lechon.jpg',     // Janna Restaurant
+        6 => 'images/store-bg.jpg',               // Justine Business
+        7 => 'images/panda_preorder_lechon.jpg',  // JM Lechon
+    ];
+    if (isset($image_map[$store_id])) {
+        return $image_map[$store_id];
+    }
+    
+    $name_lower = strtolower((string)$store_name);
+    if (str_contains($name_lower, 'lydia')) return 'images/panda_fresh_lechon.jpg';
+    if (str_contains($name_lower, 'linda')) return 'images/about-us-bg.jpg';
+    if (str_contains($name_lower, 'tagaytay')) return 'images/hero-bg.jpg';
+    if (str_contains($name_lower, 'bacoor')) return 'images/panda_preorder_lechon.jpg';
+    if (str_contains($name_lower, 'imus')) return 'images/about-us-bg.jpg';
+    return 'images/store-bg.jpg';
 }
+
+// Fetch active store locations & partner vendor stores for pick-up / pre-order
+$stores = [];
+$branch_sql = "SELECT sl.store_id AS id, sl.store_id, sl.owner_user_id, sl.store_name, sl.address, sl.city, sl.province, sl.phone, sl.opening_hours, sl.opening_time, sl.closing_time, sl.latitude, sl.longitude,
+                      'branch' AS store_category,
+                      'Pickup Branch' AS store_type_label,
+                      CASE WHEN sps.id IS NOT NULL AND sps.is_active = 1 THEN 1 ELSE 0 END AS has_reservation_schedule,
+                      sps.lead_time_days, sps.cutoff_time, sps.max_advance_days
+               FROM store_locations sl
+               LEFT JOIN shop_preorder_schedules sps ON (sps.seller_id = sl.owner_user_id OR sps.seller_id = sl.store_id) AND sps.is_active = 1
+               WHERE sl.is_active = 1
+               ORDER BY has_reservation_schedule DESC, sl.store_name ASC";
+$branch_res = mysqli_query($conn, $branch_sql);
+if ($branch_res) {
+    while ($r = mysqli_fetch_assoc($branch_res)) {
+        $r['seller_id'] = (int)($r['owner_user_id'] ?? 1);
+        $r['image'] = preorderGetStoreImage((int)$r['store_id'], $r['store_name']);
+        $stores[] = $r;
+    }
+    mysqli_free_result($branch_res);
+}
+
+// Add approved partner organization stores that are not already listed as physical branches
+$seller_sql = "SELECT u.id AS seller_id, u.full_name, u.business_name, u.business_type, u.business_logo, u.profile_image, u.address, u.phone,
+                      sl.store_id, sl.latitude, sl.longitude, sl.city, sl.province,
+                      CASE WHEN sps.id IS NOT NULL AND sps.is_active = 1 THEN 1 ELSE 0 END AS has_reservation_schedule,
+                      sps.lead_time_days, sps.cutoff_time, sps.max_advance_days
+               FROM users u
+               LEFT JOIN store_locations sl ON sl.owner_user_id = u.id AND sl.is_active = 1
+               LEFT JOIN shop_preorder_schedules sps ON sps.seller_id = u.id AND sps.is_active = 1
+               WHERE (u.account_type = 'organization' OR u.user_type = 'seller') AND u.is_active = 1";
+$seller_res = mysqli_query($conn, $seller_sql);
+if ($seller_res) {
+    while ($r = mysqli_fetch_assoc($seller_res)) {
+        $sid = (int)$r['seller_id'];
+        $already_in = false;
+        foreach ($stores as $st) {
+            if ((int)($st['owner_user_id'] ?? 0) === $sid || (!empty($r['store_id']) && (int)($st['store_id'] ?? 0) === (int)$r['store_id'])) {
+                $already_in = true;
+                break;
+            }
+        }
+        if (!$already_in) {
+            $name = trim((string)$r['business_name']) ?: (trim((string)$r['full_name']) . ' Store');
+            $city = !empty($r['city']) ? $r['city'] : 'Cavite';
+            $prov = !empty($r['province']) ? $r['province'] : 'Cavite';
+            $partner_img = !empty($r['business_logo']) ? $r['business_logo'] : (!empty($r['profile_image']) ? $r['profile_image'] : '');
+            $stores[] = [
+                'id' => 9000 + $sid,
+                'store_id' => !empty($r['store_id']) ? (int)$r['store_id'] : 1,
+                'owner_user_id' => $sid,
+                'seller_id' => $sid,
+                'store_name' => $name,
+                'address' => $r['address'] ?: ($city . ', Cavite'),
+                'city' => $city,
+                'province' => $prov,
+                'phone' => $r['phone'] ?? '',
+                'opening_hours' => '8:00 AM - 8:00 PM',
+                'opening_time' => '08:00:00',
+                'closing_time' => '20:00:00',
+                'latitude' => !empty($r['latitude']) ? $r['latitude'] : '14.3294',
+                'longitude' => !empty($r['longitude']) ? $r['longitude'] : '120.9367',
+                'store_category' => 'partner',
+                'store_type_label' => 'Partner Store',
+                'image' => preorderGetStoreImage(9000 + $sid, $name, $partner_img),
+                'has_reservation_schedule' => (int)$r['has_reservation_schedule'],
+                'lead_time_days' => $r['lead_time_days'] ?? 1,
+                'cutoff_time' => $r['cutoff_time'] ?? '18:00:00',
+                'max_advance_days' => $r['max_advance_days'] ?? 30
+            ];
+        }
+    }
+    mysqli_free_result($seller_res);
+}
+
+// Split into Official Branches and Partner Stores for hierarchical presentation
+$official_branches = array_filter($stores, function($s) {
+    return ($s['store_category'] ?? 'branch') === 'branch';
+});
+$partner_stores = array_filter($stores, function($s) {
+    return ($s['store_category'] ?? '') === 'partner';
+});
+
+// Extract unique cities for quick filter pills
+$store_cities = [];
+foreach ($stores as $s) {
+    $c = trim((string)($s['city'] ?? ''));
+    if ($c !== '' && !in_array($c, $store_cities, true)) {
+        $store_cities[] = $c;
+    }
+}
+sort($store_cities);
 
 $time_slots = ['8:00 AM', '9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM', '6:00 PM', '7:00 PM', '8:00 PM', '9:00 PM'];
 
@@ -657,6 +738,440 @@ body {
 .product-card.selected .check-icon {
     opacity: 1;
     transform: scale(1);
+}
+
+/* Step 1: Hierarchical Store Selection & Storefront Image Cards */
+.store-selection-container {
+    background: #ffffff;
+    border: 1px solid var(--pre-border);
+    border-radius: 16px;
+    padding: 22px;
+    margin-bottom: 24px;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+}
+
+.store-selection-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.store-selection-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.store-selection-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: #fff1f0;
+    color: #b3261e;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+}
+
+.store-selection-title h3 {
+    margin: 0;
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: var(--pre-ink);
+}
+
+.store-selection-title p {
+    margin: 2px 0 0 0;
+    font-size: 0.82rem;
+    color: var(--pre-muted);
+}
+
+/* Hierarchy Category Tabs */
+.store-hierarchy-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.store-hierarchy-tab {
+    background: #ffffff;
+    border: 1.5px solid #eaecf0;
+    color: #344054;
+    font-size: 0.82rem;
+    font-weight: 700;
+    padding: 8px 16px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.store-hierarchy-tab:hover {
+    border-color: #d0d5dd;
+    background: #f8f9fa;
+    color: #101828;
+}
+
+.store-hierarchy-tab.active {
+    background: #b3261e;
+    border-color: #b3261e;
+    color: #ffffff;
+    box-shadow: 0 2px 6px rgba(179, 38, 30, 0.2);
+}
+
+.store-city-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 16px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #f2f4f7;
+}
+
+.store-city-pill {
+    background: #f8f9fa;
+    border: 1px solid #eaecf0;
+    color: #475467;
+    font-size: 0.76rem;
+    font-weight: 700;
+    padding: 4px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.store-city-pill:hover {
+    border-color: #d0d5dd;
+    color: #101828;
+    background: #ffffff;
+}
+
+.store-city-pill.active {
+    background: #101828;
+    border-color: #101828;
+    color: #ffffff;
+}
+
+/* Store Hierarchy Sections */
+.store-hierarchy-section {
+    margin-bottom: 22px;
+}
+
+.store-hierarchy-section:last-child {
+    margin-bottom: 0;
+}
+
+.store-hierarchy-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #eaecf0;
+}
+
+.store-hierarchy-heading h4 {
+    margin: 0;
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.02rem;
+    font-weight: 800;
+    color: var(--pre-ink);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.store-hierarchy-heading span {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--pre-muted);
+}
+
+.store-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+/* Store Card Item with Image Banner */
+.store-card-item {
+    background: #ffffff;
+    border: 1.5px solid #eaecf0;
+    border-radius: 14px;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.store-card-item:hover {
+    border-color: #d0d5dd;
+    box-shadow: 0 6px 18px rgba(16, 24, 40, 0.08);
+    transform: translateY(-2px);
+}
+
+.store-card-item.selected {
+    border-color: #b3261e;
+    box-shadow: 0 6px 20px rgba(179, 38, 30, 0.16);
+}
+
+.store-card-img-banner {
+    height: 125px;
+    background-size: cover;
+    background-position: center;
+    position: relative;
+    background-color: #f2f4f7;
+    border-bottom: 1px solid #eaecf0;
+}
+
+.store-card-img-banner::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.1) 40%, rgba(0,0,0,0.6) 100%);
+}
+
+.store-card-badge-top-left {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.store-card-badge-top-right {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 2;
+}
+
+.store-badge-branch {
+    background: #175cd3;
+    color: #ffffff;
+    font-size: 0.68rem;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+}
+
+.store-badge-partner {
+    background: #b54708;
+    color: #ffffff;
+    font-size: 0.68rem;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+}
+
+.store-badge-res-tag {
+    background: #027a48;
+    color: #ffffff;
+    font-size: 0.66rem;
+    font-weight: 800;
+    padding: 2px 7px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+}
+
+.store-badge-dist {
+    background: rgba(16, 24, 40, 0.85);
+    backdrop-filter: blur(4px);
+    color: #ffffff;
+    font-size: 0.72rem;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid rgba(255,255,255,0.2);
+}
+
+.store-card-body {
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    justify-content: space-between;
+}
+
+.store-card-name-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.store-card-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.98rem;
+    font-weight: 800;
+    color: var(--pre-ink);
+    margin: 0;
+    line-height: 1.3;
+}
+
+.store-card-check-pill {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid #d0d5dd;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.68rem;
+    color: #ffffff;
+    background: transparent;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.store-card-item.selected .store-card-check-pill {
+    background: #b3261e;
+    border-color: #b3261e;
+}
+
+.store-card-address-row {
+    font-size: 0.78rem;
+    color: #475467;
+    margin-bottom: 8px;
+    line-height: 1.35;
+    display: flex;
+    align-items: flex-start;
+    gap: 5px;
+}
+
+.store-card-address-row i {
+    color: #b3261e;
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+.store-card-info-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: #667085;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #f2f4f7;
+}
+
+.store-card-select-btn {
+    width: 100%;
+    margin-top: 10px;
+    padding: 7px 12px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-align: center;
+    border: 1px solid #eaecf0;
+    background: #f8f9fa;
+    color: #344054;
+    transition: all 0.15s ease;
+}
+
+.store-card-item:hover .store-card-select-btn {
+    border-color: #d0d5dd;
+    background: #ffffff;
+    color: #101828;
+}
+
+.store-card-item.selected .store-card-select-btn {
+    border-color: #b3261e;
+    background: #b3261e;
+    color: #ffffff;
+}
+
+/* Progressive Disclosure for Store Selection -> Menu Display */
+.store-select-prompt-box {
+    background: #ffffff;
+    border: 2px dashed #d0d5dd;
+    border-radius: 16px;
+    padding: 42px 24px;
+    text-align: center;
+    margin-top: 10px;
+    transition: all 0.3s ease;
+}
+
+.store-select-prompt-icon {
+    width: 62px;
+    height: 62px;
+    border-radius: 50%;
+    background: #fff1f0;
+    color: #b3261e;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.65rem;
+    margin-bottom: 14px;
+}
+
+.store-select-prompt-box h4 {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--pre-ink);
+    margin: 0 0 6px;
+}
+
+.store-select-prompt-box p {
+    font-size: 0.88rem;
+    color: var(--pre-muted);
+    max-width: 480px;
+    margin: 0 auto;
+    line-height: 1.45;
+}
+
+.dishes-menu-wrapper {
+    display: none;
+    margin-top: 20px;
+    animation: preorderMenuFadeIn 0.35s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+}
+
+.dishes-menu-wrapper.is-visible {
+    display: block;
+}
+
+@keyframes preorderMenuFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(14px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 /* Step 1: 2-Column Product Catalog & Sticky Pre-Order Cart Layout */
@@ -1465,6 +1980,192 @@ body.dark-mode .btn-secondary:hover {
     color: #ffffff !important;
 }
 
+/* Step 1 Store Hierarchy & Image Cards Dark Theme */
+body.dark-mode .store-selection-container {
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+body.dark-mode .store-selection-icon {
+    background: rgba(179, 38, 30, 0.2) !important;
+    color: #ef4444 !important;
+}
+
+body.dark-mode .store-selection-title h3 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .store-selection-title p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .store-hierarchy-tabs {
+    border-bottom-color: #334155 !important;
+}
+
+body.dark-mode .store-hierarchy-tab {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .store-hierarchy-tab:hover {
+    background: #334155 !important;
+    border-color: #475569 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .store-hierarchy-tab.active {
+    background: #b3261e !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 8px rgba(179, 38, 30, 0.35) !important;
+}
+
+body.dark-mode .store-city-filters {
+    border-bottom-color: #334155 !important;
+}
+
+body.dark-mode .store-city-pill {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .store-city-pill:hover {
+    background: #1e293b !important;
+    border-color: #475569 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .store-city-pill.active {
+    background: #f8fafc !important;
+    border-color: #f8fafc !important;
+    color: #0f172a !important;
+}
+
+body.dark-mode .store-hierarchy-heading h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .store-hierarchy-heading span {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .store-card-item {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+body.dark-mode .store-card-item:hover {
+    border-color: #475569 !important;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4) !important;
+}
+
+body.dark-mode .store-card-item.selected {
+    border-color: #b3261e !important;
+    background: #18192a !important;
+    box-shadow: 0 6px 22px rgba(179, 38, 30, 0.35) !important;
+}
+
+body.dark-mode .store-card-img-banner {
+    border-bottom-color: #334155 !important;
+    background-color: #0f172a !important;
+}
+
+body.dark-mode .store-card-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .store-card-check-pill {
+    border-color: #475569 !important;
+    background: transparent !important;
+}
+
+body.dark-mode .store-card-item.selected .store-card-check-pill {
+    background: #b3261e !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .store-card-address-row {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .store-card-address-row i {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .store-card-info-footer {
+    border-top-color: #334155 !important;
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .store-card-select-btn {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .store-card-item:hover .store-card-select-btn {
+    background: #334155 !important;
+    border-color: #475569 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .store-card-item.selected .store-card-select-btn {
+    background: #b3261e !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .store-select-prompt-box {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .store-select-prompt-icon {
+    background: rgba(179, 38, 30, 0.2) !important;
+    color: #ef4444 !important;
+}
+
+body.dark-mode .store-select-prompt-box h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .store-select-prompt-box p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode #step1SelectedStoreBadge {
+    background: rgba(179, 38, 30, 0.2) !important;
+    border-color: rgba(239, 68, 68, 0.35) !important;
+    color: #ef4444 !important;
+}
+
+body.dark-mode #step1ActiveStoreName {
+    color: #f8fafc !important;
+}
+
+body.dark-mode #storePickupMap {
+    border-color: #334155 !important;
+}
+
+body.dark-mode .leaflet-popup-content-wrapper {
+    background: #1e293b !important;
+    color: #f8fafc !important;
+    border: 1px solid #334155 !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4) !important;
+}
+
+body.dark-mode .leaflet-popup-tip {
+    background: #1e293b !important;
+}
+
 /* ==========================================================================
    PRE-ORDER INTERACTIVE CALENDAR & TIME SLOTS STYLES
    ========================================================================== */
@@ -1939,64 +2640,207 @@ body.dark-mode .preorder-schedule-selected-badge {
     </div>
 
     <form id="preorderForm" method="POST">
-        <!-- Step 1: Product Selection with Dedicated Pre-Order Cart -->
+        <!-- Step 1: Store & Product Selection with Dedicated Pre-Order Cart -->
         <div class="step-content active" data-step="1">
             <div class="preorder-step1-layout">
-                <!-- Left Main: Product Catalog -->
+                <!-- Left Main: Store Selection & Product Catalog -->
                 <div class="preorder-catalog-main">
-                    <div class="step-title">Select Your Pre-Order Items</div>
-                    <?php if ($active_seller_id > 0): ?>
-                        <p class="tenant-scope-note">
-                            Showing products from
-                            <strong><?php echo htmlspecialchars($storefront_name !== '' ? $storefront_name : ('Partner #' . $active_seller_id)); ?></strong>
-                            only.
-                        </p>
-                    <?php endif; ?>
-                    
-                    <!-- Category Filter -->
-                    <div class="category-nav">
-                        <div class="category-list">
-                            <button type="button" class="category-link active" data-category="all">All</button>
-                            <?php foreach ($categories as $cat): ?>
-                                <button type="button" class="category-link" data-category="<?php echo htmlspecialchars($cat); ?>">
-                                    <?php echo htmlspecialchars($cat); ?>
+                    <!-- Step 1 Store Choice Hierarchy Grid & Selector Container -->
+                    <div class="store-selection-container">
+                        <div class="store-selection-header">
+                            <div class="store-selection-title">
+                                <div class="store-selection-icon">
+                                    <i class="fas fa-store"></i>
+                                </div>
+                                <div>
+                                    <h3>Choose Roasting Branch or Partner Store</h3>
+                                    <p>Select your preferred Cavite store to view dishes and live roasting availability.</p>
+                                </div>
+                            </div>
+                            <!-- Hidden select for form submission & legacy sync -->
+                            <select id="step1StoreSelect" class="form-control" style="display:none;" onchange="onStep1StoreChange(this.value)">
+                                <?php foreach ($stores as $store): ?>
+                                    <option value="<?php echo (int)$store['id']; ?>"
+                                        data-seller-id="<?php echo (int)($store['seller_id'] ?? $store['owner_user_id'] ?? 1); ?>"
+                                        data-name="<?php echo htmlspecialchars($store['store_name']); ?>"
+                                        data-address="<?php echo htmlspecialchars($store['address'] . ', ' . $store['city'] . ', ' . $store['province']); ?>"
+                                        data-phone="<?php echo htmlspecialchars($store['phone'] ?? ''); ?>"
+                                        data-hours="<?php echo htmlspecialchars($store['opening_hours'] ?? '8:00 AM - 8:00 PM'); ?>"
+                                        data-lat="<?php echo htmlspecialchars($store['latitude'] ?? '14.3294'); ?>"
+                                        data-lng="<?php echo htmlspecialchars($store['longitude'] ?? '120.9367'); ?>"
+                                        data-city="<?php echo htmlspecialchars($store['city'] ?? ''); ?>"
+                                        data-province="<?php echo htmlspecialchars($store['province'] ?? ''); ?>"
+                                        data-type="<?php echo htmlspecialchars($store['store_type_label'] ?? 'Pickup Branch'); ?>"
+                                        data-category="<?php echo htmlspecialchars($store['store_category'] ?? 'branch'); ?>"
+                                        data-reservation="<?php echo !empty($store['has_reservation_schedule']) ? '1' : '0'; ?>">
+                                        <?php echo htmlspecialchars($store['store_name']); ?> — <?php echo htmlspecialchars($store['address'] . ', ' . $store['city']); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+
+                        <!-- Store Type Hierarchy Tabs -->
+                        <div class="store-hierarchy-tabs">
+                            <button type="button" class="store-hierarchy-tab active" data-type="all" onclick="filterStoreCardsByType('all', this)">
+                                <i class="fas fa-layer-group"></i> All Stores (<?php echo count($stores); ?>)
+                            </button>
+                            <button type="button" class="store-hierarchy-tab" data-type="branch" onclick="filterStoreCardsByType('branch', this)">
+                                <i class="fas fa-building-flag"></i> Official Roasting Hubs (<?php echo count($official_branches); ?>)
+                            </button>
+                            <button type="button" class="store-hierarchy-tab" data-type="partner" onclick="filterStoreCardsByType('partner', this)">
+                                <i class="fas fa-handshake"></i> Partner Stores (<?php echo count($partner_stores); ?>)
+                            </button>
+                        </div>
+
+                        <!-- City Quick Filters -->
+                        <div class="store-city-filters">
+                            <button type="button" class="store-city-pill active" data-city="all" onclick="filterStoreCardsByCity('all', this)">
+                                <i class="fas fa-globe"></i> All Cities
+                            </button>
+                            <?php foreach ($store_cities as $scity): ?>
+                                <button type="button" class="store-city-pill" data-city="<?php echo htmlspecialchars(strtolower($scity)); ?>" onclick="filterStoreCardsByCity('<?php echo htmlspecialchars(addslashes($scity)); ?>', this)">
+                                    <i class="fas fa-map-pin"></i> <?php echo htmlspecialchars($scity); ?>
                                 </button>
+                            <?php endforeach; ?>
+                        </div>
+
+                        <!-- Store Choice Cards Grid (Hierarchical with Image Banners) -->
+                        <div class="store-cards-grid" id="storeCardsGrid">
+                            <?php foreach ($stores as $idx => $store): 
+                                $sId = (int)$store['id'];
+                                $sellerId = (int)($store['seller_id'] ?? $store['owner_user_id'] ?? 1);
+                                $hasRes = !empty($store['has_reservation_schedule']);
+                                $cat = $store['store_category'] ?? 'branch';
+                                $isBranch = ($cat === 'branch');
+                                $typeLabel = $store['store_type_label'] ?? ($isBranch ? 'Pickup Branch' : 'Partner Store');
+                                $storeImg = $store['image'] ?? 'images/store-bg.jpg';
+                                $isPreselected = ($requested_seller_id > 0 && $sellerId === $requested_seller_id);
+                            ?>
+                                <div class="store-card-item <?php echo $isPreselected ? 'selected' : ''; ?>"
+                                     id="store-card-<?php echo $sId; ?>"
+                                     data-store-id="<?php echo $sId; ?>"
+                                     data-seller-id="<?php echo $sellerId; ?>"
+                                     data-category="<?php echo htmlspecialchars($cat); ?>"
+                                     data-city="<?php echo htmlspecialchars(strtolower($store['city'] ?? '')); ?>"
+                                     data-lat="<?php echo htmlspecialchars($store['latitude'] ?? '14.3294'); ?>"
+                                     data-lng="<?php echo htmlspecialchars($store['longitude'] ?? '120.9367'); ?>"
+                                     data-name="<?php echo htmlspecialchars($store['store_name']); ?>"
+                                     data-address="<?php echo htmlspecialchars(($store['address'] ?? '') . ', ' . ($store['city'] ?? '')); ?>"
+                                     data-hours="<?php echo htmlspecialchars($store['opening_hours'] ?? '8:00 AM - 8:00 PM'); ?>"
+                                     data-phone="<?php echo htmlspecialchars($store['phone'] ?? ''); ?>"
+                                     data-reservation="<?php echo $hasRes ? '1' : '0'; ?>"
+                                     onclick="selectPreorderStore('<?php echo $sId; ?>', '<?php echo $sellerId; ?>', false, true)">
+                                    
+                                    <!-- Store Image Banner with Overlaid Badges -->
+                                    <div class="store-card-img-banner" style="background-image:url('<?php echo htmlspecialchars($storeImg); ?>');">
+                                        <div class="store-card-badge-top-left">
+                                            <span class="<?php echo $isBranch ? 'store-badge-branch' : 'store-badge-partner'; ?>">
+                                                <i class="<?php echo $isBranch ? 'fas fa-building-flag' : 'fas fa-handshake'; ?>"></i>
+                                                <?php echo htmlspecialchars($typeLabel); ?>
+                                            </span>
+                                            <?php if ($hasRes): ?>
+                                                <span class="store-badge-res-tag"><i class="fas fa-calendar-check"></i> Reservation Ready</span>
+                                            <?php endif; ?>
+                                        </div>
+                                        <div class="store-card-badge-top-right">
+                                            <span class="store-badge-dist" id="store-dist-<?php echo $sId; ?>">
+                                                <i class="fas fa-location-arrow"></i> <span class="dist-val">Near Cavite</span>
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Store Details Body -->
+                                    <div class="store-card-body">
+                                        <div>
+                                            <div class="store-card-name-row">
+                                                <h4 class="store-card-title"><?php echo htmlspecialchars($store['store_name']); ?></h4>
+                                                <div class="store-card-check-pill"><i class="fas fa-check"></i></div>
+                                            </div>
+                                            <div class="store-card-address-row">
+                                                <i class="fas fa-location-dot"></i>
+                                                <span><?php echo htmlspecialchars(($store['address'] ?? '') . ', ' . ($store['city'] ?? '')); ?></span>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <div class="store-card-info-footer">
+                                                <span><i class="fas fa-clock"></i> <?php echo htmlspecialchars($store['opening_hours'] ?? '8:00 AM - 8:00 PM'); ?></span>
+                                                <?php if (!empty($store['phone'])): ?>
+                                                    <span><i class="fas fa-phone"></i> <?php echo htmlspecialchars($store['phone']); ?></span>
+                                                <?php endif; ?>
+                                            </div>
+                                            <div class="store-card-select-btn">
+                                                <i class="fas fa-store"></i> Select Store
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             <?php endforeach; ?>
                         </div>
                     </div>
 
-                    <div class="form-group">
-                        <div id="productList" class="product-grid">
-                            <?php if (empty($all_products)): ?>
-                                <p class="empty-product-note"><?php echo $active_seller_id > 0 ? 'No active products are currently posted for this partner.' : 'No active products are currently available.'; ?></p>
-                            <?php else: ?>
-                                <?php foreach ($all_products as $p): 
-                                    $imgSrc = (string)($p['image'] ?? 'default.jpg');
-                                    if ($imgSrc !== '' && $imgSrc !== 'default.jpg') {
-                                        if (!str_starts_with($imgSrc, 'http') && !str_contains($imgSrc, '/')) {
-                                            $imgSrc = 'images/menu/' . $imgSrc;
-                                        }
-                                    }
-                                ?>
-                                <div class="product-card" data-product-id="<?php echo (int)$p['id']; ?>" onclick="addToCart(<?php echo (int)$p['id']; ?>)">
-                                    <div class="check-icon"><i class="fas fa-check"></i></div>
-                                    <div class="product-image">
-                                        <?php if ($imgSrc !== '' && $imgSrc !== 'default.jpg'): ?>
-                                            <img src="<?php echo htmlspecialchars($imgSrc); ?>" alt="<?php echo htmlspecialchars($p['name']); ?>">
-                                        <?php else: ?>
-                                            <i class="fas fa-drumstick-bite"></i>
-                                        <?php endif; ?>
-                                    </div>
-                                    <div class="product-info">
-                                        <h4><?php echo htmlspecialchars($p['name']); ?></h4>
-                                        <div class="product-price">₱<?php echo number_format($p['price'], 2); ?></div>
-                                        <button type="button" class="btn btn-outline btn-sm btn-block btn-add-preorder" data-product-id="<?php echo (int)$p['id']; ?>" onclick="event.stopPropagation(); addToCart(<?php echo (int)$p['id']; ?>)">
-                                            <i class="fas fa-plus"></i> Add to Order
-                                        </button>
-                                    </div>
-                                </div>
+                    <!-- Call-to-action prompt when user hasn't selected a store yet -->
+                    <div id="storeSelectPromptBox" class="store-select-prompt-box">
+                        <div class="store-select-prompt-icon">
+                            <i class="fas fa-store"></i>
+                        </div>
+                        <h4>Select a Roasting Store Above</h4>
+                        <p>Click on any of the available Cavite roasting branches or partner stores above to unlock their fresh specialty dishes, roasting schedules, and advance reservation menu.</p>
+                    </div>
+
+                    <!-- Progressive Dishes Menu Container (Revealed only after picking a store) -->
+                    <div id="dishesMenuWrapper" class="dishes-menu-wrapper">
+                        <div class="step-title" style="margin-top: 0; display:flex; align-items:center; flex-wrap:wrap; justify-content:space-between; gap:10px;">
+                            <span>Select Your Pre-Order Dishes</span>
+                            <span id="step1SelectedStoreBadge" style="font-size:0.82rem; font-weight:700; color:#b3261e; background:#fff1f0; border:1px solid #fee4e2; padding:3px 12px; border-radius:999px;">
+                                <i class="fas fa-store"></i> <span id="step1ActiveStoreName"><?php echo htmlspecialchars($stores[0]['store_name'] ?? 'Main Branch'); ?></span>
+                            </span>
+                        </div>
+                        
+                        <!-- Category Filter -->
+                        <div class="category-nav">
+                            <div class="category-list">
+                                <button type="button" class="category-link active" data-category="all">All</button>
+                                <?php foreach ($categories as $cat): ?>
+                                    <button type="button" class="category-link" data-category="<?php echo htmlspecialchars($cat); ?>">
+                                        <?php echo htmlspecialchars($cat); ?>
+                                    </button>
                                 <?php endforeach; ?>
-                            <?php endif; ?>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <div id="productList" class="product-grid">
+                                <?php if (empty($all_products)): ?>
+                                    <p class="empty-product-note"><?php echo $active_seller_id > 0 ? 'No active products are currently posted for this partner.' : 'No active products are currently available.'; ?></p>
+                                <?php else: ?>
+                                    <?php foreach ($all_products as $p): 
+                                        $imgSrc = (string)($p['image'] ?? 'default.jpg');
+                                        if ($imgSrc !== '' && $imgSrc !== 'default.jpg') {
+                                            if (!str_starts_with($imgSrc, 'http') && !str_contains($imgSrc, '/')) {
+                                                $imgSrc = 'images/menu/' . $imgSrc;
+                                            }
+                                        }
+                                    ?>
+                                    <div class="product-card" data-product-id="<?php echo (int)$p['id']; ?>" onclick="addToCart(<?php echo (int)$p['id']; ?>)">
+                                        <div class="check-icon"><i class="fas fa-check"></i></div>
+                                        <div class="product-image">
+                                            <?php if ($imgSrc !== '' && $imgSrc !== 'default.jpg'): ?>
+                                                <img src="<?php echo htmlspecialchars($imgSrc); ?>" alt="<?php echo htmlspecialchars($p['name']); ?>">
+                                            <?php else: ?>
+                                                <i class="fas fa-drumstick-bite"></i>
+                                            <?php endif; ?>
+                                        </div>
+                                        <div class="product-info">
+                                            <h4><?php echo htmlspecialchars($p['name']); ?></h4>
+                                            <div class="product-price">₱<?php echo number_format($p['price'], 2); ?></div>
+                                            <button type="button" class="btn btn-outline btn-sm btn-block btn-add-preorder" data-product-id="<?php echo (int)$p['id']; ?>" onclick="event.stopPropagation(); addToCart(<?php echo (int)$p['id']; ?>)">
+                                                <i class="fas fa-plus"></i> Add to Order
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2359,9 +3203,259 @@ function initStoreMap() {
     }
 }
 
-function onStoreChange(val) {
+function haversineKm(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
+
+let currentStoreCategoryFilter = 'all';
+let currentStoreCityFilter = 'all';
+
+function applyStoreCardFilters() {
+    const cards = document.querySelectorAll('.store-card-item');
+    cards.forEach(card => {
+        const cardCat = (card.dataset.category || 'branch').toLowerCase().trim();
+        const cardCity = (card.dataset.city || '').toLowerCase().trim();
+
+        const matchCat = (currentStoreCategoryFilter === 'all') || (cardCat === currentStoreCategoryFilter);
+        const matchCity = (currentStoreCityFilter === 'all') || cardCity.includes(currentStoreCityFilter) || currentStoreCityFilter.includes(cardCity);
+
+        if (matchCat && matchCity) {
+            card.style.display = 'flex';
+        } else {
+            card.style.display = 'none';
+        }
+    });
+}
+
+function filterStoreCardsByType(type, btnEl) {
+    currentStoreCategoryFilter = (type || 'all').toLowerCase().trim();
+    const tabs = document.querySelectorAll('.store-hierarchy-tab');
+    tabs.forEach(t => t.classList.remove('active'));
+    if (btnEl) btnEl.classList.add('active');
+    applyStoreCardFilters();
+}
+
+function filterStoreCardsByCity(city, btnEl) {
+    currentStoreCityFilter = (city || 'all').toLowerCase().trim();
+    const pills = document.querySelectorAll('.store-city-pill');
+    pills.forEach(p => p.classList.remove('active'));
+    if (btnEl) btnEl.classList.add('active');
+    applyStoreCardFilters();
+}
+
+function selectPreorderStore(storeId, sellerId, skipScheduleReload, isUserInitiated) {
+    const sIdStr = String(storeId);
+    const sellerIdNum = parseInt(sellerId) || 1;
+
+    // 1. Update Card Selected States
+    const allCards = document.querySelectorAll('.store-card-item');
+    allCards.forEach(c => {
+        const btn = c.querySelector('.store-card-select-btn');
+        if (String(c.dataset.storeId) === sIdStr) {
+            c.classList.add('selected');
+            if (btn) btn.innerHTML = '<i class="fas fa-check"></i> Selected Store';
+        } else {
+            c.classList.remove('selected');
+            if (btn) btn.innerHTML = '<i class="fas fa-store"></i> Select Store';
+        }
+    });
+
+    // 2. Reveal Menu & Hide Placeholder Prompt
+    const menuWrap = document.getElementById('dishesMenuWrapper');
+    const promptBox = document.getElementById('storeSelectPromptBox');
+    if (menuWrap) {
+        menuWrap.classList.add('is-visible');
+    }
+    if (promptBox) {
+        promptBox.style.display = 'none';
+    }
+
+    // 3. Sync hidden / Step 2 selects
+    const step1Select = document.getElementById('step1StoreSelect');
+    const step2Select = document.getElementById('storeSelect');
+    if (step1Select && step1Select.value !== sIdStr) {
+        step1Select.value = sIdStr;
+    }
+    if (step2Select && step2Select.value !== sIdStr) {
+        step2Select.value = sIdStr;
+    }
+
+    // 4. Update active store text & badges
+    const targetCard = document.getElementById('store-card-' + sIdStr) || document.querySelector(`.store-card-item[data-store-id="${sIdStr}"]`);
+    if (targetCard) {
+        const storeName = targetCard.dataset.name || 'Main Branch';
+        const badgeNameEl = document.getElementById('step1ActiveStoreName');
+        const nameEl = document.getElementById('step1StoreNameDisplay');
+        if (badgeNameEl) badgeNameEl.textContent = storeName;
+        if (nameEl) nameEl.textContent = storeName;
+    }
+
+    // 5. Update global activeSellerId
+    window.activeSellerId = sellerIdNum;
+
+    // 6. Sync addresses & Leaflet Map
     syncPreorderStoreAddress();
     initStoreMap();
+
+    // 7. Reload Roasting Schedule for selected store if schedule widget is present
+    if (!skipScheduleReload && typeof loadCalendarMonth === 'function' && typeof currentCalMonth !== 'undefined') {
+        loadCalendarMonth(currentCalMonth);
+    }
+
+    // 8. Smoothly scroll to the dishes menu if user clicked
+    if (isUserInitiated && menuWrap) {
+        setTimeout(() => {
+            menuWrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 80);
+    }
+}
+
+function onStep1StoreChange(val) {
+    const step1Select = document.getElementById('step1StoreSelect');
+    if (!step1Select) return;
+    const selectedOpt = step1Select.options[step1Select.selectedIndex];
+    const sellerId = selectedOpt ? (selectedOpt.dataset.sellerId || 1) : 1;
+    selectPreorderStore(val, sellerId, false, true);
+}
+
+function onStoreChange(val) {
+    const step2Select = document.getElementById('storeSelect');
+    if (!step2Select) return;
+    const selectedOpt = step2Select.options[step2Select.selectedIndex];
+    const sellerId = selectedOpt ? (selectedOpt.dataset.sellerId || 1) : 1;
+    selectPreorderStore(val, sellerId, false, true);
+}
+
+function prioritizeAndSelectNearbyReservationStore() {
+    const step1Select = document.getElementById('step1StoreSelect');
+    const step2Select = document.getElementById('storeSelect');
+    const cardsGrid = document.getElementById('storeCardsGrid');
+
+    let userLat = 14.3294;
+    let userLng = 120.9367;
+    let hasUserGps = false;
+
+    try {
+        const raw = localStorage.getItem('market_address_payload');
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && Number.isFinite(parseFloat(parsed.latitude)) && Number.isFinite(parseFloat(parsed.longitude))) {
+                const pLat = parseFloat(parsed.latitude);
+                const pLng = parseFloat(parsed.longitude);
+                if (pLat !== 0 && pLng !== 0) {
+                    userLat = pLat;
+                    userLng = pLng;
+                    hasUserGps = true;
+                }
+            }
+        }
+    } catch (e) {}
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const requestedStoreId = urlParams.get('store_id') || urlParams.get('branch_id');
+    const requestedSellerId = urlParams.get('seller_id');
+
+    // 1. Calculate distances for Select Options
+    const selects = [step1Select, step2Select].filter(Boolean);
+    selects.forEach(sel => {
+        const options = Array.from(sel.options);
+        options.forEach(opt => {
+            const lat = parseFloat(opt.dataset.lat) || 14.3294;
+            const lng = parseFloat(opt.dataset.lng) || 120.9367;
+            const distKm = haversineKm(userLat, userLng, lat, lng);
+            opt.dataset.distance = distKm.toFixed(2);
+            const hasRes = opt.dataset.reservation === '1';
+            const baseName = opt.dataset.name || 'Branch';
+            const city = opt.dataset.city || '';
+
+            let label = baseName + (city ? ' — ' + city : '');
+            if (hasUserGps) {
+                label += ` (~${distKm.toFixed(1)} km away)`;
+            }
+            if (hasRes) {
+                label += ' ★ Reservation Ready';
+            }
+            opt.textContent = label;
+        });
+
+        options.sort((a, b) => {
+            const resA = a.dataset.reservation === '1' ? 1 : 0;
+            const resB = b.dataset.reservation === '1' ? 1 : 0;
+            if (resA !== resB) return resB - resA;
+            const distA = parseFloat(a.dataset.distance || '999');
+            const distB = parseFloat(b.dataset.distance || '999');
+            return distA - distB;
+        });
+
+        sel.innerHTML = '';
+        options.forEach(opt => sel.appendChild(opt));
+    });
+
+    // 2. Calculate distances and sort Store Cards in Grid
+    if (cardsGrid) {
+        const cardElements = Array.from(cardsGrid.querySelectorAll('.store-card-item'));
+        cardElements.forEach(card => {
+            const lat = parseFloat(card.dataset.lat) || 14.3294;
+            const lng = parseFloat(card.dataset.lng) || 120.9367;
+            const distKm = haversineKm(userLat, userLng, lat, lng);
+            card.dataset.distance = distKm.toFixed(2);
+
+            const distValEl = card.querySelector('.dist-val');
+            if (distValEl) {
+                distValEl.textContent = hasUserGps ? `~${distKm.toFixed(1)} km away` : 'Near Cavite';
+            }
+        });
+
+        cardElements.sort((a, b) => {
+            const resA = a.dataset.reservation === '1' ? 1 : 0;
+            const resB = b.dataset.reservation === '1' ? 1 : 0;
+            if (resA !== resB) return resB - resA;
+            const distA = parseFloat(a.dataset.distance || '999');
+            const distB = parseFloat(b.dataset.distance || '999');
+            return distA - distB;
+        });
+
+        cardsGrid.innerHTML = '';
+        cardElements.forEach(c => cardsGrid.appendChild(c));
+    }
+
+    // 3. Determine initial store to select only if explicitly passed in URL
+    let initialStoreId = null;
+    let initialSellerId = null;
+
+    if (requestedStoreId) {
+        const found = document.querySelector(`.store-card-item[data-store-id="${requestedStoreId}"]`);
+        if (found) {
+            initialStoreId = requestedStoreId;
+            initialSellerId = found.dataset.sellerId;
+        }
+    } else if (requestedSellerId) {
+        const found = document.querySelector(`.store-card-item[data-seller-id="${requestedSellerId}"]`);
+        if (found) {
+            initialStoreId = found.dataset.storeId;
+            initialSellerId = requestedSellerId;
+        }
+    }
+
+    if (initialStoreId) {
+        selectPreorderStore(initialStoreId, initialSellerId, true, false);
+    } else {
+        // No pre-selected store in URL: show prompt and keep dishes hidden until user picks a store
+        const promptBox = document.getElementById('storeSelectPromptBox');
+        const menuWrap = document.getElementById('dishesMenuWrapper');
+        if (promptBox) promptBox.style.display = 'block';
+        if (menuWrap) menuWrap.classList.remove('is-visible');
+        syncPreorderStoreAddress();
+        initStoreMap();
+    }
 }
 
 function syncPreorderStoreAddress() {
@@ -2622,8 +3716,16 @@ document.addEventListener('DOMContentLoaded', function() {
     setupButtons();
     setupFilters();
     setupProgressNavigation();
-    syncPreorderStoreAddress();
+    prioritizeAndSelectNearbyReservationStore();
     loadCalendarMonth(currentCalMonth);
+
+    window.addEventListener('storage', function (e) {
+        if (e.key === 'market_address_payload' || e.key === 'market_address') {
+            prioritizeAndSelectNearbyReservationStore();
+        }
+    });
+    window.addEventListener('marketAddressChanged', prioritizeAndSelectNearbyReservationStore);
+    window.addEventListener('marketAddressUpdated', prioritizeAndSelectNearbyReservationStore);
     
     // Auto-add product if routed with product_id (e.g. from Menu 'Reserve Event Date')
     const preselectedProductId = <?php echo (int)$requested_product_id; ?>;

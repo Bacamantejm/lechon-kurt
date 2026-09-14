@@ -53,11 +53,13 @@ foreach ($favorite_store_keys as $raw_key) {
 
     if (isset($store_lookup_cache[$store_key])) {
         $card = $store_lookup_cache[$store_key];
-    } elseif (preg_match('/^seller-(\d+)$/', $store_key, $matches)) {
+    } elseif (preg_match('/^seller[-_](\d+)$/', $store_key, $matches)) {
         $seller_id = (int)$matches[1];
         $sql = "SELECT
                     COALESCE(NULLIF(TRIM(business_name), ''), full_name) AS store_name,
-                    address
+                    address,
+                    business_logo,
+                    profile_image
                 FROM users
                 WHERE id = ?
                 LIMIT 1";
@@ -74,6 +76,11 @@ foreach ($favorite_store_keys as $raw_key) {
                 $card['location'] = trim((string)($row['address'] ?? 'Marketplace storefront'));
                 $card['subtitle'] = 'Partner store';
                 $card['link'] = 'menu.php?seller_id=' . $seller_id;
+                if (!empty($row['business_logo'])) {
+                    $card['image'] = favoriteAssetPath((string)$row['business_logo'], 'images/store-bg.jpg');
+                } elseif (!empty($row['profile_image'])) {
+                    $card['image'] = favoriteAssetPath((string)$row['profile_image'], 'images/store-bg.jpg');
+                }
             }
         }
 
@@ -89,7 +96,7 @@ foreach ($favorite_store_keys as $raw_key) {
                 $card['image'] = favoriteAssetPath((string)$image_row['image'], 'images/store-bg.jpg');
             }
         }
-    } elseif (preg_match('/^branch-(\d+)$/', $store_key, $matches)) {
+    } elseif (preg_match('/^branch[-_](\d+)$/', $store_key, $matches)) {
         $branch_id = (int)$matches[1];
         $stmt = mysqli_prepare($conn, "SELECT store_name, address, city, province FROM store_locations WHERE store_id = ? LIMIT 1");
         if ($stmt) {
@@ -108,7 +115,7 @@ foreach ($favorite_store_keys as $raw_key) {
                 ])));
                 if ($card['location'] === '') $card['location'] = 'Pickup branch';
                 $card['subtitle'] = 'Pickup branch';
-                $card['link'] = 'locations.php';
+                $card['link'] = 'menu.php?branch_id=' . $branch_id;
             }
         }
     } elseif ($store_key === 'platform-main') {
@@ -387,6 +394,112 @@ include 'includes/header.php';
 
 .btn-empty-action:hover {
     background: #981b15;
+}
+
+/* ==========================================================================
+   FAVORITES PAGE DARK THEME ENGINE
+   ========================================================================== */
+body.dark-mode .favorites-page {
+    background: #0f172a !important;
+}
+
+body.dark-mode .favorites-head {
+    border-bottom-color: #334155 !important;
+}
+
+body.dark-mode .favorites-head h1 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .favorites-head p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .favorite-section-head h2 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .favorite-count {
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .favorite-card {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+body.dark-mode .favorite-card:hover {
+    border-color: #475569 !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35) !important;
+}
+
+body.dark-mode .favorite-toggle {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #ef4444 !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+}
+
+body.dark-mode .favorite-toggle.is-active {
+    background: #1e293b !important;
+    color: #ef4444 !important;
+}
+
+body.dark-mode .favorite-subtitle {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .favorite-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .favorite-meta {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .favorite-link {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .favorite-link:hover {
+    background: #334155 !important;
+    border-color: #475569 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .favorite-empty {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .favorite-empty i {
+    color: #64748b !important;
+}
+
+body.dark-mode .favorite-empty-text {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .favorite-price strong {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .stock-badge.in-stock {
+    background: rgba(2, 122, 72, 0.15) !important;
+    border-color: rgba(74, 222, 128, 0.4) !important;
+    color: #4ade80 !important;
+}
+
+body.dark-mode .stock-badge.out-stock {
+    background: rgba(179, 38, 30, 0.15) !important;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+    color: #f87171 !important;
 }
 </style>
 

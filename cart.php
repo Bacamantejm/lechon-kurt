@@ -510,6 +510,128 @@ $downpayment = round($grand_total * 0.30, 2);
         grid-template-columns: 1fr;
     }
 }
+
+/* ==========================================================================
+   CART PAGE DARK THEME ENGINE
+   ========================================================================== */
+body.dark-mode .cart-page {
+    background: #0f172a !important;
+}
+
+body.dark-mode .cart-page-header h1 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cart-page-header p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .cart-header-stat {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .cart-header-stat-label {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .cart-header-stat strong {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cart-items-panel,
+body.dark-mode .cart-summary-panel {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25) !important;
+}
+
+body.dark-mode .cart-panel-head h2,
+body.dark-mode .cart-summary-panel h2 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cart-panel-note {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .cart-page-item {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .cart-page-item:hover {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
+    border-color: #475569 !important;
+}
+
+body.dark-mode .cart-page-item-details h3 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cart-page-item-details p {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .cart-page-qty button {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cart-page-qty button:hover {
+    background: #334155 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .cart-page-qty span {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cart-page-item-total {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .summary-row {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .summary-row span:last-child {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .summary-row.grand span:last-child {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .checkout-choice {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .checkout-choice-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .checkout-choice-note {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .checkout-security-note {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .cart-empty-state {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .cart-empty-state i {
+    color: #64748b !important;
+}
+
+body.dark-mode .cart-empty-state p {
+    color: #cbd5e1 !important;
+}
 </style>
 
 <script>

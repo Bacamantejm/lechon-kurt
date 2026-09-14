@@ -25,7 +25,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $new_password     = $_POST['new_password']     ?? '';
     $confirm_password = $_POST['confirm_password'] ?? '';
 
-    // Re-verify token validity for POST processing
     $user_id = validateResetToken($conn, $token);
 
     if (!$user_id) {
@@ -54,120 +53,146 @@ $page_title = 'Create New Password | Lechon Delights';
 include 'includes/header.php';
 ?>
 
-<!-- SweetAlert2 CSS -->
-<link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
-
 <style>
-/* Main Layout Styles */
+/* Reset Password Page Layout */
 .login-page-container {
-    background: #ffffff !important;
+    background: #f8f9fa !important;
     display: flex;
     align-items: stretch;
     justify-content: stretch;
-    height: calc(100vh - var(--site-header-offset, 64px)) !important;
-    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
-    overflow: hidden !important;
+    min-height: calc(100vh - var(--site-header-offset, 64px));
     padding: 0 !important;
 }
 
 .login-wrapper {
     max-width: 100% !important;
     width: 100%;
-    height: calc(100vh - var(--site-header-offset, 64px)) !important;
-    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
-    background-color: white;
-    border-radius: 0 !important;
-    border: none;
-    box-shadow: none !important;
+    min-height: calc(100vh - var(--site-header-offset, 64px));
+    background-color: #ffffff;
     display: flex;
     flex-direction: row;
     margin: 0 !important;
-    animation: fadeIn 0.6s ease-out;
     overflow: hidden;
 }
 
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(30px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-/* Left Side - Brand/Info */
+/* Left Brand Showcase */
 .login-left {
-    width: 50%;
-    background: linear-gradient(135deg, #b3261e 0%, #8f261a 100%) !important;
+    width: 48%;
+    background: linear-gradient(135deg, #182234 0%, #1e293b 60%, #0f172a 100%) !important;
     display: flex !important;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 40px !important;
+    padding: 48px 40px !important;
     text-align: center;
     position: relative;
     overflow: hidden;
-    height: calc(100vh - var(--site-header-offset, 64px)) !important;
-    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    color: #ffffff !important;
+    border-right: 1px solid #334155;
+}
+
+.brand-showcase-card {
+    position: relative;
+    z-index: 10;
+    max-width: 420px;
+}
+
+.brand-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    background: rgba(179, 38, 30, 0.25);
+    border: 1px solid rgba(179, 38, 30, 0.4);
+    border-radius: 999px;
+    color: #f87171;
+    font-size: 0.82rem;
+    font-weight: 700;
+    margin-bottom: 20px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
 }
 
 .brand-title {
     font-family: 'Outfit', sans-serif;
-    font-size: 3.8rem;
+    font-size: 2.8rem;
     font-weight: 900;
-    letter-spacing: -1.5px;
-    margin: 0;
+    letter-spacing: -0.03em;
+    margin: 0 0 12px 0;
     color: #ffffff !important;
-    text-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+    line-height: 1.15;
 }
 
 .brand-subtitle {
-    font-size: 1.25rem;
-    color: rgba(255, 255, 255, 0.9) !important;
-    margin-top: 15px;
-    max-width: 340px;
-    font-weight: 600;
+    font-size: 1.05rem;
+    color: #94a3b8 !important;
+    margin: 0 0 32px 0;
+    font-weight: 500;
     line-height: 1.6;
 }
 
-.floating-pigs-container {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    z-index: 1;
+.brand-feature-list {
+    display: grid;
+    gap: 14px;
+    text-align: left;
+    margin-top: 10px;
 }
 
-.floating-pig {
-    position: absolute;
-    font-size: 3.5rem;
-    opacity: 0.16;
-    animation: floatPig 8s ease-in-out infinite alternate;
+.brand-feature-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(51, 65, 85, 0.6);
+    border-radius: 12px;
 }
 
-.pig-1 { top: 10%; left: 15%; animation-duration: 9s; font-size: 4rem; }
-.pig-2 { top: 25%; right: 15%; animation-duration: 11s; animation-delay: 1s; font-size: 3.5rem; }
-.pig-3 { bottom: 20%; left: 20%; animation-duration: 10s; animation-delay: 2s; font-size: 4.5rem; }
-.pig-4 { bottom: 15%; right: 25%; animation-duration: 8s; animation-delay: 0.5s; font-size: 3rem; }
-.pig-5 { top: 50%; left: 40%; animation-duration: 12s; animation-delay: 1.5s; font-size: 3.8rem; }
-
-@keyframes floatPig {
-    0% { transform: translateY(0) rotate(0deg) scale(1); }
-    50% { transform: translateY(-20px) rotate(8deg) scale(1.05); }
-    100% { transform: translateY(10px) rotate(-8deg) scale(0.95); }
+.brand-feature-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: rgba(179, 38, 30, 0.2);
+    color: #ef4444;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
 }
 
-/* Right Side - Forms */
+.brand-feature-text h4 {
+    margin: 0 0 2px 0;
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #f8fafc;
+}
+
+.brand-feature-text p {
+    margin: 0;
+    font-size: 0.8rem;
+    color: #94a3b8;
+}
+
+/* Right Side - Form Section */
 .login-right {
-    width: 50%;
+    width: 52%;
     background: #ffffff;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: flex-start;
-    padding: 44px 24px 36px !important;
-    height: calc(100vh - var(--site-header-offset, 64px)) !important;
-    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
-    overflow-y: auto !important;
+    justify-content: center;
+    padding: 48px 32px !important;
+    overflow-y: auto;
     box-sizing: border-box;
+}
+
+.auth-form-card {
+    max-width: 440px;
+    width: 100%;
+    margin: auto 0;
+    display: flex;
+    flex-direction: column;
 }
 
 .login-header {
@@ -175,29 +200,77 @@ include 'includes/header.php';
     text-align: center;
 }
 
+.brand-logo-row {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    text-decoration: none;
+}
+
+.brand-logo-row img {
+    width: 44px;
+    height: 44px;
+    object-fit: cover;
+    border-radius: 12px;
+    border: 1px solid #eaecf0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.brand-logo-row span {
+    font-size: 1.45rem;
+    font-weight: 800;
+    color: #101828;
+    font-family: 'Outfit', sans-serif;
+}
+
 .login-header h2 {
-    color: #171922;
-    font-size: 1.8rem;
-    margin-bottom: 10px;
-    font-weight: 700;
+    color: #101828;
+    font-size: 1.75rem;
+    font-weight: 800;
+    margin: 0 0 8px 0;
+    font-family: 'Outfit', sans-serif;
 }
 
 .login-header p {
-    color: #7b6d64;
-    font-size: 1rem;
+    color: #475467;
+    font-size: 0.92rem;
     line-height: 1.5;
+    margin: 0;
 }
 
-/* Form Styles */
-.login-form {
-    animation: slideUp 0.5s ease;
+/* Inline Alert Banners */
+.alert {
+    padding: 14px 18px;
+    border-radius: 12px;
+    margin-bottom: 22px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    font-size: 0.9rem;
+    line-height: 1.45;
 }
 
-@keyframes slideUp {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
+.alert-error {
+    background-color: #fff1f0;
+    border: 1px solid #fee4e2;
+    color: #b3261e;
 }
 
+.alert-success {
+    background-color: #ecfdf3;
+    border: 1px solid #abefc6;
+    color: #027a48;
+}
+
+.alert i {
+    font-size: 1.15rem;
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+/* Form Controls */
 .form-group {
     margin-bottom: 20px;
 }
@@ -205,34 +278,33 @@ include 'includes/header.php';
 .form-group label {
     display: block;
     margin-bottom: 8px;
-    color: #2a211d;
+    color: #344054;
     font-weight: 700;
-    font-size: 0.95rem;
+    font-size: 0.9rem;
 }
 
 .form-control {
     width: 100%;
-    padding: 15px 48px 15px 50px;
+    padding: 14px 44px 14px 44px;
     border: 1px solid #d0d5dd;
     border-radius: 10px;
-    font-size: 1rem;
-    transition: all 0.3s;
+    font-size: 0.95rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
     font-family: inherit;
     background-color: #ffffff;
-    color: #171922;
+    color: #101828;
     box-sizing: border-box;
 }
 
 .form-control:focus {
     outline: none;
     border-color: #b3261e;
-    background-color: #ffffff;
-    box-shadow: 0 0 0 4px rgba(179, 38, 30, 0.12);
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.15);
 }
 
 .form-control.is-error {
     border-color: #b3261e;
-    box-shadow: 0 0 0 4px rgba(179, 38, 30, 0.15);
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.15);
 }
 
 .input-with-icon {
@@ -241,282 +313,410 @@ include 'includes/header.php';
 
 .input-with-icon .input-icon {
     position: absolute;
-    left: 18px;
+    left: 16px;
     top: 50%;
     transform: translateY(-50%);
-    color: #999;
-    font-size: 1.1rem;
+    color: #667085;
+    font-size: 1rem;
     pointer-events: none;
-    transition: color 0.3s;
 }
 
-.toggle-password {
+.input-with-icon .toggle-password {
     position: absolute;
-    right: 15px;
+    right: 12px;
     top: 50%;
     transform: translateY(-50%);
     background: none;
     border: none;
-    color: #666;
+    color: #667085;
     cursor: pointer;
-    padding: 8px;
-    font-size: 1.1rem;
-    transition: color 0.3s;
+    font-size: 1rem;
+    padding: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-.toggle-password:hover {
-    color: #b3261e;
+.input-with-icon .toggle-password:hover {
+    color: #101828;
 }
 
-/* Password strength meter */
+/* Password Strength Meter */
 .pw-strength-wrap {
-    margin-top: 10px;
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
 .pw-strength-bars {
     display: flex;
-    gap: 6px;
-    height: 4px;
-    margin-bottom: 6px;
+    gap: 4px;
+    flex: 1;
 }
 
 .pw-bar {
+    height: 4px;
     flex: 1;
-    border-radius: 4px;
-    background: #e8d4c3;
-    transition: background 0.3s;
+    background: #eaecf0;
+    border-radius: 999px;
+    transition: background-color 0.3s ease;
 }
 
-.pw-bar.active-weak   { background: #dc2626; }
-.pw-bar.active-fair   { background: #f59e0b; }
-.pw-bar.active-good   { background: #16a34a; }
-.pw-bar.active-strong { background: #15803d; }
+.pw-bar.active-weak { background: #ef4444; }
+.pw-bar.active-fair { background: #f59e0b; }
+.pw-bar.active-good { background: #10b981; }
+.pw-bar.active-strong { background: #059669; }
 
 .pw-strength-label {
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     font-weight: 700;
-    color: #7b6d64;
-    transition: color 0.2s;
+    min-width: 45px;
+    text-align: right;
 }
 
-/* Requirements checklist */
+/* Requirements Checklist */
 .pw-reqs {
-    margin: 12px 0 24px;
-    display: flex;
-    flex-direction: column;
+    display: grid;
     gap: 6px;
+    margin: 12px 0 20px 0;
+    padding: 12px 14px;
+    background: #f8f9fa;
+    border: 1px solid #eaecf0;
+    border-radius: 10px;
 }
 
 .pw-req-item {
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 0.85rem;
-    color: #7b6d64;
-    transition: color 0.2s;
+    font-size: 0.8rem;
+    color: #667085;
+    transition: color 0.2s ease;
 }
 
 .pw-req-item i {
-    width: 16px;
-    text-align: center;
-    color: #d0c0b6;
-    transition: color 0.2s;
+    font-size: 0.75rem;
+    color: #98a2b3;
 }
 
 .pw-req-item.met {
-    color: #15803d;
+    color: #027a48;
     font-weight: 600;
 }
 
 .pw-req-item.met i {
-    color: #15803d;
+    color: #12b76a;
 }
 
-/* Button Styles */
+/* Action Buttons */
 .btn-primary {
     width: 100%;
-    padding: 16px;
-    background: linear-gradient(135deg, #b3261e 0%, #ef6b2e 100%);
-    color: white;
+    padding: 14px;
+    background: #b3261e;
+    color: #ffffff;
     border: none;
     border-radius: 10px;
-    font-size: 1.1rem;
-    font-weight: 600;
+    font-size: 1rem;
+    font-weight: 700;
     cursor: pointer;
-    transition: all 0.3s;
-    display: flex;
+    transition: background-color 0.2s ease, transform 0.15s ease;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
-    position: relative;
-    overflow: hidden;
-    letter-spacing: 0.5px;
-    margin-top: 10px;
-    box-shadow: 0 12px 28px rgba(179, 38, 30, 0.26);
+    gap: 8px;
+    margin-top: 6px;
+    text-decoration: none;
 }
 
 .btn-primary:hover:not(:disabled) {
-    transform: translateY(-3px);
-    box-shadow: 0 15px 34px rgba(179, 38, 30, 0.34);
-}
-
-.btn-primary:active:not(:disabled) {
+    background: #981b15;
     transform: translateY(-1px);
 }
 
+.btn-primary:active:not(:disabled) {
+    transform: translateY(0);
+}
+
 .btn-primary:disabled {
-    background: #cccccc;
+    background: #94a3b8;
     cursor: not-allowed;
     transform: none;
-    box-shadow: none;
 }
 
-.btn-primary.loading {
-    color: transparent;
-}
-
-.btn-primary.loading::after {
-    content: '';
-    position: absolute;
-    width: 22px;
-    height: 22px;
-    border: 3px solid rgba(255, 255, 255, 0.3);
-    border-top-color: white;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
-
-/* Auth Link */
+/* Auth Links */
 .auth-link {
     text-align: center;
-    margin-top: 25px;
-    color: #7b6d64;
-    font-size: 0.95rem;
+    margin-top: 24px;
+    color: #475467;
+    font-size: 0.92rem;
     padding-top: 20px;
-    border-top: 1px solid #efddcd;
+    border-top: 1px solid #eaecf0;
 }
 
 .auth-link a {
     color: #b3261e !important;
     text-decoration: none !important;
     font-weight: 700 !important;
-    transition: all 0.3s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .auth-link a:hover {
-    color: #8f261a !important;
+    color: #981b15 !important;
     text-decoration: underline !important;
 }
 
-/* Status State Box */
+/* State Box for Expired Link */
 .rp-state-box {
     text-align: center;
-    padding: 10px 0 20px;
+    padding: 24px 16px;
 }
 
 .rp-state-icon {
-    width: 72px;
-    height: 72px;
+    width: 64px;
+    height: 64px;
     border-radius: 50%;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    margin: 0 auto 20px;
-    font-size: 28px;
+    font-size: 1.8rem;
+    margin-bottom: 16px;
 }
 
-.rp-state-icon.success { background: #dcfce7; color: #15803d; }
-.rp-state-icon.error   { background: #fee2e2; color: #b3261e; }
+.rp-state-icon.error {
+    background: #fff1f0;
+    color: #b3261e;
+    border: 1px solid #fee4e2;
+}
 
-.rp-state-box h2 { margin: 0 0 10px; color: #171922; font-size: 1.5rem; font-weight: 800; }
-.rp-state-box p  { margin: 0; color: #7b6d64; font-size: 0.95rem; line-height: 1.6; }
+.rp-state-box h2 {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: #101828;
+    margin: 0 0 8px 0;
+}
 
-/* Responsive Design */
+.rp-state-box p {
+    color: #475467;
+    font-size: 0.92rem;
+    line-height: 1.5;
+    margin: 0;
+}
+
+/* ==========================================================================
+   RESET PASSWORD DARK MODE ENGINE
+   ========================================================================== */
+body.dark-mode,
+body.dark-mode .login-page-container {
+    background: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .login-wrapper {
+    background: #0f172a !important;
+}
+
+body.dark-mode .login-left {
+    background: linear-gradient(135deg, #090d16 0%, #111827 60%, #0f172a 100%) !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .brand-feature-item {
+    background: rgba(15, 23, 42, 0.7) !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .login-right {
+    background: #0f172a !important;
+}
+
+body.dark-mode .brand-logo-row span,
+body.dark-mode .login-header h2,
+body.dark-mode .rp-state-box h2 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .login-header p,
+body.dark-mode .rp-state-box p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .form-group label {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .form-control {
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .form-control:focus {
+    background-color: #0b1120 !important;
+    border-color: #b3261e !important;
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.3) !important;
+}
+
+body.dark-mode .input-with-icon .input-icon,
+body.dark-mode .input-with-icon .toggle-password {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .input-with-icon .toggle-password:hover {
+    color: #ffffff !important;
+}
+
+body.dark-mode .pw-reqs {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .pw-req-item {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .pw-req-item.met {
+    color: #4ade80 !important;
+}
+
+body.dark-mode .pw-req-item.met i {
+    color: #4ade80 !important;
+}
+
+body.dark-mode .pw-bar {
+    background: #334155 !important;
+}
+
+body.dark-mode .auth-link {
+    color: #94a3b8 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .auth-link a {
+    color: #f87171 !important;
+}
+
+body.dark-mode .auth-link a:hover {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .alert-error {
+    background-color: rgba(179, 38, 30, 0.15) !important;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+    color: #f87171 !important;
+}
+
+body.dark-mode .alert-success {
+    background-color: rgba(2, 122, 72, 0.15) !important;
+    border-color: rgba(74, 222, 128, 0.3) !important;
+    color: #4ade80 !important;
+}
+
+body.dark-mode .rp-state-icon.error {
+    background: rgba(179, 38, 30, 0.15) !important;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+    color: #f87171 !important;
+}
+
+/* Responsive */
 @media (max-width: 850px) {
     .login-wrapper {
         flex-direction: column;
     }
-    .login-right {
-        width: 100%;
-        height: auto;
-        min-height: calc(100vh - 64px);
-        padding: 40px 20px !important;
-    }
     .login-left {
         display: none !important;
     }
-    input, select, textarea, .form-control {
-        font-size: 16px !important;
+    .login-right {
+        width: 100%;
+        padding: 40px 20px !important;
+        min-height: calc(100vh - 64px);
     }
 }
 </style>
 
 <div class="login-page-container">
     <div class="login-wrapper">
-        <!-- Left Side: Branding Panel with Floating Mascot Pigs -->
+        <!-- Left Side: Brand Showcase Panel -->
         <div class="login-left">
-            <div class="floating-pigs-container">
-                <div class="floating-pig pig-1">🐷</div>
-                <div class="floating-pig pig-2">🐷</div>
-                <div class="floating-pig pig-3">🐷</div>
-                <div class="floating-pig pig-4">🐷</div>
-                <div class="floating-pig pig-5">🐷</div>
-            </div>
-            <div class="brand-content" style="position: relative; z-index: 10;">
+            <div class="brand-showcase-card">
+                <div class="brand-badge">
+                    <i class="fas fa-shield-alt"></i> Security Center
+                </div>
                 <h1 class="brand-title">Lechon Delights</h1>
-                <p class="brand-subtitle">Cavite's Finest Lechon at Your Doorsteps</p>
+                <p class="brand-subtitle">Set your new strong password to keep your account safe and continue ordering your favorite dishes.</p>
+                
+                <div class="brand-feature-list">
+                    <div class="brand-feature-item">
+                        <div class="brand-feature-icon">
+                            <i class="fas fa-lock"></i>
+                        </div>
+                        <div class="brand-feature-text">
+                            <h4>Password Requirements</h4>
+                            <p>Minimum 8 characters with numbers and uppercase</p>
+                        </div>
+                    </div>
+                    <div class="brand-feature-item">
+                        <div class="brand-feature-icon">
+                            <i class="fas fa-key"></i>
+                        </div>
+                        <div class="brand-feature-text">
+                            <h4>Encrypted Storage</h4>
+                            <p>Protected by modern cryptographic standards</p>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <!-- Reset Password Form Section -->
+        <!-- Right Side: Reset Password Form -->
         <div class="login-right">
-            <div style="max-width: 440px; width: 100%; margin: auto 0; display: flex; flex-direction: column;">
+            <div class="auth-form-card">
                 <div class="login-header">
-                    <div style="display: inline-flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 12px;">
-                        <img src="assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 48px; height: 48px; object-fit: cover; border-radius: 12px; display: block; border: 1px solid #efddcd; box-shadow: 0 4px 12px rgba(0,0,0,0.06);">
-                        <span style="font-size: 1.6rem; font-weight: 800; color: #171922; font-family: 'Outfit', sans-serif;">Lechon Delights</span>
-                    </div>
-                    <h2><?php echo $success ? 'Password Updated' : ($is_valid_token ? 'Create New Password' : 'Link Expired'); ?></h2>
-                    <p><?php echo $success ? 'Your account is secured.' : ($is_valid_token ? 'Choose a strong password for your account.' : 'Request a new password reset link.'); ?></p>
+                    <a href="index.php" class="brand-logo-row">
+                        <img src="assets/images/logo.jpg" alt="Lechon Delights Logo">
+                        <span>Lechon Delights</span>
+                    </a>
+                    <h2>Create New Password</h2>
+                    <p>Enter your new password below to regain full access to your account.</p>
                 </div>
+
+                <?php if ($error && $is_valid_token): ?>
+                <div class="alert alert-error">
+                    <i class="fas fa-circle-exclamation"></i>
+                    <div><?php echo htmlspecialchars($error); ?></div>
+                </div>
+                <?php endif; ?>
 
                 <?php if ($success): ?>
-                <!-- Success state -->
-                <div class="rp-state-box">
-                    <div class="rp-state-icon success">
-                        <i class="fas fa-check"></i>
-                    </div>
-                    <h2>All Done!</h2>
-                    <p><?php echo htmlspecialchars($success); ?></p>
-                    <a href="login.php" class="btn-primary" style="text-decoration:none;margin-top:24px;">
-                        <i class="fas fa-sign-in-alt"></i> <span>Sign In Now</span>
+                <div class="alert alert-success">
+                    <i class="fas fa-circle-check"></i>
+                    <div><?php echo htmlspecialchars($success); ?></div>
+                </div>
+                <div style="margin-top: 14px;">
+                    <a href="login.php" class="btn-primary">
+                        <i class="fas fa-arrow-right-to-bracket"></i> Sign In Now
                     </a>
                 </div>
-
                 <?php elseif (!$is_valid_token): ?>
-                <!-- Invalid / expired token state -->
+                <!-- Invalid / Expired Token State -->
                 <div class="rp-state-box">
                     <div class="rp-state-icon error">
-                        <i class="fas fa-exclamation-triangle"></i>
+                        <i class="fas fa-triangle-exclamation"></i>
                     </div>
-                    <h2>Link Expired</h2>
+                    <h2>Reset Link Expired</h2>
                     <p><?php echo htmlspecialchars($error); ?></p>
-                    <a href="reset_password_request.php" class="btn-primary" style="text-decoration:none;margin-top:24px;">
-                        <i class="fas fa-redo"></i> <span>Request a New Link</span>
+                    <a href="reset_password_request.php" class="btn-primary" style="margin-top: 20px;">
+                        <i class="fas fa-rotate-right"></i> <span>Request New Reset Link</span>
                     </a>
                 </div>
-
                 <?php else: ?>
-                <!-- Password reset form -->
+                <!-- Password Reset Form -->
                 <form method="POST" id="resetPasswordForm" class="login-form" autocomplete="off">
                     <input type="hidden" name="token" value="<?php echo htmlspecialchars($token); ?>">
                     <input type="hidden" name="reset_password_submit" value="1">
 
-                    <!-- New password -->
                     <div class="form-group">
                         <label for="new_password">New Password</label>
                         <div class="input-with-icon">
@@ -533,7 +733,7 @@ include 'includes/header.php';
                             </button>
                         </div>
 
-                        <!-- Strength indicator -->
+                        <!-- Strength meter -->
                         <div class="pw-strength-wrap" id="strengthWrap" style="display:none;">
                             <div class="pw-strength-bars">
                                 <div class="pw-bar" id="bar1"></div>
@@ -545,7 +745,7 @@ include 'includes/header.php';
                         </div>
                     </div>
 
-                    <!-- Requirements checklist -->
+                    <!-- Requirements Checklist -->
                     <div class="pw-reqs" id="pwReqs">
                         <div class="pw-req-item" id="req-len">
                             <i class="fas fa-circle-dot"></i>
@@ -565,21 +765,18 @@ include 'includes/header.php';
                         </div>
                     </div>
 
-                    <!-- Confirm password -->
+                    <!-- Confirm Password -->
                     <div class="form-group">
-                        <label for="confirm_password">Confirm Password</label>
+                        <label for="confirm_password">Confirm New Password</label>
                         <div class="input-with-icon">
                             <i class="fas fa-lock input-icon"></i>
                             <input type="password"
                                    id="confirm_password"
                                    name="confirm_password"
                                    class="form-control"
-                                   placeholder="Repeat your new password"
+                                   placeholder="Confirm new password"
                                    required
                                    autocomplete="new-password">
-                            <button type="button" class="toggle-password" data-target="confirm_password" aria-label="Toggle password visibility">
-                                <i class="fas fa-eye"></i>
-                            </button>
                         </div>
                     </div>
 
@@ -590,18 +787,15 @@ include 'includes/header.php';
                 <?php endif; ?>
 
                 <div class="auth-link">
-                    Remembered your password? <a href="login.php">Sign in here</a>
+                    Remember your password? <a href="login.php"><i class="fas fa-arrow-left"></i> Back to Sign In</a>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- SweetAlert2 JS -->
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-
     // Toggle password visibility
     document.querySelectorAll('.toggle-password').forEach(function (btn) {
         btn.addEventListener('click', function () {
@@ -611,11 +805,9 @@ document.addEventListener('DOMContentLoaded', function () {
             const isHidden = input.type === 'password';
             input.type = isHidden ? 'text' : 'password';
             icon.className = isHidden ? 'fas fa-eye-slash' : 'fas fa-eye';
-            this.setAttribute('aria-label', isHidden ? 'Hide password' : 'Show password');
         });
     });
 
-    // Password strength meter
     const newPwInput   = document.getElementById('new_password');
     const confirmInput = document.getElementById('confirm_password');
     const strengthWrap = document.getElementById('strengthWrap');
@@ -637,7 +829,7 @@ document.addEventListener('DOMContentLoaded', function () {
         el.classList.toggle('met', met);
         const icon = el.querySelector('i');
         if (icon) {
-            icon.className = met ? 'fas fa-check-circle' : 'fas fa-circle-dot';
+            icon.className = met ? 'fas fa-circle-check' : 'fas fa-circle-dot';
         }
     }
 
@@ -664,7 +856,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const levelNames  = ['', 'Weak', 'Fair', 'Good', 'Strong'];
     const levelClass  = ['', 'active-weak', 'active-fair', 'active-good', 'active-strong'];
-    const labelColors = ['', '#dc2626', '#f59e0b', '#16a34a', '#15803d'];
+    const labelColors = ['', '#ef4444', '#f59e0b', '#10b981', '#059669'];
 
     if (newPwInput) {
         newPwInput.addEventListener('input', function () {
@@ -674,7 +866,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 bars.forEach(b => { if (b) b.className = 'pw-bar'; });
                 return;
             }
-            if (strengthWrap) strengthWrap.style.display = 'block';
+            if (strengthWrap) strengthWrap.style.display = 'flex';
             const score = evaluateStrength(pw);
             bars.forEach(function (bar, i) {
                 if (bar) bar.className = 'pw-bar' + (i < score ? ' ' + levelClass[score] : '');
@@ -686,7 +878,6 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // Form submit validation
     const form = document.getElementById('resetPasswordForm');
     if (form) {
         form.addEventListener('submit', function (e) {
@@ -696,35 +887,33 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (pw.length < 8) {
                 e.preventDefault();
-                Swal.fire({ icon: 'warning', title: 'Too Short', text: 'Password must be at least 8 characters.', confirmButtonColor: '#b3261e' });
+                if (window.showPopupAlert) window.showPopupAlert('Password must be at least 8 characters long.', 'alert');
                 return false;
             }
             if (!/[A-Z]/.test(pw)) {
                 e.preventDefault();
-                Swal.fire({ icon: 'warning', title: 'Missing Uppercase', text: 'Add at least one uppercase letter (A–Z).', confirmButtonColor: '#b3261e' });
+                if (window.showPopupAlert) window.showPopupAlert('Please include at least one uppercase letter (A–Z).', 'alert');
                 return false;
             }
             if (!/[0-9]/.test(pw)) {
                 e.preventDefault();
-                Swal.fire({ icon: 'warning', title: 'Missing Number', text: 'Add at least one number (0–9).', confirmButtonColor: '#b3261e' });
+                if (window.showPopupAlert) window.showPopupAlert('Please include at least one number (0–9).', 'alert');
                 return false;
             }
             if (pw !== confirm) {
                 e.preventDefault();
                 if (confirmInput) confirmInput.classList.add('is-error');
-                Swal.fire({ icon: 'warning', title: 'Passwords Don\'t Match', text: 'Both fields must contain the same password.', confirmButtonColor: '#b3261e' });
+                if (window.showPopupAlert) window.showPopupAlert('Passwords do not match.', 'error');
                 return false;
             }
 
             if (btn) {
-                btn.classList.add('loading');
-                const span = btn.querySelector('span');
-                if (span) span.textContent = 'Updating Password...';
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> <span>Updating Password...</span>';
             }
         });
     }
 
-    // Confirm match live feedback
     if (confirmInput && newPwInput) {
         confirmInput.addEventListener('input', function () {
             const match = this.value === newPwInput.value;
@@ -733,28 +922,15 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     <?php if ($success): ?>
-    Swal.fire({
-        icon: 'success',
-        title: 'Password Updated!',
-        text: '<?php echo addslashes($success); ?>',
-        confirmButtonColor: '#b3261e',
-        confirmButtonText: 'Sign In Now',
-        allowOutsideClick: false,
-        allowEscapeKey: false
-    }).then((result) => {
-        if (result.isConfirmed) {
-            window.location.href = 'login.php';
-        }
-    });
+    if (window.showPopupAlert) {
+        window.showPopupAlert(<?php echo json_encode($success); ?>, 'success', 6000);
+    }
     <?php endif; ?>
 
     <?php if ($error && $is_valid_token): ?>
-    Swal.fire({
-        icon: 'error',
-        title: 'Unable to Reset',
-        text: '<?php echo addslashes($error); ?>',
-        confirmButtonColor: '#b3261e'
-    });
+    if (window.showPopupAlert) {
+        window.showPopupAlert(<?php echo json_encode($error); ?>, 'error', 5000);
+    }
     <?php endif; ?>
 });
 </script>

@@ -1375,6 +1375,132 @@ unset($order);
     }
     .timeline-stepper .line { display: none; }
 }
+
+/* ==========================================================================
+   MY ORDERS PAGE DARK THEME ENGINE
+   ========================================================================== */
+body.dark-mode .orders-page-container {
+    background: #0f172a !important;
+}
+
+body.dark-mode .header-text h1 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .header-text p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .orders-nav-tabs {
+    border-bottom-color: #334155 !important;
+}
+
+body.dark-mode .nav-tab-item {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .nav-tab-item.active {
+    color: #ef4444 !important;
+    border-bottom-color: #ef4444 !important;
+}
+
+body.dark-mode .tab-count {
+    background: rgba(179, 38, 30, 0.2) !important;
+    color: #ef4444 !important;
+}
+
+body.dark-mode .ecom-order-card {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+body.dark-mode .ecom-card-top,
+body.dark-mode .ecom-card-bottom {
+    border-color: #334155 !important;
+}
+
+body.dark-mode .order-ref-number,
+body.dark-mode .seller-store-name {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .order-channel-tag {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .order-item-row {
+    border-bottom-color: #334155 !important;
+}
+
+body.dark-mode .item-name {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .item-meta,
+body.dark-mode .item-qty,
+body.dark-mode .payment-method,
+body.dark-mode .total-label {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .item-price,
+body.dark-mode .total-amount {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .ecom-details-drawer {
+    background: #111827 !important;
+    border-top-color: #334155 !important;
+}
+
+body.dark-mode .timeline-stepper {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .timeline-step .label {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .timeline-step .time {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .empty-orders-state {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .empty-orders-state h3 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .empty-orders-state p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .btn-action-outline {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .btn-action-outline:hover {
+    background: #334155 !important;
+    border-color: #475569 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .page-num {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
 </style>
 
 <script>

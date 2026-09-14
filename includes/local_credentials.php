@@ -122,5 +122,5 @@ if (!defined('MAIL_FROM_NAME')) {
 }
 
 if (!defined('FORCE_LOCAL_MAILER')) {
-    define('FORCE_LOCAL_MAILER', true);
+    define('FORCE_LOCAL_MAILER', false);
 }

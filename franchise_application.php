@@ -2782,6 +2782,148 @@ include 'includes/header.php';
     .requirements-sidebar { position: static; }
     .form-row { grid-template-columns: 1fr; }
 }
+
+/* ==========================================================================
+   FRANCHISE APPLICATION DARK THEME ENGINE
+   ========================================================================== */
+body.dark-mode .franchise-application-page {
+    background: #0f172a !important;
+}
+
+body.dark-mode .application-form-card,
+body.dark-mode .requirements-card {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35) !important;
+}
+
+body.dark-mode .workflow-status-card {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .workflow-pill {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .workflow-summary {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .form-section h3,
+body.dark-mode .requirements-card h3,
+body.dark-mode .support-info h4,
+body.dark-mode .contact-support h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .section-description {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .form-group label,
+body.dark-mode .fp-radio-label {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .form-group input,
+body.dark-mode .form-group select,
+body.dark-mode .form-group textarea,
+body.dark-mode .fp-input,
+body.dark-mode .fp-select {
+    background-color: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .form-group input:focus,
+body.dark-mode .form-group select:focus,
+body.dark-mode .form-group textarea:focus,
+body.dark-mode .fp-input:focus,
+body.dark-mode .fp-select:focus {
+    border-color: #b3261e !important;
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .form-text,
+body.dark-mode .psgc-help {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .document-item {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .document-item:hover {
+    background: #1e293b !important;
+    border-color: #b3261e !important;
+}
+
+body.dark-mode .document-label span {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .document-label small {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .requirement-item {
+    border-bottom-color: #334155 !important;
+}
+
+body.dark-mode .requirement-item strong {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .requirement-item small,
+body.dark-mode .support-info ul,
+body.dark-mode .contact-support p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .support-info,
+body.dark-mode .contact-support {
+    border-top-color: #334155 !important;
+}
+
+body.dark-mode .chip-btn {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .chip-btn:hover {
+    background: #b3261e !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .progress-steps .step-number {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .progress-steps .step.active .step-number {
+    background: #b3261e !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .progress-steps .step-label {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .progress-steps .step.active .step-label {
+    color: #f8fafc !important;
+    font-weight: 700 !important;
+}
 </style>
 
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>

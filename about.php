@@ -259,4 +259,43 @@ body {
     .timeline-item::after { left: 21px; }
     .right { left: 0; }
 }
+
+/* ==========================================================================
+   ABOUT PAGE DARK THEME ENGINE
+   ========================================================================== */
+body.dark-mode,
+body.dark-mode .about-content-section,
+body.dark-mode .milestones-section {
+    background: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .page-header {
+    background: #1e293b !important;
+    border-bottom-color: #334155 !important;
+}
+
+body.dark-mode .page-header h1,
+body.dark-mode .about-text h2,
+body.dark-mode .section-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .page-header p,
+body.dark-mode .about-text p,
+body.dark-mode .timeline-content p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .about-grid,
+body.dark-mode .timeline-content {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25) !important;
+}
+
+body.dark-mode .timeline::after {
+    background: #334155 !important;
+}
 </style>

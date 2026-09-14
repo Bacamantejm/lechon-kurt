@@ -324,6 +324,113 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
             color: #f8fafc !important;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25) !important;
         }
+        body.dark-mode .cart-sidebar,
+        body.dark-mode .panda-cart-sidebar,
+        body.dark-mode .cart-container {
+            background: #1e293b !important;
+            border-color: #334155 !important;
+            color: #f8fafc !important;
+            box-shadow: -4px 0 25px rgba(0, 0, 0, 0.5) !important;
+        }
+        body.dark-mode .cart-header {
+            background: #1e293b !important;
+            border-bottom: 1px solid #334155 !important;
+        }
+        body.dark-mode .cart-close {
+            color: #cbd5e1 !important;
+        }
+        body.dark-mode .cart-close:hover {
+            color: #ef4444 !important;
+        }
+        body.dark-mode .cart-header span {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .cart-header small {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode .cart-body {
+            background: #1e293b !important;
+        }
+        body.dark-mode .cart-store-header h4 {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .cart-empty {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode .cart-empty i {
+            color: #64748b !important;
+        }
+        body.dark-mode .cart-empty p {
+            color: #cbd5e1 !important;
+        }
+        body.dark-mode .cart-item {
+            background: #111827 !important;
+            border: 1px solid #334155 !important;
+            border-radius: 10px !important;
+            padding: 10px !important;
+            margin-bottom: 10px !important;
+        }
+        body.dark-mode .cart-item-quantity button,
+        body.dark-mode .qty-decrease,
+        body.dark-mode .qty-increase {
+            background: #1e293b !important;
+            border: 1px solid #334155 !important;
+            color: #cbd5e1 !important;
+        }
+        body.dark-mode .cart-item-quantity button:hover,
+        body.dark-mode .qty-decrease:hover,
+        body.dark-mode .qty-increase:hover {
+            background: #334155 !important;
+            color: #ffffff !important;
+        }
+        body.dark-mode .cart-item-quantity span {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .cart-item-image {
+            background-color: #0f172a !important;
+        }
+        body.dark-mode .cart-item-name {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .cart-item-size,
+        body.dark-mode .cart-item-addons {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode .cart-item-price-col,
+        body.dark-mode .cart-item-price-col div {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .cart-item-remove {
+            color: #ef4444 !important;
+        }
+        body.dark-mode .cart-item-remove:hover {
+            color: #f87171 !important;
+        }
+        body.dark-mode .cart-footer {
+            background: #1e293b !important;
+            border-top: 1px solid #334155 !important;
+        }
+        body.dark-mode .summary-row span,
+        body.dark-mode .cart-summary .summary-row span {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode #cartSubtotal {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .summary-row.total,
+        body.dark-mode .cart-summary .summary-row.total {
+            border-top: 1px solid #334155 !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode #cartTotal {
+            color: #ef4444 !important;
+        }
+        body.dark-mode #clearCart {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode #clearCart:hover {
+            color: #ef4444 !important;
+        }
         body.dark-mode .form-control,
         body.dark-mode .form-select,
         body.dark-mode input[type="text"],
@@ -506,9 +613,19 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
         .nav-link,.market-home-link { text-decoration:none; color:#56617a; font-size:.88rem; font-weight:700; min-height:38px; padding:0 12px; border-radius:999px; border:1px solid transparent; display:inline-flex; gap:6px; align-items:center; transition:var(--transition-fast); }
         .nav-link:hover,.nav-link.active,.market-home-link:hover,.market-home-link.active { background:#fff4e8; border-color:var(--line); color:var(--ink); }
         .user-menu-wrapper,.notification-wrapper { position:relative; }
-        .user-dropdown,.notification-dropdown { position:absolute; top:calc(100% + 10px); right:0; min-width:260px; background:#fff; border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow); padding:8px 0; opacity:0; visibility:hidden; transform:translateY(8px); transition:var(--transition-fade); z-index:1500 !important; }
+        .user-dropdown,.notification-dropdown { position:absolute; top:calc(100% + 10px); right:0; min-width:260px; background:#fff; border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow); padding:8px 0; opacity:0; visibility:hidden; pointer-events:none; transform:translateY(8px); transition:var(--transition-fade); z-index:1500 !important; }
+        .user-dropdown::before,.notification-dropdown::before { content:''; position:absolute; top:-14px; left:0; right:0; height:14px; background:transparent; }
         .notification-dropdown { min-width:310px; }
-        .user-menu-wrapper:hover .user-dropdown,.notification-wrapper:hover .notification-dropdown { opacity:1; visibility:visible; transform:translateY(0); }
+        .user-menu-wrapper:hover .user-dropdown,
+        .user-menu-wrapper.is-open .user-dropdown,
+        .user-menu-wrapper.active .user-dropdown,
+        .user-dropdown.is-open,
+        .user-dropdown.show,
+        .notification-wrapper:hover .notification-dropdown,
+        .notification-wrapper.is-open .notification-dropdown,
+        .notification-wrapper.active .notification-dropdown,
+        .notification-dropdown.is-open,
+        .notification-dropdown.show { opacity:1; visibility:visible; pointer-events:auto; transform:translateY(0); }
         .user-dropdown-header { padding:4px 15px 11px; border-bottom:1px solid var(--line); margin-bottom:8px; }
         .user-name { font-size:1rem; font-weight:800; }
         .user-email { font-size:.84rem; color:var(--muted); }
@@ -2013,17 +2130,43 @@ document.addEventListener('DOMContentLoaded', function () {
         return { lat: lat, lng: lng };
     };
 
-    const buildMarketAddressPayload = function (streetAddress, city, postalCode) {
+    const getCityCoordinatesFallback = function (cityName) {
+        const norm = String(cityName || '').toLowerCase();
+        if (norm.includes('dasma') || norm.includes('salawag')) return { lat: 14.3294, lng: 120.9367 };
+        if (norm.includes('bacoor') || norm.includes('habay') || norm.includes('molino')) return { lat: 14.4445, lng: 120.9439 };
+        if (norm.includes('imus') || norm.includes('anabu') || norm.includes('poblacion')) return { lat: 14.4296, lng: 120.9367 };
+        if (norm.includes('tagaytay')) return { lat: 14.1153, lng: 120.9621 };
+        if (norm.includes('trias') || norm.includes('manggahan') || norm.includes('gentri')) return { lat: 14.2818, lng: 120.8800 };
+        if (norm.includes('silang')) return { lat: 14.2307, lng: 120.9749 };
+        if (norm.includes('trece')) return { lat: 14.2820, lng: 120.8670 };
+        if (norm.includes('kawit')) return { lat: 14.4450, lng: 120.9020 };
+        if (norm.includes('rosario')) return { lat: 14.4167, lng: 120.8500 };
+        if (norm.includes('tanza')) return { lat: 14.3940, lng: 120.8540 };
+        if (norm.includes('naic')) return { lat: 14.3167, lng: 120.7667 };
+        if (norm.includes('carmona')) return { lat: 14.3167, lng: 121.0500 };
+        return { lat: 14.3294, lng: 120.9367 };
+    };
+
+    const buildMarketAddressPayload = function (streetAddress, city, postalCode, latitude, longitude) {
         const street = String(streetAddress || '').trim();
         const cityName = String(city || '').trim();
         const zip = normalizePostalCode(postalCode);
         const cityWithZip = [cityName, zip].filter(Boolean).join(' ');
         const fullAddress = [street, cityWithZip].filter(Boolean).join(', ');
+        let lat = (latitude !== undefined && latitude !== null && latitude !== '') ? parseFloat(latitude) : null;
+        let lng = (longitude !== undefined && longitude !== null && longitude !== '') ? parseFloat(longitude) : null;
+        if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat === 0 || lng === 0) {
+            const fallback = getCityCoordinatesFallback(cityName || street);
+            lat = fallback.lat;
+            lng = fallback.lng;
+        }
         return {
             street_address: street,
             city: cityName,
             postal_code: zip,
-            full_address: fullAddress
+            full_address: fullAddress,
+            latitude: lat,
+            longitude: lng
         };
     };
 
@@ -2198,10 +2341,13 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     const persistMarketAddressPayload = function (payload) {
-        const normalized = buildMarketAddressPayload(payload?.street_address, payload?.city, payload?.postal_code);
+        const lat = payload?.latitude ?? payload?.lat ?? null;
+        const lng = payload?.longitude ?? payload?.lng ?? null;
+        const normalized = buildMarketAddressPayload(payload?.street_address, payload?.city, payload?.postal_code, lat, lng);
         try {
             localStorage.setItem(marketAddressStorageKey, JSON.stringify(normalized));
             localStorage.setItem('market_address', normalized.full_address);
+            window.dispatchEvent(new CustomEvent('marketAddressChanged', { detail: normalized }));
         } catch (error) {
             // Best-effort persistence only.
         }
@@ -2708,8 +2854,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     };
 
-    const applyQuickAddressSelection = function (street, city) {
-        const payload = buildMarketAddressPayload(street || '', city || 'Cavite', '');
+    const applyQuickAddressSelection = function (street, city, lat, lng) {
+        const payload = buildMarketAddressPayload(street || '', city || 'Cavite', '', lat, lng);
         fillMarketAddressInputs(payload, { includeMapFields: true });
         const stored = persistMarketAddressPayload(payload);
         renderMarketAddressDisplay(stored);
@@ -2721,8 +2867,9 @@ document.addEventListener('DOMContentLoaded', function () {
         pill.addEventListener('click', function () {
             const city = pill.dataset.city || 'Cavite';
             const street = pill.dataset.street || (city + ', Cavite');
+            const fallback = getCityCoordinatesFallback(city);
             if (marketQuickStreetInput) marketQuickStreetInput.value = street;
-            applyQuickAddressSelection(street, city);
+            applyQuickAddressSelection(street, city, fallback.lat, fallback.lng);
         });
     });
 
@@ -3206,6 +3353,92 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     requestFavoritesCount();
+
+    // User Profile Menu & Notifications Dropdown toggles
+    const userMenuWrappers = Array.from(document.querySelectorAll('.user-menu-wrapper'));
+    const notificationWrappers = Array.from(document.querySelectorAll('.notification-wrapper'));
+
+    const closeAllUserMenus = function () {
+        userMenuWrappers.forEach(function (wrap) {
+            wrap.classList.remove('is-open', 'active');
+            const btn = wrap.querySelector('.user-avatar-btn');
+            if (btn) btn.setAttribute('aria-expanded', 'false');
+        });
+    };
+
+    const closeAllNotificationMenus = function () {
+        notificationWrappers.forEach(function (wrap) {
+            wrap.classList.remove('is-open', 'active');
+            const btn = wrap.querySelector('.icon-btn');
+            if (btn) btn.setAttribute('aria-expanded', 'false');
+        });
+    };
+
+    document.addEventListener('click', function (event) {
+        const userAvatarBtn = event.target.closest('.user-avatar-btn');
+        if (userAvatarBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            const wrapper = userAvatarBtn.closest('.user-menu-wrapper');
+            if (wrapper) {
+                const isCurrentlyOpen = wrapper.classList.contains('is-open') || wrapper.classList.contains('active');
+                closeAllUserMenus();
+                closeAllNotificationMenus();
+                if (!isCurrentlyOpen) {
+                    wrapper.classList.add('is-open', 'active');
+                    userAvatarBtn.setAttribute('aria-expanded', 'true');
+                }
+            }
+            return;
+        }
+
+        const notifBtn = event.target.closest('.notification-wrapper > .icon-btn');
+        if (notifBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            const wrapper = notifBtn.closest('.notification-wrapper');
+            if (wrapper) {
+                const isCurrentlyOpen = wrapper.classList.contains('is-open') || wrapper.classList.contains('active');
+                closeAllUserMenus();
+                closeAllNotificationMenus();
+                if (!isCurrentlyOpen) {
+                    wrapper.classList.add('is-open', 'active');
+                    notifBtn.setAttribute('aria-expanded', 'true');
+                }
+            }
+            return;
+        }
+
+        let clickedInsideUserMenu = false;
+        userMenuWrappers.forEach(function (wrap) {
+            if (wrap.contains(event.target)) {
+                clickedInsideUserMenu = true;
+                if (event.target.closest('.user-dropdown-item')) {
+                    closeAllUserMenus();
+                }
+            }
+        });
+        if (!clickedInsideUserMenu) {
+            closeAllUserMenus();
+        }
+
+        let clickedInsideNotifMenu = false;
+        notificationWrappers.forEach(function (wrap) {
+            if (wrap.contains(event.target)) {
+                clickedInsideNotifMenu = true;
+            }
+        });
+        if (!clickedInsideNotifMenu) {
+            closeAllNotificationMenus();
+        }
+    });
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') {
+            closeAllUserMenus();
+            closeAllNotificationMenus();
+        }
+    });
 
     document.addEventListener('click', function (event) {
         if (marketAddressWrap && marketAddressWrap.classList.contains('is-open')) {

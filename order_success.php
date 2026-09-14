@@ -415,6 +415,52 @@ body {
         justify-content: center;
     }
 }
+
+/* ==========================================================================
+   ORDER SUCCESS DARK THEME ENGINE
+   ========================================================================== */
+body.dark-mode .success-section {
+    background: #0f172a !important;
+}
+
+body.dark-mode .success-card {
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
+}
+
+body.dark-mode .success-card h2,
+body.dark-mode .next-steps h3,
+body.dark-mode .step-content h4,
+body.dark-mode .contact-info h3 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .order-number,
+body.dark-mode .order-details,
+body.dark-mode .contact-info {
+    background: #111827 !important;
+    border: 1px solid #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .order-details p,
+body.dark-mode .step-content p,
+body.dark-mode .contact-info p,
+body.dark-mode .contact-info li {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .step {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .success-actions .btn-secondary {
+    background: #334155 !important;
+    color: #ffffff !important;
+}
 </style>
 
 <?php include 'includes/footer.php'; ?>

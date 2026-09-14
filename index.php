@@ -185,8 +185,10 @@ if (!empty($_SESSION['user_id'])) {
 }
 
 $favorite_store_keys = [];
+$favorite_product_ids = [];
 if (favoritesIsCustomerUserSession()) {
     $favorite_store_keys = favoritesFetchUserFavoriteStoreKeyMap($conn, (int)$_SESSION['user_id']);
+    $favorite_product_ids = favoritesFetchUserFavoriteProductIdMap($conn, (int)$_SESSION['user_id']);
 }
 
 $sales_map = [];
@@ -3162,7 +3164,7 @@ body.dark-mode .deal-copy-btn {
                                 <div class="panda-card-content">
                                     <h2 class="panda-card-title">Order Fresh Lechon</h2>
                                     <p class="panda-card-desc">Enjoy crispy skin and juicy meat, roasted fresh for every order.</p>
-                                    <a href="register.php" class="panda-card-btn guest-cta-btn">Order Now</a>
+                                    <a href="shops.php" class="panda-card-btn">Order Now</a>
                                 </div>
                                 <div class="panda-card-graphic">
                                     <img src="assets/images/lechon_mascot_user.png" alt="Lechon Delights Mascot" class="panda-mascot-img" loading="lazy">
@@ -3177,7 +3179,7 @@ body.dark-mode .deal-copy-btn {
                                 <div class="panda-card-content">
                                     <h2 class="panda-card-title">Pre-order for Celebrations</h2>
                                     <p class="panda-card-desc">Avoid the rush by booking your whole or half lechon ahead of time.</p>
-                                    <a href="register.php" class="panda-card-btn panda-card-btn-alt guest-cta-btn">Reserve Now</a>
+                                    <a href="preorder.php" class="panda-card-btn panda-card-btn-alt">Reserve Now</a>
                                 </div>
                                 <div class="panda-card-graphic-cluster">
                                     <div class="panda-float-badge-wrap">
@@ -3199,7 +3201,7 @@ body.dark-mode .deal-copy-btn {
                                 <div style="flex: 1;">
                                     <h4 style="margin: 0 0 4px 0; font-family: 'Outfit', sans-serif; font-size: 0.98rem; font-weight: 800; color: #1e293b;">Order Fresh Lechon</h4>
                                     <p style="margin: 0 0 10px 0; font-size: 0.8rem; color: #64748b; line-height: 1.4;">Crispy skin and juicy meat roasted fresh for your feast.</p>
-                                    <a href="#marketplaceStores" class="market-btn" style="min-height: 32px; padding: 0 14px; font-size: 0.78rem; border-radius: 8px; text-decoration: none; display: inline-flex; align-items: center; justify-content: center;">Order Now</a>
+                                    <a href="shops.php" class="market-btn" style="min-height: 32px; padding: 0 14px; font-size: 0.78rem; border-radius: 8px; text-decoration: none; display: inline-flex; align-items: center; justify-content: center;">Order Now</a>
                                 </div>
                             </div>
                             
@@ -3248,7 +3250,7 @@ body.dark-mode .deal-copy-btn {
                                             <i class="fas fa-copy"></i> Copy
                                         </button>
                                     </div>
-                                    <a href="javascript:void(0)" onclick="claimAndUseWelcomeDeal('WELCOME100', '#marketplaceStores')" class="deal-action-btn">
+                                    <a href="javascript:void(0)" onclick="claimAndUseWelcomeDeal('WELCOME100', 'shops.php')" class="deal-action-btn">
                                         <i class="fas fa-utensils"></i> Claim &amp; Order Now
                                     </a>
                                 </div>
@@ -3317,7 +3319,7 @@ body.dark-mode .deal-copy-btn {
                                             <i class="fas fa-copy"></i> Copy
                                         </button>
                                     </div>
-                                    <a href="javascript:void(0)" onclick="claimAndUseWelcomeDeal('BELLY50', '#marketplaceStores')" class="deal-action-btn" style="background:#175cd3;">
+                                    <a href="javascript:void(0)" onclick="claimAndUseWelcomeDeal('BELLY50', 'shops.php')" class="deal-action-btn" style="background:#175cd3;">
                                         <i class="fas fa-store"></i> Claim ₱50 OFF
                                     </a>
                                 </div>
@@ -3424,7 +3426,7 @@ body.dark-mode .deal-copy-btn {
                             <?php foreach ($featured_products as $idx => $product): ?>
                                 <?php
                                 $prod_id_val = (string)($product['id'] ?? '');
-                                $is_prod_fav = !empty($favorite_store_keys['product_' . $prod_id_val]);
+                                $is_prod_fav = !empty($favorite_product_ids[(int)$prod_id_val]);
                                 $rank_num = $idx + 1;
                                 ?>
                                 <a href="<?php echo htmlspecialchars($product['menu_link'] ?? 'menu.php'); ?>" class="bestseller-card panda-card-link" style="background:#ffffff; border:1px solid #efddcd; border-radius:14px; overflow:hidden; display:flex; flex-direction:column; transition:transform 0.25s ease, box-shadow 0.25s ease; text-decoration:none; position:relative;">
@@ -3566,15 +3568,6 @@ body.dark-mode .deal-copy-btn {
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    // Intercept guest order/reserve button clicks
-    const guestCtaBtns = document.querySelectorAll('.guest-cta-btn');
-    guestCtaBtns.forEach(btn => {
-        btn.addEventListener('click', function(e) {
-            e.preventDefault();
-            window.location.href = 'login.php';
-        });
-    });
-
     // Auto-initialize Foodpanda Leaflet Pick-up Map for Nearby Stores
     const pickupMapElement = document.getElementById('pickupLeafletMap');
     let pickupLeafletMap = null;
@@ -4130,8 +4123,28 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // Immediate initial DSS calculation on load using Cavite center coordinates (14.3294, 120.9367)
-    updateNearest(14.3294, 120.9367, false);
+    function checkStoredAddressOnIndex() {
+        try {
+            const raw = localStorage.getItem('market_address_payload');
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed && Number.isFinite(parseFloat(parsed.latitude)) && Number.isFinite(parseFloat(parsed.longitude))) {
+                    const lat = parseFloat(parsed.latitude);
+                    const lng = parseFloat(parsed.longitude);
+                    if (lat !== 0 && lng !== 0) {
+                        updateNearest(lat, lng, true);
+                        return true;
+                    }
+                }
+            }
+        } catch (e) {}
+        return false;
+    }
+
+    // Immediate initial DSS calculation on load: use stored address or default Cavite center
+    if (!checkStoredAddressOnIndex()) {
+        updateNearest(14.3294, 120.9367, false);
+    }
 
     // Try auto-detecting user location silently if permission was previously granted
     if (navigator.geolocation) {
@@ -4143,6 +4156,14 @@ document.addEventListener('DOMContentLoaded', function () {
             { enableHighAccuracy: false, timeout: 4000, maximumAge: 300000 }
         );
     }
+
+    window.addEventListener('storage', function (e) {
+        if (e.key === 'market_address_payload' || e.key === 'market_address') {
+            checkStoredAddressOnIndex();
+        }
+    });
+    window.addEventListener('marketAddressChanged', checkStoredAddressOnIndex);
+    window.addEventListener('marketAddressUpdated', checkStoredAddressOnIndex);
 
     const params = new URLSearchParams(window.location.search);
     const initialSearch = params.get('search');

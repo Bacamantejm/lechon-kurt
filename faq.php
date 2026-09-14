@@ -785,6 +785,56 @@ $faqs = [
         padding: 24px;
     }
 }
+
+/* ==========================================================================
+   FAQ PAGE DARK THEME ENGINE
+   ========================================================================== */
+body.dark-mode .faq-page-wrapper,
+body.dark-mode .faq-main-section {
+    background-color: #0f172a !important;
+}
+
+body.dark-mode .faq-card,
+body.dark-mode .faq-contact-box {
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25) !important;
+}
+
+body.dark-mode .faq-question-text,
+body.dark-mode .faq-category-title,
+body.dark-mode .faq-contact-box h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .faq-answer-text,
+body.dark-mode .faq-contact-box p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .faq-category-pill {
+    background-color: #111827 !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .faq-category-pill:hover {
+    background-color: #334155 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .faq-category-pill.active {
+    background-color: #b3261e !important;
+    color: #ffffff !important;
+    border-color: #b3261e !important;
+}
+
+body.dark-mode .faq-search-box input {
+    background-color: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
 </style>
 
 <script>

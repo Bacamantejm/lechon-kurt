@@ -1538,13 +1538,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         forgotViewAlert.innerHTML = '<i class="fas fa-check-circle"></i> <div>' + (data.message || 'Password reset link sent! Check your inbox.') + '</div>';
                         forgotViewAlert.style.display = 'flex';
                     }
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Reset Link Sent',
-                            text: data.message || 'Check your email inbox for password reset instructions.',
-                            confirmButtonColor: '#b3261e'
-                        });
+                    if (window.showPopupAlert) {
+                        window.showPopupAlert(data.message || 'Check your email inbox for password reset instructions.', 'success', 5000);
                     }
                 } else {
                     if (forgotViewAlert) {
@@ -1552,12 +1547,18 @@ document.addEventListener('DOMContentLoaded', function() {
                         forgotViewAlert.innerHTML = '<i class="fas fa-exclamation-circle"></i> <div>' + (data.message || 'Error processing request.') + '</div>';
                         forgotViewAlert.style.display = 'flex';
                     }
+                    if (window.showPopupAlert) {
+                        window.showPopupAlert(data.message || 'Failed to process password reset request.', 'error', 5000);
+                    }
                 }
             } catch (err) {
                 if (forgotViewAlert) {
                     forgotViewAlert.className = 'alert alert-error';
                     forgotViewAlert.innerHTML = '<i class="fas fa-exclamation-circle"></i> <div>An unexpected error occurred. Please try again.</div>';
                     forgotViewAlert.style.display = 'flex';
+                }
+                if (window.showPopupAlert) {
+                    window.showPopupAlert('An unexpected error occurred. Please try again.', 'error', 5000);
                 }
             } finally {
                 if (forgotViewSubmitBtn) {

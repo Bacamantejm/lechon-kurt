@@ -1045,6 +1045,121 @@ include 'includes/header.php';
         justify-content: center;
     }
 }
+
+/* ==========================================================================
+   MY ACCOUNT PAGE DARK THEME ENGINE
+   ========================================================================== */
+body.dark-mode .account-page-v2 {
+    background: #0f172a !important;
+}
+
+body.dark-mode .account-hero-card,
+body.dark-mode .account-sidebar-v2,
+body.dark-mode .account-card-v2,
+body.dark-mode .account-panel-v2 {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+body.dark-mode .hero-user-details h2,
+body.dark-mode .panel-head-v2 h3 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .panel-head-v2 p,
+body.dark-mode .acc-form-hint {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .hero-tag.type-tag,
+body.dark-mode .hero-action-btn {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .hero-action-btn:hover {
+    background: #334155 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .acc-nav-item {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .acc-nav-item:hover {
+    background: #111827 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .acc-nav-item.active {
+    background: rgba(179, 38, 30, 0.15) !important;
+    color: #ef4444 !important;
+}
+
+body.dark-mode .acc-form-label {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .acc-form-input,
+body.dark-mode .acc-form-select,
+body.dark-mode .acc-form-textarea {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .acc-form-input:focus,
+body.dark-mode .acc-form-select:focus,
+body.dark-mode .acc-form-textarea:focus {
+    border-color: #b3261e !important;
+    background: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .acc-form-input:disabled {
+    background: #111827 !important;
+    color: #64748b !important;
+}
+
+body.dark-mode .primary-address-snippet {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .address-snippet-left strong {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .address-snippet-left p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .btn-switch-tab {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #ef4444 !important;
+}
+
+body.dark-mode .btn-switch-tab:hover {
+    background: rgba(179, 38, 30, 0.2) !important;
+}
+
+body.dark-mode .mobile-segmented-nav {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .mobile-segment-btn {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .mobile-segment-btn.active {
+    background: #b3261e !important;
+    color: #ffffff !important;
+}
 </style>
 
 <div class="account-page-v2">

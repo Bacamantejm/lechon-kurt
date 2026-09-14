@@ -2088,6 +2088,41 @@ body.dark-mode #cameraModal h3 {
 body.dark-mode .floating-pig {
     opacity: 0.25 !important;
 }
+
+/* Step 3 Address & Map Dark Theme */
+body.dark-mode #step3Title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode #step3Subtitle {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode label[for="homeAddressInput"] {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode #registerMapWrapper {
+    border-color: #334155 !important;
+    background: #0f172a !important;
+}
+
+body.dark-mode #useCurrentLocationBtn {
+    background: #1e293b !important;
+    color: #f8fafc !important;
+    border-color: #334155 !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+}
+
+body.dark-mode #caviteAreaStatusBadge {
+    background: rgba(179, 38, 30, 0.15) !important;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+    color: #f87171 !important;
+}
+
+body.dark-mode .leaflet-container {
+    background: #0f172a !important;
+}
 </style>
 <div class="registration-page">
     <!-- Liquid Ripple Surge Overlay -->
@@ -3071,20 +3106,39 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function initRegisterMap() {
-        const mapElem = document.getElementById('registerMapCanvas');
-        if (!mapElem || !window.L) return;
+        const mapElem = document.getElementById('registerMap') || document.getElementById('registerMapCanvas');
+        if (!mapElem) return;
+
+        if (!window.L) {
+            setTimeout(initRegisterMap, 100);
+            return;
+        }
 
         let initLat = parseFloat(regLatitude?.value || '') || 14.3294; // Default Dasmariñas Cavite
         let initLng = parseFloat(regLongitude?.value || '') || 120.9367;
 
         if (!regMap) {
-            regMap = L.map('registerMapCanvas').setView([initLat, initLng], 14);
+            regMap = L.map(mapElem, {
+                center: [initLat, initLng],
+                zoom: 14,
+                zoomControl: true,
+                scrollWheelZoom: true
+            });
+
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
-                attribution: '© OpenStreetMap contributors'
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'
             }).addTo(regMap);
 
-            regMarker = L.marker([initLat, initLng], { draggable: true }).addTo(regMap);
+            const customPinIcon = L.divIcon({
+                className: 'custom-map-pin',
+                html: '<div style="background:#b3261e;width:32px;height:32px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;border:2px solid #ffffff;box-shadow:0 3px 10px rgba(0,0,0,0.35);"><i class="fas fa-location-dot" style="transform:rotate(45deg);color:#ffffff;font-size:15px;"></i></div>',
+                iconSize: [32, 32],
+                iconAnchor: [16, 32],
+                popupAnchor: [0, -32]
+            });
+
+            regMarker = L.marker([initLat, initLng], { draggable: true, icon: customPinIcon }).addTo(regMap);
 
             regMarker.on('dragend', function() {
                 const pos = regMarker.getLatLng();
@@ -3099,11 +3153,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 reverseGeocodeLocation(pos.lat, pos.lng);
             });
 
-            // Initial check
-            reverseGeocodeLocation(initLat, initLng);
-        } else {
-            regMap.invalidateSize();
+            // Initial check if address field is empty
+            if (!homeAddressInput || !homeAddressInput.value.trim()) {
+                reverseGeocodeLocation(initLat, initLng);
+            }
         }
+
+        setTimeout(function() {
+            if (regMap) regMap.invalidateSize();
+        }, 100);
+        setTimeout(function() {
+            if (regMap) regMap.invalidateSize();
+        }, 300);
     }
 
     // Input typing listener with debounce
@@ -3147,7 +3208,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 useCurrentLocationBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Locating...';
                 navigator.geolocation.getCurrentPosition(
                     function(pos) {
-                        useCurrentLocationBtn.innerHTML = '<i class="fas fa-crosshairs"></i> Use My Current Location';
+                        useCurrentLocationBtn.innerHTML = '<i class="fas fa-crosshairs" style="color: #b3261e;"></i> Locate Me';
                         const lat = pos.coords.latitude;
                         const lng = pos.coords.longitude;
                         if (regMap && regMarker) {
@@ -3157,7 +3218,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         reverseGeocodeLocation(lat, lng);
                     },
                     function(err) {
-                        useCurrentLocationBtn.innerHTML = '<i class="fas fa-crosshairs"></i> Use My Current Location';
+                        useCurrentLocationBtn.innerHTML = '<i class="fas fa-crosshairs" style="color: #b3261e;"></i> Locate Me';
                         showError('Location Access Error', 'Unable to retrieve your current location. Please drag the pin on the map instead.');
                     },
                     { enableHighAccuracy: true, timeout: 8000 }
@@ -3183,7 +3244,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         if (currentStep === 3) {
-            setTimeout(initRegisterMap, 150);
+            setTimeout(initRegisterMap, 100);
+            setTimeout(initRegisterMap, 300);
         }
     }
 

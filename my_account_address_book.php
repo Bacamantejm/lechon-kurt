@@ -1168,60 +1168,148 @@ body.theme-dark .empty-addresses {
     color: #ccb7aa;
 }
 
+body.dark-mode .account-page,
+body.theme-dark .account-page {
+    background: #0f172a !important;
+}
+
+body.dark-mode .address-book-head,
+body.theme-dark .address-book-head {
+    border-bottom-color: #334155 !important;
+}
+
+body.dark-mode .address-book-head h1,
+body.dark-mode .address-book-head h2,
+body.theme-dark .address-book-head h1,
+body.theme-dark .address-book-head h2 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .account-subtitle,
+body.theme-dark .account-subtitle {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .address-card,
+body.dark-mode .address-item,
+body.dark-mode .edit-details-form,
+body.dark-mode .address-map-modal,
 body.theme-dark .address-card,
 body.theme-dark .address-item,
 body.theme-dark .edit-details-form,
 body.theme-dark .address-map-modal {
-    background: #201a16;
-    border-color: #3a2f27;
-    color: #f3ece6;
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
 }
 
+body.dark-mode .address-card h2,
+body.theme-dark .address-card h2 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .address-item.is-default,
 body.theme-dark .address-item.is-default {
-    background: #2b211b;
+    background: #111827 !important;
+    border-color: #ef4444 !important;
 }
 
+body.dark-mode .address-item-title,
+body.dark-mode .address-item strong {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .address-item-location,
+body.dark-mode .address-item p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .form-group label,
+body.dark-mode .checkbox-row,
 body.theme-dark .form-group label,
 body.theme-dark .checkbox-row {
-    color: #d9c3b5;
+    color: #f8fafc !important;
 }
 
+body.dark-mode .form-group input,
+body.dark-mode .form-group textarea,
+body.dark-mode .form-group select,
+body.dark-mode .address-map-search-row input,
 body.theme-dark .form-group input,
 body.theme-dark .form-group textarea,
 body.theme-dark .form-group select,
 body.theme-dark .address-map-search-row input {
-    background: #2b241f;
-    border-color: #46372c;
-    color: #fff6ef;
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
 }
 
+body.dark-mode .form-group input:focus,
+body.dark-mode .form-group textarea:focus,
+body.dark-mode .form-group select:focus,
+body.theme-dark .form-group input:focus,
+body.theme-dark .form-group textarea:focus,
+body.theme-dark .form-group select:focus {
+    border-color: #b3261e !important;
+    background: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .psgc-help,
 body.theme-dark .psgc-help {
-    color: #c4ac9d;
+    color: #94a3b8 !important;
 }
 
+body.dark-mode .btn-outline,
 body.theme-dark .btn-outline {
-    background: #2e251f;
-    border-color: #4b3b2f;
-    color: #ecd7c9;
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
 }
 
+body.dark-mode .btn-outline:hover,
 body.theme-dark .btn-outline:hover {
-    background: #3a2e26;
+    background: #334155 !important;
+    border-color: #475569 !important;
+    color: #ffffff !important;
 }
 
+body.dark-mode .btn-danger,
 body.theme-dark .btn-danger {
-    border-color: #a94433;
-    background: #4a221c;
-    color: #f2bcb3;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+    background: rgba(179, 38, 30, 0.2) !important;
+    color: #f87171 !important;
 }
 
+body.dark-mode .address-map-overlay,
 body.theme-dark .address-map-overlay {
-    background: rgba(0, 0, 0, 0.65);
+    background: rgba(0, 0, 0, 0.65) !important;
 }
 
+body.dark-mode .address-map-head,
+body.dark-mode .address-map-foot {
+    border-color: #334155 !important;
+}
+
+body.dark-mode .address-map-head h3 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .address-map-head p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .address-map-close {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode #addressMapCanvas,
 body.theme-dark #addressMapCanvas {
-    background: #2b241f;
-    border-color: #46372c;
+    background: #0f172a !important;
+    border-color: #334155 !important;
 }
 
 @media (max-width: 900px) {

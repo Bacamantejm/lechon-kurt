@@ -2363,7 +2363,9 @@ document.addEventListener('click', function(e) {
                     closeProductPreview();
                     updateCartSidebar();
 
-                    if (typeof Swal !== 'undefined') {
+                    if (window.showPopupAlert) {
+                        window.showPopupAlert(data.message || 'Item successfully added to your cart.', 'success', 2500);
+                    } else if (typeof Swal !== 'undefined') {
                         Swal.fire({
                             icon: 'success',
                             title: 'Added to Cart!',
@@ -2376,7 +2378,40 @@ document.addEventListener('click', function(e) {
                     }
                 } else {
                     if (data.code === 'MIXED_TENANT_ADD_BLOCKED') {
-                        if (typeof Swal !== 'undefined') {
+                        if (window.showConfirmDialog) {
+                            window.showConfirmDialog({
+                                title: 'Switch Store Order?',
+                                text: data.message || 'Your cart has items from another store. Clear cart and start an order from this shop?',
+                                icon: 'warning',
+                                confirmText: 'Yes, Clear & Add Item',
+                                confirmColor: '#b3261e',
+                                cancelText: 'Keep Existing Cart'
+                            }).then(async (confirmed) => {
+                                if (confirmed) {
+                                    formData.append('clear_and_add', '1');
+                                    try {
+                                        const retryRes = await fetch('add_to_cart.php', {
+                                            method: 'POST',
+                                            body: formData
+                                        });
+                                        const retryData = await retryRes.json();
+                                        if (retryData.success) {
+                                            closeProductPreview();
+                                            updateCartSidebar();
+                                            if (window.showPopupAlert) {
+                                                window.showPopupAlert('Cart was cleared and your new item was added.', 'success', 2500);
+                                            }
+                                        } else {
+                                            if (window.showPopupAlert) {
+                                                window.showPopupAlert(retryData.message || 'Failed to add item.', 'error');
+                                            }
+                                        }
+                                    } catch (e) {
+                                        console.error(e);
+                                    }
+                                }
+                            });
+                        } else if (typeof Swal !== 'undefined') {
                             Swal.fire({
                                 icon: 'warning',
                                 title: 'Switch Store Order?',
@@ -2398,22 +2433,13 @@ document.addEventListener('click', function(e) {
                                         if (retryData.success) {
                                             closeProductPreview();
                                             updateCartSidebar();
-                                            Swal.fire({
-                                                icon: 'success',
-                                                title: 'Switched Store!',
-                                                text: 'Cart was cleared and your new item was added.',
-                                                toast: true,
-                                                position: 'top-end',
-                                                showConfirmButton: false,
-                                                timer: 2500
-                                            });
+                                            if (window.showPopupAlert) {
+                                                window.showPopupAlert('Cart was cleared and your new item was added.', 'success', 2500);
+                                            }
                                         } else {
-                                            Swal.fire({
-                                                icon: 'error',
-                                                title: 'Cannot Add Item',
-                                                text: retryData.message || 'Failed to add item.',
-                                                confirmButtonColor: '#b3261e'
-                                            });
+                                            if (window.showPopupAlert) {
+                                                window.showPopupAlert(retryData.message || 'Failed to add item.', 'error');
+                                            }
                                         }
                                     } catch (e) {
                                         console.error(e);
@@ -2429,7 +2455,20 @@ document.addEventListener('click', function(e) {
                             }
                         }
                     } else if (data.code === 'MIXED_TENANT_CART_EXISTING') {
-                        if (typeof Swal !== 'undefined') {
+                        if (window.showConfirmDialog) {
+                            window.showConfirmDialog({
+                                title: 'Cart Contains Multiple Stores',
+                                text: data.message,
+                                icon: 'warning',
+                                confirmText: 'Go to Cart',
+                                confirmColor: '#b3261e',
+                                cancelText: 'Close'
+                            }).then((confirmed) => {
+                                if (confirmed) {
+                                    openCartSidebar();
+                                }
+                            });
+                        } else if (typeof Swal !== 'undefined') {
                             Swal.fire({
                                 icon: 'warning',
                                 title: 'Cart Contains Multiple Stores',
@@ -2444,10 +2483,16 @@ document.addEventListener('click', function(e) {
                                 }
                             });
                         } else {
-                            alert(data.message);
+                            if (window.showPopupAlert) {
+                                window.showPopupAlert(data.message, 'warning');
+                            } else {
+                                alert(data.message);
+                            }
                         }
                     } else {
-                        if (typeof Swal !== 'undefined') {
+                        if (window.showPopupAlert) {
+                            window.showPopupAlert(data.message || 'Failed to add item to cart.', 'error');
+                        } else if (typeof Swal !== 'undefined') {
                             Swal.fire({
                                 icon: 'error',
                                 title: 'Cannot Add Item',
@@ -2461,7 +2506,9 @@ document.addEventListener('click', function(e) {
                 }
             } catch (err) {
                 console.error('Add to cart error:', err);
-                if (typeof Swal !== 'undefined') {
+                if (window.showPopupAlert) {
+                    window.showPopupAlert('An error occurred while adding the item to cart. Please try again.', 'error');
+                } else if (typeof Swal !== 'undefined') {
                     Swal.fire({
                         icon: 'error',
                         title: 'Error',
@@ -2696,16 +2743,19 @@ document.addEventListener('click', function(e) {
                 if (data.success) {
                     updateCartSidebar();
                     
-                    // Show notification
-                    Swal.fire({
-                        icon: 'success',
-                        title: action === 'remove' ? 'Removed!' : 'Updated!',
-                        text: action === 'remove' ? 'Item removed from cart' : 'Cart updated',
-                        toast: true,
-                        position: 'top-end',
-                        showConfirmButton: false,
-                        timer: 1500
-                    });
+                    if (window.showPopupAlert) {
+                        window.showPopupAlert(action === 'remove' ? 'Item removed from cart' : 'Cart updated', 'success', 1500);
+                    } else if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: action === 'remove' ? 'Removed!' : 'Updated!',
+                            text: action === 'remove' ? 'Item removed from cart' : 'Cart updated',
+                            toast: true,
+                            position: 'top-end',
+                            showConfirmButton: false,
+                            timer: 1500
+                        });
+                    }
                 }
             } catch (error) {
                 console.error('Error:', error);
@@ -2714,18 +2764,10 @@ document.addEventListener('click', function(e) {
     });
     
     // Clear cart
-    document.getElementById('clearCart').addEventListener('click', async function() {
-        Swal.fire({
-            title: 'Clear Cart?',
-            text: 'Are you sure you want to clear your entire cart?',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#b3261e',
-            cancelButtonColor: '#6c757d',
-            confirmButtonText: 'Yes, clear cart',
-            cancelButtonText: 'Cancel'
-        }).then(async (result) => {
-            if (result.isConfirmed) {
+    const clearCartBtn = document.getElementById('clearCart');
+    if (clearCartBtn) {
+        clearCartBtn.addEventListener('click', async function() {
+            const handleClear = async () => {
                 try {
                     const response = await fetch('update_cart.php', {
                         method: 'POST',
@@ -2742,124 +2784,60 @@ document.addEventListener('click', function(e) {
                     if (data.success) {
                         updateCartSidebar();
                         
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Cart Cleared!',
-                            text: 'Your cart has been cleared.',
-                            toast: true,
-                            position: 'top-end',
-                            showConfirmButton: false,
-                            timer: 1500
-                        });
+                        if (window.showPopupAlert) {
+                            window.showPopupAlert('Your cart has been cleared.', 'success', 1500);
+                        } else if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Cart Cleared!',
+                                text: 'Your cart has been cleared.',
+                                toast: true,
+                                position: 'top-end',
+                                showConfirmButton: false,
+                                timer: 1500
+                            });
+                        }
                     }
                 } catch (error) {
                     console.error('Error:', error);
                 }
-            }
-        });
-    });
-    
-    // Close modals with Escape key
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
-            // closeProductPreview(); // This is handled by its own function now
-            closeCartSidebar();
-        }
-    });
-    
-    
-    // Cart item quantity controls
-    document.addEventListener('click', async function(e) {
-        if (e.target.closest('.qty-decrease') || e.target.closest('.qty-increase') || e.target.closest('.cart-item-remove')) {
-            const button = e.target.closest('.qty-decrease, .qty-increase, .cart-item-remove');
-            const index = button.getAttribute('data-index');
-            const action = button.classList.contains('qty-decrease') ? 'decrease' : 
-                          button.classList.contains('qty-increase') ? 'increase' : 'remove';
-            
-            try {
-                const response = await fetch('update_cart.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: new URLSearchParams({
-                        'index': index,
-                        'action': action
-                    })
+            };
+
+            if (window.showConfirmDialog) {
+                window.showConfirmDialog({
+                    title: 'Clear Cart?',
+                    text: 'Are you sure you want to clear your entire cart?',
+                    icon: 'warning',
+                    confirmText: 'Yes, clear cart',
+                    confirmColor: '#b3261e',
+                    cancelText: 'Cancel'
+                }).then((confirmed) => {
+                    if (confirmed) handleClear();
                 });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    updateCartSidebar();
-                    
-                    // Show notification
-                    Swal.fire({
-                        icon: 'success',
-                        title: action === 'remove' ? 'Removed!' : 'Updated!',
-                        text: action === 'remove' ? 'Item removed from cart' : 'Cart updated',
-                        toast: true,
-                        position: 'top-end',
-                        showConfirmButton: false,
-                        timer: 1500
-                    });
-                }
-            } catch (error) {
-                console.error('Error:', error);
-            }
-        }
-    });
-    
-    // Clear cart
-    document.getElementById('clearCart').addEventListener('click', async function() {
-        Swal.fire({
-            title: 'Clear Cart?',
-            text: 'Are you sure you want to clear your entire cart?',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#b3261e',
-            cancelButtonColor: '#6c757d',
-            confirmButtonText: 'Yes, clear cart',
-            cancelButtonText: 'Cancel'
-        }).then(async (result) => {
-            if (result.isConfirmed) {
-                try {
-                    const response = await fetch('update_cart.php', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                        },
-                        body: new URLSearchParams({
-                            'action': 'clear'
-                        })
-                    });
-                    
-                    const data = await response.json();
-                    
-                    if (data.success) {
-                        updateCartSidebar();
-                        
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Cart Cleared!',
-                            text: 'Your cart has been cleared.',
-                            toast: true,
-                            position: 'top-end',
-                            showConfirmButton: false,
-                            timer: 1500
-                        });
-                    }
-                } catch (error) {
-                    console.error('Error:', error);
+            } else if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    title: 'Clear Cart?',
+                    text: 'Are you sure you want to clear your entire cart?',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#b3261e',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: 'Yes, clear cart',
+                    cancelButtonText: 'Cancel'
+                }).then((result) => {
+                    if (result.isConfirmed) handleClear();
+                });
+            } else {
+                if (confirm('Are you sure you want to clear your entire cart?')) {
+                    handleClear();
                 }
             }
         });
-    });
+    }
     
     // Close modals with Escape key
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
-            // closeProductPreview(); // This is handled by its own function now
             closeCartSidebar();
         }
     });
@@ -6253,24 +6231,144 @@ body.dark-mode .empty-cart-message {
     color: #f8fafc !important;
 }
 
-/* Right Cart Sidebar in Dark Mode */
+/* ==========================================================================
+   RIGHT CART SIDEBAR IN DARK MODE
+   ========================================================================== */
 body.dark-mode .cart-sidebar,
 body.dark-mode .panda-cart-sidebar,
 body.dark-mode .cart-container {
     background: #1e293b !important;
     border-color: #334155 !important;
     color: #f8fafc !important;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4) !important;
+    box-shadow: -4px 0 25px rgba(0, 0, 0, 0.5) !important;
 }
-body.dark-mode .cart-sidebar h3,
-body.dark-mode .cart-sidebar h4,
-body.dark-mode .cart-sidebar strong {
-    color: #f8fafc !important;
+
+body.dark-mode .cart-header {
+    background: #1e293b !important;
+    border-bottom: 1px solid #334155 !important;
 }
-body.dark-mode .cart-sidebar p,
-body.dark-mode .cart-sidebar span {
+
+body.dark-mode .cart-close {
     color: #cbd5e1 !important;
 }
+
+body.dark-mode .cart-close:hover {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .cart-header span {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cart-header small {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .cart-body {
+    background: #1e293b !important;
+}
+
+body.dark-mode .cart-store-header h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cart-empty {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .cart-empty i {
+    color: #64748b !important;
+}
+
+body.dark-mode .cart-empty p {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .cart-item {
+    background: #111827 !important;
+    border: 1px solid #334155 !important;
+    border-radius: 10px !important;
+    padding: 10px !important;
+    margin-bottom: 10px !important;
+}
+
+body.dark-mode .cart-item-quantity button,
+body.dark-mode .qty-decrease,
+body.dark-mode .qty-increase {
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .cart-item-quantity button:hover,
+body.dark-mode .qty-decrease:hover,
+body.dark-mode .qty-increase:hover {
+    background: #334155 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .cart-item-quantity span {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cart-item-image {
+    background-color: #0f172a !important;
+}
+
+body.dark-mode .cart-item-name {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cart-item-size,
+body.dark-mode .cart-item-addons {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .cart-item-price-col,
+body.dark-mode .cart-item-price-col div {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cart-item-remove {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .cart-item-remove:hover {
+    color: #f87171 !important;
+}
+
+body.dark-mode .cart-footer {
+    background: #1e293b !important;
+    border-top: 1px solid #334155 !important;
+}
+
+body.dark-mode .summary-row span,
+body.dark-mode .cart-summary .summary-row span {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode #cartSubtotal {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .summary-row.total,
+body.dark-mode .cart-summary .summary-row.total {
+    border-top: 1px solid #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode #cartTotal {
+    color: #ef4444 !important;
+}
+
+body.dark-mode #clearCart {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode #clearCart:hover {
+    color: #ef4444 !important;
+}
+
 body.dark-mode .delivery-pickup-toggle,
 body.dark-mode .order-type-switch {
     background: #0f172a !important;

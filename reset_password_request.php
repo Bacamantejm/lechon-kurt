@@ -15,12 +15,10 @@ function checkResetRateLimit(): bool {
     $now = time();
     $window_start = $now - RESET_RATE_WINDOW;
 
-    // Initialise or migrate the session key
     if (!isset($_SESSION['pw_reset_attempts']) || !is_array($_SESSION['pw_reset_attempts'])) {
         $_SESSION['pw_reset_attempts'] = [];
     }
 
-    // Prune timestamps that are outside the current window
     $_SESSION['pw_reset_attempts'] = array_values(
         array_filter($_SESSION['pw_reset_attempts'], fn($t) => $t > $window_start)
     );
@@ -52,7 +50,6 @@ function getResetCooldownSeconds(): int {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email'] ?? '');
 
-    // ── Check rate limit first ───────────────────────────────────────────────
     if (!checkResetRateLimit()) {
         $cooldown = getResetCooldownSeconds();
         $minutes  = ceil($cooldown / 60);
@@ -68,7 +65,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error = 'Please enter a valid email address.';
     } else {
-
         $check_stmt = mysqli_prepare($conn, 'SELECT id, full_name FROM users WHERE email = ? AND is_active = 1');
         if (!$check_stmt) {
             $error = 'Unable to process your request right now. Please try again shortly.';
@@ -82,7 +78,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 mysqli_stmt_fetch($check_stmt);
                 mysqli_stmt_close($check_stmt);
 
-                // Only count as a rate-limit attempt when the email is actually registered.
                 recordResetAttempt();
 
                 $token   = bin2hex(random_bytes(32));
@@ -110,13 +105,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             } else {
                 mysqli_stmt_close($check_stmt);
-                // Tell the user explicitly — their email is not in our system.
+                $error = 'No account found with this email address. Please verify or register a new account.';
             }
         }
     }
-    error_log("=== End Password Reset Request ===\n");
 
-    // Handle AJAX requests (Forgot Password modal)
     $is_ajax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
     $is_ajax = $is_ajax || (isset($_POST['ajax']) && (string)$_POST['ajax'] === 'true');
     if ($is_ajax) {
@@ -155,120 +148,146 @@ $page_title = "Reset Password | Lechon Delights";
 include 'includes/header.php';
 ?>
 
-<!-- SweetAlert2 CSS -->
-<link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
-
 <style>
-/* Main Layout Styles */
+/* Reset Password Page Layout */
 .login-page-container {
-    background: #ffffff !important;
+    background: #f8f9fa !important;
     display: flex;
     align-items: stretch;
     justify-content: stretch;
-    height: calc(100vh - var(--site-header-offset, 64px)) !important;
-    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
-    overflow: hidden !important;
+    min-height: calc(100vh - var(--site-header-offset, 64px));
     padding: 0 !important;
 }
 
 .login-wrapper {
     max-width: 100% !important;
     width: 100%;
-    height: calc(100vh - var(--site-header-offset, 64px)) !important;
-    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
-    background-color: white;
-    border-radius: 0 !important;
-    border: none;
-    box-shadow: none !important;
+    min-height: calc(100vh - var(--site-header-offset, 64px));
+    background-color: #ffffff;
     display: flex;
     flex-direction: row;
     margin: 0 !important;
-    animation: fadeIn 0.6s ease-out;
     overflow: hidden;
 }
 
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(30px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-/* Left Side - Brand/Info */
+/* Left Brand Showcase */
 .login-left {
-    width: 50%;
-    background: linear-gradient(135deg, #b3261e 0%, #8f261a 100%) !important;
+    width: 48%;
+    background: linear-gradient(135deg, #182234 0%, #1e293b 60%, #0f172a 100%) !important;
     display: flex !important;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 40px !important;
+    padding: 48px 40px !important;
     text-align: center;
     position: relative;
     overflow: hidden;
-    height: calc(100vh - var(--site-header-offset, 64px)) !important;
-    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
+    color: #ffffff !important;
+    border-right: 1px solid #334155;
+}
+
+.brand-showcase-card {
+    position: relative;
+    z-index: 10;
+    max-width: 420px;
+}
+
+.brand-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    background: rgba(179, 38, 30, 0.25);
+    border: 1px solid rgba(179, 38, 30, 0.4);
+    border-radius: 999px;
+    color: #f87171;
+    font-size: 0.82rem;
+    font-weight: 700;
+    margin-bottom: 20px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
 }
 
 .brand-title {
     font-family: 'Outfit', sans-serif;
-    font-size: 3.8rem;
+    font-size: 2.8rem;
     font-weight: 900;
-    letter-spacing: -1.5px;
-    margin: 0;
+    letter-spacing: -0.03em;
+    margin: 0 0 12px 0;
     color: #ffffff !important;
-    text-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+    line-height: 1.15;
 }
 
 .brand-subtitle {
-    font-size: 1.25rem;
-    color: rgba(255, 255, 255, 0.9) !important;
-    margin-top: 15px;
-    max-width: 340px;
-    font-weight: 600;
+    font-size: 1.05rem;
+    color: #94a3b8 !important;
+    margin: 0 0 32px 0;
+    font-weight: 500;
     line-height: 1.6;
 }
 
-.floating-pigs-container {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    z-index: 1;
+.brand-feature-list {
+    display: grid;
+    gap: 14px;
+    text-align: left;
+    margin-top: 10px;
 }
 
-.floating-pig {
-    position: absolute;
-    font-size: 3.5rem;
-    opacity: 0.16;
-    animation: floatPig 8s ease-in-out infinite alternate;
+.brand-feature-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(51, 65, 85, 0.6);
+    border-radius: 12px;
 }
 
-.pig-1 { top: 10%; left: 15%; animation-duration: 9s; font-size: 4rem; }
-.pig-2 { top: 25%; right: 15%; animation-duration: 11s; animation-delay: 1s; font-size: 3.5rem; }
-.pig-3 { bottom: 20%; left: 20%; animation-duration: 10s; animation-delay: 2s; font-size: 4.5rem; }
-.pig-4 { bottom: 15%; right: 25%; animation-duration: 8s; animation-delay: 0.5s; font-size: 3rem; }
-.pig-5 { top: 50%; left: 40%; animation-duration: 12s; animation-delay: 1.5s; font-size: 3.8rem; }
-
-@keyframes floatPig {
-    0% { transform: translateY(0) rotate(0deg) scale(1); }
-    50% { transform: translateY(-20px) rotate(8deg) scale(1.05); }
-    100% { transform: translateY(10px) rotate(-8deg) scale(0.95); }
+.brand-feature-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: rgba(179, 38, 30, 0.2);
+    color: #ef4444;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
 }
 
-/* Right Side - Forms */
+.brand-feature-text h4 {
+    margin: 0 0 2px 0;
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #f8fafc;
+}
+
+.brand-feature-text p {
+    margin: 0;
+    font-size: 0.8rem;
+    color: #94a3b8;
+}
+
+/* Right Side - Form Section */
 .login-right {
-    width: 50%;
+    width: 52%;
     background: #ffffff;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: flex-start;
-    padding: 44px 24px 36px !important;
-    height: calc(100vh - var(--site-header-offset, 64px)) !important;
-    max-height: calc(100vh - var(--site-header-offset, 64px)) !important;
-    overflow-y: auto !important;
+    justify-content: center;
+    padding: 48px 32px !important;
+    overflow-y: auto;
     box-sizing: border-box;
+}
+
+.auth-form-card {
+    max-width: 440px;
+    width: 100%;
+    margin: auto 0;
+    display: flex;
+    flex-direction: column;
 }
 
 .login-header {
@@ -276,91 +295,106 @@ include 'includes/header.php';
     text-align: center;
 }
 
+.brand-logo-row {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    text-decoration: none;
+}
+
+.brand-logo-row img {
+    width: 44px;
+    height: 44px;
+    object-fit: cover;
+    border-radius: 12px;
+    border: 1px solid #eaecf0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.brand-logo-row span {
+    font-size: 1.45rem;
+    font-weight: 800;
+    color: #101828;
+    font-family: 'Outfit', sans-serif;
+}
+
 .login-header h2 {
-    color: #171922;
-    font-size: 1.8rem;
-    margin-bottom: 10px;
-    font-weight: 700;
+    color: #101828;
+    font-size: 1.75rem;
+    font-weight: 800;
+    margin: 0 0 8px 0;
+    font-family: 'Outfit', sans-serif;
 }
 
 .login-header p {
-    color: #7b6d64;
-    font-size: 1rem;
+    color: #475467;
+    font-size: 0.92rem;
     line-height: 1.5;
+    margin: 0;
 }
 
-/* Alert Messages */
+/* Inline Alert Banners */
 .alert {
-    padding: 15px 20px;
+    padding: 14px 18px;
     border-radius: 12px;
-    margin-bottom: 20px;
-    animation: slideDown 0.3s ease;
+    margin-bottom: 22px;
     display: flex;
     align-items: flex-start;
     gap: 12px;
-}
-
-@keyframes slideDown {
-    from { transform: translateY(-10px); opacity: 0; }
-    to { transform: translateY(0); opacity: 1; }
+    font-size: 0.9rem;
+    line-height: 1.45;
 }
 
 .alert-error {
-    background-color: #FFEBEE;
-    border-left: 4px solid #F44336;
+    background-color: #fff1f0;
+    border: 1px solid #fee4e2;
     color: #b3261e;
 }
 
 .alert-success {
-    background-color: #E8F5E9;
-    border-left: 4px solid #4CAF50;
-    color: #2E7D32;
+    background-color: #ecfdf3;
+    border: 1px solid #abefc6;
+    color: #027a48;
 }
 
 .alert i {
-    font-size: 1.2rem;
+    font-size: 1.15rem;
     margin-top: 2px;
     flex-shrink: 0;
 }
 
-/* Form Styles */
-.login-form {
-    animation: slideUp 0.5s ease;
-}
-
-@keyframes slideUp {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
+/* Form Controls */
 .form-group {
-    margin-bottom: 25px;
+    margin-bottom: 22px;
 }
 
 .form-group label {
     display: block;
     margin-bottom: 8px;
-    color: #2a211d;
+    color: #344054;
     font-weight: 700;
-    font-size: 0.95rem;
+    font-size: 0.9rem;
 }
 
 .form-control {
     width: 100%;
-    padding: 15px 18px;
+    padding: 14px 16px 14px 44px;
     border: 1px solid #d0d5dd;
     border-radius: 10px;
-    font-size: 1rem;
-    transition: all 0.3s;
+    font-size: 0.95rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
     font-family: inherit;
     background-color: #ffffff;
+    color: #101828;
+    box-sizing: border-box;
 }
 
 .form-control:focus {
     outline: none;
     border-color: #b3261e;
-    background-color: #ffffff;
-    box-shadow: 0 0 0 4px rgba(179, 38, 30, 0.12);
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.15);
 }
 
 .input-with-icon {
@@ -369,156 +403,235 @@ include 'includes/header.php';
 
 .input-with-icon i {
     position: absolute;
-    left: 18px;
+    left: 16px;
     top: 50%;
     transform: translateY(-50%);
-    color: #999;
-    font-size: 1.1rem;
+    color: #667085;
+    font-size: 1rem;
+    pointer-events: none;
 }
 
-.input-with-icon .form-control {
-    padding-left: 50px;
-}
-
-/* Button Styles */
+/* Action Buttons */
 .btn-primary {
     width: 100%;
-    padding: 16px;
-    background: linear-gradient(135deg, #b3261e 0%, #ef6b2e 100%);
-    color: white;
+    padding: 14px;
+    background: #b3261e;
+    color: #ffffff;
     border: none;
     border-radius: 10px;
-    font-size: 1.1rem;
-    font-weight: 600;
+    font-size: 1rem;
+    font-weight: 700;
     cursor: pointer;
-    transition: all 0.3s;
-    display: flex;
+    transition: background-color 0.2s ease, transform 0.15s ease;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
-    position: relative;
-    overflow: hidden;
-    letter-spacing: 0.5px;
-    margin-top: 10px;
-    box-shadow: 0 12px 28px rgba(179, 38, 30, 0.26);
+    gap: 8px;
+    margin-top: 6px;
+    text-decoration: none;
 }
 
 .btn-primary:hover:not(:disabled) {
-    transform: translateY(-3px);
-    box-shadow: 0 15px 34px rgba(179, 38, 30, 0.34);
-}
-
-.btn-primary:active:not(:disabled) {
+    background: #981b15;
     transform: translateY(-1px);
 }
 
+.btn-primary:active:not(:disabled) {
+    transform: translateY(0);
+}
+
 .btn-primary:disabled {
-    background: #cccccc;
+    background: #94a3b8;
     cursor: not-allowed;
     transform: none;
-    box-shadow: none;
 }
 
-.btn-primary.loading {
-    color: transparent;
-}
-
-.btn-primary.loading::after {
-    content: '';
-    position: absolute;
-    width: 22px;
-    height: 22px;
-    border: 3px solid rgba(255, 255, 255, 0.3);
-    border-top-color: white;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
-
-/* Auth Link */
+/* Auth Links */
 .auth-link {
     text-align: center;
-    margin-top: 25px;
-    color: #7b6d64;
-    font-size: 0.95rem;
+    margin-top: 24px;
+    color: #475467;
+    font-size: 0.92rem;
     padding-top: 20px;
-    border-top: 1px solid #efddcd;
+    border-top: 1px solid #eaecf0;
 }
 
 .auth-link a {
     color: #b3261e !important;
     text-decoration: none !important;
     font-weight: 700 !important;
-    transition: all 0.3s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .auth-link a:hover {
-    color: #8f261a !important;
+    color: #981b15 !important;
     text-decoration: underline !important;
 }
 
-/* Responsive Design */
+/* ==========================================================================
+   RESET PASSWORD DARK MODE ENGINE
+   ========================================================================== */
+body.dark-mode,
+body.dark-mode .login-page-container {
+    background: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .login-wrapper {
+    background: #0f172a !important;
+}
+
+body.dark-mode .login-left {
+    background: linear-gradient(135deg, #090d16 0%, #111827 60%, #0f172a 100%) !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .brand-feature-item {
+    background: rgba(15, 23, 42, 0.7) !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .login-right {
+    background: #0f172a !important;
+}
+
+body.dark-mode .brand-logo-row span,
+body.dark-mode .login-header h2 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .login-header p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .form-group label {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .form-control {
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .form-control:focus {
+    background-color: #0b1120 !important;
+    border-color: #b3261e !important;
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.3) !important;
+}
+
+body.dark-mode .input-with-icon i {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .auth-link {
+    color: #94a3b8 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .auth-link a {
+    color: #f87171 !important;
+}
+
+body.dark-mode .auth-link a:hover {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .alert-error {
+    background-color: rgba(179, 38, 30, 0.15) !important;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+    color: #f87171 !important;
+}
+
+body.dark-mode .alert-success {
+    background-color: rgba(2, 122, 72, 0.15) !important;
+    border-color: rgba(74, 222, 128, 0.3) !important;
+    color: #4ade80 !important;
+}
+
+/* Responsive */
 @media (max-width: 850px) {
     .login-wrapper {
         flex-direction: column;
     }
-    .login-right {
-        width: 100%;
-        height: auto;
-        min-height: calc(100vh - 64px);
-        padding: 40px 20px !important;
-    }
     .login-left {
         display: none !important;
     }
-    input, select, textarea, .form-control {
-        font-size: 16px !important;
+    .login-right {
+        width: 100%;
+        padding: 40px 20px !important;
+        min-height: calc(100vh - 64px);
     }
 }
 </style>
 
 <div class="login-page-container">
     <div class="login-wrapper">
-        <!-- Left Side: Branding Panel with Floating Mascot Pigs -->
+        <!-- Left Side: Brand Showcase Panel -->
         <div class="login-left">
-            <div class="floating-pigs-container">
-                <div class="floating-pig pig-1">🐷</div>
-                <div class="floating-pig pig-2">🐷</div>
-                <div class="floating-pig pig-3">🐷</div>
-                <div class="floating-pig pig-4">🐷</div>
-                <div class="floating-pig pig-5">🐷</div>
-            </div>
-            <div class="brand-content" style="position: relative; z-index: 10;">
+            <div class="brand-showcase-card">
+                <div class="brand-badge">
+                    <i class="fas fa-shield-alt"></i> Account Security
+                </div>
                 <h1 class="brand-title">Lechon Delights</h1>
-                <p class="brand-subtitle">Cavite's Finest Lechon at Your Doorsteps</p>
+                <p class="brand-subtitle">Reset your account password quickly and securely to get back to ordering Cavite's finest lechon.</p>
+                
+                <div class="brand-feature-list">
+                    <div class="brand-feature-item">
+                        <div class="brand-feature-icon">
+                            <i class="fas fa-lock"></i>
+                        </div>
+                        <div class="brand-feature-text">
+                            <h4>Encrypted &amp; Secure</h4>
+                            <p>One-time secure tokens expire in 10 minutes</p>
+                        </div>
+                    </div>
+                    <div class="brand-feature-item">
+                        <div class="brand-feature-icon">
+                            <i class="fas fa-inbox"></i>
+                        </div>
+                        <div class="brand-feature-text">
+                            <h4>Direct Email Delivery</h4>
+                            <p>Instant password reset instructions delivered to you</p>
+                        </div>
+                    </div>
+                    <div class="brand-feature-item">
+                        <div class="brand-feature-icon">
+                            <i class="fas fa-headset"></i>
+                        </div>
+                        <div class="brand-feature-text">
+                            <h4>Customer Support</h4>
+                            <p>Available 24/7 if you need assistance recovering access</p>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <!-- Reset Request Form Section -->
+        <!-- Right Side: Reset Form Section -->
         <div class="login-right">
-            <div style="max-width: 440px; width: 100%; margin: auto 0; display: flex; flex-direction: column;">
+            <div class="auth-form-card">
                 <div class="login-header">
-                    <div style="display: inline-flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 12px;">
-                        <img src="assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 48px; height: 48px; object-fit: cover; border-radius: 12px; display: block; border: 1px solid #efddcd; box-shadow: 0 4px 12px rgba(0,0,0,0.06);">
-                        <span style="font-size: 1.6rem; font-weight: 800; color: #171922; font-family: 'Outfit', sans-serif;">Lechon Delights</span>
-                    </div>
+                    <a href="index.php" class="brand-logo-row">
+                        <img src="assets/images/logo.jpg" alt="Lechon Delights Logo">
+                        <span>Lechon Delights</span>
+                    </a>
                     <h2>Reset Your Password</h2>
-                    <p>Enter your email address and we'll send you a link to reset your password.</p>
+                    <p>Enter your registered email address and we will send you a secure link to reset your password.</p>
                 </div>
 
                 <?php if ($error): ?>
                 <div class="alert alert-error" id="errorAlert">
-                    <i class="fas fa-exclamation-circle"></i>
+                    <i class="fas fa-circle-exclamation"></i>
                     <div><?php echo htmlspecialchars($error); ?></div>
                 </div>
                 <?php endif; ?>
 
                 <?php if ($success): ?>
                 <div class="alert alert-success" id="successAlert">
-                    <i class="fas fa-check-circle"></i>
+                    <i class="fas fa-circle-check"></i>
                     <div><?php echo htmlspecialchars($success); ?></div>
                 </div>
                 <?php endif; ?>
@@ -529,7 +642,7 @@ include 'includes/header.php';
                         <div class="input-with-icon">
                             <i class="fas fa-envelope"></i>
                             <input type="email" id="email" name="email" class="form-control" required 
-                                placeholder="Enter your registered email address"
+                                placeholder="name@example.com"
                                 autocomplete="email"
                                 value="<?php echo htmlspecialchars($_POST['email'] ?? ''); ?>">
                         </div>
@@ -540,9 +653,9 @@ include 'includes/header.php';
                         <span>Send Reset Link</span>
                     </button>
 
-                    <div class="auth-link" style="text-align: center;">
+                    <div class="auth-link">
                         Remember your password? 
-                        <a href="login.php">Sign in here</a>
+                        <a href="login.php"><i class="fas fa-arrow-left"></i> Back to Sign In</a>
                     </div>
                 </form>
             </div>
@@ -550,116 +663,62 @@ include 'includes/header.php';
     </div>
 </div>
 
-<!-- SweetAlert2 JS -->
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const resetForm = document.getElementById('resetRequestForm');
+    const emailInput = document.getElementById('email');
+    const submitBtn = document.getElementById('submitBtn');
+
     if (resetForm) {
         resetForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const email = document.getElementById('email').value.trim();
-            const btn = document.getElementById('submitBtn');
+            const email = emailInput ? emailInput.value.trim() : '';
             
             if (!email) {
-                Swal.fire({
-                    icon: 'info',
-                    title: 'Email Required',
-                    text: 'Please enter your email address to continue.',
-                    confirmButtonColor: '#b3261e'
-                });
+                e.preventDefault();
+                if (window.showPopupAlert) {
+                    window.showPopupAlert('Please enter your email address.', 'alert');
+                }
                 return false;
             }
             
             if (!isValidEmail(email)) {
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Invalid Email',
-                    text: 'Please enter a valid email address (e.g., user@example.com).',
-                    confirmButtonColor: '#b3261e'
-                });
+                e.preventDefault();
+                if (window.showPopupAlert) {
+                    window.showPopupAlert('Please enter a valid email address (e.g. name@example.com).', 'alert');
+                }
                 return false;
             }
             
-            if (btn) {
-                btn.classList.add('loading');
-                btn.disabled = true;
-                const span = btn.querySelector('span');
-                if (span) {
-                    span.textContent = 'Sending Reset Link...';
-                }
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> <span>Sending Reset Link...</span>';
             }
-            
-            this.submit();
         });
     }
 
     function isValidEmail(email) {
-        const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        return re.test(email);
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
     }
 
     setTimeout(() => {
-        const emailInput = document.getElementById('email');
         if (emailInput) {
             emailInput.focus();
         }
-    }, 300);
-    
+    }, 250);
+
     <?php if ($error): ?>
-    <?php
-        // Detect rate-limit errors to show a distinct dialog with countdown
-        $is_rate_limited = str_contains($error, 'Too many reset requests');
-        $cooldown_secs   = $is_rate_limited ? getResetCooldownSeconds() : 0;
-    ?>
-    Swal.fire({
-        icon: '<?php echo $is_rate_limited ? 'warning' : 'error'; ?>',
-        title: '<?php echo $is_rate_limited ? 'Too Many Requests' : 'Oops!'; ?>',
-        html: '<?php echo addslashes($error); ?>'
-            <?php if ($is_rate_limited && $cooldown_secs > 0): ?>
-            + '<br><small id="swalCountdown" style="color:#7b6d64;">Retry available in <strong><?php echo $cooldown_secs; ?></strong>s</small>',
-            <?php else: ?>
-            ,
-            <?php endif; ?>
-        confirmButtonColor: '#b3261e',
-        confirmButtonText: '<?php echo $is_rate_limited ? 'OK' : 'Try Again'; ?>',
-        backdrop: 'rgba(0, 0, 0, 0.4)',
-        didOpen: function() {
-            Swal.getConfirmButton().focus();
-            <?php if ($is_rate_limited && $cooldown_secs > 0): ?>
-            let remaining = <?php echo $cooldown_secs; ?>;
-            const cd = document.getElementById('swalCountdown');
-            const timer = setInterval(function() {
-                remaining--;
-                if (cd) cd.innerHTML = 'Retry available in <strong>' + remaining + '</strong>s';
-                if (remaining <= 0) {
-                    clearInterval(timer);
-                    if (cd) cd.innerHTML = 'You can try again now.';
-                    Swal.getConfirmButton().textContent = 'Try Again';
-                }
-            }, 1000);
-            <?php endif; ?>
-        }
-    });
+    if (window.showPopupAlert) {
+        window.showPopupAlert(<?php echo json_encode($error); ?>, 'error', 5000);
+    }
     <?php endif; ?>
 
     <?php if ($success): ?>
-    Swal.fire({
-        icon: 'success',
-        title: 'Success!',
-        html: '<p><?php echo addslashes($success); ?></p><p style="font-size: 0.85rem; color: #666; margin-top: 10px;">Check your inbox and spam folder for the reset link.</p>',
-        confirmButtonColor: '#b3261e',
-        confirmButtonText: 'Done',
-        backdrop: 'rgba(0, 0, 0, 0.4)',
-        didOpen: function() {
-            const button = Swal.getConfirmButton();
-            button.focus();
-        }
-    }).then(() => {
-        document.getElementById('email').value = '';
-    });
+    if (window.showPopupAlert) {
+        window.showPopupAlert(<?php echo json_encode($success); ?>, 'success', 5000);
+    }
+    if (emailInput) {
+        emailInput.value = '';
+    }
     <?php endif; ?>
 });
 </script>

@@ -41,7 +41,7 @@ if (!function_exists('favoritesNormalizeStoreKey')) {
     function favoritesNormalizeStoreKey($value) {
         $text = strtolower(trim((string)$value));
         $text = preg_replace('/[^a-z0-9\-_\s]+/', '', $text);
-        $text = preg_replace('/\s+/', '-', $text);
+        $text = preg_replace('/[\s_]+/', '-', $text);
         $text = trim((string)$text, '-_');
         if ($text === '') {
             return '';

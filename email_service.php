@@ -21,7 +21,7 @@ class EmailService {
     public function __construct($conn, bool $forceLocalMailer = false) {
         $this->conn = $conn;
         $this->mail = new PHPMailer(true);
-        $this->local_mail_path = realpath(__DIR__ . '/../tmp/local_mail') ?: (__DIR__ . '/../tmp/local_mail');
+        $this->local_mail_path = __DIR__ . '/tmp/local_mail';
 
         $smtp_host = trim((string)(defined('SMTP_HOST') ? SMTP_HOST : ''));
         $smtp_port = (int)(defined('SMTP_PORT') ? SMTP_PORT : 587);
@@ -128,55 +128,102 @@ class EmailService {
         }
     }
 
-    public function sendNotificationEmail($email, $subject, $message) {
-        try {
-            $this->resetMessage();
-            $safe_email = trim((string)$email);
-            if ($safe_email === '') {
-                return false;
-            }
-
-            $safe_subject = trim((string)$subject);
-            $safe_message = nl2br(htmlspecialchars((string)$message));
-            $html = "
-            <html>
-            <body style='font-family:Arial,sans-serif;background:#f8fafc;color:#0f172a;padding:24px;'>
-                <div style='max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;padding:24px;'>
-                    <h2 style='margin-top:0;color:#b91c1c;'>Lechon Delights Notice</h2>
-                    <p>{$safe_message}</p>
-                    <p style='margin-top:24px;color:#64748b;font-size:13px;'>This is an automated platform message.</p>
-                </div>
-            </body>
-            </html>";
-
-            $this->mail->addAddress($safe_email);
-            $this->mail->Subject = $safe_subject;
-            $this->mail->Body = $html;
-            $this->mail->AltBody = strip_tags((string)$message);
-            return $this->mail->send();
-        } catch (Exception $e) {
-            $this->recordFailure("Notification email sending failed: " . $e->getMessage(), $e);
-
-            if ($this->used_local_smtp && !$this->local_mail_fallback) {
-                $this->local_mail_fallback = true;
-                error_log('Local SMTP failed, retrying with PHP mail() fallback.');
-                try {
-                    $this->resetMessage();
-                    $this->mail->isMail();
-                    $this->mail->addAddress($safe_email);
-                    $this->mail->Subject = $safe_subject;
-                    $this->mail->Body = $html;
-                    $this->mail->AltBody = strip_tags((string)$message);
-                    return $this->mail->send();
-                } catch (Exception $e2) {
-                    $this->recordFailure("PHP mail() fallback failed: " . $e2->getMessage(), $e2);
-                    error_log('Mail function failed, writing email to local file fallback.');
-                    return $this->writeLocalMailFile($safe_email, $safe_subject, $html, strip_tags((string)$message));
-                }
-            }
-
+    public function dispatchMessage(string $safe_email, string $safe_subject, string $html, string $alt_body, string $recipient_name = ''): bool {
+        $safe_email = trim($safe_email);
+        if ($safe_email === '' || !filter_var($safe_email, FILTER_VALIDATE_EMAIL)) {
+            $this->last_error = 'Invalid recipient email address.';
             return false;
         }
+
+        // 1. Primary configured mailer attempt (e.g. SMTP or Laragon Mailpit)
+        try {
+            $this->resetMessage();
+            if ($recipient_name !== '') {
+                $this->mail->addAddress($safe_email, $recipient_name);
+            } else {
+                $this->mail->addAddress($safe_email);
+            }
+            $this->mail->Subject = $safe_subject;
+            $this->mail->Body    = $html;
+            $this->mail->AltBody = $alt_body !== '' ? $alt_body : strip_tags($html);
+
+            if ($this->mail->send()) {
+                return true;
+            }
+        } catch (Exception $e) {
+            $this->recordFailure("Primary mailer failed for {$safe_email}: " . $e->getMessage(), $e);
+        }
+
+        // 2. Fallback attempt: PHPMailer isMail() transport
+        try {
+            $this->resetMessage();
+            $this->mail->isMail();
+            if ($recipient_name !== '') {
+                $this->mail->addAddress($safe_email, $recipient_name);
+            } else {
+                $this->mail->addAddress($safe_email);
+            }
+            $this->mail->Subject = $safe_subject;
+            $this->mail->Body    = $html;
+            $this->mail->AltBody = $alt_body !== '' ? $alt_body : strip_tags($html);
+
+            if ($this->mail->send()) {
+                error_log("Email to {$safe_email} sent successfully via PHPMailer isMail() fallback.");
+                return true;
+            }
+        } catch (Exception $e2) {
+            $this->recordFailure("PHPMailer isMail() fallback failed for {$safe_email}: " . $e2->getMessage(), $e2);
+        }
+
+        // 3. Fallback attempt: Native PHP mail() function directly
+        try {
+            $from_name = $this->mail->FromName ?: 'Lechon Delights';
+            $from_addr = $this->mail->From ?: 'no-reply@lechondelights.com';
+            $headers = [
+                'MIME-Version: 1.0',
+                'Content-type: text/html; charset=UTF-8',
+                'From: ' . $from_name . ' <' . $from_addr . '>',
+                'Reply-To: ' . $from_addr,
+                'X-Mailer: PHP/' . phpversion()
+            ];
+            if (@mail($safe_email, $safe_subject, $html, implode("\r\n", $headers))) {
+                error_log("Email to {$safe_email} sent successfully via native PHP mail() function.");
+                return true;
+            }
+        } catch (Throwable $e3) {
+            $this->recordFailure("Native PHP mail() fallback failed for {$safe_email}: " . $e3->getMessage(), $e3);
+        }
+
+        // 4. Fallback attempt: Save local HTML email artifact
+        $written = $this->writeLocalMailFile($safe_email, $safe_subject, $html, $alt_body !== '' ? $alt_body : strip_tags($html));
+        if ($written) {
+            error_log("Email to {$safe_email} saved to local mail file as fallback.");
+            return true;
+        }
+
+        return false;
+    }
+
+    public function sendNotificationEmail($email, $subject, $message) {
+        $safe_email = trim((string)$email);
+        if ($safe_email === '') {
+            return false;
+        }
+
+        $safe_subject = trim((string)$subject);
+        $safe_message = nl2br(htmlspecialchars((string)$message));
+        $html = "
+        <html>
+        <body style='font-family:Arial,sans-serif;background:#f8fafc;color:#0f172a;padding:24px;'>
+            <div style='max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;padding:24px;'>
+                <h2 style='margin-top:0;color:#b91c1c;'>Lechon Delights Notice</h2>
+                <p>{$safe_message}</p>
+                <p style='margin-top:24px;color:#64748b;font-size:13px;'>This is an automated platform message.</p>
+            </div>
+        </body>
+        </html>";
+
+        return $this->dispatchMessage($safe_email, $safe_subject, $html, strip_tags((string)$message));
     }
 
     private function writeLocalMailFile(string $to, string $subject, string $html, string $altBody): bool {
@@ -393,22 +440,15 @@ class EmailService {
 
             $alt_body = "Hi {$full_name},\n\nYour 6-digit Lechon Delights registration verification code (OTP) is: {$otp_code}\n\nThis code expires in 15 minutes. Please do not share it with anyone.\n\n-- Lechon Delights";
 
-            $this->mail->addAddress($safe_email);
-            $this->mail->Subject = "{$otp_code} is your Lechon Delights verification code";
-            $this->mail->Body    = $html;
-            $this->mail->AltBody = $alt_body;
-            return $this->mail->send();
+            return $this->dispatchMessage($safe_email, "{$otp_code} is your Lechon Delights verification code", $html, $alt_body, $full_name);
         } catch (Exception $e) {
             $this->recordFailure("Registration OTP email failed: " . $e->getMessage(), $e);
-            error_log("PHPMailer error info: " . $this->mail->ErrorInfo);
             return false;
         }
     }
 
     public function sendPasswordResetEmail(string $email, string $full_name, string $reset_link): bool {
-
         try {
-            $this->resetMessage();
             $safe_email = trim($email);
             if ($safe_email === '') {
                 return false;
@@ -500,14 +540,9 @@ class EmailService {
 
             $alt_body = "Hi {$full_name},\n\nWe received a request to reset your Lechon Delights account password.\n\nClick the link below to reset it (valid for 10 minutes):\n{$reset_link}\n\nIf you did not request this, you can safely ignore this email.\n\n-- Lechon Delights";
 
-            $this->mail->addAddress($safe_email);
-            $this->mail->Subject = 'Reset Your Password - Lechon Delights';
-            $this->mail->Body    = $html;
-            $this->mail->AltBody = $alt_body;
-            return $this->mail->send();
+            return $this->dispatchMessage($safe_email, 'Reset Your Password - Lechon Delights', $html, $alt_body, $full_name);
         } catch (Exception $e) {
             $this->recordFailure("Password reset email failed: " . $e->getMessage(), $e);
-            error_log("PHPMailer error info: " . $this->mail->ErrorInfo);
             return false;
         }
     }

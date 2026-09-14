@@ -26,6 +26,47 @@ if (favoritesIsCustomerUserSession()) {
     $favorite_store_keys = favoritesFetchUserFavoriteStoreKeyMap($conn, (int)$_SESSION['user_id']);
 }
 
+function shopsGetCityDefaultCoords(string $city_or_address): array {
+    $haystack = strtolower(trim($city_or_address));
+    if (strpos($haystack, 'dasma') !== false || strpos($haystack, 'salawag') !== false || strpos($haystack, 'paliparan') !== false) {
+        return ['lat' => 14.3294, 'lng' => 120.9367];
+    }
+    if (strpos($haystack, 'bacoor') !== false || strpos($haystack, 'habay') !== false || strpos($haystack, 'molino') !== false) {
+        return ['lat' => 14.4445, 'lng' => 120.9439];
+    }
+    if (strpos($haystack, 'imus') !== false || strpos($haystack, 'anabu') !== false || strpos($haystack, 'poblacion') !== false) {
+        return ['lat' => 14.4296, 'lng' => 120.9367];
+    }
+    if (strpos($haystack, 'tagaytay') !== false) {
+        return ['lat' => 14.1153, 'lng' => 120.9621];
+    }
+    if (strpos($haystack, 'trias') !== false || strpos($haystack, 'manggahan') !== false || strpos($haystack, 'gentri') !== false) {
+        return ['lat' => 14.2818, 'lng' => 120.8800];
+    }
+    if (strpos($haystack, 'silang') !== false) {
+        return ['lat' => 14.2307, 'lng' => 120.9749];
+    }
+    if (strpos($haystack, 'trece') !== false) {
+        return ['lat' => 14.2820, 'lng' => 120.8670];
+    }
+    if (strpos($haystack, 'kawit') !== false) {
+        return ['lat' => 14.4450, 'lng' => 120.9020];
+    }
+    if (strpos($haystack, 'rosario') !== false) {
+        return ['lat' => 14.4167, 'lng' => 120.8500];
+    }
+    if (strpos($haystack, 'tanza') !== false) {
+        return ['lat' => 14.3940, 'lng' => 120.8540];
+    }
+    if (strpos($haystack, 'naic') !== false) {
+        return ['lat' => 14.3167, 'lng' => 120.7667];
+    }
+    if (strpos($haystack, 'carmona') !== false) {
+        return ['lat' => 14.3167, 'lng' => 121.0500];
+    }
+    return ['lat' => 14.3294, 'lng' => 120.9367];
+}
+
 // Fetch real store branches from store_locations table
 $shops = [];
 
@@ -43,8 +84,16 @@ if ($branch_res) {
         $city_label = !empty($row['city']) ? trim($row['city']) : 'Branch Store';
         $location_display = !empty($row['address']) ? trim($row['address']) : $city_label;
 
+        $lat = isset($row['latitude']) && $row['latitude'] !== null && (float)$row['latitude'] != 0 ? (float)$row['latitude'] : null;
+        $lng = isset($row['longitude']) && $row['longitude'] !== null && (float)$row['longitude'] != 0 ? (float)$row['longitude'] : null;
+        if ($lat === null || $lng === null) {
+            $fallback = shopsGetCityDefaultCoords($location_display . ' ' . $city_label);
+            $lat = $fallback['lat'];
+            $lng = $fallback['lng'];
+        }
+
         $shops[] = [
-            'key' => 'branch_' . $store_id,
+            'key' => 'branch-' . $store_id,
             'name' => trim((string)$row['store_name']),
             'type' => 'Pickup Branch',
             'cat_key' => 'branch',
@@ -56,8 +105,8 @@ if ($branch_res) {
             'reviews' => 12,
             'is_open' => true,
             'has_vouchers' => true,
-            'latitude' => $row['latitude'],
-            'longitude' => $row['longitude'],
+            'latitude' => $lat,
+            'longitude' => $lng,
             'image' => 'images/store-bg.jpg',
             'menu_link' => 'menu.php?branch_id=' . $store_id,
             'tags' => ['branch', strtolower($row['store_name']), strtolower($city_label)]
@@ -86,8 +135,16 @@ if ($seller_res) {
         $min_row = $min_res ? mysqli_fetch_assoc($min_res) : null;
         $start_price = (!empty($min_row['min_price']) && (float)$min_row['min_price'] > 0) ? (float)$min_row['min_price'] : 50.00;
 
+        $lat = isset($row['latitude']) && $row['latitude'] !== null && (float)$row['latitude'] != 0 ? (float)$row['latitude'] : null;
+        $lng = isset($row['longitude']) && $row['longitude'] !== null && (float)$row['longitude'] != 0 ? (float)$row['longitude'] : null;
+        if ($lat === null || $lng === null) {
+            $fallback = shopsGetCityDefaultCoords($city . ' ' . ($row['business_address'] ?? '') . ' ' . ($row['address'] ?? ''));
+            $lat = $fallback['lat'];
+            $lng = $fallback['lng'];
+        }
+
         $shops[] = [
-            'key' => 'seller_' . $seller_id,
+            'key' => 'seller-' . $seller_id,
             'name' => $name,
             'type' => !empty($row['business_type']) ? ucwords(str_replace('_', ' ', $row['business_type'])) : 'Partner Store',
             'cat_key' => 'partner',
@@ -99,8 +156,8 @@ if ($seller_res) {
             'reviews' => 15,
             'is_open' => true,
             'has_vouchers' => true,
-            'latitude' => $row['latitude'],
-            'longitude' => $row['longitude'],
+            'latitude' => $lat,
+            'longitude' => $lng,
             'image' => !empty($row['business_logo']) ? $row['business_logo'] : (!empty($row['profile_image']) ? $row['profile_image'] : 'images/store-bg.jpg'),
             'menu_link' => 'menu.php?seller_id=' . $seller_id,
             'tags' => ['partner', strtolower($name), strtolower($city)]
@@ -580,12 +637,26 @@ body.dark-mode .store-card-promo-line {
     color: #fb7185 !important;
 }
 
-body.dark-mode #shopsMainSection h2 {
+body.dark-mode #shopsMainSection h2,
+body.dark-mode #nearbySectionTitle,
+body.dark-mode #otherSectionTitle {
     color: #f8fafc !important;
 }
 
-body.dark-mode #shopsCountLabel {
+body.dark-mode #shopsCountLabel,
+body.dark-mode #nearbyCountLabel,
+body.dark-mode #otherCountLabel {
     color: #94a3b8 !important;
+}
+
+body.dark-mode #nearbyEmptyNotice {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode [style*="border-top:1px solid #eaecf0"],
+body.dark-mode [style*="border-top: 1px solid #eaecf0"] {
+    border-top-color: #334155 !important;
 }
 
 body.dark-mode .market-time-pill {
@@ -743,88 +814,118 @@ body.dark-mode .leaflet-popup-content span {
                         <div id="shopsNearbyMap" style="width:100%; height:360px; border-radius:16px; border:1px solid #cbd5e1; box-shadow:0 6px 20px rgba(15,23,42,0.06); z-index:1;"></div>
                     </div>
 
-                    <!-- Shop by Store Header -->
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                        <h2 style="font-size:1.5rem; font-weight:800; color:#171922; margin:0;">Shop by store</h2>
-                        <span style="font-size:0.88rem; color:#667085;" id="shopsCountLabel">Showing <?php echo count($shops); ?> shops</span>
+                    <!-- Section 1: Stores Near You (Only shows stores nearby the user's location) -->
+                    <div class="shops-section-block" id="nearbyShopsBlock" style="margin-bottom:34px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; flex-wrap:wrap; gap:10px;">
+                            <div>
+                                <div style="display:inline-flex; align-items:center; gap:6px; background:#fff1f0; color:#b3261e; padding:4px 12px; border-radius:999px; font-size:0.78rem; font-weight:800; margin-bottom:6px; border:1px solid #fee4e2;">
+                                    <i class="fas fa-location-arrow"></i> Nearby Delivery
+                                </div>
+                                <h2 style="font-size:1.45rem; font-weight:800; color:#171922; margin:0;" id="nearbySectionTitle">Stores Near You</h2>
+                            </div>
+                            <span style="font-size:0.88rem; color:#667085;" id="nearbyCountLabel">Showing nearby stores</span>
+                        </div>
+
+                        <!-- 3-Column Nearby Store Grid -->
+                        <div class="market-store-list store-list-grid" id="nearbyShopsGrid"></div>
+
+                        <!-- Nearby Empty Notice -->
+                        <div id="nearbyEmptyNotice" style="display:none; padding:28px 20px; text-align:center; background:#ffffff; border:1px dashed #cbd5e1; border-radius:16px; margin-top:10px;">
+                            <i class="fas fa-location-crosshairs" style="font-size:1.8rem; color:#b3261e; margin-bottom:8px; opacity:0.8;"></i>
+                            <p style="color:#64748b; font-size:0.92rem; margin:0 0 6px; font-weight:600;">No stores found within immediate 15 km of your location.</p>
+                            <span style="color:#b3261e; font-weight:700; font-size:0.85rem;">Check other Cavite store branches &amp; partner shops below!</span>
+                        </div>
                     </div>
 
-                    <!-- 3-Column Store Grid Layout (Real DB Store Cards) -->
-                    <div class="market-store-list store-list-grid" id="shopsGrid">
-                        <?php foreach ($shops as $index => $shop): ?>
-                            <?php
-                            $price_text = 'Starts at PHP ' . number_format((float)$shop['start_price'], 2);
-                            $shop_key_value = (string)($shop['key'] ?? '');
-                            $is_shop_favorite = !empty($favorite_store_keys[$shop_key_value]);
-                            $city_label = !empty($shop['city']) ? $shop['city'] : $shop['location'];
-                            ?>
-                            <a href="<?php echo htmlspecialchars($shop['menu_link']); ?>"
-                               class="market-store-row panda-card-link shop-card-item"
-                               data-shop-key="<?php echo htmlspecialchars($shop_key_value); ?>"
-                               data-city="<?php echo htmlspecialchars(strtolower($city_label)); ?>"
-                               data-location="<?php echo htmlspecialchars(strtolower($shop['location'] ?? '')); ?>"
-                               data-cat="<?php echo htmlspecialchars($shop['cat_key']); ?>"
-                               data-vouchers="<?php echo !empty($shop['has_vouchers']) ? '1' : '0'; ?>"
-                               data-price="<?php echo (float)$shop['start_price']; ?>"
-                               data-rating="<?php echo (float)$shop['rating']; ?>"
-                               data-open="<?php echo !empty($shop['is_open']) ? '1' : '0'; ?>"
-                               data-lat="<?php echo isset($shop['latitude']) && $shop['latitude'] !== null ? htmlspecialchars((string)$shop['latitude']) : ''; ?>"
-                               data-lng="<?php echo isset($shop['longitude']) && $shop['longitude'] !== null ? htmlspecialchars((string)$shop['longitude']) : ''; ?>"
-                               data-search="<?php echo htmlspecialchars(strtolower($shop['name'] . ' ' . $shop['summary'] . ' ' . $city_label . ' ' . implode(' ', $shop['tags']))); ?>">
-                                
-                                <!-- Image Wrapper -->
-                                <div class="store-card-image-wrap">
-                                    <div class="market-store-row-thumb" style="background-image:url('<?php echo htmlspecialchars($shop['image']); ?>');"></div>
-                                    <span class="market-type-pill"><?php echo htmlspecialchars($shop['type']); ?></span>
-                                    <span class="market-ad-pill"><?php echo htmlspecialchars($city_label); ?></span>
-                                    <button
-                                        type="button"
-                                        class="market-store-favorite-btn<?php echo $is_shop_favorite ? ' is-active' : ''; ?>"
-                                        data-favorite-toggle="1"
-                                        data-favorite-type="store"
-                                        data-favorite-store-key="<?php echo htmlspecialchars($shop_key_value); ?>"
-                                        data-favorite-active="<?php echo $is_shop_favorite ? '1' : '0'; ?>"
-                                        aria-pressed="<?php echo $is_shop_favorite ? 'true' : 'false'; ?>"
-                                        title="<?php echo $is_shop_favorite ? 'Remove from favorites' : 'Save to favorites'; ?>">
-                                        <i class="<?php echo $is_shop_favorite ? 'fas' : 'far'; ?> fa-heart"></i>
-                                    </button>
+                    <!-- Section 2: Other Store Branches & Partner Vendors (Different Categories) -->
+                    <div class="shops-section-block" id="otherShopsBlock" style="margin-top:10px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; flex-wrap:wrap; gap:10px; border-top:1px solid #eaecf0; padding-top:28px;">
+                            <div>
+                                <div style="display:inline-flex; align-items:center; gap:6px; background:#f1f5f9; color:#475569; padding:4px 12px; border-radius:999px; font-size:0.78rem; font-weight:800; margin-bottom:6px; border:1px solid #e2e8f0;">
+                                    <i class="fas fa-layer-group"></i> Store Categories &amp; Other Branches
                                 </div>
+                                <h2 style="font-size:1.35rem; font-weight:800; color:#171922; margin:0;" id="otherSectionTitle">Other Cavite Stores &amp; Partner Shops</h2>
+                            </div>
+                            <span style="font-size:0.88rem; color:#667085;" id="otherCountLabel">More stores in Cavite</span>
+                        </div>
 
-                                <!-- Details Container (Minimalist Foodpanda Style) -->
-                                <div class="store-card-details">
-                                    <!-- Line 1: Store Name & Rating -->
-                                    <div class="store-card-row-head">
-                                        <h3><?php echo htmlspecialchars($shop['name']); ?> <span style="font-weight:600; color:#64748b; font-size:0.86rem;">– <?php echo htmlspecialchars($city_label); ?></span></h3>
-                                        <span class="store-card-rating">
-                                            <i class="fas fa-star" style="color:#ef6b2e; font-size:0.75rem;"></i> <?php echo number_format((float)$shop['rating'], 1); ?>
-                                            <span style="font-size:0.72rem; color:#94a3b8; font-weight:500;">(<?php echo (int)$shop['reviews']; ?>+)</span>
-                                        </span>
-                                    </div>
+                        <!-- 3-Column Other Store Grid -->
+                        <div class="market-store-list store-list-grid" id="otherShopsGrid">
+                            <?php foreach ($shops as $index => $shop): ?>
+                                <?php
+                                $price_text = 'Starts at PHP ' . number_format((float)$shop['start_price'], 2);
+                                $shop_key_value = (string)($shop['key'] ?? '');
+                                $is_shop_favorite = !empty($favorite_store_keys[$shop_key_value]);
+                                $city_label = !empty($shop['city']) ? $shop['city'] : $shop['location'];
+                                ?>
+                                <a href="<?php echo htmlspecialchars($shop['menu_link']); ?>"
+                                   class="market-store-row panda-card-link shop-card-item"
+                                   data-shop-key="<?php echo htmlspecialchars($shop_key_value); ?>"
+                                   data-city="<?php echo htmlspecialchars(strtolower($city_label)); ?>"
+                                   data-location="<?php echo htmlspecialchars(strtolower($shop['location'] ?? '')); ?>"
+                                   data-cat="<?php echo htmlspecialchars($shop['cat_key']); ?>"
+                                   data-vouchers="<?php echo !empty($shop['has_vouchers']) ? '1' : '0'; ?>"
+                                   data-price="<?php echo (float)$shop['start_price']; ?>"
+                                   data-rating="<?php echo (float)$shop['rating']; ?>"
+                                   data-open="<?php echo !empty($shop['is_open']) ? '1' : '0'; ?>"
+                                   data-lat="<?php echo isset($shop['latitude']) && $shop['latitude'] !== null ? htmlspecialchars((string)$shop['latitude']) : ''; ?>"
+                                   data-lng="<?php echo isset($shop['longitude']) && $shop['longitude'] !== null ? htmlspecialchars((string)$shop['longitude']) : ''; ?>"
+                                   data-search="<?php echo htmlspecialchars(strtolower($shop['name'] . ' ' . $shop['summary'] . ' ' . $city_label . ' ' . implode(' ', $shop['tags']))); ?>">
                                     
-                                    <!-- Line 2: ETA • Distance • Cuisine -->
-                                    <div class="store-card-meta-line">
-                                        <span data-role="eta-text">From 15 min</span>
-                                        <span>•</span>
-                                        <span data-role="distance-text">Near Cavite</span>
-                                        <span>•</span>
-                                        <span>Lechon &amp; Specialty</span>
+                                    <!-- Image Wrapper -->
+                                    <div class="store-card-image-wrap">
+                                        <div class="market-store-row-thumb" style="background-image:url('<?php echo htmlspecialchars($shop['image']); ?>');"></div>
+                                        <span class="market-type-pill"><?php echo htmlspecialchars($shop['type']); ?></span>
+                                        <span class="market-ad-pill"><?php echo htmlspecialchars($city_label); ?></span>
+                                        <button
+                                            type="button"
+                                            class="market-store-favorite-btn<?php echo $is_shop_favorite ? ' is-active' : ''; ?>"
+                                            data-favorite-toggle="1"
+                                            data-favorite-type="store"
+                                            data-favorite-store-key="<?php echo htmlspecialchars($shop_key_value); ?>"
+                                            data-favorite-active="<?php echo $is_shop_favorite ? '1' : '0'; ?>"
+                                            aria-pressed="<?php echo $is_shop_favorite ? 'true' : 'false'; ?>"
+                                            title="<?php echo $is_shop_favorite ? 'Remove from favorites' : 'Save to favorites'; ?>">
+                                            <i class="<?php echo $is_shop_favorite ? 'fas' : 'far'; ?> fa-heart"></i>
+                                        </button>
                                     </div>
 
-                                    <!-- Line 3: Delivery Deal Line -->
-                                    <div class="store-card-delivery-line">
-                                        <i class="fas fa-motorcycle" style="color:#94a3b8; font-size:0.75rem;"></i>
-                                        <span style="text-decoration:line-through; color:#94a3b8;">₱49</span>
-                                        <span style="color:#b3261e; font-weight:700;">Free for first order</span>
-                                    </div>
+                                    <!-- Details Container (Minimalist Foodpanda Style) -->
+                                    <div class="store-card-details">
+                                        <!-- Line 1: Store Name & Rating -->
+                                        <div class="store-card-row-head">
+                                            <h3><?php echo htmlspecialchars($shop['name']); ?> <span style="font-weight:600; color:#64748b; font-size:0.86rem;">– <?php echo htmlspecialchars($city_label); ?></span></h3>
+                                            <span class="store-card-rating">
+                                                <i class="fas fa-star" style="color:#ef6b2e; font-size:0.75rem;"></i> <?php echo number_format((float)$shop['rating'], 1); ?>
+                                                <span style="font-size:0.72rem; color:#94a3b8; font-weight:500;">(<?php echo (int)$shop['reviews']; ?>+)</span>
+                                            </span>
+                                        </div>
+                                        
+                                        <!-- Line 2: ETA • Distance • Cuisine -->
+                                        <div class="store-card-meta-line">
+                                            <span data-role="eta-text">From 15 min</span>
+                                            <span>•</span>
+                                            <span data-role="distance-text">Near Cavite</span>
+                                            <span>•</span>
+                                            <span>Lechon &amp; Specialty</span>
+                                        </div>
 
-                                    <!-- Line 4: Pricing / Discount Promo Line -->
-                                    <div class="store-card-promo-line">
-                                        <i class="fas fa-tag" style="font-size:0.7rem;"></i>
-                                        <span><?php echo htmlspecialchars($price_text); ?></span>
+                                        <!-- Line 3: Delivery Deal Line -->
+                                        <div class="store-card-delivery-line">
+                                            <i class="fas fa-motorcycle" style="color:#94a3b8; font-size:0.75rem;"></i>
+                                            <span style="text-decoration:line-through; color:#94a3b8;">₱49</span>
+                                            <span style="color:#b3261e; font-weight:700;">Free for first order</span>
+                                        </div>
+
+                                        <!-- Line 4: Pricing / Discount Promo Line -->
+                                        <div class="store-card-promo-line">
+                                            <i class="fas fa-tag" style="font-size:0.7rem;"></i>
+                                            <span><?php echo htmlspecialchars($price_text); ?></span>
+                                        </div>
                                     </div>
-                                </div>
-                            </a>
-                        <?php endforeach; ?>
+                                </a>
+                            <?php endforeach; ?>
+                        </div>
                     </div>
 
                     <!-- Zero State Container -->
@@ -907,8 +1008,35 @@ document.addEventListener('DOMContentLoaded', function () {
         if (norm.includes('silang') || norm.includes('biga') || norm.includes('bulihan')) {
             return { key: 'silang', name: 'Silang' };
         }
-        if (norm.includes('general trias') || norm.includes('gen. trias') || norm.includes('manggahan') || norm.includes('gentri')) {
+        if (norm.includes('general trias') || norm.includes('gen. trias') || norm.includes('manggahan') || norm.includes('gentri') || norm.includes('trias')) {
             return { key: 'general trias', name: 'General Trias' };
+        }
+        if (norm.includes('trece') || norm.includes('martires')) {
+            return { key: 'trece', name: 'Trece Martires' };
+        }
+        if (norm.includes('kawit')) {
+            return { key: 'kawit', name: 'Kawit' };
+        }
+        if (norm.includes('rosario')) {
+            return { key: 'rosario', name: 'Rosario' };
+        }
+        if (norm.includes('tanza')) {
+            return { key: 'tanza', name: 'Tanza' };
+        }
+        if (norm.includes('naic')) {
+            return { key: 'naic', name: 'Naic' };
+        }
+        if (norm.includes('carmona')) {
+            return { key: 'carmona', name: 'Carmona' };
+        }
+        if (norm.includes('noveleta')) {
+            return { key: 'noveleta', name: 'Noveleta' };
+        }
+        if (norm.includes('cavite city')) {
+            return { key: 'cavite city', name: 'Cavite City' };
+        }
+        if (norm.includes('alvarez') || norm.includes('gma')) {
+            return { key: 'gma', name: 'GMA' };
         }
 
         // Check GPS coordinates bounding boxes if coordinates are provided
@@ -1042,18 +1170,48 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function isStoreInCityScope(card, cityKey) {
         if (!cityKey) return true;
-        const normKey = cityKey.toLowerCase().replace(/ñ/g, 'n');
+        const normKey = normalizeCityString(cityKey);
         const cardCity = normalizeCityString(card.dataset.city || '');
         const cardLoc = normalizeCityString(card.dataset.location || '');
-        const cardSearch = normalizeCityString(card.dataset.search || '');
 
-        if (normKey === 'dasmarinas' || normKey === 'dasma') {
+        if (normKey.includes('dasma') || normKey.includes('salawag')) {
             return cardCity.includes('dasma') || cardCity.includes('salawag') ||
-                   cardLoc.includes('dasma') || cardLoc.includes('salawag') ||
-                   cardSearch.includes('dasma') || cardSearch.includes('salawag');
+                   cardLoc.includes('dasma') || cardLoc.includes('salawag');
         }
-
-        return cardCity.includes(normKey) || cardLoc.includes(normKey) || cardSearch.includes(normKey);
+        if (normKey.includes('bacoor')) {
+            return cardCity.includes('bacoor') || cardLoc.includes('bacoor');
+        }
+        if (normKey.includes('imus')) {
+            return cardCity.includes('imus') || cardLoc.includes('imus');
+        }
+        if (normKey.includes('tagaytay')) {
+            return cardCity.includes('tagaytay') || cardLoc.includes('tagaytay');
+        }
+        if (normKey.includes('trias') || normKey.includes('gentri')) {
+            return cardCity.includes('trias') || cardLoc.includes('trias') || cardCity.includes('gentri') || cardLoc.includes('gentri');
+        }
+        if (normKey.includes('silang')) {
+            return cardCity.includes('silang') || cardLoc.includes('silang');
+        }
+        if (normKey.includes('trece')) {
+            return cardCity.includes('trece') || cardLoc.includes('trece');
+        }
+        if (normKey.includes('kawit')) {
+            return cardCity.includes('kawit') || cardLoc.includes('kawit');
+        }
+        if (normKey.includes('rosario')) {
+            return cardCity.includes('rosario') || cardLoc.includes('rosario');
+        }
+        if (normKey.includes('tanza')) {
+            return cardCity.includes('tanza') || cardLoc.includes('tanza');
+        }
+        if (normKey.includes('naic')) {
+            return cardCity.includes('naic') || cardLoc.includes('naic');
+        }
+        if (normKey.includes('carmona')) {
+            return cardCity.includes('carmona') || cardLoc.includes('carmona');
+        }
+        return cardCity.includes(normKey) || cardLoc.includes(normKey);
     }
 
     function renderStoreMapMarkers() {
@@ -1065,7 +1223,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const bounds = [[currentUserLat, currentUserLng]];
         const isNearbyOnly = filterNearbyOnly ? filterNearbyOnly.checked : false;
-        const isCityOnly = filterCityOnly ? filterCityOnly.checked : true;
+        const isCityOnly = filterCityOnly ? filterCityOnly.checked : false;
         const targetCityKey = detectedCity ? detectedCity.key : 'dasmarinas';
 
         shopCards.forEach(function (card) {
@@ -1081,13 +1239,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
 
-            // Filter on map if city only is enabled
-            if (isCityOnly && !isStoreInCityScope(card, targetCityKey)) {
-                return;
-            }
-
-            // Filter on map if nearby radius is enabled
-            if (isNearbyOnly && distance > 15) {
+            if (card.style.display === 'none') {
                 return;
             }
 
@@ -1131,7 +1283,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         if (bounds.length > 1) {
-            leafletMap.fitBounds(bounds, { padding: [50, 50] });
+            leafletMap.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
         } else {
             leafletMap.setView([currentUserLat, currentUserLng], 13);
         }
@@ -1161,6 +1313,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const minTime = Math.max(15, Math.round((distanceKm * 3.5) + 15));
             const maxTime = minTime + 10;
             const etaString = minTime + '-' + maxTime + ' min';
+            const distLabel = distanceKm < 1 ? '< 1 km away' : distanceKm.toFixed(1) + ' km away';
 
             card.dataset.distance = distanceKm.toFixed(2);
             card.dataset.minutes = minTime.toString();
@@ -1168,11 +1321,11 @@ document.addEventListener('DOMContentLoaded', function () {
             const isOpen = card.dataset.open === '1';
             if (timeLabel) {
                 timeLabel.innerHTML = isOpen 
-                    ? '<i class="fas fa-truck-fast"></i> ' + etaString + ' &bull; ' + distanceKm.toFixed(1) + ' km' 
-                    : '<i class="fas fa-store-slash"></i> Closed &bull; ' + distanceKm.toFixed(1) + ' km';
+                    ? '<i class="fas fa-truck-fast"></i> ' + etaString + ' &bull; ' + (distanceKm < 1 ? '< 1 km' : distanceKm.toFixed(1) + ' km') 
+                    : '<i class="fas fa-store-slash"></i> Closed &bull; ' + (distanceKm < 1 ? '< 1 km' : distanceKm.toFixed(1) + ' km');
             }
             if (etaText) etaText.textContent = etaString;
-            if (distanceText) distanceText.textContent = distanceKm.toFixed(1) + ' km away';
+            if (distanceText) distanceText.textContent = distLabel;
         });
 
         updateUserMapMarker();
@@ -1183,7 +1336,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const query = (headerSearch ? headerSearch.value : '').toLowerCase().trim();
         const vouchersOnly = filterVouchers ? filterVouchers.checked : false;
         const nearbyOnly = filterNearbyOnly ? filterNearbyOnly.checked : false;
-        const cityOnly = filterCityOnly ? filterCityOnly.checked : true;
+        const cityOnly = filterCityOnly ? filterCityOnly.checked : false;
         const targetCityKey = detectedCity ? detectedCity.key : 'dasmarinas';
 
         const selectedTypes = [];
@@ -1201,8 +1354,8 @@ document.addEventListener('DOMContentLoaded', function () {
             if (r.checked) selectedPrice = r.value;
         });
 
-        let visibleCount = 0;
-        const visibleCardsArray = [];
+        const nearbyCardsArray = [];
+        const otherCardsArray = [];
 
         shopCards.forEach(function (card) {
             const cardCat = card.dataset.cat || '';
@@ -1215,20 +1368,43 @@ document.addEventListener('DOMContentLoaded', function () {
             const matchesVouchers = !vouchersOnly || cardVouchers;
             const matchesTypes = selectedTypes.length === 0 || selectedTypes.includes(cardCat);
             const matchesQuery = !query || cardSearch.includes(query);
-            const matchesNearby = !nearbyOnly || (cardDistance <= 15);
-            const matchesCity = !cityOnly || isStoreInCityScope(card, targetCityKey);
 
             let matchesPrice = true;
             if (selectedPrice === 'under_300') matchesPrice = cardPrice < 300;
             else if (selectedPrice === '300_1000') matchesPrice = cardPrice >= 300 && cardPrice <= 1000;
             else if (selectedPrice === 'above_1000') matchesPrice = cardPrice > 1000;
 
-            if (matchesVouchers && matchesTypes && matchesQuery && matchesPrice && matchesNearby && matchesCity) {
-                card.style.display = '';
-                visibleCount++;
-                visibleCardsArray.push(card);
-            } else {
+            if (!matchesVouchers || !matchesTypes || !matchesQuery || !matchesPrice) {
                 card.style.display = 'none';
+                return;
+            }
+
+            card.style.display = '';
+
+            // Strict Nearby Determination based on user location & proximity
+            const inCity = isStoreInCityScope(card, targetCityKey);
+            const isNearbyRadius = Number.isFinite(cardDistance) && cardDistance <= 10;
+            const isSameCityNearby = inCity && Number.isFinite(cardDistance) && cardDistance <= 12;
+            const isNearby = (isNearbyRadius || isSameCityNearby) && cardDistance < 900;
+
+            if (cityOnly) {
+                if (inCity && cardDistance < 900) {
+                    nearbyCardsArray.push(card);
+                } else {
+                    card.style.display = 'none';
+                }
+            } else if (nearbyOnly) {
+                if (isNearby) {
+                    nearbyCardsArray.push(card);
+                } else {
+                    card.style.display = 'none';
+                }
+            } else {
+                if (isNearby) {
+                    nearbyCardsArray.push(card);
+                } else {
+                    otherCardsArray.push(card);
+                }
             }
         });
 
@@ -1239,34 +1415,58 @@ document.addEventListener('DOMContentLoaded', function () {
             scard.style.display = matches ? 'flex' : 'none';
         });
 
-        // Sorting Logic (Default to nearest distance if nearby filter is checked)
-        const effectiveSort = (nearbyOnly && selectedSort === 'relevance') ? 'distance' : selectedSort;
+        // Sorting Logic
+        const sortCardsList = function (arr, mode) {
+            if (mode === 'top_rated') {
+                arr.sort((a, b) => parseFloat(b.dataset.rating || '0') - parseFloat(a.dataset.rating || '0'));
+            } else if (mode === 'fastest') {
+                arr.sort((a, b) => parseFloat(a.dataset.minutes || '999') - parseFloat(b.dataset.minutes || '999'));
+            } else {
+                arr.sort((a, b) => parseFloat(a.dataset.distance || '999') - parseFloat(b.dataset.distance || '999'));
+            }
+        };
 
-        if (effectiveSort !== 'relevance' && visibleCardsArray.length > 1) {
-            visibleCardsArray.sort(function (a, b) {
-                if (effectiveSort === 'top_rated') {
-                    return parseFloat(b.dataset.rating || '0') - parseFloat(a.dataset.rating || '0');
-                }
-                if (effectiveSort === 'fastest') {
-                    return parseFloat(a.dataset.minutes || '999') - parseFloat(b.dataset.minutes || '999');
-                }
-                if (effectiveSort === 'distance') {
-                    return parseFloat(a.dataset.distance || '999') - parseFloat(b.dataset.distance || '999');
-                }
-                return 0;
-            });
-            visibleCardsArray.forEach(function (card) {
-                shopsGrid.appendChild(card);
-            });
+        const effectiveSort = (selectedSort === 'relevance') ? 'distance' : selectedSort;
+        sortCardsList(nearbyCardsArray, effectiveSort);
+        sortCardsList(otherCardsArray, effectiveSort);
+
+        const nearbyGrid = document.getElementById('nearbyShopsGrid');
+        const otherGrid = document.getElementById('otherShopsGrid');
+        const nearbyBlock = document.getElementById('nearbyShopsBlock');
+        const otherBlock = document.getElementById('otherShopsBlock');
+        const nearbyEmptyNotice = document.getElementById('nearbyEmptyNotice');
+        const nearbyTitle = document.getElementById('nearbySectionTitle');
+        const nearbyCountLabel = document.getElementById('nearbyCountLabel');
+        const otherCountLabel = document.getElementById('otherCountLabel');
+
+        if (nearbyGrid) {
+            nearbyCardsArray.forEach(card => nearbyGrid.appendChild(card));
+        }
+        if (otherGrid) {
+            otherCardsArray.forEach(card => otherGrid.appendChild(card));
         }
 
+        const cityName = detectedCity ? detectedCity.name : 'Dasmariñas';
+        if (nearbyTitle) {
+            nearbyTitle.textContent = `Stores Near You in ${cityName}`;
+        }
+        if (nearbyCountLabel) {
+            nearbyCountLabel.textContent = `Showing ${nearbyCardsArray.length} nearby store${nearbyCardsArray.length === 1 ? '' : 's'}`;
+        }
+        if (otherCountLabel) {
+            otherCountLabel.textContent = `Showing ${otherCardsArray.length} other store${otherCardsArray.length === 1 ? '' : 's'}`;
+        }
+
+        if (nearbyEmptyNotice) {
+            nearbyEmptyNotice.style.display = nearbyCardsArray.length === 0 ? 'block' : 'none';
+        }
+        if (otherBlock) {
+            otherBlock.style.display = otherCardsArray.length === 0 ? 'none' : 'block';
+        }
+
+        const totalVisible = nearbyCardsArray.length + otherCardsArray.length;
         if (zeroState) {
-            zeroState.style.display = visibleCount === 0 ? 'block' : 'none';
-        }
-
-        if (countLabel) {
-            const cityName = detectedCity ? detectedCity.name : 'Dasmariñas';
-            countLabel.textContent = 'Showing ' + visibleCount + ' shops' + (cityOnly ? ` in ${cityName}` : (nearbyOnly ? ' (Nearby)' : ''));
+            zeroState.style.display = totalVisible === 0 ? 'block' : 'none';
         }
 
         renderStoreMapMarkers();
@@ -1290,15 +1490,26 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // 1. Check if user already set location in navbar / session
+    // 1. Check URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('nearby') === '1') {
+        if (filterNearbyOnly) filterNearbyOnly.checked = true;
+        if (filterCityOnly) filterCityOnly.checked = false;
+    }
+    if (urlParams.get('sort')) {
+        const querySort = urlParams.get('sort');
+        sortRadios.forEach(r => r.checked = r.value === querySort);
+    }
+
+    // 2. Check if user already set location in navbar / session
     readStoredNavbarLocation();
 
-    // 2. Compute distances and initialize map
+    // 3. Compute distances and initialize map
     calculateShopDistances(currentUserLat, currentUserLng);
     setTimeout(initShopsMap, 150);
     applyShopFilters();
 
-    // 3. Try background browser geolocation if not set from navbar
+    // 4. Try background browser geolocation if not set from navbar
     if (!isUserLocationAccurate && navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(function (pos) {
             isUserLocationAccurate = true;
@@ -1313,8 +1524,22 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Event Listeners
-    if (filterCityOnly) filterCityOnly.addEventListener('change', applyShopFilters);
-    if (filterNearbyOnly) filterNearbyOnly.addEventListener('change', applyShopFilters);
+    if (filterCityOnly) {
+        filterCityOnly.addEventListener('change', function () {
+            if (filterCityOnly.checked && filterNearbyOnly) {
+                filterNearbyOnly.checked = false;
+            }
+            applyShopFilters();
+        });
+    }
+    if (filterNearbyOnly) {
+        filterNearbyOnly.addEventListener('change', function () {
+            if (filterNearbyOnly.checked && filterCityOnly) {
+                filterCityOnly.checked = false;
+            }
+            applyShopFilters();
+        });
+    }
     if (filterVouchers) filterVouchers.addEventListener('change', applyShopFilters);
     shopTypeChecks.forEach(chk => chk.addEventListener('change', applyShopFilters));
     sortRadios.forEach(r => r.addEventListener('change', applyShopFilters));
@@ -1324,15 +1549,20 @@ document.addEventListener('DOMContentLoaded', function () {
     if (mapDetectLocationBtn) mapDetectLocationBtn.addEventListener('click', triggerGeolocationDetection);
     if (sidebarDetectLocationBtn) sidebarDetectLocationBtn.addEventListener('click', triggerGeolocationDetection);
 
-    // Listen for storage changes from header location modal
+    // Listen for storage and custom events from header location modal
+    const syncLocationUpdate = function () {
+        if (readStoredNavbarLocation()) {
+            calculateShopDistances(currentUserLat, currentUserLng);
+            applyShopFilters();
+        }
+    };
     window.addEventListener('storage', function(e) {
-        if (e.key === 'market_address_payload') {
-            if (readStoredNavbarLocation()) {
-                calculateShopDistances(currentUserLat, currentUserLng);
-                applyShopFilters();
-            }
+        if (e.key === 'market_address_payload' || e.key === 'market_address') {
+            syncLocationUpdate();
         }
     });
+    window.addEventListener('marketAddressChanged', syncLocationUpdate);
+    window.addEventListener('marketAddressUpdated', syncLocationUpdate);
 });
 </script>
 

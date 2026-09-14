@@ -1412,6 +1412,91 @@ include 'includes/header.php';
         width: 100%;
     }
 }
+
+/* ==========================================================================
+   HELP CENTER DARK THEME ENGINE
+   ========================================================================== */
+body.dark-mode .help-center-section {
+    background: #0f172a !important;
+}
+
+body.dark-mode .help-card {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+body.dark-mode .help-card-head {
+    border-bottom-color: #334155 !important;
+}
+
+body.dark-mode .help-card-head h2,
+body.dark-mode .help-faq-item summary,
+body.dark-mode .quick-order-item strong,
+body.dark-mode .help-label {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .help-card-head p,
+body.dark-mode .help-faq-item p,
+body.dark-mode .case-priority,
+body.dark-mode .help-empty-text {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .issue-card {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .issue-card.active,
+body.dark-mode .issue-card:hover {
+    border-color: #ef4444 !important;
+    background: rgba(179, 38, 30, 0.15) !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .help-input,
+body.dark-mode .help-select,
+body.dark-mode .help-textarea {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .help-input:focus,
+body.dark-mode .help-select:focus,
+body.dark-mode .help-textarea:focus {
+    border-color: #b3261e !important;
+    background: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .quick-order-item {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .btn-help-secondary {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .btn-help-secondary:hover {
+    background: #334155 !important;
+    border-color: #475569 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .case-card {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
 </style>
 
 <script>

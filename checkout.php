@@ -2332,9 +2332,543 @@ body {
         order: 1;
     }
 }
-@keyframes pigRun {
-    0% { transform: translateY(0) scaleX(-1); }
-    100% { transform: translateY(-4px) scaleX(-1); }
+/* ==========================================================================
+   CHECKOUT PAGE DARK THEME ENGINE
+   ========================================================================== */
+body.dark-mode {
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .checkout-section {
+    background: #0f172a !important;
+}
+
+body.dark-mode .checkout-summary,
+body.dark-mode .checkout-form {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35) !important;
+}
+
+body.dark-mode .checkout-summary h3,
+body.dark-mode .checkout-form h3 {
+    color: #f8fafc !important;
+    border-bottom-color: #334155 !important;
+}
+
+body.dark-mode .checkout-summary-kpis {
+    gap: 8px;
+}
+
+body.dark-mode .checkout-kpi {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .checkout-kpi-label {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .checkout-kpi strong,
+body.dark-mode #summaryModeValue {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .summary-item {
+    border-bottom-color: #334155 !important;
+    background: transparent !important;
+}
+
+body.dark-mode .item-info h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .item-info p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .item-price {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .summary-totals {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .total-row {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .total-row span:first-child {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .total-row span:last-child {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .total-row.grand-total {
+    border-top-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .total-row.grand-total span:first-child {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .total-row.grand-total span:last-child,
+body.dark-mode #summaryTotal {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .payment-breakdown {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .payment-breakdown h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .payment-breakdown h4 span:last-child {
+    background: rgba(239, 107, 46, 0.15) !important;
+    border-color: rgba(239, 107, 46, 0.4) !important;
+    color: #f97316 !important;
+}
+
+body.dark-mode .breakdown-row span {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .breakdown-row .downpayment-amount {
+    color: #fb923c !important;
+}
+
+body.dark-mode .breakdown-row .remaining-amount {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .breakdown-row .full-amount {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .breakdown-row[style*="border-top"] {
+    border-top-color: #334155 !important;
+}
+
+body.dark-mode .delivery-info {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .delivery-info h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode #summaryDeliveryDetails {
+    color: #f8fafc !important;
+}
+
+body.dark-mode #summaryDeliveryTime {
+    background: rgba(2, 122, 72, 0.15) !important;
+    border-color: rgba(74, 222, 128, 0.4) !important;
+    color: #4ade80 !important;
+}
+
+body.dark-mode #summaryStoreAddress {
+    color: #94a3b8 !important;
+}
+
+/* Step Flow */
+body.dark-mode .checkout-flow-step {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .checkout-flow-step span {
+    border-color: #475569 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .checkout-flow-step.is-active {
+    background: #b3261e !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .checkout-flow-step.is-active span {
+    border-color: rgba(255, 255, 255, 0.4) !important;
+    color: #ffffff !important;
+}
+
+/* Checkout Type Switch */
+body.dark-mode .checkout-type-switch {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .checkout-type-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .checkout-type-chip {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .checkout-type-chip:hover {
+    background: #334155 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .checkout-type-chip.is-active {
+    background: #b3261e !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .checkout-type-note {
+    color: #94a3b8 !important;
+}
+
+/* Fulfillment Mode Card */
+body.dark-mode .delivery-option-form {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .checkout-mode-card {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .checkout-mode-card h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .checkout-mode-card p,
+body.dark-mode .checkout-mode-card p strong {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .checkout-mode-btn {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .checkout-mode-btn:hover {
+    background: #334155 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .checkout-mode-btn.is-active {
+    background: #b3261e !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .checkout-mode-btn[data-mode="pickup"].is-active,
+body.dark-mode #modePickupBtn.is-active {
+    background-color: #ef6b2e !important;
+    border-color: #ef6b2e !important;
+}
+
+body.dark-mode #findNearestStoreBtn {
+    background: #1e293b !important;
+    border-color: #b3261e !important;
+    color: #ef4444 !important;
+}
+
+/* Form Controls, Inputs & Labels */
+body.dark-mode .checkout-section-label {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .form-group label {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .form-group input,
+body.dark-mode .form-group select,
+body.dark-mode .form-group textarea,
+body.dark-mode .store-select,
+body.dark-mode .delivery-select,
+body.dark-mode .address-search {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .form-group input:focus,
+body.dark-mode .form-group select:focus,
+body.dark-mode .form-group textarea:focus,
+body.dark-mode .store-select:focus,
+body.dark-mode .delivery-select:focus,
+body.dark-mode .address-search:focus {
+    border-color: #b3261e !important;
+    background: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .store-info {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    border-left: 4px solid #027a48 !important;
+}
+
+body.dark-mode .store-info p {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .account-autofill-note {
+    background: rgba(2, 122, 72, 0.12) !important;
+    border-color: rgba(74, 222, 128, 0.3) !important;
+    color: #4ade80 !important;
+}
+
+body.dark-mode .delivery-fee-info-box {
+    background: #111827 !important;
+    border: 1px solid #334155 !important;
+    color: #cbd5e1 !important;
+    padding: 12px;
+    border-radius: 8px;
+}
+
+body.dark-mode .delivery-fee-info-box p {
+    color: #cbd5e1 !important;
+}
+
+/* Step 2 Address Cards */
+body.dark-mode .co-address-card,
+body.dark-mode #mainDeliveryAddressCard,
+body.dark-mode .delivery-address-shell {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .co-address-card h3,
+body.dark-mode #displayStreetAddress {
+    color: #f8fafc !important;
+}
+
+body.dark-mode #displayCityAddress {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode #openChangeAddressModalBtn {
+    color: #ef4444 !important;
+}
+
+body.dark-mode #delivery_instructions {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .btn-step-back {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .btn-step-back:hover {
+    background: #334155 !important;
+    color: #ffffff !important;
+}
+
+/* Step 3 Voucher and Payment Options */
+body.dark-mode .voucher-section {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .voucher-section h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode #voucherCodeInput {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .available-voucher-card {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .available-voucher-card.is-active {
+    background: rgba(2, 122, 72, 0.15) !important;
+    border-color: #22c55e !important;
+}
+
+body.dark-mode .available-voucher-card div[style*="font-weight:700"] {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .available-voucher-card div[style*="font-size:0.75rem"] {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .available-vouchers-container {
+    border-top-color: #334155 !important;
+}
+
+body.dark-mode .available-vouchers-container div {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .payment-type-section h4,
+body.dark-mode .payment-info-section h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .payment-type-option {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .payment-type-option:hover {
+    border-color: #b3261e !important;
+    background: #1e293b !important;
+}
+
+body.dark-mode .option-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .option-amount {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .option-content small {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .payment-info-box {
+    background: #111827 !important;
+    border: 1px solid #334155 !important;
+    border-radius: 12px;
+    padding: 16px;
+}
+
+body.dark-mode .payment-info-box p {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .payment-amount {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .payment-note {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .terms-agreement {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .terms-agreement span,
+body.dark-mode .terms-agreement label {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .terms-agreement a {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .checkout-final-note {
+    background: rgba(2, 122, 72, 0.12) !important;
+    border-color: rgba(74, 222, 128, 0.3) !important;
+    color: #4ade80 !important;
+}
+
+/* Modals Dark Mode */
+body.dark-mode #changeAddressModal > div,
+body.dark-mode #addNewAddressModal > div,
+body.dark-mode #editAddressModal > div {
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
+}
+
+body.dark-mode #changeAddressModal h3,
+body.dark-mode #addNewAddressModal h3,
+body.dark-mode #editAddressModal h3,
+body.dark-mode #changeAddressModal label,
+body.dark-mode #addNewAddressModal label,
+body.dark-mode #editAddressModal label {
+    color: #f8fafc !important;
+}
+
+body.dark-mode #changeAddressModal div[style*="border-bottom"],
+body.dark-mode #changeAddressModal div[style*="border-top"],
+body.dark-mode #addNewAddressModal div[style*="border-bottom"],
+body.dark-mode #addNewAddressModal div[style*="border-top"],
+body.dark-mode #editAddressModal div[style*="border-bottom"],
+body.dark-mode #editAddressModal div[style*="border-top"] {
+    border-color: #334155 !important;
+}
+
+body.dark-mode .modal-saved-addr-card {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .modal-saved-addr-card.is-selected {
+    border-color: #ef4444 !important;
+    background: rgba(179, 38, 30, 0.15) !important;
+}
+
+body.dark-mode .addr-street-line {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .addr-city-line,
+body.dark-mode .addr-rider-note {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .addr-radio-btn {
+    background: #111827 !important;
+    border-color: #475569 !important;
+}
+
+body.dark-mode .modal-saved-addr-card.is-selected .addr-radio-btn {
+    border-color: #ef4444 !important;
+}
+
+body.dark-mode .modal-saved-addr-card.is-selected .addr-radio-inner {
+    background: #ef4444 !important;
+}
+
+body.dark-mode .btn-edit-saved-addr,
+body.dark-mode .btn-delete-saved-addr,
+body.dark-mode #closeChangeAddressModalBtn,
+body.dark-mode #closeAddAddressModalBtn,
+body.dark-mode #closeEditAddressModalBtn {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode #openAddAddressModalBtn {
+    color: #f8fafc !important;
 }
 </style>
 
