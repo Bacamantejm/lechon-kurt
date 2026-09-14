@@ -161,12 +161,14 @@ if ($prefill_province === '') {
     $prefill_province = 'Cavite';
 }
 
-// Fetch products for pre-ordering (load full catalog with seller association)
-$products_sql = "SELECT id, product_id, seller_id, name, description, price, image, category
-                 FROM products
-                 WHERE is_active = 1
-                   AND (is_archived = 0 OR is_archived IS NULL)
-                 ORDER BY category, name ASC";
+// Fetch products for pre-ordering (load full catalog with seller association and live inventory)
+$products_sql = "SELECT p.id, p.product_id, p.seller_id, p.name, p.description, p.price, p.image, p.category,
+                        COALESCE(i.current_stock, p.stock) AS stock
+                 FROM products p
+                 LEFT JOIN inventory i ON p.id = i.product_id AND i.inventory_date = CURDATE() AND i.is_archived = 0
+                 WHERE p.is_active = 1
+                   AND (p.is_archived = 0 OR p.is_archived IS NULL)
+                 ORDER BY p.category, p.name ASC";
 $products_result = mysqli_query($conn, $products_sql);
 $all_products = [];
 if ($products_result) {
@@ -178,6 +180,7 @@ if ($products_result) {
             'name' => (string)($row['name'] ?? ''),
             'description' => (string)($row['description'] ?? ''),
             'price' => (float)($row['price'] ?? 0),
+            'stock' => (int)($row['stock'] ?? 0),
             'image' => (string)($row['image'] ?? 'default.jpg'),
             'category' => (string)($row['category'] ?? 'lechon')
         ];
@@ -231,11 +234,11 @@ function preorderGetStoreImage($store_id, $store_name, $custom_image = '') {
     return 'images/store-bg.jpg';
 }
 
+$official_owner_ids = [0, 1, 42, 43, 44, 45];
+
 // Fetch active store locations & partner vendor stores for pick-up / pre-order
 $stores = [];
 $branch_sql = "SELECT sl.store_id AS id, sl.store_id, sl.owner_user_id, sl.store_name, sl.address, sl.city, sl.province, sl.phone, sl.opening_hours, sl.opening_time, sl.closing_time, sl.latitude, sl.longitude,
-                      'branch' AS store_category,
-                      'Pickup Branch' AS store_type_label,
                       CASE WHEN sps.id IS NOT NULL AND sps.is_active = 1 THEN 1 ELSE 0 END AS has_reservation_schedule,
                       sps.lead_time_days, sps.cutoff_time, sps.max_advance_days
                FROM store_locations sl
@@ -245,7 +248,11 @@ $branch_sql = "SELECT sl.store_id AS id, sl.store_id, sl.owner_user_id, sl.store
 $branch_res = mysqli_query($conn, $branch_sql);
 if ($branch_res) {
     while ($r = mysqli_fetch_assoc($branch_res)) {
-        $r['seller_id'] = (int)($r['owner_user_id'] ?? 1);
+        $b_owner = (int)($r['owner_user_id'] ?? 1);
+        $is_partner = ($b_owner > 0 && !in_array($b_owner, $official_owner_ids, true));
+        $r['seller_id'] = $b_owner;
+        $r['store_category'] = $is_partner ? 'partner' : 'branch';
+        $r['store_type_label'] = $is_partner ? 'Partner Store' : 'Pickup Branch';
         $r['image'] = preorderGetStoreImage((int)$r['store_id'], $r['store_name']);
         $stores[] = $r;
     }
@@ -267,7 +274,7 @@ if ($seller_res) {
         $sid = (int)$r['seller_id'];
         $already_in = false;
         foreach ($stores as $st) {
-            if ((int)($st['owner_user_id'] ?? 0) === $sid || (!empty($r['store_id']) && (int)($st['store_id'] ?? 0) === (int)$r['store_id'])) {
+            if ((int)($st['owner_user_id'] ?? 0) === $sid) {
                 $already_in = true;
                 break;
             }
@@ -3125,6 +3132,7 @@ body.dark-mode .preorder-schedule-selected-badge {
 <script>
 const products = <?php echo json_encode($all_products); ?>;
 const activeSellerId = <?php echo (int)$active_seller_id; ?>;
+const stores = <?php echo json_encode($stores); ?>;
 let cart = []; // Array to store selected items: { id, name, price, quantity, image }
 const VAT_RATE = 0.12;
 let storeMap = null;
@@ -3298,19 +3306,24 @@ function selectPreorderStore(storeId, sellerId, skipScheduleReload, isUserInitia
         if (nameEl) nameEl.textContent = storeName;
     }
 
-    // 5. Update global activeSellerId
+    // 5. Update global activeSellerId and activeStoreId
     window.activeSellerId = sellerIdNum;
+    window.activeStoreId = sIdStr;
 
-    // 6. Sync addresses & Leaflet Map
+    // 6. Refresh products immediately for this specific shop
+    const activeCatBtn = document.querySelector('.category-link.active');
+    renderProducts(activeCatBtn ? activeCatBtn.dataset.category : 'all');
+
+    // 7. Sync addresses & Leaflet Map
     syncPreorderStoreAddress();
     initStoreMap();
 
-    // 7. Reload Roasting Schedule for selected store if schedule widget is present
+    // 8. Reload Roasting Schedule for selected store if schedule widget is present
     if (!skipScheduleReload && typeof loadCalendarMonth === 'function' && typeof currentCalMonth !== 'undefined') {
         loadCalendarMonth(currentCalMonth);
     }
 
-    // 8. Smoothly scroll to the dishes menu if user clicked
+    // 9. Smoothly scroll to the dishes menu if user clicked
     if (isUserInitiated && menuWrap) {
         setTimeout(() => {
             menuWrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -3750,13 +3763,44 @@ function renderProducts(category) {
     if (!productList) return;
     
     const cat = category || 'all';
-    const filtered = cat === 'all' ? products : products.filter(p => p.category === cat);
+    const officialOwnerIds = [0, 1, 42, 43, 44, 45];
+
+    // Identify current selected store
+    const sIdStr = String(window.activeStoreId || '');
+    let currentStore = null;
+    if (typeof stores !== 'undefined' && Array.isArray(stores)) {
+        currentStore = stores.find(s => String(s.id) === sIdStr || String(s.store_id) === sIdStr);
+    }
+    const storeOwnerId = currentStore ? parseInt(currentStore.seller_id || currentStore.owner_user_id || 1) : parseInt(window.activeSellerId || 1);
+    const isPartnerStore = currentStore && (currentStore.store_category === 'partner' || currentStore.store_type_label === 'Partner Store' || !officialOwnerIds.includes(storeOwnerId));
+
+    // Isolate products belonging strictly to the selected business shop
+    let storeProducts = [];
+    if (isPartnerStore) {
+        // Partner Store: strictly only items where seller_id matches this partner
+        storeProducts = products.filter(p => parseInt(p.seller_id) === storeOwnerId);
+    } else {
+        // Official Branch: foods with seller_id = 1, seller_id is null, or matching branch owner
+        storeProducts = products.filter(p => {
+            const sId = p.seller_id ? parseInt(p.seller_id) : 1;
+            return sId === 1 || sId === storeOwnerId || !p.seller_id;
+        });
+    }
+
+    const filtered = cat === 'all' ? storeProducts : storeProducts.filter(p => p.category === cat);
 
     if (filtered.length === 0) {
-        const emptyMessage = activeSellerId > 0
-            ? 'No active products are currently posted for this partner.'
-            : 'No active products are currently available.';
-        productList.innerHTML = `<p class="empty-product-note">${emptyMessage}</p>`;
+        const storeName = currentStore ? (currentStore.store_name || 'this shop') : 'this shop';
+        const emptyMessage = storeProducts.length === 0
+            ? `No menu items are currently available for ${storeName}. Please choose another branch or shop.`
+            : `No items found in this category for ${storeName}.`;
+        productList.innerHTML = `
+            <div style="grid-column: 1 / -1; text-align: center; padding: 40px 20px; background: #ffffff; border: 1px dashed #d0d5dd; border-radius: 14px; color: #475467;">
+                <i class="fas fa-utensils" style="font-size: 2rem; color: #98a2b3; margin-bottom: 10px; display: block;"></i>
+                <h4 style="margin: 0 0 6px; font-family: 'Outfit', sans-serif; font-size: 1.05rem; color: #101828; font-weight: 700;">No Menu Items Available</h4>
+                <p style="margin: 0; font-size: 0.85rem; color: #667085;">${emptyMessage}</p>
+            </div>
+        `;
         return;
     }
     
@@ -3776,16 +3820,27 @@ function renderProducts(category) {
         const qty = inCart ? (parseInt(inCart.quantity) || 0) : 0;
         const isSelected = qty > 0;
         const priceNum = parseFloat(p.price) || 0;
+        const pStock = typeof p.stock !== 'undefined' ? parseInt(p.stock) : 10;
+        const isSoldOut = pStock <= 0;
         
         return `
-            <div class="product-card ${isSelected ? 'selected' : ''}" data-product-id="${p.id}" onclick="addToCart(${p.id})">
+            <div class="product-card ${isSelected ? 'selected' : ''} ${isSoldOut ? 'product-sold-out' : ''}" data-product-id="${p.id}" onclick="${isSoldOut ? '' : `addToCart(${p.id})`}">
                 <div class="check-icon"><i class="fas fa-check"></i></div>
-                <div class="product-image">${imageHtml}</div>
+                <div class="product-image">
+                    ${imageHtml}
+                    ${isSoldOut ? '<div style="position:absolute;inset:0;background:rgba(16,24,40,0.65);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:0.8rem;border-radius:10px;">SOLD OUT</div>' : ''}
+                </div>
                 <div class="product-info">
                     <h4>${p.name}</h4>
                     <div class="product-price">₱${priceNum.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
-                    <button type="button" class="btn ${isSelected ? 'btn-primary' : 'btn-outline'} btn-sm btn-block btn-add-preorder" data-product-id="${p.id}" onclick="event.stopPropagation(); addToCart(${p.id})">
-                        ${isSelected ? `<i class="fas fa-check"></i> Added (${qty})` : '<i class="fas fa-plus"></i> Add to Order'}
+                    <div style="margin: 4px 0 8px; display: flex; align-items: center; gap: 4px;">
+                        ${!isSoldOut 
+                            ? `<span style="font-size:0.72rem; font-weight:700; color:#027a48; background:#ecfdf3; border:1px solid #abefc6; padding:2px 6px; border-radius:4px;"><i class="fas fa-boxes-stacked"></i> ${pStock} in stock</span>`
+                            : `<span style="font-size:0.72rem; font-weight:700; color:#b3261e; background:#fff1f0; border:1px solid #fee4e2; padding:2px 6px; border-radius:4px;"><i class="fas fa-ban"></i> Out of stock</span>`
+                        }
+                    </div>
+                    <button type="button" class="btn ${isSelected ? 'btn-primary' : 'btn-outline'} btn-sm btn-block btn-add-preorder" data-product-id="${p.id}" ${isSoldOut ? 'disabled style="opacity:0.6; cursor:not-allowed;"' : `onclick="event.stopPropagation(); addToCart(${p.id})"`}>
+                        ${isSoldOut ? '<i class="fas fa-ban"></i> Sold Out' : (isSelected ? `<i class="fas fa-check"></i> Added (${qty})` : '<i class="fas fa-plus"></i> Add to Order')}
                     </button>
                 </div>
             </div>
@@ -3801,9 +3856,19 @@ function addToCart(productId) {
         console.warn('Product not found for ID:', productId);
         return;
     }
+
+    const pStock = typeof product.stock !== 'undefined' ? parseInt(product.stock) : 10;
+    if (pStock <= 0) {
+        showPreorderToast('Sorry, ' + product.name + ' is currently out of stock.');
+        return;
+    }
     
     const existing = cart.find(i => String(i.id) === String(product.id) || (i.product_id && String(i.product_id) === String(product.product_id)));
     if (existing) {
+        if (existing.quantity >= pStock) {
+            showPreorderToast('Cannot add more than available stock (' + pStock + ' max).');
+            return;
+        }
         existing.quantity = (parseInt(existing.quantity) || 1) + 1;
     } else {
         cart.push({

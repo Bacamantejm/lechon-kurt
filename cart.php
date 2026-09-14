@@ -1,6 +1,17 @@
 <?php
 session_start();
-header("Location: menu.php?open_cart=1");
+
+$active_seller_id = (int)($_SESSION['storefront_seller_id'] ?? 0);
+$active_branch_id = (int)($_SESSION['pickup_location'] ?? 0);
+
+$query_params = ['open_cart' => 1];
+if ($active_seller_id > 0) {
+    $query_params['seller_id'] = $active_seller_id;
+} elseif ($active_branch_id > 0) {
+    $query_params['branch_id'] = $active_branch_id;
+}
+
+header("Location: menu.php?" . http_build_query($query_params));
 exit;
 
 if (!isset($_SESSION['cart']) || !is_array($_SESSION['cart'])) {

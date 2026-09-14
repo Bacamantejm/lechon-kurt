@@ -291,12 +291,67 @@ if (empty($store_locations)) {
     ];
 }
 
+function menuGetStoreImage($store_id, $store_name, $custom_image = '') {
+    $custom = trim((string)$custom_image);
+    if ($custom !== '' && $custom !== 'default.jpg') {
+        if (str_starts_with($custom, 'http') || str_starts_with($custom, 'images/') || str_starts_with($custom, 'uploads/')) {
+            return $custom;
+        }
+        if (file_exists('uploads/business_logos/' . $custom)) {
+            return 'uploads/business_logos/' . $custom;
+        }
+        if (file_exists('images/' . $custom)) {
+            return 'images/' . $custom;
+        }
+    }
+    
+    $image_map = [
+        1 => 'images/store-bg.jpg',
+        2 => 'images/panda_preorder_lechon.jpg',
+        3 => 'images/about-us-bg.jpg',
+        4 => 'images/hero-bg.jpg',
+        5 => 'images/panda_fresh_lechon.jpg',
+        6 => 'images/store-bg.jpg',
+        7 => 'images/panda_preorder_lechon.jpg',
+    ];
+    if (isset($image_map[$store_id])) {
+        return $image_map[$store_id];
+    }
+    
+    $name_lower = strtolower((string)$store_name);
+    if (str_contains($name_lower, 'lydia')) return 'images/panda_fresh_lechon.jpg';
+    if (str_contains($name_lower, 'linda')) return 'images/about-us-bg.jpg';
+    if (str_contains($name_lower, 'tagaytay')) return 'images/hero-bg.jpg';
+    if (str_contains($name_lower, 'bacoor')) return 'images/panda_preorder_lechon.jpg';
+    if (str_contains($name_lower, 'imus')) return 'images/about-us-bg.jpg';
+    return 'images/store-bg.jpg';
+}
+
+$official_owner_ids = [0, 1, 42, 43, 44, 45];
+$selected_pickup_branch = null;
 $default_pickup_location = (int)($_SESSION['pickup_location'] ?? ($store_locations[0]['id'] ?? 1));
 if ($requested_branch_id > 0) {
     foreach ($store_locations as $branch_option) {
         if ((int)$branch_option['id'] === $requested_branch_id) {
             $default_pickup_location = $requested_branch_id;
             $_SESSION['pickup_location'] = $requested_branch_id;
+            $selected_pickup_branch = $branch_option;
+            break;
+        }
+    }
+}
+if (!$selected_pickup_branch && $requested_seller_id > 0) {
+    foreach ($store_locations as $branch_option) {
+        if ((int)($branch_option['owner_user_id'] ?? 0) === $requested_seller_id) {
+            $selected_pickup_branch = $branch_option;
+            break;
+        }
+    }
+}
+if (!$selected_pickup_branch) {
+    foreach ($store_locations as $branch_option) {
+        if ((int)($branch_option['id'] ?? 0) === (int)$default_pickup_location) {
+            $selected_pickup_branch = $branch_option;
             break;
         }
     }
@@ -309,6 +364,70 @@ if ($requested_seller_id > 0) {
         }
     }
 }
+
+// Build unified list of all business shops for the store directory & quick switcher
+$all_menu_shops = [];
+
+// 1. Physical branches
+foreach ($store_locations as $loc) {
+    $b_id = (int)$loc['id'];
+    $b_owner = (int)($loc['owner_user_id'] ?? 1);
+    $is_partner = ($b_owner > 0 && !in_array($b_owner, $official_owner_ids, true));
+    $all_menu_shops[] = [
+        'id' => $b_id,
+        'seller_id' => $b_owner,
+        'branch_id' => $b_id,
+        'name' => (string)$loc['name'],
+        'address' => (string)($loc['address'] ?? ''),
+        'city' => (string)($loc['city'] ?? 'Cavite'),
+        'category' => $is_partner ? 'partner' : 'branch',
+        'type_label' => $is_partner ? 'Partner Store' : 'Official Branch',
+        'image' => menuGetStoreImage($b_id, (string)$loc['name']),
+        'link' => $is_partner ? ('menu.php?seller_id=' . $b_owner) : ('menu.php?branch_id=' . $b_id),
+        'is_active_selection' => ($is_partner ? ($requested_seller_id > 0 && $requested_seller_id === $b_owner) : ($requested_branch_id > 0 && $requested_branch_id === $b_id && $requested_seller_id <= 0))
+    ];
+}
+
+// 2. Partner organization sellers
+$partner_sql = "SELECT u.id AS seller_id, u.full_name, u.business_name, u.business_type, u.business_logo, u.profile_image, u.address, u.phone,
+                       sl.store_id, sl.city, sl.province
+                FROM users u
+                LEFT JOIN store_locations sl ON sl.owner_user_id = u.id AND sl.is_active = 1
+                WHERE (u.account_type = 'organization' OR u.user_type = 'seller' OR EXISTS (SELECT 1 FROM franchise_applications fa WHERE fa.user_id = u.id AND fa.status = 'approved')) AND u.is_active = 1";
+$partner_res = mysqli_query($conn, $partner_sql);
+if ($partner_res) {
+    while ($p_row = mysqli_fetch_assoc($partner_res)) {
+        $sid = (int)$p_row['seller_id'];
+        $already_in = false;
+        foreach ($all_menu_shops as $st) {
+            if ((int)($st['seller_id'] ?? 0) === $sid) {
+                $already_in = true;
+                break;
+            }
+        }
+        if (!$already_in) {
+            $name = trim((string)$p_row['business_name']) ?: (trim((string)$p_row['full_name']) . ' Store');
+            $city = !empty($p_row['city']) ? $p_row['city'] : 'Cavite';
+            $p_img = !empty($p_row['business_logo']) ? $p_row['business_logo'] : (!empty($p_row['profile_image']) ? $p_row['profile_image'] : '');
+            $all_menu_shops[] = [
+                'id' => 9000 + $sid,
+                'seller_id' => $sid,
+                'branch_id' => !empty($p_row['store_id']) ? (int)$p_row['store_id'] : 0,
+                'name' => $name,
+                'address' => $p_row['address'] ?: ($city . ', Cavite'),
+                'city' => $city,
+                'category' => 'partner',
+                'type_label' => 'Partner Store',
+                'image' => menuGetStoreImage(9000 + $sid, $name, $p_img),
+                'link' => 'menu.php?seller_id=' . $sid,
+                'is_active_selection' => ($requested_seller_id > 0 && $requested_seller_id === $sid)
+            ];
+        }
+    }
+    mysqli_free_result($partner_res);
+}
+
+$has_selected_store = ($requested_seller_id > 0 || $requested_branch_id > 0);
 
 // Compute total sold per product for best/top-seller filtering
 $total_sold_map = [];
@@ -338,6 +457,13 @@ $query = "SELECT p.*, COALESCE(i.current_stock, p.stock) as stock,
           WHERE p.is_archived = 0 AND p.is_active = 1";
 if ($requested_seller_id > 0) {
     $query .= " AND p.seller_id = " . (int)$requested_seller_id;
+} elseif ($requested_branch_id > 0) {
+    $branch_owner = $selected_pickup_branch ? (int)($selected_pickup_branch['owner_user_id'] ?? 0) : 0;
+    if ($branch_owner > 0 && !in_array($branch_owner, [0, 1, 42, 43, 44, 45], true)) {
+        $query .= " AND p.seller_id = " . (int)$branch_owner;
+    } else {
+        $query .= " AND (p.seller_id = 1 OR p.seller_id IS NULL" . ($branch_owner > 0 ? " OR p.seller_id = " . (int)$branch_owner : "") . ")";
+    }
 }
 $query .= " ORDER BY p.category, p.name";
 $result = mysqli_query($conn, $query);
@@ -429,14 +555,6 @@ $_SESSION['product_details'] = $product_details;
 $_SESSION['delivery_fees'] = $delivery_fees;
 $_SESSION['store_locations'] = $store_locations;
 
-$selected_pickup_branch = null;
-foreach ($store_locations as $branch_option) {
-    if ((int)($branch_option['id'] ?? 0) === (int)$default_pickup_location) {
-        $selected_pickup_branch = $branch_option;
-        break;
-    }
-}
-
 $breadcrumb_location = 'Marketplace';
 $storefront_breadcrumb_address = '';
 if ($requested_seller_id > 0) {
@@ -512,8 +630,19 @@ if ($storefront_breadcrumb_address !== '') {
     $breadcrumb_location = $storefront_breadcrumb_address;
 }
 
-$store_display_name = $storefront_name !== '' ? $storefront_name : 'Lechon Delights';
-$store_display_subtitle = $storefront_subtitle;
+if ($requested_seller_id > 0) {
+    $store_display_name = $storefront_name !== '' ? $storefront_name : 'Partner Store';
+    $store_display_type_label = 'Partner Store';
+    $store_display_subtitle = $storefront_subtitle;
+} elseif ($requested_branch_id > 0 && $selected_pickup_branch) {
+    $store_display_name = $selected_pickup_branch['name'];
+    $store_display_type_label = 'Official Pickup Branch';
+    $store_display_subtitle = 'Order directly from ' . $selected_pickup_branch['name'] . ' and browse available products.';
+} else {
+    $store_display_name = 'All Business Shops';
+    $store_display_type_label = 'Marketplace Directory';
+    $store_display_subtitle = 'Browse products across all verified partner shops and official branches, or select a specific shop below.';
+}
 
 $category_keys = array_values(array_filter(array_keys($menu_categories), static function ($category) {
     return trim((string)$category) !== '';
@@ -860,6 +989,120 @@ body.dark-mode .quick-order-checkout:not(:disabled) {
     background: #b3261e !important;
     color: #ffffff !important;
 }
+
+/* Business Shop Selector Panel */
+.menu-shops-selector-panel {
+    background: #ffffff;
+    border: 1px solid #eaecf0;
+    border-radius: 16px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+}
+.menu-shops-header {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.menu-shops-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.menu-shops-title i {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    background: #fff1f0;
+    color: #b3261e;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+    flex-shrink: 0;
+}
+.menu-shops-title h3 {
+    margin: 0;
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: #101828;
+}
+.menu-shops-title p {
+    margin: 0;
+    font-size: 0.78rem;
+    color: #667085;
+}
+.menu-shops-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+.menu-shop-pill {
+    background: #ffffff;
+    border: 1.5px solid #d0d5dd;
+    color: #344054;
+    font-size: 0.82rem;
+    font-weight: 700;
+    padding: 7px 14px;
+    border-radius: 10px;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s ease;
+}
+.menu-shop-pill:hover {
+    border-color: #b3261e;
+    color: #b3261e;
+    background: #fff1f0;
+    text-decoration: none;
+}
+.menu-shop-pill.active {
+    background: #b3261e;
+    border-color: #b3261e;
+    color: #ffffff;
+    box-shadow: 0 2px 6px rgba(179, 38, 30, 0.2);
+    text-decoration: none;
+}
+.menu-shop-pill .shop-pill-tag {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: #f2f4f7;
+    color: #475467;
+}
+.menu-shop-pill.active .shop-pill-tag {
+    background: rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+}
+body.dark-mode .menu-shops-selector-panel {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+body.dark-mode .menu-shops-title h3 {
+    color: #f8fafc !important;
+}
+body.dark-mode .menu-shops-title p {
+    color: #94a3b8 !important;
+}
+body.dark-mode .menu-shop-pill {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+body.dark-mode .menu-shop-pill:hover {
+    border-color: #ef4444 !important;
+    color: #ffffff !important;
+    background: #334155 !important;
+}
+body.dark-mode .menu-shop-pill.active {
+    background: #b3261e !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+}
 </style>
 
 <!-- Product Preview Modal -->
@@ -1036,11 +1279,15 @@ body.dark-mode .quick-order-checkout:not(:disabled) {
 <section class="storefront-header">
     <div class="container">
         <nav class="store-breadcrumb" aria-label="Breadcrumb">
-            <a href="locations.php"><?php echo htmlspecialchars($breadcrumb_location); ?></a>
-            <span class="breadcrumb-sep">&rsaquo;</span>
-            <a href="index.php#marketplaceStores">Store list</a>
-            <span class="breadcrumb-sep">&rsaquo;</span>
-            <span class="is-current"><?php echo htmlspecialchars($store_display_name); ?></span>
+            <?php if ($has_selected_store): ?>
+                <a href="menu.php" style="color: #b3261e; font-weight: 700;"><i class="fas fa-arrow-left"></i> All Business Shops</a>
+                <span class="breadcrumb-sep">&rsaquo;</span>
+                <span class="is-current"><?php echo htmlspecialchars($store_display_name); ?></span>
+            <?php else: ?>
+                <a href="locations.php"><?php echo htmlspecialchars($breadcrumb_location); ?></a>
+                <span class="breadcrumb-sep">&rsaquo;</span>
+                <span class="is-current">All Business Shops</span>
+            <?php endif; ?>
         </nav>
         <div class="storefront-overview">
             <div class="store-logo-tile">
@@ -1058,12 +1305,17 @@ body.dark-mode .quick-order-checkout:not(:disabled) {
                 <div class="storefront-meta-row">
                     <span><i class="fas fa-motorcycle"></i> Delivery and pickup available</span>
                     <span><i class="fas fa-receipt"></i> <?php echo htmlspecialchars($store_price_label); ?></span>
-                    <span><i class="fas fa-utensils"></i> <?php echo number_format($store_item_count); ?> items</span>
+                    <span><i class="fas fa-utensils"></i> <?php echo $has_selected_store ? (number_format($store_item_count) . ' items') : (count($all_menu_shops) . ' shops available'); ?></span>
                 </div>
                 <div class="storefront-meta-row storefront-meta-row-secondary">
-                    <a href="javascript:void(0);" id="openStorefrontReviewsBtn"><i class="fas fa-star" style="color:#f59e0b;"></i> <?php echo htmlspecialchars($store_rating_label); ?> <span style="text-decoration:underline; font-weight:700; margin-left:4px;">See reviews</span></a>
-                    <a href="#menu"><i class="far fa-comment-dots"></i> See menu</a>
-                    <a href="locations.php"><i class="fas fa-circle-info"></i> More info</a>
+                    <?php if ($has_selected_store): ?>
+                        <a href="javascript:void(0);" id="openStorefrontReviewsBtn"><i class="fas fa-star" style="color:#f59e0b;"></i> <?php echo htmlspecialchars($store_rating_label); ?> <span style="text-decoration:underline; font-weight:700; margin-left:4px;">See reviews</span></a>
+                        <a href="menu.php" style="color:#b3261e; font-weight:700;"><i class="fas fa-arrows-rotate"></i> Change Shop</a>
+                        <a href="locations.php"><i class="fas fa-circle-info"></i> More info</a>
+                    <?php else: ?>
+                        <a href="#shopsDirectory"><i class="fas fa-store"></i> Choose a Shop Below</a>
+                        <a href="locations.php"><i class="fas fa-location-dot"></i> View Branch Map</a>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -1073,280 +1325,374 @@ body.dark-mode .quick-order-checkout:not(:disabled) {
 <!-- Menu Section -->
 <section class="menu-section" id="menu">
     <div class="container">
-        <?php if (!empty($store_deals)): ?>
-            <div class="store-deals-strip" style="background: #ffffff; border: 1px solid #eaecf0; border-radius: 16px; padding: 18px 20px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(16, 24, 40, 0.04);">
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <div style="width: 34px; height: 34px; border-radius: 10px; background: #fff1f0; color: #b3261e; display: flex; align-items: center; justify-content: center; font-size: 0.95rem;">
-                            <i class="fas fa-tags"></i>
-                        </div>
-                        <div>
-                            <h3 style="margin: 0; font-family: 'Outfit', sans-serif; font-size: 1.1rem; font-weight: 800; color: #101828;">Store Exclusive Deals</h3>
-                            <p style="margin: 0; font-size: 0.78rem; color: #667085;">Special discounts available only when ordering from <?php echo htmlspecialchars($store_display_name); ?>.</p>
-                        </div>
+        <!-- Business Shop Quick Selector Bar -->
+        <?php if (!empty($all_menu_shops)): ?>
+        <div class="menu-shops-selector-panel" id="shopsDirectory">
+            <div class="menu-shops-header">
+                <div class="menu-shops-title">
+                    <i class="fas fa-store"></i>
+                    <div>
+                        <h3>Browse by Business Shop</h3>
+                        <p>Select a business shop to view only their menu items and live availability.</p>
                     </div>
-                    <span style="font-size: 0.76rem; font-weight: 700; color: #027a48; background: #ecfdf3; border: 1px solid #abefc6; padding: 4px 10px; border-radius: 999px;">
-                        <i class="fas fa-badge-check"></i> <?php echo count($store_deals); ?> Store Offer<?php echo count($store_deals) > 1 ? 's' : ''; ?> Available
-                    </span>
                 </div>
-                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px;">
-                    <?php foreach ($store_deals as $deal): ?>
-                        <?php
-                            $is_pct = strtolower((string)$deal['discount_type']) === 'percent';
-                            $val_text = $is_pct ? (rtrim(rtrim(number_format((float)$deal['discount_value'], 2), '0'), '.') . '% OFF') : ('₱' . number_format((float)$deal['discount_value'], 0) . ' OFF');
-                            $min_order = (float)$deal['min_order_amount'];
-                            $min_text = $min_order > 0 ? ('Min. spend ₱' . number_format($min_order, 0)) : 'No min. spend';
-                            $deal_code = htmlspecialchars((string)$deal['code']);
-                        ?>
-                        <div style="background: #f8f9fa; border: 1px dashed #d0d5dd; border-radius: 12px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
-                            <div>
-                                <div style="font-weight: 800; color: #b3261e; font-size: 1.05rem;"><?php echo $val_text; ?></div>
-                                <div style="font-size: 0.78rem; color: #344054; font-weight: 700; margin-top: 1px;"><?php echo htmlspecialchars((string)$deal['name']); ?></div>
-                                <div style="font-size: 0.72rem; color: #667085;"><?php echo $min_text; ?></div>
-                            </div>
-                            <button type="button" onclick="claimStoreVoucher('<?php echo $deal_code; ?>', this)" style="background: #ffffff; border: 1px solid #d0d5dd; color: #344054; font-size: 0.76rem; font-weight: 700; padding: 7px 12px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; transition: all 0.15s ease;">
-                                <i class="fas fa-copy"></i> <?php echo $deal_code; ?>
-                            </button>
-                        </div>
+                <div class="menu-shops-pills">
+                    <a href="menu.php" class="menu-shop-pill <?php echo (!$has_selected_store) ? 'active' : ''; ?>">
+                        <i class="fas fa-layer-group"></i> All Shops
+                    </a>
+                    <?php foreach ($all_menu_shops as $shop_item): ?>
+                        <a href="<?php echo htmlspecialchars($shop_item['link']); ?>" class="menu-shop-pill <?php echo !empty($shop_item['is_active_selection']) ? 'active' : ''; ?>">
+                            <i class="<?php echo $shop_item['category'] === 'branch' ? 'fas fa-location-dot' : 'fas fa-shop'; ?>"></i>
+                            <?php echo htmlspecialchars($shop_item['name']); ?>
+                            <span class="shop-pill-tag"><?php echo htmlspecialchars($shop_item['city']); ?></span>
+                        </a>
                     <?php endforeach; ?>
                 </div>
             </div>
+        </div>
         <?php endif; ?>
 
-        <!-- Foodpanda Unified Sticky Category Navigation Bar -->
-        <div class="panda-menu-sticky-bar" id="pandaMenuStickyBar">
-            <div class="panda-menu-bar-inner">
-                <!-- Search in Menu Input -->
-                <div class="panda-menu-search-box">
-                    <i class="fas fa-magnifying-glass"></i>
-                    <input type="search" id="menuSearchInput" placeholder="Search in menu" autocomplete="off">
-                </div>
-
-                <!-- Left Scroll Arrow -->
-                <button type="button" class="panda-cat-arrow arrow-left" id="pandaCatScrollLeft" aria-label="Scroll categories left">
-                    <i class="fas fa-chevron-left"></i>
-                </button>
-
-                <!-- Category Tabs Strip -->
-                <div class="panda-cat-strip-wrap" id="pandaCatStripWrap">
-                    <div class="panda-cat-strip" id="pandaCatStrip">
-                        <?php $cat_index = 0; foreach ($menu_categories as $category => $items): ?>
-                            <?php
-                            $cat_slug = strtolower(str_replace(' ', '-', $category));
-                            $cat_count = count($items);
-                            $is_active_cat = ($cat_index === 0);
-                            ?>
-                            <a href="#<?php echo htmlspecialchars($cat_slug); ?>" class="panda-cat-tab<?php echo $is_active_cat ? ' active' : ''; ?>" data-category="<?php echo htmlspecialchars($cat_slug); ?>">
-                                <?php echo htmlspecialchars($category); ?> <span class="panda-cat-count">(<?php echo $cat_count; ?>)</span>
-                            </a>
-                        <?php $cat_index++; endforeach; ?>
+        <?php if (!$has_selected_store): ?>
+            <!-- All Business Shops Directory Showcase Grid -->
+            <div class="menu-shops-showcase-section" style="margin-bottom: 40px;">
+                <div style="background: #ffffff; border: 1px solid #eaecf0; border-radius: 20px; padding: 32px 24px; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);">
+                    <div style="text-align: center; max-width: 680px; margin: 0 auto 28px;">
+                        <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.78rem; font-weight: 800; color: #b3261e; background: #fff1f0; border: 1px solid #fee4e2; padding: 4px 12px; border-radius: 999px; margin-bottom: 10px;">
+                            <i class="fas fa-store"></i> Verified Marketplace Partners & Branches
+                        </span>
+                        <h2 style="font-family: 'Outfit', sans-serif; font-size: 1.75rem; font-weight: 800; color: #101828; margin: 0 0 8px; letter-spacing: -0.02em;">
+                            Choose a Business Shop to Order
+                        </h2>
+                        <p style="font-size: 0.92rem; color: #475467; margin: 0; line-height: 1.5;">
+                            Select an official pickup branch or partner restaurant below to view their exclusive dishes, real-time inventory, and store deals.
+                        </p>
                     </div>
-                </div>
 
-                <!-- Right Scroll Arrow -->
-                <button type="button" class="panda-cat-arrow arrow-right" id="pandaCatScrollRight" aria-label="Scroll categories right">
-                    <i class="fas fa-chevron-right"></i>
-                </button>
-                
-                <!-- Filter Dropdown -->
-                <div class="panda-menu-filter-select-wrap">
-                    <select id="menuSortFilter" class="panda-menu-filter-select">
-                        <option value="default" selected>Default Sort</option>
-                        <option value="lowest_price">Lowest Price</option>
-                        <option value="highest_price">Highest Price</option>
-                        <option value="best_top_seller">Best / Top Seller</option>
-                    </select>
+                    <div class="menu-shops-directory-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px;">
+                        <?php foreach ($all_menu_shops as $shop): ?>
+                            <a href="<?php echo htmlspecialchars($shop['link']); ?>" class="menu-shop-card" style="background: #ffffff; border: 1.5px solid #eaecf0; border-radius: 16px; overflow: hidden; text-decoration: none; display: flex; flex-direction: column; transition: all 0.2s ease; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);">
+                                <div style="height: 160px; overflow: hidden; position: relative; background: #f8f9fa;">
+                                    <img src="<?php echo htmlspecialchars($shop['image']); ?>" alt="<?php echo htmlspecialchars($shop['name']); ?>" style="width: 100%; height: 100%; object-fit: cover; transition: transform 0.25s ease;" onerror="this.src='images/store-bg.jpg'">
+                                    <span style="position: absolute; top: 12px; left: 12px; font-size: 0.72rem; font-weight: 800; padding: 4px 10px; border-radius: 999px; background: rgba(16, 24, 40, 0.82); color: #ffffff; backdrop-filter: blur(4px);">
+                                        <i class="<?php echo $shop['category'] === 'branch' ? 'fas fa-location-dot' : 'fas fa-shop'; ?>" style="margin-right: 3px;"></i> <?php echo htmlspecialchars($shop['type_label']); ?>
+                                    </span>
+                                </div>
+                                <div style="padding: 18px; display: flex; flex-direction: column; flex: 1;">
+                                    <div style="font-size: 0.78rem; color: #b3261e; font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 5px;">
+                                        <i class="fas fa-map-pin"></i> <?php echo htmlspecialchars($shop['city']); ?>
+                                    </div>
+                                    <h3 style="margin: 0 0 6px; font-family: 'Outfit', sans-serif; font-size: 1.15rem; font-weight: 800; color: #101828;">
+                                        <?php echo htmlspecialchars($shop['name']); ?>
+                                    </h3>
+                                    <p style="margin: 0 0 16px; font-size: 0.82rem; color: #667085; line-height: 1.4; flex: 1;">
+                                        <?php echo htmlspecialchars($shop['address']); ?>
+                                    </p>
+                                    <div style="border-top: 1px solid #f2f4f7; padding-top: 14px; display: flex; align-items: center; justify-content: space-between;">
+                                        <span style="font-size: 0.84rem; font-weight: 700; color: #b3261e; display: inline-flex; align-items: center; gap: 6px;">
+                                            <i class="fas fa-utensils"></i> Browse Food Menu
+                                        </span>
+                                        <span style="width: 32px; height: 32px; border-radius: 50%; background: #fff1f0; color: #b3261e; display: flex; align-items: center; justify-content: center; font-size: 0.85rem;">
+                                            <i class="fas fa-arrow-right"></i>
+                                        </span>
+                                    </div>
+                                </div>
+                            </a>
+                        <?php endforeach; ?>
+                    </div>
                 </div>
             </div>
-        </div>
-        <p id="menuSearchResultInfo" class="menu-search-result-info" style="display:none;"></p>
-
-        <div class="menu-layout">
-            <div class="menu-main-column">
-
-        <?php if (empty($menu_categories)): ?>
-        <div class="menu-filter-bar" style="margin-top:16px;">
-            <label>Storefront update:</label>
-            <span style="color:#6b7280;font-weight:600;">This store has no active posted products yet.</span>
-            <a href="index.php#marketplaceStores" class="btn-primary" style="margin-left:auto;">Back to Stores</a>
-        </div>
-        <?php endif; ?>
-
-        <!-- Menu Items by Category -->
-        <?php foreach ($menu_categories as $category => $items): ?>
-        <div class="menu-category" id="<?php echo strtolower(str_replace(' ', '-', $category)); ?>">
-            <h2 class="category-title"><?php echo $category; ?></h2>
-            <div class="menu-items-grid">
-                <?php foreach ($items as $item): ?>
-                <?php
-                    $item_search_tokens = [
-                        (string)($item['name'] ?? ''),
-                        (string)($item['category'] ?? ''),
-                        (string)strip_tags((string)($item['description'] ?? '')),
-                        (string)($item['store_name'] ?? ''),
-                        implode(' ', array_filter(array_map('strval', (array)($item['sizes'] ?? [])))),
-                        implode(' ', array_filter(array_map('strval', (array)($item['addons'] ?? [])))),
-                        implode(' ', array_filter(array_map('strval', (array)($item['weights'] ?? [])))),
-                        implode(' ', array_filter(array_map('strval', (array)($item['good_for'] ?? []))))
-                    ];
-                    $item_search_text = strtolower(trim(preg_replace('/\s+/', ' ', implode(' ', array_filter($item_search_tokens)))));
-                    $is_product_favorite = !empty($favorite_product_ids[(int)$item['id']]);
-                ?>
-                 <div class="menu-item <?php if ($item['stock'] <= 0) echo 'item-unavailable'; ?>"
-                     data-product-id="<?php echo $item['id']; ?>"
-                     data-min-price="<?php echo htmlspecialchars((string)min($item['size_prices'])); ?>"
-                     data-search="<?php echo htmlspecialchars($item_search_text); ?>"
-                     data-total-sold="<?php echo (int)$item['total_sold']; ?>">
-<?php
-    $imagePath = $item['image'] ?? '';
-    $placeholderText = urlencode($item['name']);
-    if (empty($imagePath)) {
-        $imageSrc = 'https://via.placeholder.com/400x300?text=' . $placeholderText;
-    } elseif (stripos($imagePath, 'http://') === 0 || stripos($imagePath, 'https://') === 0) {
-        $imageSrc = $imagePath;
-    } elseif (strpos($imagePath, '/') === false) {
-        $imageSrc = 'images/menu/' . $imagePath;
-    } else {
-        $imageSrc = $imagePath;
-    }
-?>
-                    <?php if ($item['stock'] <= 0): ?>
-                        <div class="item-sold-out-overlay">
-                            <span>Sold Out</span>
+        <?php else: ?>
+            <!-- Specific Shop Food Menu & Ordering Section -->
+            <?php if (!empty($store_deals)): ?>
+                <div class="store-deals-strip" style="background: #ffffff; border: 1px solid #eaecf0; border-radius: 16px; padding: 18px 20px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(16, 24, 40, 0.04);">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="width: 34px; height: 34px; border-radius: 10px; background: #fff1f0; color: #b3261e; display: flex; align-items: center; justify-content: center; font-size: 0.95rem;">
+                                <i class="fas fa-tags"></i>
+                            </div>
+                            <div>
+                                <h3 style="margin: 0; font-family: 'Outfit', sans-serif; font-size: 1.1rem; font-weight: 800; color: #101828;">Store Exclusive Deals</h3>
+                                <p style="margin: 0; font-size: 0.78rem; color: #667085;">Special discounts available only when ordering from <?php echo htmlspecialchars($store_display_name); ?>.</p>
+                            </div>
                         </div>
-                    <?php endif; ?>
-                    
-                    <!-- Top Image Banner -->
-                    <div class="item-image">
-                        <img src="<?php echo htmlspecialchars($imageSrc); ?>" alt="<?php echo htmlspecialchars($item['name']); ?>" 
-                             onerror="this.src='https://via.placeholder.com/400x300?text=<?php echo $placeholderText; ?>'">
-                        <button
-                            type="button"
-                            class="product-favorite-btn<?php echo $is_product_favorite ? ' is-active' : ''; ?>"
-                            data-favorite-toggle="1"
-                            data-favorite-type="product"
-                            data-favorite-product-id="<?php echo (int)$item['id']; ?>"
-                            data-favorite-active="<?php echo $is_product_favorite ? '1' : '0'; ?>"
-                            aria-pressed="<?php echo $is_product_favorite ? 'true' : 'false'; ?>"
-                            title="<?php echo $is_product_favorite ? 'Remove from favorites' : 'Save to favorites'; ?>">
-                            <i class="<?php echo $is_product_favorite ? 'fas' : 'far'; ?> fa-heart"></i>
-                        </button>
-                        <?php if (($item['total_sold'] ?? 0) > 0): ?>
-                        <span class="top-seller-badge"><i class="fas fa-fire"></i> Top Seller</span>
-                        <?php endif; ?>
+                        <span style="font-size: 0.76rem; font-weight: 700; color: #027a48; background: #ecfdf3; border: 1px solid #abefc6; padding: 4px 10px; border-radius: 999px;">
+                            <i class="fas fa-badge-check"></i> <?php echo count($store_deals); ?> Store Offer<?php echo count($store_deals) > 1 ? 's' : ''; ?> Available
+                        </span>
                     </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px;">
+                        <?php foreach ($store_deals as $deal): ?>
+                            <?php
+                                $is_pct = strtolower((string)$deal['discount_type']) === 'percent';
+                                $val_text = $is_pct ? (rtrim(rtrim(number_format((float)$deal['discount_value'], 2), '0'), '.') . '% OFF') : ('₱' . number_format((float)$deal['discount_value'], 0) . ' OFF');
+                                $min_order = (float)$deal['min_order_amount'];
+                                $min_text = $min_order > 0 ? ('Min. spend ₱' . number_format($min_order, 0)) : 'No min. spend';
+                                $deal_code = htmlspecialchars((string)$deal['code']);
+                            ?>
+                            <div style="background: #f8f9fa; border: 1px dashed #d0d5dd; border-radius: 12px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+                                <div>
+                                    <div style="font-weight: 800; color: #b3261e; font-size: 1.05rem;"><?php echo $val_text; ?></div>
+                                    <div style="font-size: 0.78rem; color: #344054; font-weight: 700; margin-top: 1px;"><?php echo htmlspecialchars((string)$deal['name']); ?></div>
+                                    <div style="font-size: 0.72rem; color: #667085;"><?php echo $min_text; ?></div>
+                                </div>
+                                <button type="button" onclick="claimStoreVoucher('<?php echo $deal_code; ?>', this)" style="background: #ffffff; border: 1px solid #d0d5dd; color: #344054; font-size: 0.76rem; font-weight: 700; padding: 7px 12px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; transition: all 0.15s ease;">
+                                    <i class="fas fa-copy"></i> <?php echo $deal_code; ?>
+                                </button>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+
+            <!-- Foodpanda Unified Sticky Category Navigation Bar -->
+            <div class="panda-menu-sticky-bar" id="pandaMenuStickyBar">
+                <div class="panda-menu-bar-inner">
+                    <!-- Search in Menu Input -->
+                    <div class="panda-menu-search-box">
+                        <i class="fas fa-magnifying-glass"></i>
+                        <input type="search" id="menuSearchInput" placeholder="Search in this store's menu" autocomplete="off">
+                    </div>
+
+                    <!-- Left Scroll Arrow -->
+                    <button type="button" class="panda-cat-arrow arrow-left" id="pandaCatScrollLeft" aria-label="Scroll categories left">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+
+                    <!-- Category Tabs Strip -->
+                    <div class="panda-cat-strip-wrap" id="pandaCatStripWrap">
+                        <div class="panda-cat-strip" id="pandaCatStrip">
+                            <?php $cat_index = 0; foreach ($menu_categories as $category => $items): ?>
+                                <?php
+                                $cat_slug = strtolower(str_replace(' ', '-', $category));
+                                $cat_count = count($items);
+                                $is_active_cat = ($cat_index === 0);
+                                ?>
+                                <a href="#<?php echo htmlspecialchars($cat_slug); ?>" class="panda-cat-tab<?php echo $is_active_cat ? ' active' : ''; ?>" data-category="<?php echo htmlspecialchars($cat_slug); ?>">
+                                    <?php echo htmlspecialchars($category); ?> <span class="panda-cat-count">(<?php echo $cat_count; ?>)</span>
+                                </a>
+                            <?php $cat_index++; endforeach; ?>
+                        </div>
+                    </div>
+
+                    <!-- Right Scroll Arrow -->
+                    <button type="button" class="panda-cat-arrow arrow-right" id="pandaCatScrollRight" aria-label="Scroll categories right">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
                     
-                    <!-- Card Body Content -->
-                    <div class="item-content">
-                        <?php 
-                        $is_whole_roast = stripos($item['name'], 'whole') !== false || stripos($item['category'], 'whole') !== false || stripos($item['name'], 'lechon baka') !== false;
-                        if ($is_whole_roast): 
-                        ?>
-                            <div style="margin-bottom: 6px;">
-                                <span style="display:inline-flex; align-items:center; gap:4px; font-size:0.7rem; font-weight:800; color:#b54708; background:#fffaeb; border:1px solid #fedf89; padding:2px 8px; border-radius:6px;">
-                                    <i class="fas fa-clock"></i> 4–6 hrs Roasting • Advance Order
-                                </span>
+                    <!-- Filter Dropdown -->
+                    <div class="panda-menu-filter-select-wrap">
+                        <select id="menuSortFilter" class="panda-menu-filter-select">
+                            <option value="default" selected>Default Sort</option>
+                            <option value="lowest_price">Lowest Price</option>
+                            <option value="highest_price">Highest Price</option>
+                            <option value="best_top_seller">Best / Top Seller</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <p id="menuSearchResultInfo" class="menu-search-result-info" style="display:none;"></p>
+
+            <div class="menu-layout">
+                <div class="menu-main-column">
+
+            <?php if (empty($menu_categories)): ?>
+            <div class="menu-filter-bar" style="margin-top:16px; background:#ffffff; border:1px dashed #d0d5dd; border-radius:14px; padding:32px 20px; text-align:center;">
+                <i class="fas fa-utensils" style="font-size:2.2rem; color:#98a2b3; margin-bottom:12px; display:block;"></i>
+                <h3 style="font-family:'Outfit',sans-serif; font-size:1.15rem; font-weight:800; color:#101828; margin:0 0 6px;">No Menu Items Currently Posted</h3>
+                <p style="color:#667085; font-size:0.88rem; margin:0 0 16px;">This store currently has no active products posted in the menu catalog.</p>
+                <a href="menu.php" class="btn-primary" style="display:inline-flex; align-items:center; gap:6px; padding:10px 20px; border-radius:10px; text-decoration:none;"><i class="fas fa-store"></i> Browse Other Shops</a>
+            </div>
+            <?php endif; ?>
+
+            <!-- Menu Items by Category -->
+            <?php foreach ($menu_categories as $category => $items): ?>
+            <div class="menu-category" id="<?php echo strtolower(str_replace(' ', '-', $category)); ?>">
+                <h2 class="category-title"><?php echo $category; ?></h2>
+                <div class="menu-items-grid">
+                    <?php foreach ($items as $item): ?>
+                    <?php
+                        $item_search_tokens = [
+                            (string)($item['name'] ?? ''),
+                            (string)($item['category'] ?? ''),
+                            (string)strip_tags((string)($item['description'] ?? '')),
+                            (string)($item['store_name'] ?? ''),
+                            implode(' ', array_filter(array_map('strval', (array)($item['sizes'] ?? [])))),
+                            implode(' ', array_filter(array_map('strval', (array)($item['addons'] ?? [])))),
+                            implode(' ', array_filter(array_map('strval', (array)($item['weights'] ?? [])))),
+                            implode(' ', array_filter(array_map('strval', (array)($item['good_for'] ?? []))))
+                        ];
+                        $item_search_text = strtolower(trim(preg_replace('/\s+/', ' ', implode(' ', array_filter($item_search_tokens)))));
+                        $is_product_favorite = !empty($favorite_product_ids[(int)$item['id']]);
+                    ?>
+                     <div class="menu-item <?php if ($item['stock'] <= 0) echo 'item-unavailable'; ?>"
+                         data-product-id="<?php echo $item['id']; ?>"
+                         data-min-price="<?php echo htmlspecialchars((string)min($item['size_prices'])); ?>"
+                         data-search="<?php echo htmlspecialchars($item_search_text); ?>"
+                         data-total-sold="<?php echo (int)$item['total_sold']; ?>">
+    <?php
+        $imagePath = $item['image'] ?? '';
+        $placeholderText = urlencode($item['name']);
+        if (empty($imagePath)) {
+            $imageSrc = 'https://via.placeholder.com/400x300?text=' . $placeholderText;
+        } elseif (stripos($imagePath, 'http://') === 0 || stripos($imagePath, 'https://') === 0) {
+            $imageSrc = $imagePath;
+        } elseif (strpos($imagePath, '/') === false) {
+            $imageSrc = 'images/menu/' . $imagePath;
+        } else {
+            $imageSrc = $imagePath;
+        }
+    ?>
+                        <?php if ($item['stock'] <= 0): ?>
+                            <div class="item-sold-out-overlay">
+                                <span>Sold Out</span>
                             </div>
                         <?php endif; ?>
-                        <h3><?php echo htmlspecialchars($item['name']); ?></h3>
                         
-                        <div class="item-rating">
-                            <?php
-                            $rating = floatval($item['avg_rating']);
-                            $review_count = intval($item['review_count']);
-                            for ($i = 1; $i <= 5; $i++) {
-                                if ($i <= $rating) {
-                                    echo '<i class="fas fa-star"></i>';
-                                } elseif ($i - 0.5 <= $rating) {
-                                    echo '<i class="fas fa-star-half-alt"></i>';
-                                } else {
-                                    echo '<i class="far fa-star"></i>';
-                                }
-                            }
-                            ?>
-                            <span class="review-count">(<?php echo $review_count; ?>)</span>
+                        <!-- Top Image Banner -->
+                        <div class="item-image">
+                            <img src="<?php echo htmlspecialchars($imageSrc); ?>" alt="<?php echo htmlspecialchars($item['name']); ?>" 
+                                 onerror="this.src='https://via.placeholder.com/400x300?text=<?php echo $placeholderText; ?>'">
+                            <button
+                                type="button"
+                                class="product-favorite-btn<?php echo $is_product_favorite ? ' is-active' : ''; ?>"
+                                data-favorite-toggle="1"
+                                data-favorite-type="product"
+                                data-favorite-product-id="<?php echo (int)$item['id']; ?>"
+                                data-favorite-active="<?php echo $is_product_favorite ? '1' : '0'; ?>"
+                                aria-pressed="<?php echo $is_product_favorite ? 'true' : 'false'; ?>"
+                                title="<?php echo $is_product_favorite ? 'Remove from favorites' : 'Save to favorites'; ?>">
+                                <i class="<?php echo $is_product_favorite ? 'fas' : 'far'; ?> fa-heart"></i>
+                            </button>
+                            <?php if (($item['total_sold'] ?? 0) > 0): ?>
+                            <span class="top-seller-badge"><i class="fas fa-fire"></i> Top Seller</span>
+                            <?php endif; ?>
                         </div>
                         
-                        <p class="item-description"><?php echo htmlspecialchars($item['description']); ?></p>
-                        
-                        <!-- Bottom Action Bar: Price Pill + (+) Plus Button -->
-                        <div class="item-card-bottom">
-                            <div class="panda-price-pill">
-                                PHP <?php echo number_format(min($item['size_prices']), 2); ?>
+                        <!-- Card Body Content -->
+                        <div class="item-content">
+                            <?php 
+                            $is_whole_roast = stripos($item['name'], 'whole') !== false || stripos($item['category'], 'whole') !== false || stripos($item['name'], 'lechon baka') !== false;
+                            if ($is_whole_roast): 
+                            ?>
+                                <div style="margin-bottom: 6px;">
+                                    <span style="display:inline-flex; align-items:center; gap:4px; font-size:0.7rem; font-weight:800; color:#b54708; background:#fffaeb; border:1px solid #fedf89; padding:2px 8px; border-radius:6px;">
+                                        <i class="fas fa-clock"></i> 4–6 hrs Roasting • Advance Order
+                                    </span>
+                                </div>
+                            <?php endif; ?>
+                            
+                            <h3 class="item-title"><?php echo htmlspecialchars($item['name']); ?></h3>
+                            
+                            <div class="item-rating">
+                                <?php
+                                $rating = floatval($item['avg_rating']);
+                                $review_count = intval($item['review_count']);
+                                for ($i = 1; $i <= 5; $i++) {
+                                    if ($i <= $rating) {
+                                        echo '<i class="fas fa-star"></i>';
+                                    } elseif ($i - 0.5 <= $rating) {
+                                        echo '<i class="fas fa-star-half-alt"></i>';
+                                    } else {
+                                        echo '<i class="far fa-star"></i>';
+                                    }
+                                }
+                                ?>
+                                <span class="review-count">(<?php echo $review_count; ?>)</span>
                             </div>
                             
-                            <button type="button" class="panda-quick-add-btn view-details-btn add-to-cart"
-                                    data-id="<?php echo $item['id']; ?>"
-                                    data-product-id="<?php echo $item['product_id']; ?>"
-                                    data-name="<?php echo htmlspecialchars($item['name']); ?>"
-                                    data-description="<?php echo htmlspecialchars($item['description']); ?>"
-                                    data-image="<?php echo htmlspecialchars($imageSrc); ?>"
-                                    data-sizes='<?php echo json_encode($item['sizes']); ?>'
-                                    data-weights='<?php echo json_encode($item['weights']); ?>'
-                                    data-good-for='<?php echo json_encode($item['good_for']); ?>'
-                                    data-size-prices='<?php echo json_encode($item['size_prices']); ?>'
-                                    data-addons='<?php echo json_encode($item['addons']); ?>'
-                                    data-avg-rating='<?php echo $item['avg_rating']; ?>'
-                                    data-stock="<?php echo $item['stock']; ?>"
-                                    <?php if ($item['stock'] <= 0) echo 'disabled'; ?>
-                                    title="View details / Add to cart">
-                                <i class="fas fa-<?php echo ($item['stock'] <= 0) ? 'ban' : 'plus'; ?>"></i>
-                            </button>
+                            <p class="item-description"><?php echo htmlspecialchars($item['description']); ?></p>
+                            
+                            <!-- Stock & Inventory Status Indicator -->
+                            <div style="margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+                                <?php if ((int)$item['stock'] > 0): ?>
+                                    <span style="font-size: 0.72rem; font-weight: 700; color: #027a48; background: #ecfdf3; border: 1px solid #abefc6; padding: 2px 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;">
+                                        <i class="fas fa-boxes-stacked"></i> <?php echo (int)$item['stock']; ?> Available in Stock
+                                    </span>
+                                <?php else: ?>
+                                    <span style="font-size: 0.72rem; font-weight: 700; color: #b3261e; background: #fff1f0; border: 1px solid #fee4e2; padding: 2px 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;">
+                                        <i class="fas fa-ban"></i> Currently Sold Out
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+
+                            <!-- Bottom Action Bar: Price Pill + (+) Plus Button -->
+                            <div class="item-card-bottom">
+                                <div class="panda-price-pill">
+                                    PHP <?php echo number_format(min($item['size_prices']), 2); ?>
+                                </div>
+                                
+                                <button type="button" class="panda-quick-add-btn view-details-btn add-to-cart"
+                                        data-id="<?php echo $item['id']; ?>"
+                                        data-product-id="<?php echo $item['product_id']; ?>"
+                                        data-name="<?php echo htmlspecialchars($item['name']); ?>"
+                                        data-description="<?php echo htmlspecialchars($item['description']); ?>"
+                                        data-image="<?php echo htmlspecialchars($imageSrc); ?>"
+                                        data-sizes='<?php echo json_encode($item['sizes']); ?>'
+                                        data-weights='<?php echo json_encode($item['weights']); ?>'
+                                        data-good-for='<?php echo json_encode($item['good_for']); ?>'
+                                        data-size-prices='<?php echo json_encode($item['size_prices']); ?>'
+                                        data-addons='<?php echo json_encode($item['addons']); ?>'
+                                        data-avg-rating='<?php echo $item['avg_rating']; ?>'
+                                        data-stock="<?php echo $item['stock']; ?>"
+                                        <?php if ($item['stock'] <= 0) echo 'disabled'; ?>
+                                        title="View details / Add to cart">
+                                    <i class="fas fa-<?php echo ($item['stock'] <= 0) ? 'ban' : 'plus'; ?>"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
+                    <?php endforeach; ?>
                 </div>
-                <?php endforeach; ?>
             </div>
-        </div>
-        <?php endforeach; ?>
+            <?php endforeach; ?>
 
-            </div>
-
-            <aside class="menu-side-column">
-                <div class="menu-side-stack">
-                    <section class="quick-order-panel" id="quickOrderPanel">
-                        <div class="quick-order-tabs" role="tablist" aria-label="Order option">
-                            <button type="button"
-                                    class="quick-order-tab<?php echo ($_SESSION['delivery_option'] ?? 'pickup') === 'delivery' ? ' active' : ''; ?>"
-                                    data-delivery-option="delivery"
-                                    onclick="switchDeliveryOptionTab('delivery')">
-                                Delivery
-                            </button>
-                            <button type="button"
-                                    class="quick-order-tab<?php echo ($_SESSION['delivery_option'] ?? 'pickup') === 'pickup' ? ' active' : ''; ?>"
-                                    data-delivery-option="pickup"
-                                    onclick="switchDeliveryOptionTab('pickup')">
-                                Pick-up
-                            </button>
-                        </div>
-
-                        <div class="quick-order-hero">
-                            <div class="quick-order-hero-icon">
-                                <i class="fas fa-bag-shopping"></i>
-                            </div>
-                            <h3>Free delivery on your first order</h3>
-                            <p id="quickOrderHint">Add items to unlock free delivery</p>
-                        </div>
-
-                        <div class="quick-order-summary">
-                            <p class="quick-order-meta" id="quickOrderMeta">Pick-up selected</p>
-                            <div class="quick-order-items" id="quickOrderItems" aria-live="polite">
-                                <p class="quick-order-items-empty">No items in cart yet.</p>
-                            </div>
-                            <div class="summary-row">
-                                <span>Total <small>(incl. fees and tax)</small></span>
-                                <strong id="quickOrderTotal">&#8369;0.00</strong>
-                            </div>
-                            <button type="button" class="quick-order-link" id="quickSeeSummaryBtn">See summary</button>
-                        </div>
-
-                        <button type="button" class="quick-order-checkout" id="quickCheckoutBtn" disabled>
-                            Review payment and address
-                        </button>
-                    </section>
                 </div>
-            </aside>
-        </div>
+
+                <aside class="menu-side-column">
+                    <div class="menu-side-stack">
+                        <section class="quick-order-panel" id="quickOrderPanel">
+                            <div class="quick-order-tabs" role="tablist" aria-label="Order option">
+                                <button type="button"
+                                        class="quick-order-tab<?php echo ($_SESSION['delivery_option'] ?? 'pickup') === 'delivery' ? ' active' : ''; ?>"
+                                        data-delivery-option="delivery"
+                                        onclick="switchDeliveryOptionTab('delivery')">
+                                    Delivery
+                                </button>
+                                <button type="button"
+                                        class="quick-order-tab<?php echo ($_SESSION['delivery_option'] ?? 'pickup') === 'pickup' ? ' active' : ''; ?>"
+                                        data-delivery-option="pickup"
+                                        onclick="switchDeliveryOptionTab('pickup')">
+                                    Pick-up
+                                </button>
+                            </div>
+
+                            <div class="quick-order-hero">
+                                <div class="quick-order-hero-icon">
+                                    <i class="fas fa-bag-shopping"></i>
+                                </div>
+                                <h3>Free delivery on your first order</h3>
+                                <p id="quickOrderHint">Add items to unlock free delivery</p>
+                            </div>
+
+                            <div class="quick-order-summary">
+                                <p class="quick-order-meta" id="quickOrderMeta">Pick-up selected</p>
+                                <div class="quick-order-items" id="quickOrderItems" aria-live="polite">
+                                    <p class="quick-order-items-empty">No items in cart yet.</p>
+                                </div>
+                                <div class="summary-row">
+                                    <span>Total <small>(incl. fees and tax)</small></span>
+                                    <strong id="quickOrderTotal">&#8369;0.00</strong>
+                                </div>
+                                <button type="button" class="quick-order-link" id="quickSeeSummaryBtn">See summary</button>
+                            </div>
+
+                            <button type="button" class="quick-order-checkout" id="quickCheckoutBtn" disabled>
+                                Review payment and address
+                            </button>
+                        </section>
+                    </div>
+                </aside>
+            </div>
+        <?php endif; ?>
     </div>
 </section>
 
