@@ -7,6 +7,7 @@ require_once 'email_service.php';
 require_once 'includes/partner_voucher_helper.php';
 require_once 'includes/checkout_address_helper.php';
 require_once 'includes/delivery_pricing_helper.php';
+require_once 'includes/transaction_fee_helper.php';
 
 $is_ajax_request =
     (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower((string)$_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest')
@@ -161,6 +162,7 @@ if (!isset($_SESSION['user_id'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     pvEnsureVoucherSchema($conn);
     caEnsureUserSavedAddressSchema($conn);
+    tfEnsureOrderTransactionFeeSchema($conn);
 
     $cart_tenant_scope = function_exists('pvGetCheckoutTenantScope')
         ? pvGetCheckoutTenantScope($conn, $_SESSION['cart'])
@@ -230,12 +232,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     // Handle delivery/pickup specific data
     if ($delivery_option === 'delivery') {
-        $delivery_address = isset($_POST['delivery_address']) ? mysqli_real_escape_string($conn, $_POST['delivery_address']) : '';
-        $delivery_instructions = isset($_POST['delivery_instructions']) ? mysqli_real_escape_string($conn, $_POST['delivery_instructions']) : '';
-        $latitude = isset($_POST['latitude']) ? floatval($_POST['latitude']) : NULL;
-        $longitude = isset($_POST['longitude']) ? floatval($_POST['longitude']) : NULL;
-        $delivery_location = isset($_POST['delivery_location']) ? mysqli_real_escape_string($conn, $_POST['delivery_location']) : 'metro_manila';
-        $pickup_location = NULL;
+        $delivery_address = trim((string)($_POST['delivery_address'] ?? ''));
+        $delivery_instructions = trim((string)($_POST['delivery_instructions'] ?? ''));
+        $coords = dpSanitizeCoordinates($_POST['latitude'] ?? null, $_POST['longitude'] ?? null);
+        if ($coords === null && $delivery_address !== '') {
+            $coords = dpResolveCoordinatesFromAddress($delivery_address);
+        }
+        $latitude = $coords ? (float)($coords['lat'] ?? $coords['latitude'] ?? 0) : null;
+        $longitude = $coords ? (float)($coords['lng'] ?? $coords['longitude'] ?? 0) : null;
+
+        $delivery_location = isset($_POST['delivery_location']) ? trim((string)$_POST['delivery_location']) : 'metro_manila';
+        $pickup_location = null;
         
         // Validate delivery address
         if (empty($delivery_address)) {
@@ -249,9 +256,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         // Pickup option
         $pickup_location = isset($_POST['pickup_location']) ? intval($_POST['pickup_location']) : 1;
-        $delivery_location = NULL;
-        $latitude = NULL;
-        $longitude = NULL;
+        $delivery_location = null;
+        $latitude = null;
+        $longitude = null;
         $delivery_instructions = '';
         
         // Get store address for pickup
@@ -287,18 +294,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $delivery_pricing_note = '';
     $delivery_quote = null;
     $deliveryPricingConfig = dpGetDeliveryPricingConfig();
+    $estimated_delivery_time = null;
+
     // Get delivery fee
     $delivery_fee = 0;
     if ($delivery_option === 'delivery') {
+        $active_stores = !empty($_SESSION['store_locations'])
+            ? $_SESSION['store_locations']
+            : dpFetchActiveStoresFromDb($conn);
+
         if ($latitude !== null && $longitude !== null) {
+            $seller_owner_id = $checkout_seller_owner_id > 0
+                ? $checkout_seller_owner_id
+                : (int)($_SESSION['storefront_seller_id'] ?? 0);
+
             $delivery_quote = dpBuildDeliveryQuote(
-                $_SESSION['store_locations'] ?? [],
+                $active_stores,
                 (float)$latitude,
                 (float)$longitude,
-                $checkout_seller_owner_id > 0
-                    ? $checkout_seller_owner_id
-                    : (int)($_SESSION['storefront_seller_id'] ?? 0),
-                $deliveryPricingConfig
+                $seller_owner_id,
+                $deliveryPricingConfig,
+                $delivery_address
             );
         }
 
@@ -311,6 +327,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             if (!empty($delivery_quote['estimated_delivery_text'])) {
                 $delivery_pricing_note .= ' | ' . (string)$delivery_quote['estimated_delivery_text'];
+            }
+            if (!empty($delivery_quote['eta_max_minutes'])) {
+                $estimated_delivery_time = date('Y-m-d H:i:s', strtotime('+' . (int)$delivery_quote['eta_max_minutes'] . ' minutes'));
             }
             $_SESSION['current_delivery_quote'] = $delivery_quote;
         } elseif ($calculated_delivery_fee > 0) {
@@ -328,12 +347,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    // Infer shop owner ID if not set from cart scope
+    if ($checkout_seller_owner_id <= 0) {
+        if ($delivery_option === 'delivery' && !empty($delivery_quote['nearest_store_id'])) {
+            $nStoreId = (int)$delivery_quote['nearest_store_id'];
+            $sStmt = mysqli_prepare($conn, "SELECT owner_user_id FROM store_locations WHERE store_id = ? OR id = ? LIMIT 1");
+            if ($sStmt) {
+                mysqli_stmt_bind_param($sStmt, "ii", $nStoreId, $nStoreId);
+                mysqli_stmt_execute($sStmt);
+                $sRes = mysqli_stmt_get_result($sStmt);
+                if ($sRow = mysqli_fetch_assoc($sRes)) {
+                    $checkout_seller_owner_id = (int)($sRow['owner_user_id'] ?? 0);
+                }
+                mysqli_stmt_close($sStmt);
+            }
+        } elseif ($delivery_option === 'pickup' && !empty($pickup_location)) {
+            $sStmt = mysqli_prepare($conn, "SELECT owner_user_id FROM store_locations WHERE store_id = ? OR id = ? LIMIT 1");
+            if ($sStmt) {
+                mysqli_stmt_bind_param($sStmt, "ii", $pickup_location, $pickup_location);
+                mysqli_stmt_execute($sStmt);
+                $sRes = mysqli_stmt_get_result($sStmt);
+                if ($sRow = mysqli_fetch_assoc($sRes)) {
+                    $checkout_seller_owner_id = (int)($sRow['owner_user_id'] ?? 0);
+                }
+                mysqli_stmt_close($sStmt);
+            }
+        }
+    }
+
+    // Calculate monetization transaction fee based on shop owner subscription
+    $tf_calc = tfCalculateTransactionFee($conn, $checkout_seller_owner_id, $subtotal);
+    $platform_fee_rate_percent = (float)($tf_calc['fee_percent'] ?? 0.0);
+    $platform_fee_flat = (float)($tf_calc['fee_flat'] ?? 0.0);
+    $platform_fee_amount = (float)($tf_calc['fee_amount'] ?? 0.0);
+    $platform_fee_plan_name = (string)($tf_calc['plan_name'] ?? '');
+    $net_seller_payout = (float)($tf_calc['net_payout'] ?? $subtotal);
+    $seller_id_for_order = $checkout_seller_owner_id > 0 ? $checkout_seller_owner_id : null;
+
     if ($delivery_pricing_note !== '') {
         $order_notes .= ($order_notes ? "\n" : '') . $delivery_pricing_note;
     }
     
     $vat_rate = 0.12;
     $vat_amount = round($subtotal * $vat_rate, 2);
+
+    if (empty($_SESSION['applied_voucher']) && !empty($_SESSION['pending_welcome_voucher']) && $user_id > 0 && !empty($_SESSION['cart'])) {
+        $auto_pre = pvApplyVoucherCodeForSession($conn, (int)$user_id, (string)$_SESSION['pending_welcome_voucher'], $_SESSION['cart']);
+        if (!empty($auto_pre['success'])) {
+            unset($_SESSION['pending_welcome_voucher']);
+        }
+    }
 
     $voucher_state = pvResolveAppliedVoucherState($conn, (int)$user_id, $_SESSION['cart']);
     $voucher_discount = 0.0;
@@ -362,6 +425,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Generate order number (19 chars: ORD-YYYYMMDD-XXXXXX)
     $order_number = 'ORD-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -6));
+
     
     // Start transaction
 
@@ -413,10 +477,84 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             && in_array('voucher_discount', $columns, true);
         
         // Insert order based on actual database structure
-        if (in_array('delivery_option', $columns) && 
-            in_array('pickup_location', $columns) && 
-            in_array('delivery_location', $columns)) {
-            // Database has new columns
+        $has_modern_schema = in_array('delivery_option', $columns, true)
+            && in_array('latitude', $columns, true)
+            && in_array('platform_fee_amount', $columns, true);
+
+        if ($has_modern_schema) {
+            $query = "INSERT INTO orders (
+                order_number, user_id, seller_id, customer_name, customer_email, customer_phone,
+                delivery_address, delivery_date, delivery_time, estimated_delivery_time, payment_method,
+                delivery_option, pickup_location, delivery_location, latitude, longitude,
+                delivery_instructions, subtotal, delivery_fee, voucher_id, voucher_code,
+                voucher_discount, total_amount, platform_fee_rate_percent, platform_fee_flat,
+                platform_fee_amount, platform_fee_plan_name, net_seller_payout, special_instructions,
+                status, payment_status, downpayment_amount, remaining_balance
+            ) VALUES (
+                ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?,
+                ?, ?, ?, ?,
+                ?, ?, ?, ?,
+                ?, ?, ?, ?
+            )";
+
+            $stmt = mysqli_prepare($conn, $query);
+            if (!$stmt) {
+                throw new Exception("Prepare failed: " . mysqli_error($conn));
+            }
+
+            $pickup_location_param = ($pickup_location > 0) ? (int)$pickup_location : null;
+            $delivery_location_param = !empty($delivery_location) ? (string)$delivery_location : null;
+            $latitude_param = ($latitude !== null && $latitude !== '') ? number_format((float)$latitude, 8, '.', '') : null;
+            $longitude_param = ($longitude !== null && $longitude !== '') ? number_format((float)$longitude, 8, '.', '') : null;
+            $estimated_delivery_time_param = !empty($estimated_delivery_time) ? (string)$estimated_delivery_time : null;
+            $voucher_id_param = ($voucher_id > 0) ? (int)$voucher_id : null;
+            $voucher_code_param = !empty($voucher_code) ? (string)$voucher_code : null;
+            $platform_plan_param = !empty($platform_fee_plan_name) ? (string)$platform_fee_plan_name : null;
+            $seller_id_param = ($seller_id_for_order > 0) ? (int)$seller_id_for_order : null;
+            $delivery_instructions_param = (string)($delivery_instructions ?? '');
+
+            mysqli_stmt_bind_param($stmt, "siisssssssssissssddisdddddsdsssdd",
+                $order_number,                  // s (1)
+                $user_id,                       // i (2)
+                $seller_id_param,               // i (3)
+                $full_name,                     // s (4)
+                $email,                         // s (5)
+                $phone,                         // s (6)
+                $delivery_address,              // s (7)
+                $delivery_date,                 // s (8)
+                $delivery_time,                 // s (9)
+                $estimated_delivery_time_param, // s (10)
+                $payment_method,                // s (11)
+                $delivery_option,               // s (12)
+                $pickup_location_param,         // i (13)
+                $delivery_location_param,       // s (14)
+                $latitude_param,                // s (15)
+                $longitude_param,               // s (16)
+                $delivery_instructions_param,   // s (17)
+                $subtotal,                      // d (18)
+                $delivery_fee,                  // d (19)
+                $voucher_id_param,              // i (20)
+                $voucher_code_param,            // s (21)
+                $voucher_discount,              // d (22)
+                $total_amount,                  // d (23)
+                $platform_fee_rate_percent,     // d (24)
+                $platform_fee_flat,             // d (25)
+                $platform_fee_amount,           // d (26)
+                $platform_plan_param,           // s (27)
+                $net_seller_payout,             // d (28)
+                $order_notes,                   // s (29)
+                $status,                        // s (30)
+                $payment_status,                // s (31)
+                $downpayment_amount,            // d (32)
+                $remaining_balance              // d (33)
+            );
+        } elseif (in_array('delivery_option', $columns, true) && 
+            in_array('pickup_location', $columns, true) && 
+            in_array('delivery_location', $columns, true)) {
+            // Database has intermediate columns
             $query = "INSERT INTO orders (
                 order_number, user_id, customer_name, customer_email, customer_phone, 
                 delivery_address, delivery_date, delivery_time, payment_method,
@@ -494,7 +632,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $order_id = mysqli_insert_id($conn);
         mysqli_stmt_close($stmt);
 
-        if ($has_voucher_columns) {
+        if (!$has_modern_schema && $has_voucher_columns) {
             $voucher_update_sql = "UPDATE orders
                                    SET voucher_id = NULLIF(?, 0),
                                        voucher_code = NULLIF(?, ''),
@@ -511,18 +649,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             mysqli_stmt_close($voucher_update_stmt);
         }
 
-        if ($delivery_option === 'delivery' && in_array('customer_coordinates', $columns, true) && $latitude !== null && $longitude !== null) {
-            $customer_coordinates = json_encode([
-                'latitude' => (float)$latitude,
-                'longitude' => (float)$longitude,
-            ]);
-            $coords_stmt = mysqli_prepare($conn, "UPDATE orders SET customer_coordinates = ? WHERE id = ?");
+        if (!$has_modern_schema && $delivery_option === 'delivery' && in_array('latitude', $columns, true) && $latitude !== null && $longitude !== null) {
+            $lat_save = number_format((float)$latitude, 8, '.', '');
+            $lng_save = number_format((float)$longitude, 8, '.', '');
+            $coords_stmt = mysqli_prepare($conn, "UPDATE orders SET latitude = ?, longitude = ? WHERE id = ?");
             if ($coords_stmt) {
-                mysqli_stmt_bind_param($coords_stmt, "si", $customer_coordinates, $order_id);
+                mysqli_stmt_bind_param($coords_stmt, "ssi", $lat_save, $lng_save, $order_id);
                 mysqli_stmt_execute($coords_stmt);
                 mysqli_stmt_close($coords_stmt);
             }
         }
+
         
         // Insert order items
         foreach ($_SESSION['cart'] as $item) {
@@ -695,6 +832,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Commit transaction
         mysqli_commit($conn);
         pvClearAppliedVoucherSession();
+        unset($_SESSION['pending_welcome_voucher']);
         
         // All payments go through PayMongo
         $payment_amount = ($payment_type === 'downpayment') ? $downpayment_amount : $total_amount;

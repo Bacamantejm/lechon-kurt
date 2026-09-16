@@ -778,23 +778,41 @@ if (!empty($product_ids_for_reviews)) {
     }
 }
 
+// Record claimed voucher from URL if passed
+if (!empty($_GET['voucher'])) {
+    $claimed_v_code = strtoupper(trim((string)$_GET['voucher']));
+    if ($claimed_v_code !== '') {
+        $_SESSION['pending_welcome_voucher'] = $claimed_v_code;
+    }
+}
+
 // Fetch active store-specific deals/vouchers for this shop
 $store_deals = [];
 $lookup_seller_id = (int)($requested_seller_id ?: ($store_owner_id ?? 0));
+if ($lookup_seller_id <= 0) {
+    if (!empty($selected_pickup_branch['owner_user_id']) && (int)$selected_pickup_branch['owner_user_id'] > 0) {
+        $lookup_seller_id = (int)$selected_pickup_branch['owner_user_id'];
+    } elseif (!empty($_SESSION['storefront_seller_id']) && (int)$_SESSION['storefront_seller_id'] > 0) {
+        $lookup_seller_id = (int)$_SESSION['storefront_seller_id'];
+    } else {
+        $lookup_seller_id = 1;
+    }
+}
+
 if ($lookup_seller_id > 0 && isset($conn) && $conn instanceof mysqli) {
     require_once __DIR__ . '/includes/partner_voucher_helper.php';
     pvEnsureVoucherSchema($conn);
     $vd_stmt = mysqli_prepare($conn, "
-        SELECT id, code, name, description, discount_type, discount_value, min_order_amount, max_discount_amount 
+        SELECT id, seller_id, code, name, description, discount_type, discount_value, min_order_amount, max_discount_amount 
         FROM partner_vouchers 
-        WHERE seller_id = ? AND is_active = 1 
+        WHERE (seller_id = ? OR seller_id = 0) AND is_active = 1 
           AND (start_at IS NULL OR start_at <= NOW()) 
           AND (end_at IS NULL OR end_at >= NOW()) 
-        ORDER BY id DESC 
-        LIMIT 4
+        ORDER BY (seller_id = ?) DESC, id DESC 
+        LIMIT 6
     ");
     if ($vd_stmt) {
-        mysqli_stmt_bind_param($vd_stmt, "i", $lookup_seller_id);
+        mysqli_stmt_bind_param($vd_stmt, "ii", $lookup_seller_id, $lookup_seller_id);
         mysqli_stmt_execute($vd_stmt);
         $vd_res = mysqli_stmt_get_result($vd_stmt);
         if ($vd_res) {
@@ -1788,6 +1806,13 @@ function claimStoreVoucher(code, btn) {
     try {
         sessionStorage.setItem('pending_welcome_voucher', textToCopy);
     } catch(e) {}
+
+    // Send to backend so PHP session records it immediately
+    fetch('apply_voucher.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ action: 'claim', code: textToCopy })
+    }).catch(() => {});
 
     if (navigator.clipboard && window.isSecureContext) {
         navigator.clipboard.writeText(textToCopy).catch(() => {});

@@ -1458,9 +1458,9 @@ include 'includes/header.php';
                             <div class="fp-order-item-row">
                                 <div class="fp-item-left">
                                     <?php 
-                                    $img_src = !empty($item['product_image']) ? 'uploads/products/' . htmlspecialchars($item['product_image']) : 'images/menu/lechon.jpg';
+                                    $img_src = !empty($item['product_image']) ? 'uploads/products/' . htmlspecialchars($item['product_image']) : 'assets/images/promo_lechon.jpg';
                                     ?>
-                                    <img src="<?php echo $img_src; ?>" class="fp-item-thumb" alt="<?php echo htmlspecialchars($item['product_name']); ?>" onerror="this.src='images/menu/lechon.jpg'">
+                                    <img src="<?php echo $img_src; ?>" class="fp-item-thumb" alt="<?php echo htmlspecialchars($item['product_name']); ?>" onerror="this.onerror=null;this.src='assets/images/promo_lechon.jpg';">
                                     <div>
                                         <div class="fp-item-name"><?php echo htmlspecialchars($item['product_name']); ?></div>
                                         <div class="fp-item-sub">

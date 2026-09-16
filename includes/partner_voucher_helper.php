@@ -99,10 +99,10 @@ if (!function_exists('pvEnsureVoucherSchema')) {
         }
 
         $default_vouchers = [
-            ['WELCOME100', 'New User Welcome ₱100 OFF', 'Get ₱100 flat discount on your first order.', 'fixed', 100.00, 500.00, 100.00],
-            ['FREESHIP', 'First Order Free Delivery', 'Free shipping discount on whole or half lechon pre-orders.', 'fixed', 150.00, 1200.00, 150.00],
-            ['LECHON15', '15% OFF Celebration Pre-order', 'Save 15% on advance celebrations up to ₱300.', 'percent', 15.00, 800.00, 300.00],
-            ['BELLY50', '₱50 OFF Crispy Lechon Belly', 'Save ₱50 on lechon belly rolls and meal boxes.', 'fixed', 50.00, 350.00, 50.00]
+            ['WELCOME100', 'New User Welcome ₱100 OFF', 'Get ₱100 flat discount on your first order.', 'fixed', 100.00, 200.00, 100.00],
+            ['FREESHIP', 'First Order Free Delivery', 'Free shipping discount on whole or half lechon pre-orders.', 'fixed', 150.00, 600.00, 150.00],
+            ['LECHON15', '15% OFF Celebration Pre-order', 'Save 15% on advance celebrations up to ₱300.', 'percent', 15.00, 400.00, 300.00],
+            ['BELLY50', '₱50 OFF Crispy Lechon Belly', 'Save ₱50 on lechon belly rolls and meal boxes.', 'fixed', 50.00, 150.00, 50.00]
         ];
 
         foreach ($default_vouchers as $v) {

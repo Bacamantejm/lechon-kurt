@@ -102,6 +102,12 @@ if ($seller_scope_id === null) {
             <p><strong>Address:</strong> <?php echo htmlspecialchars($order['delivery_address']); ?></p>
             <p><strong>Date:</strong> <?php echo date('M d, Y', strtotime($order['delivery_date'])); ?></p>
             <p><strong>Time:</strong> <?php echo $order['delivery_time'] ?? 'Not specified'; ?></p>
+            <?php if (!empty($order['latitude']) && !empty($order['longitude'])): ?>
+                <p><strong>Coordinates:</strong> <?php echo htmlspecialchars($order['latitude'] . ', ' . $order['longitude']); ?></p>
+            <?php endif; ?>
+            <?php if (!empty($order['estimated_delivery_time'])): ?>
+                <p><strong>Estimated Delivery:</strong> <?php echo date('M d, Y h:i A', strtotime($order['estimated_delivery_time'])); ?></p>
+            <?php endif; ?>
         </div>
     </div>
     
@@ -142,6 +148,16 @@ if ($seller_scope_id === null) {
                 <span>Store Items Total:</span>
                 <span>&#8369;<?php echo number_format($partner_items_total, 2); ?></span>
             </div>
+            <?php if (isset($order['platform_fee_amount']) && (float)$order['platform_fee_amount'] > 0): ?>
+                <div class="summary-row" style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #eaecf0; color: #475467;">
+                    <span>Platform Fee (<?php echo htmlspecialchars($order['platform_fee_plan_name'] ?: 'Plan Rate'); ?> - <?php echo number_format((float)($order['platform_fee_rate_percent'] ?? 0), 2); ?>% + &#8369;<?php echo number_format((float)($order['platform_fee_flat'] ?? 0), 2); ?>):</span>
+                    <span style="color: #b3261e;">-&#8369;<?php echo number_format((float)$order['platform_fee_amount'], 2); ?></span>
+                </div>
+                <div class="summary-row" style="font-weight: 600; color: #027a48;">
+                    <span>Net Store Payout:</span>
+                    <span>&#8369;<?php echo number_format((float)($order['net_seller_payout'] ?? ($partner_items_total - $order['platform_fee_amount'])), 2); ?></span>
+                </div>
+            <?php endif; ?>
         <?php else: ?>
             <div class="summary-row">
                 <span>Subtotal:</span>
@@ -165,6 +181,16 @@ if ($seller_scope_id === null) {
                 <span>Total Amount:</span>
                 <span>&#8369;<?php echo number_format((float)$order['total_amount'], 2); ?></span>
             </div>
+            <?php if (isset($order['platform_fee_amount']) && ((float)$order['platform_fee_amount'] > 0 || (int)($order['seller_id'] ?? 0) > 0)): ?>
+                <div class="summary-row" style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #eaecf0; color: #475467;">
+                    <span>Platform Fee (<?php echo htmlspecialchars($order['platform_fee_plan_name'] ?: 'Plan Rate'); ?> - <?php echo number_format((float)($order['platform_fee_rate_percent'] ?? 0), 2); ?>% + &#8369;<?php echo number_format((float)($order['platform_fee_flat'] ?? 0), 2); ?>):</span>
+                    <span style="color: #b3261e;">-&#8369;<?php echo number_format((float)$order['platform_fee_amount'], 2); ?></span>
+                </div>
+                <div class="summary-row" style="font-weight: 600; color: #027a48;">
+                    <span>Net Seller Payout:</span>
+                    <span>&#8369;<?php echo number_format((float)($order['net_seller_payout'] ?? ($order['subtotal'] - $order['platform_fee_amount'])), 2); ?></span>
+                </div>
+            <?php endif; ?>
             <?php if ($payment): ?>
                 <div class="summary-row">
                     <span>Payment Method:</span>
@@ -177,6 +203,7 @@ if ($seller_scope_id === null) {
             <?php endif; ?>
         <?php endif; ?>
     </div>
+
     
     <?php if ($order['special_instructions']): ?>
         <div class="special-instructions">

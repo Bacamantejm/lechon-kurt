@@ -79,51 +79,88 @@ if (!function_exists('srFetchBusinessProfile')) {
             'email' => '',
         ];
 
-        if ($userId <= 0) {
-            return $profile;
+        if ($userId > 0) {
+            $query = "SELECT
+                        COALESCE(NULLIF(TRIM(business_name), ''), NULLIF(TRIM(full_name), ''), 'Lechon Delights') AS business_name,
+                        COALESCE(NULLIF(TRIM(address), ''), 'Business address not set') AS address,
+                        COALESCE(NULLIF(TRIM(phone), ''), '') AS phone,
+                        COALESCE(NULLIF(TRIM(tax_id), ''), '') AS tax_id,
+                        COALESCE(NULLIF(TRIM(business_registration), ''), '') AS business_registration,
+                        COALESCE(NULLIF(TRIM(email), ''), '') AS email
+                      FROM users
+                      WHERE id = ?
+                      LIMIT 1";
+            $stmt = mysqli_prepare($conn, $query);
+            if ($stmt) {
+                mysqli_stmt_bind_param($stmt, 'i', $userId);
+                mysqli_stmt_execute($stmt);
+                $result = mysqli_stmt_get_result($stmt);
+                $row = $result ? mysqli_fetch_assoc($result) : null;
+                mysqli_stmt_close($stmt);
+
+                if ($row) {
+                    $profile = array_merge($profile, $row);
+                }
+            }
+
+            $receiptSettings = prsFetchReceiptSettings($conn, $userId);
+            if (!empty($receiptSettings['store_display_name'])) {
+                $profile['business_name'] = $receiptSettings['store_display_name'];
+            }
+            if (!empty($receiptSettings['vat_tin'])) {
+                $profile['tax_id'] = $receiptSettings['vat_tin'];
+            }
+            foreach (['branch_name', 'business_style', 'permit_no', 'ptu_no', 'accreditation_no', 'serial_no', 'footer_text'] as $key) {
+                if (!empty($receiptSettings[$key])) {
+                    $profile[$key] = $receiptSettings[$key];
+                }
+            }
+
+            // Check if seller has a store address in store_locations
+            if ($profile['address'] === 'Business address not set' || empty($profile['address'])) {
+                $store_stmt = mysqli_prepare($conn, "SELECT store_name, address, city, province, phone FROM store_locations WHERE owner_user_id = ? AND is_active = 1 LIMIT 1");
+                if ($store_stmt) {
+                    mysqli_stmt_bind_param($store_stmt, 'i', $userId);
+                    mysqli_stmt_execute($store_stmt);
+                    $store_res = mysqli_stmt_get_result($store_stmt);
+                    if ($sRow = mysqli_fetch_assoc($store_res)) {
+                        $addrParts = array_filter([trim((string)($sRow['address'] ?? '')), trim((string)($sRow['city'] ?? '')), trim((string)($sRow['province'] ?? ''))]);
+                        if (!empty($addrParts)) {
+                            $profile['address'] = implode(', ', $addrParts);
+                        }
+                        if (empty($profile['branch_name']) && !empty($sRow['store_name'])) {
+                            $profile['branch_name'] = trim((string)$sRow['store_name']);
+                        }
+                        if (empty($profile['phone']) && !empty($sRow['phone'])) {
+                            $profile['phone'] = trim((string)$sRow['phone']);
+                        }
+                    }
+                    mysqli_stmt_close($store_stmt);
+                }
+            }
         }
 
-        $query = "SELECT
-                    COALESCE(NULLIF(TRIM(business_name), ''), NULLIF(TRIM(full_name), ''), 'Lechon Delights') AS business_name,
-                    COALESCE(NULLIF(TRIM(address), ''), 'Business address not set') AS address,
-                    COALESCE(NULLIF(TRIM(phone), ''), '') AS phone,
-                    COALESCE(NULLIF(TRIM(tax_id), ''), '') AS tax_id,
-                    COALESCE(NULLIF(TRIM(business_registration), ''), '') AS business_registration,
-                    COALESCE(NULLIF(TRIM(email), ''), '') AS email
-                  FROM users
-                  WHERE id = ?
-                  LIMIT 1";
-        $stmt = mysqli_prepare($conn, $query);
-        if (!$stmt) {
-            return $profile;
-        }
-
-        mysqli_stmt_bind_param($stmt, 'i', $userId);
-        mysqli_stmt_execute($stmt);
-        $result = mysqli_stmt_get_result($stmt);
-        $row = $result ? mysqli_fetch_assoc($result) : null;
-        mysqli_stmt_close($stmt);
-
-        if ($row) {
-            $profile = array_merge($profile, $row);
-        }
-
-        $receiptSettings = prsFetchReceiptSettings($conn, $userId);
-        if (!empty($receiptSettings['store_display_name'])) {
-            $profile['business_name'] = $receiptSettings['store_display_name'];
-        }
-        if (!empty($receiptSettings['vat_tin'])) {
-            $profile['tax_id'] = $receiptSettings['vat_tin'];
-        }
-        foreach (['branch_name', 'business_style', 'permit_no', 'ptu_no', 'accreditation_no', 'serial_no', 'footer_text'] as $key) {
-            if (!empty($receiptSettings[$key])) {
-                $profile[$key] = $receiptSettings[$key];
+        // Global fallback to active store branch if address is still unset
+        if ($profile['address'] === 'Business address not set' || empty($profile['address'])) {
+            $fallback_res = @mysqli_query($conn, "SELECT store_name, address, city, province, phone FROM store_locations WHERE is_active = 1 ORDER BY store_id ASC LIMIT 1");
+            if ($fallback_res && ($fRow = mysqli_fetch_assoc($fallback_res))) {
+                $addrParts = array_filter([trim((string)($fRow['address'] ?? '')), trim((string)($fRow['city'] ?? '')), trim((string)($fRow['province'] ?? ''))]);
+                if (!empty($addrParts)) {
+                    $profile['address'] = implode(', ', $addrParts);
+                }
+                if (empty($profile['branch_name']) && !empty($fRow['store_name'])) {
+                    $profile['branch_name'] = trim((string)$fRow['store_name']);
+                }
+                if (empty($profile['phone']) && !empty($fRow['phone'])) {
+                    $profile['phone'] = trim((string)$fRow['phone']);
+                }
             }
         }
 
         return $profile;
     }
 }
+
 
 if (!function_exists('srPdfEscapeText')) {
     function srPdfEscapeText(string $text): string

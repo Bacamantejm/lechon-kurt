@@ -3241,7 +3241,7 @@ body.dark-mode .deal-copy-btn {
                                         <span style="font-size:0.76rem; color:#667085; font-weight:600;">1st Order Only</span>
                                     </div>
                                     <div class="deal-discount-val">₱100 OFF</div>
-                                    <p class="deal-desc">Get ₱100 flat discount on your very first freshly roasted lechon order. Min. spend ₱500.</p>
+                                    <p class="deal-desc">Get ₱100 flat discount on your very first freshly roasted lechon order. Min. spend ₱200.</p>
                                 </div>
                                 <div>
                                     <div class="deal-code-row">
@@ -3264,7 +3264,7 @@ body.dark-mode .deal-copy-btn {
                                         <span style="font-size:0.76rem; color:#667085; font-weight:600;">Whole &amp; Half Lechon</span>
                                     </div>
                                     <div class="deal-discount-val">Free Shipping</div>
-                                    <p class="deal-desc">Enjoy zero delivery fee on your first party celebration or whole lechon delivery across Cavite.</p>
+                                    <p class="deal-desc">Enjoy zero delivery fee on your first party celebration or whole lechon delivery across Cavite. Min. spend ₱600.</p>
                                 </div>
                                 <div>
                                     <div class="deal-code-row">
@@ -3287,7 +3287,7 @@ body.dark-mode .deal-copy-btn {
                                         <span style="font-size:0.76rem; color:#667085; font-weight:600;">Advance Booking</span>
                                     </div>
                                     <div class="deal-discount-val">15% OFF</div>
-                                    <p class="deal-desc">Save 15% (up to ₱300) when booking your weekend family feasts and birthdays in advance.</p>
+                                    <p class="deal-desc">Save 15% (up to ₱300) when booking your weekend family feasts and birthdays in advance. Min. spend ₱400.</p>
                                 </div>
                                 <div>
                                     <div class="deal-code-row">
@@ -3310,7 +3310,7 @@ body.dark-mode .deal-copy-btn {
                                         <span style="font-size:0.76rem; color:#667085; font-weight:600;">Belly &amp; Meals</span>
                                     </div>
                                     <div class="deal-discount-val">₱50 OFF</div>
-                                    <p class="deal-desc">Direct discount on crispy lechon belly rolls, sisig packs, or kilo boxes. Min. spend ₱350.</p>
+                                    <p class="deal-desc">Direct discount on crispy lechon belly rolls, sisig packs, or kilo boxes. Min. spend ₱150.</p>
                                 </div>
                                 <div>
                                     <div class="deal-code-row">
@@ -3324,6 +3324,90 @@ body.dark-mode .deal-copy-btn {
                                     </a>
                                 </div>
                             </article>
+                        </div>
+                    </section>
+                    <?php endif; ?>
+
+                    <?php
+                    $featured_store_promos = [];
+                    if (isset($conn) && $conn instanceof mysqli) {
+                        $sp_sql = "
+                            SELECT pv.*, 
+                                   COALESCE(NULLIF(TRIM(u.business_name), ''), u.full_name, 'Partner Shop') AS shop_name,
+                                   u.id AS seller_user_id
+                            FROM partner_vouchers pv
+                            JOIN users u ON pv.seller_id = u.id
+                            WHERE pv.is_active = 1
+                              AND pv.seller_id > 0
+                              AND (pv.start_at IS NULL OR pv.start_at <= NOW())
+                              AND (pv.end_at IS NULL OR pv.end_at >= NOW())
+                            ORDER BY pv.id DESC
+                            LIMIT 6
+                        ";
+                        $sp_res = @mysqli_query($conn, $sp_sql);
+                        if ($sp_res) {
+                            while ($sp_r = mysqli_fetch_assoc($sp_res)) {
+                                $featured_store_promos[] = $sp_r;
+                            }
+                            @mysqli_free_result($sp_res);
+                        }
+                    }
+                    ?>
+                    <?php if (!empty($featured_store_promos)): ?>
+                    <!-- Shop Owner Vouchers & Promotions Section -->
+                    <section class="store-promos-section" style="margin-bottom: 32px;">
+                        <div class="market-head" style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 10px;">
+                            <div>
+                                <div style="display:inline-flex; align-items:center; gap:6px; padding:4px 12px; background:#eff8ff; border:1px solid #b2ddff; border-radius:999px; color:#175cd3; font-size:0.75rem; font-weight:800; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:6px;">
+                                    <i class="fas fa-store"></i> Verified Partner Store Offers
+                                </div>
+                                <h2 style="font-family:'Outfit',sans-serif; font-size:1.45rem; font-weight:800; color:#101828; margin:0 0 4px 0;">Partner Store Deals &amp; Vouchers</h2>
+                                <p style="font-size:0.86rem; color:#475467; margin:0;">Special discounts and promotional vouchers posted directly by our verified roast pitmasters and restaurant partners.</p>
+                            </div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;">
+                            <?php foreach ($featured_store_promos as $sp): ?>
+                                <?php
+                                    $is_pct = ($sp['discount_type'] === 'percent');
+                                    $sp_disc = $is_pct ? (rtrim(rtrim(number_format((float)$sp['discount_value'], 2), '0'), '.') . '% OFF') : ('₱' . number_format((float)$sp['discount_value'], 0) . ' OFF');
+                                    $sp_min = (float)$sp['min_order_amount'];
+                                    $sp_min_label = $sp_min > 0 ? ('Min. spend ₱' . number_format($sp_min, 2)) : 'No minimum spend';
+                                    $sp_code = htmlspecialchars((string)$sp['code']);
+                                    $sp_seller_id = (int)$sp['seller_id'];
+                                    $sp_shop_name = htmlspecialchars((string)$sp['shop_name']);
+                                    $sp_target_url = 'menu.php?seller_id=' . $sp_seller_id;
+                                ?>
+                                <article class="deal-card" style="border-left: none; display: flex; flex-direction: column; justify-content: space-between;">
+                                    <div>
+                                        <div class="deal-card-top" style="margin-bottom: 8px;">
+                                            <span class="deal-badge" style="background:#eff8ff; color:#175cd3; border:1px solid #b2ddff;">
+                                                <i class="fas fa-store"></i> <?php echo $sp_shop_name; ?>
+                                            </span>
+                                            <span style="font-size:0.75rem; color:#667085; font-weight:700;">Store Exclusive</span>
+                                        </div>
+                                        <div class="deal-discount-val" style="color:#b3261e; font-size:1.5rem; font-weight:900; margin-bottom: 4px;">
+                                            <?php echo $sp_disc; ?>
+                                        </div>
+                                        <div style="font-weight:700; font-size:0.92rem; color:#101828; margin-bottom: 4px;">
+                                            <?php echo htmlspecialchars((string)$sp['name']); ?>
+                                        </div>
+                                        <p class="deal-desc" style="font-size:0.8rem; color:#475467; margin-bottom: 12px;">
+                                            <?php echo htmlspecialchars((string)($sp['description'] ?: 'Exclusive promo voucher for ' . $sp['shop_name'] . ' customers.')); ?> <?php echo $sp_min_label; ?>.
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <div class="deal-code-row" style="margin-bottom: 8px;">
+                                            <span class="deal-code-text"><?php echo $sp_code; ?></span>
+                                            <button type="button" class="deal-copy-btn" onclick="copyWelcomePromoCode('<?php echo $sp_code; ?>', this)">
+                                                <i class="fas fa-copy"></i> Copy
+                                            </button>
+                                        </div>
+                                        <a href="javascript:void(0)" onclick="claimAndUseWelcomeDeal('<?php echo $sp_code; ?>', '<?php echo $sp_target_url; ?>')" class="deal-action-btn" style="background:#b3261e;">
+                                            <i class="fas fa-store"></i> Claim &amp; Shop Store
+                                        </a>
+                                    </div>
+                                </article>
+                            <?php endforeach; ?>
                         </div>
                     </section>
                     <?php endif; ?>
@@ -4691,6 +4775,13 @@ function claimAndUseWelcomeDeal(code, targetUrl) {
     try {
         sessionStorage.setItem('pending_welcome_voucher', textToCopy);
     } catch(e) {}
+
+    // Send to backend so PHP session records it immediately
+    fetch('apply_voucher.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ action: 'claim', code: textToCopy })
+    }).catch(() => {});
 
     // Copy to clipboard
     if (navigator.clipboard && window.isSecureContext) {

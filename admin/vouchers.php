@@ -9,12 +9,7 @@ $admin_info = getAdminInfo($conn);
 $current_user_id = (int)($_SESSION['user_id'] ?? 0);
 $is_partner_scoped_admin = isApprovedFranchiseSellerAccount($conn, $current_user_id);
 $seller_scope_id = $is_partner_scoped_admin ? (int)getFranchiseSellerScopeOwnerId($conn, $current_user_id) : 0;
-
-if (!$is_partner_scoped_admin || $seller_scope_id <= 0) {
-    $_SESSION['error'] = 'Voucher management is available only for approved business partner admins.';
-    header('Location: index.php');
-    exit();
-}
+$is_full_admin = !$is_partner_scoped_admin;
 
 pvEnsureVoucherSchema($conn);
 
@@ -74,6 +69,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_voucher'])) {
         $errors[] = 'Voucher end date must be after start date.';
     }
 
+    $target_seller_id = $seller_scope_id;
+    if ($is_full_admin) {
+        $target_seller_id = isset($_POST['seller_id']) ? (int)$_POST['seller_id'] : 0;
+    }
+
     if (empty($errors)) {
         $insert_sql = "INSERT INTO partner_vouchers
             (seller_id, code, name, description, discount_type, discount_value, min_order_amount, max_discount_amount, start_at, end_at, usage_limit, per_user_limit, is_active, created_at, updated_at)
@@ -84,7 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_voucher'])) {
             mysqli_stmt_bind_param(
                 $insert_stmt,
                 "issssdddssiii",
-                $seller_scope_id,
+                $target_seller_id,
                 $code,
                 $name,
                 $description,
@@ -103,7 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_voucher'])) {
                 $_SESSION['success'] = 'Voucher created successfully.';
             } else {
                 $_SESSION['error'] = (mysqli_errno($conn) === 1062)
-                    ? 'Voucher code already exists for your shop.'
+                    ? 'Voucher code already exists for this shop/platform.'
                     : ('Failed to create voucher: ' . mysqli_error($conn));
             }
             mysqli_stmt_close($insert_stmt);
@@ -121,19 +121,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_voucher'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_voucher'])) {
     $voucher_id = (int)($_POST['voucher_id'] ?? 0);
     if ($voucher_id > 0) {
-        $toggle_sql = "UPDATE partner_vouchers
-                       SET is_active = IF(is_active = 1, 0, 1), updated_at = NOW()
-                       WHERE id = ? AND seller_id = ?";
-        $toggle_stmt = mysqli_prepare($conn, $toggle_sql);
-        if ($toggle_stmt) {
-            mysqli_stmt_bind_param($toggle_stmt, "ii", $voucher_id, $seller_scope_id);
-            mysqli_stmt_execute($toggle_stmt);
-            $affected_rows = mysqli_stmt_affected_rows($toggle_stmt);
-            $_SESSION[($affected_rows > 0) ? 'success' : 'error'] =
-                ($affected_rows > 0) ? 'Voucher status updated.' : 'Voucher not found or unauthorized.';
-            mysqli_stmt_close($toggle_stmt);
+        if ($is_full_admin) {
+            $toggle_sql = "UPDATE partner_vouchers
+                           SET is_active = IF(is_active = 1, 0, 1), updated_at = NOW()
+                           WHERE id = ?";
+            $toggle_stmt = mysqli_prepare($conn, $toggle_sql);
+            if ($toggle_stmt) {
+                mysqli_stmt_bind_param($toggle_stmt, "i", $voucher_id);
+                mysqli_stmt_execute($toggle_stmt);
+                $affected_rows = mysqli_stmt_affected_rows($toggle_stmt);
+                $_SESSION[($affected_rows > 0) ? 'success' : 'error'] =
+                    ($affected_rows > 0) ? 'Voucher status updated.' : 'Voucher not found.';
+                mysqli_stmt_close($toggle_stmt);
+            }
         } else {
-            $_SESSION['error'] = 'Unable to update voucher status right now.';
+            $toggle_sql = "UPDATE partner_vouchers
+                           SET is_active = IF(is_active = 1, 0, 1), updated_at = NOW()
+                           WHERE id = ? AND seller_id = ?";
+            $toggle_stmt = mysqli_prepare($conn, $toggle_sql);
+            if ($toggle_stmt) {
+                mysqli_stmt_bind_param($toggle_stmt, "ii", $voucher_id, $seller_scope_id);
+                mysqli_stmt_execute($toggle_stmt);
+                $affected_rows = mysqli_stmt_affected_rows($toggle_stmt);
+                $_SESSION[($affected_rows > 0) ? 'success' : 'error'] =
+                    ($affected_rows > 0) ? 'Voucher status updated.' : 'Voucher not found or unauthorized.';
+                mysqli_stmt_close($toggle_stmt);
+            }
         }
     } else {
         $_SESSION['error'] = 'Invalid voucher selection.';
@@ -145,11 +158,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_voucher'])) {
 
 $vouchers = [];
 $total_redemptions = 0;
-$list_stmt = mysqli_prepare($conn, "SELECT id, code, name, discount_type, discount_value, min_order_amount, max_discount_amount, start_at, end_at, usage_limit, usage_count, is_active FROM partner_vouchers WHERE seller_id = ? ORDER BY created_at DESC");
-if ($list_stmt) {
-    mysqli_stmt_bind_param($list_stmt, "i", $seller_scope_id);
-    mysqli_stmt_execute($list_stmt);
-    $list_result = mysqli_stmt_get_result($list_stmt);
+if ($is_full_admin) {
+    $list_query = "SELECT pv.*, COALESCE(NULLIF(TRIM(u.business_name), ''), u.full_name, 'Platform Voucher') AS store_name 
+                   FROM partner_vouchers pv 
+                   LEFT JOIN users u ON pv.seller_id = u.id 
+                   ORDER BY pv.created_at DESC";
+    $list_result = mysqli_query($conn, $list_query);
     if ($list_result) {
         while ($row = mysqli_fetch_assoc($list_result)) {
             $vouchers[] = $row;
@@ -157,7 +171,33 @@ if ($list_stmt) {
         }
         mysqli_free_result($list_result);
     }
-    mysqli_stmt_close($list_stmt);
+} else {
+    $list_stmt = mysqli_prepare($conn, "SELECT pv.*, 'My Store' AS store_name FROM partner_vouchers pv WHERE pv.seller_id = ? ORDER BY pv.created_at DESC");
+    if ($list_stmt) {
+        mysqli_stmt_bind_param($list_stmt, "i", $seller_scope_id);
+        mysqli_stmt_execute($list_stmt);
+        $list_result = mysqli_stmt_get_result($list_stmt);
+        if ($list_result) {
+            while ($row = mysqli_fetch_assoc($list_result)) {
+                $vouchers[] = $row;
+                $total_redemptions += (int)($row['usage_count'] ?? 0);
+            }
+            mysqli_free_result($list_result);
+        }
+        mysqli_stmt_close($list_stmt);
+    }
+}
+
+// Fetch stores list for full admin selection
+$admin_store_options = [];
+if ($is_full_admin) {
+    $store_opt_res = mysqli_query($conn, "SELECT id, COALESCE(NULLIF(TRIM(business_name), ''), full_name, 'Shop') AS store_name FROM users WHERE user_type = 'admin' OR account_type = 'organization' ORDER BY store_name ASC");
+    if ($store_opt_res) {
+        while ($so = mysqli_fetch_assoc($store_opt_res)) {
+            $admin_store_options[] = $so;
+        }
+        mysqli_free_result($store_opt_res);
+    }
 }
 
 $flash_success = $_SESSION['success'] ?? null;
@@ -204,6 +244,18 @@ unset($_SESSION['success'], $_SESSION['error']);
                     <form method="POST" id="createVoucherForm">
                         <input type="hidden" name="create_voucher" value="1">
                         <div class="row g-3">
+                            <?php if ($is_full_admin): ?>
+                                <div class="col-md-12">
+                                    <label class="form-label"><strong>Voucher Scope (Platform or Specific Shop)</strong></label>
+                                    <select class="form-select" name="seller_id" required>
+                                        <option value="0">Platform-Wide (All Stores / Welcome Perk)</option>
+                                        <?php foreach ($admin_store_options as $store): ?>
+                                            <option value="<?php echo (int)$store['id']; ?>">Store: <?php echo htmlspecialchars($store['store_name']); ?> (ID: <?php echo (int)$store['id']; ?>)</option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <div class="form-text">Choose whether this promotion applies across all branches or is exclusive to a specific partner shop.</div>
+                                </div>
+                            <?php endif; ?>
                             <div class="col-md-4"><label class="form-label">Code</label><input class="form-control" name="code" maxlength="60" required></div>
                             <div class="col-md-4"><label class="form-label">Name</label><input class="form-control" name="name" maxlength="120" required></div>
                             <div class="col-md-4"><label class="form-label">Discount Type</label><select class="form-select" name="discount_type"><option value="percent">Percent</option><option value="fixed">Fixed</option></select></div>
@@ -226,10 +278,13 @@ unset($_SESSION['success'], $_SESSION['error']);
                 <div class="card-header"><strong>Manage Vouchers</strong></div>
                 <div class="card-body table-responsive">
                     <table class="table table-striped align-middle">
-                        <thead><tr><th>Code</th><th>Discount</th><th>Min</th><th>Usage</th><th>Validity</th><th>Status</th><th>Action</th></tr></thead>
+                        <thead><tr><th>Code &amp; Scope</th><th>Discount</th><th>Min</th><th>Usage</th><th>Validity</th><th>Status</th><th>Action</th></tr></thead>
                         <tbody>
                         <?php if ($vouchers): foreach ($vouchers as $v): ?>
                             <?php
+                                $store_badge = ((int)$v['seller_id'] === 0)
+                                    ? '<span class="badge text-bg-primary" style="font-size:0.7rem;">Platform-Wide</span>'
+                                    : ('<span class="badge text-bg-info" style="font-size:0.7rem;">Shop: ' . htmlspecialchars((string)($v['store_name'] ?? 'Store')) . '</span>');
                                 $discount = strtolower((string)$v['discount_type']) === 'percent'
                                     ? rtrim(rtrim(number_format((float)$v['discount_value'], 2), '0'), '.') . '%'
                                     : 'PHP ' . number_format((float)$v['discount_value'], 2);
@@ -246,7 +301,11 @@ unset($_SESSION['success'], $_SESSION['error']);
                                 $form_id = 'toggleVoucherForm' . (int)$v['id'];
                             ?>
                             <tr>
-                                <td><strong><?php echo htmlspecialchars((string)$v['code']); ?></strong><br><small><?php echo htmlspecialchars((string)$v['name']); ?></small></td>
+                                <td>
+                                    <strong><?php echo htmlspecialchars((string)$v['code']); ?></strong>
+                                    <div class="mt-1"><?php echo $store_badge; ?></div>
+                                    <small class="text-muted"><?php echo htmlspecialchars((string)$v['name']); ?></small>
+                                </td>
                                 <td><?php echo htmlspecialchars($discount); ?></td>
                                 <td>PHP <?php echo number_format((float)$v['min_order_amount'], 2); ?></td>
                                 <td><?php echo htmlspecialchars($usage); ?></td>
