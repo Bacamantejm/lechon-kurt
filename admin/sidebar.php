@@ -2372,7 +2372,6 @@ body.dark-mode .sidebar-footer .logout-btn {
                     renderAdminNotifications();
                 }
             });
-            }
             
             // Initial load and polling
             if (btn && badge) {
