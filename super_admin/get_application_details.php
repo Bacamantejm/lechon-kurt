@@ -227,13 +227,23 @@ if (saTableExists($conn, 'franchise_applications')) {
             if ($docs_result) {
                 while ($doc = mysqli_fetch_assoc($docs_result)) {
                     $doc_type_name = $doc_types[$doc['document_type']] ?? $doc['document_type'];
+                    $document_url = '../' . ltrim((string)($doc['file_path'] ?? ''), '/');
+                    $document_name = (string)($doc['file_name'] ?? $doc_type_name);
+                    $document_extension = strtolower(pathinfo($document_name, PATHINFO_EXTENSION));
+                    $image_extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'];
+                    $document_icon = in_array($document_extension, $image_extensions, true) ? 'fa-file-image' : 'fa-file-pdf';
                     echo "
                     <div class='doc-item'>
-                        <i class='fas fa-file-pdf'></i>
-                        <span>{$doc_type_name}</span>
-                        <a href='../" . htmlspecialchars($doc['file_path']) . "' target='_blank' class='btn btn-sm btn-outline-primary'>
-                            <i class='fas fa-download'></i>
-                        </a>
+                        <i class='fas {$document_icon}'></i>
+                        <span>" . htmlspecialchars($doc_type_name) . "</span>
+                        <button type='button'
+                                class='btn btn-sm btn-outline-primary doc-preview-button'
+                                data-preview-url='" . htmlspecialchars($document_url, ENT_QUOTES, 'UTF-8') . "'
+                                data-preview-title='" . htmlspecialchars($doc_type_name, ENT_QUOTES, 'UTF-8') . "'
+                                onclick='openDocumentPreview(this)'
+                                title='Preview'>
+                            <i class='fas fa-eye'></i>
+                        </button>
                     </div>
                     ";
                 }
@@ -354,6 +364,41 @@ if (saTableExists($conn, 'franchise_applications')) {
 }
 .doc-item i {
     color: #dc3545;
+}
+.doc-item .doc-preview-button {
+    margin-left: auto;
+}
+.document-preview-controls {
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
+    margin-right: 12px;
+}
+.document-preview-controls[hidden] {
+    display: none;
+}
+.document-preview-body {
+    min-height: 70vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f8f9fa;
+    overflow: auto;
+}
+.document-preview-image {
+    display: block;
+    max-width: 100%;
+    max-height: 68vh;
+    height: auto;
+    object-fit: contain;
+    transform-origin: center center;
+    transition: transform 150ms ease;
+}
+.document-preview-frame {
+    width: 100%;
+    height: 68vh;
+    border: 0;
+    background: #fff;
 }
 .app-actions {
     margin-top: 20px;

@@ -412,6 +412,29 @@ saRenderModuleHeader('Business Applications', 'Business Applications', $admin_in
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="documentPreviewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="documentPreviewTitle">Document Preview</h5>
+                <div class="document-preview-controls" id="documentPreviewControls" aria-label="Image zoom controls">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="changeDocumentZoom(-0.25)" title="Zoom out" aria-label="Zoom out">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetDocumentZoom()" title="Reset zoom" aria-label="Reset zoom">100%</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="changeDocumentZoom(0.25)" title="Zoom in" aria-label="Zoom in">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body document-preview-body" id="documentPreviewBody">
+                <div class="text-muted text-center">Loading document preview...</div>
+            </div>
+        </div>
+    </div>
+</div>
 <?php
 $extra_scripts = <<<'HTML'
 <script>
@@ -427,6 +450,69 @@ $extra_scripts = <<<'HTML'
                 $('#appDetails').html('<div class="alert alert-danger">Unable to load application details.</div>');
             }
         });
+    }
+
+    function openDocumentPreview(button) {
+        const previewUrl = button.getAttribute('data-preview-url');
+        const previewTitle = button.getAttribute('data-preview-title') || 'Document Preview';
+        const previewTitleElement = document.getElementById('documentPreviewTitle');
+        const previewBody = document.getElementById('documentPreviewBody');
+        const previewModalElement = document.getElementById('documentPreviewModal');
+        const previewControls = document.getElementById('documentPreviewControls');
+
+        if (!previewUrl || !previewTitleElement || !previewBody || !previewModalElement) {
+            return;
+        }
+
+        const extension = previewUrl.split('?')[0].split('.').pop().toLowerCase();
+        const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'];
+        previewTitleElement.textContent = previewTitle;
+        previewBody.innerHTML = '';
+        resetDocumentZoom();
+
+        if (imageExtensions.includes(extension)) {
+            previewControls.hidden = false;
+            const image = document.createElement('img');
+            image.src = previewUrl;
+            image.alt = previewTitle;
+            image.className = 'document-preview-image';
+            image.addEventListener('error', function() {
+                previewBody.innerHTML = '<div class="alert alert-danger">Unable to load this document preview.</div>';
+            });
+            previewBody.appendChild(image);
+        } else {
+            previewControls.hidden = true;
+            const frame = document.createElement('iframe');
+            frame.src = previewUrl;
+            frame.title = previewTitle;
+            frame.className = 'document-preview-frame';
+            previewBody.appendChild(frame);
+        }
+
+        bootstrap.Modal.getOrCreateInstance(previewModalElement).show();
+    }
+
+    let documentZoom = 1;
+
+    function applyDocumentZoom() {
+        const image = document.querySelector('#documentPreviewBody .document-preview-image');
+        const zoomLabel = document.querySelector('#documentPreviewControls button:nth-child(2)');
+        if (image) {
+            image.style.transform = 'scale(' + documentZoom + ')';
+        }
+        if (zoomLabel) {
+            zoomLabel.textContent = Math.round(documentZoom * 100) + '%';
+        }
+    }
+
+    function changeDocumentZoom(amount) {
+        documentZoom = Math.min(3, Math.max(0.5, documentZoom + amount));
+        applyDocumentZoom();
+    }
+
+    function resetDocumentZoom() {
+        documentZoom = 1;
+        applyDocumentZoom();
     }
 
     function handleIncomplete(applicationNumber) {
