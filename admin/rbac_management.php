@@ -1313,13 +1313,6 @@ unset($_SESSION['success'], $_SESSION['error']);
                     </button>
                     <div class="topbar-right">
                         <div class="date-display" id="currentDate"></div>
-                        <div class="admin-profile">
-                            <img src="https://ui-avatars.com/api/?name=<?php echo urlencode($admin_info['full_name']); ?>" alt="Profile" class="profile-img">
-                            <div class="profile-info">
-                                <div class="profile-name"><?php echo htmlspecialchars($admin_info['full_name']); ?></div>
-                                <div class="profile-role"><?php echo rbacRoleDisplayName($admin_info['role_name'] ?? 'admin', $is_partner_scoped_admin ? $partner_scope_owner_id : 0); ?></div>
-                            </div>
-                        </div>
                     </div>
                 </div>
             </div>
