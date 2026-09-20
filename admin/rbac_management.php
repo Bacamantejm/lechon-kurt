@@ -1313,6 +1313,10 @@ unset($_SESSION['success'], $_SESSION['error']);
                     </button>
                     <div class="topbar-right">
                         <div class="date-display" id="currentDate"></div>
+                        <div class="admin-profile">
+                            <span><?php echo htmlspecialchars($admin_info['full_name'] ?? 'Admin'); ?></span>
+                            <i class="fas fa-user-circle"></i>
+                        </div>
                     </div>
                 </div>
             </div>
