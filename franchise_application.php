@@ -1371,63 +1371,41 @@ include 'includes/header.php';
                             </div>
                         </div>
 
-                        <!-- Business Location & PSGC -->
+                        <!-- Business Location & Leaflet Pin -->
                         <div class="form-section">
                             <h3><i class="fas fa-location-dot"></i> Business Location (Cavite Scope)</h3>
-                            <p class="section-description">Select your PSGC location fields. Franchise applications are currently accepted for Cavite locations.</p>
+                            <p class="section-description">Click the map or drag the pin to your exact business location. Partner applications are currently accepted for Cavite locations.</p>
 
                             <input type="hidden" name="psgc_region_name" id="psgcRegionName" value="<?php echo oldFormValue('psgc_region_name', $franchise_prefill['psgc_region_name'] ?? ''); ?>">
+                            <input type="hidden" name="psgc_region_code" id="psgcRegionCode" value="<?php echo oldFormValue('psgc_region_code', $franchise_prefill['psgc_region_code'] ?? '040000000'); ?>">
                             <input type="hidden" name="psgc_province_name" id="psgcProvinceName" value="<?php echo oldFormValue('psgc_province_name', $franchise_prefill['psgc_province_name'] ?? ''); ?>">
+                            <input type="hidden" name="psgc_province_code" id="psgcProvinceCode" value="<?php echo oldFormValue('psgc_province_code', $franchise_prefill['psgc_province_code'] ?? '042100000'); ?>">
                             <input type="hidden" name="psgc_city_name" id="psgcCityName" value="<?php echo oldFormValue('psgc_city_name', $franchise_prefill['psgc_city_name'] ?? ''); ?>">
+                            <input type="hidden" name="psgc_city_code" id="psgcCityCode" value="<?php echo oldFormValue('psgc_city_code', $franchise_prefill['psgc_city_code'] ?? ''); ?>">
                             <input type="hidden" name="psgc_barangay_name" id="psgcBarangayName" value="<?php echo oldFormValue('psgc_barangay_name', $franchise_prefill['psgc_barangay_name'] ?? ''); ?>">
-                            <input type="hidden" name="psgc_manual_mode" id="psgcManualMode" value="<?php echo oldFormValue('psgc_manual_mode', $franchise_prefill['psgc_manual_mode'] ?? '0'); ?>">
+                            <input type="hidden" name="psgc_barangay_code" id="psgcBarangayCode" value="<?php echo oldFormValue('psgc_barangay_code', $franchise_prefill['psgc_barangay_code'] ?? ''); ?>">
+                            <input type="hidden" name="psgc_manual_mode" id="psgcManualMode" value="1">
+                            <input type="hidden" name="location_latitude" id="locationLatitude" value="">
+                            <input type="hidden" name="location_longitude" id="locationLongitude" value="">
 
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="business_address_street">Street Address / Landmark *</label>
                                     <textarea id="business_address_street" name="business_address_street" rows="2" required
-                                            placeholder="House/Bldg No., Street, Subdivision, Landmark"><?php echo oldFormValue('business_address_street', $franchise_prefill['business_address_street'] ?? ''); ?></textarea>
+                                            placeholder="Select a pin first, then add a house/building number or landmark"><?php echo oldFormValue('business_address_street', $franchise_prefill['business_address_street'] ?? ''); ?></textarea>
                                 </div>
                             </div>
 
-                            <div class="form-row psgc-row">
-                                <div class="form-group">
-                                    <label for="psgcRegion">Region *</label>
-                                    <select id="psgcRegion" name="psgc_region_code" required data-selected="<?php echo oldFormValue('psgc_region_code', $franchise_prefill['psgc_region_code'] ?? '040000000'); ?>">
-                                        <option value="">Select region</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="psgcProvince">Province (Strictly Cavite Only) *</label>
-                                    <select id="psgcProvince" name="psgc_province_code" required data-selected="<?php echo oldFormValue('psgc_province_code', $franchise_prefill['psgc_province_code'] ?? '042100000'); ?>" disabled>
-                                        <option value="">Select province</option>
-                                    </select>
-                                    <small style="color: #ef6b2e; font-weight: 700; display: block; margin-top: 4px;"><i class="fas fa-location-dot"></i> Partnership scope is strictly restricted to Cavite</small>
-                                </div>
+                            <div class="franchise-map-shell">
+                                <div id="franchiseLocationMap" class="franchise-location-map" role="application" aria-label="Cavite business location map"></div>
+                                <div class="franchise-map-status" id="franchiseMapStatus"><i class="fas fa-hand-pointer"></i> Click anywhere in Cavite or drag the pin to choose your location.</div>
                             </div>
-
-                            <div class="form-row psgc-row">
-                                <div class="form-group">
-                                    <label for="psgcCity">City / Municipality *</label>
-                                    <select id="psgcCity" name="psgc_city_code" required data-selected="<?php echo oldFormValue('psgc_city_code', $franchise_prefill['psgc_city_code'] ?? ''); ?>" disabled>
-                                        <option value="">Select city / municipality</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="psgcBarangay">Barangay *</label>
-                                    <select id="psgcBarangay" name="psgc_barangay_code" required data-selected="<?php echo oldFormValue('psgc_barangay_code', $franchise_prefill['psgc_barangay_code'] ?? ''); ?>" disabled>
-                                        <option value="">Select barangay</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <p class="psgc-help" id="psgcAddressHelp">PSGC location selector helps speed up site verification.</p>
 
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="business_address">Composed Business Address *</label>
                                     <textarea id="business_address" name="business_address" rows="2" required readonly
-                                            placeholder="Generated complete address"><?php echo oldFormValue('business_address', $franchise_prefill['business_address'] ?? ''); ?></textarea>
+                                            placeholder="Your pinned location address will appear here"><?php echo oldFormValue('business_address', $franchise_prefill['business_address'] ?? ''); ?></textarea>
                                 </div>
                             </div>
                         </div>
@@ -2030,6 +2008,9 @@ include 'includes/header.php';
     </div>
 </div>
 
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
@@ -2495,6 +2476,75 @@ include 'includes/header.php';
     margin: 4px 0 14px;
     color: #7b6d64;
     font-size: 0.84rem;
+}
+
+.franchise-map-shell {
+    margin: 4px 0 18px;
+    overflow: hidden;
+    border: 1px solid var(--food-border);
+    border-radius: 14px;
+    background: #fffdfb;
+}
+
+.franchise-location-map {
+    width: 100%;
+    height: 360px;
+    min-height: 280px;
+    z-index: 1;
+}
+
+.franchise-map-status {
+    padding: 10px 14px;
+    color: #7b6d64;
+    background: #fffdfb;
+    font-size: 0.84rem;
+    font-weight: 600;
+}
+
+.franchise-map-status.is-valid {
+    color: #15803d;
+    background: #f0fdf4;
+}
+
+.franchise-map-status.is-invalid {
+    color: #b3261e;
+    background: #fff1f0;
+}
+
+.franchise-pin-icon {
+    background: transparent;
+    border: 0;
+}
+
+.franchise-pin-icon::before {
+    content: '\f3c5';
+    display: flex;
+    width: 34px;
+    height: 34px;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    background: #b3261e;
+    border: 2px solid #ffffff;
+    border-radius: 50% 50% 50% 0;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+    font-family: 'Font Awesome 6 Free';
+    font-size: 15px;
+    font-weight: 900;
+    transform: rotate(-45deg);
+}
+
+body.dark-mode .franchise-map-shell,
+body.dark-mode .franchise-map-status {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+@media (max-width: 640px) {
+    .franchise-location-map {
+        height: 300px;
+    }
 }
 
 /* Documents Grid & Drag-Drop */
@@ -3351,141 +3401,127 @@ document.addEventListener('DOMContentLoaded', function() {
         localStorage.removeItem(DRAFT_KEY);
     });
 
-    // PSGC cascading dropdowns initialization
-    const psgcRegion = document.getElementById('psgcRegion');
-    const psgcProvince = document.getElementById('psgcProvince');
-    const psgcCity = document.getElementById('psgcCity');
-    const psgcBarangay = document.getElementById('psgcBarangay');
+    // Leaflet Cavite pin picker
+    const franchiseMapElement = document.getElementById('franchiseLocationMap');
+    const franchiseMapStatus = document.getElementById('franchiseMapStatus');
+    const locationLatitude = document.getElementById('locationLatitude');
+    const locationLongitude = document.getElementById('locationLongitude');
     const psgcRegionName = document.getElementById('psgcRegionName');
+    const psgcRegionCode = document.getElementById('psgcRegionCode');
     const psgcProvinceName = document.getElementById('psgcProvinceName');
+    const psgcProvinceCode = document.getElementById('psgcProvinceCode');
     const psgcCityName = document.getElementById('psgcCityName');
+    const psgcCityCode = document.getElementById('psgcCityCode');
     const psgcBarangayName = document.getElementById('psgcBarangayName');
+    const psgcBarangayCode = document.getElementById('psgcBarangayCode');
+    const psgcManualMode = document.getElementById('psgcManualMode');
     const businessStreetInput = document.getElementById('business_address_street');
     const businessAddressInput = document.getElementById('business_address');
-    const PSGC_API_BASE = 'https://psgc.gitlab.io/api';
-    const psgcCache = new Map();
+    const CAVITE_CENTER = [14.3294, 120.9367];
+    const CAVITE_BOUNDS = window.L && window.L.latLngBounds ? window.L.latLngBounds([14.00, 120.65], [14.75, 121.20]) : null;
+    let franchiseMap = null;
+    let franchiseMarker = null;
 
-    function normalizePsgcText(v) { return String(v || '').replace(/\s+/g, ' ').trim(); }
+    function normalizeMapText(value) {
+        return String(value || '').replace(/\s+/g, ' ').trim();
+    }
 
-    function syncPsgcHiddenNames() {
-        if (psgcRegionName && psgcRegion) psgcRegionName.value = psgcRegion.options[psgcRegion.selectedIndex]?.text || '';
-        if (psgcProvinceName && psgcProvince) psgcProvinceName.value = psgcProvince.options[psgcProvince.selectedIndex]?.text || '';
-        if (psgcCityName && psgcCity) psgcCityName.value = psgcCity.options[psgcCity.selectedIndex]?.text || '';
-        if (psgcBarangayName && psgcBarangay) psgcBarangayName.value = psgcBarangay.options[psgcBarangay.selectedIndex]?.text || '';
+    function setMapStatus(message, valid) {
+        if (!franchiseMapStatus) return;
+        franchiseMapStatus.classList.toggle('is-valid', valid === true);
+        franchiseMapStatus.classList.toggle('is-invalid', valid === false);
+        franchiseMapStatus.innerHTML = '<i class="fas ' + (valid === true ? 'fa-check-circle' : valid === false ? 'fa-triangle-exclamation' : 'fa-hand-pointer') + '"></i> ' + message;
     }
 
     function composeBusinessAddress() {
         if (!businessAddressInput) return;
-        const street = normalizePsgcText(businessStreetInput?.value);
-        const barangay = normalizePsgcText(psgcBarangayName?.value);
-        const city = normalizePsgcText(psgcCityName?.value);
-        const province = normalizePsgcText(psgcProvinceName?.value);
-        const region = normalizePsgcText(psgcRegionName?.value);
-
-        const parts = [street, barangay, city, province, region].filter(p => p !== '');
+        const parts = [
+            normalizeMapText(businessStreetInput?.value),
+            normalizeMapText(psgcBarangayName?.value),
+            normalizeMapText(psgcCityName?.value),
+            normalizeMapText(psgcProvinceName?.value),
+            normalizeMapText(psgcRegionName?.value)
+        ].filter(Boolean);
         businessAddressInput.value = parts.join(', ');
     }
 
-    async function fetchPsgc(path) {
-        if (psgcCache.has(path)) return psgcCache.get(path);
-        const res = await fetch(PSGC_API_BASE + path);
-        const data = await res.json();
-        psgcCache.set(path, data);
-        return data;
+    function applyReverseGeocode(data, lat, lng) {
+        const address = data?.address || {};
+        const displayName = normalizeMapText(data?.display_name);
+        const city = normalizeMapText(address.city || address.town || address.municipality || address.city_district);
+        const barangay = normalizeMapText(address.village || address.suburb || address.neighbourhood || address.quarter);
+        const road = normalizeMapText(address.road || address.pedestrian || address.residential || displayName.split(',')[0]);
+        const province = normalizeMapText(address.state_district || address.province || 'Cavite');
+        const region = normalizeMapText(address.state || 'Calabarzon');
+        const isCavite = /cavite/i.test(displayName + ' ' + province) || (CAVITE_BOUNDS && CAVITE_BOUNDS.contains([lat, lng]));
+
+        if (locationLatitude) locationLatitude.value = lat.toFixed(7);
+        if (locationLongitude) locationLongitude.value = lng.toFixed(7);
+        if (psgcManualMode) psgcManualMode.value = '1';
+        if (psgcRegionName) psgcRegionName.value = region;
+        if (psgcRegionCode) psgcRegionCode.value = '040000000';
+        if (psgcProvinceName) psgcProvinceName.value = isCavite ? 'Cavite' : province;
+        if (psgcProvinceCode) psgcProvinceCode.value = isCavite ? '042100000' : '';
+        if (psgcCityName) psgcCityName.value = city;
+        if (psgcBarangayName) psgcBarangayName.value = barangay;
+        if (businessStreetInput && (!businessStreetInput.value.trim() || businessStreetInput.dataset.pinGenerated === '1')) {
+            businessStreetInput.value = road || (isCavite ? 'Pinned business location' : 'Pinned location');
+            businessStreetInput.dataset.pinGenerated = '1';
+        }
+        composeBusinessAddress();
+
+        if (isCavite) {
+            setMapStatus((city ? 'Location selected: ' + city + ', Cavite.' : 'Location selected inside Cavite.') + ' Add a building number or landmark above if available.', true);
+        } else {
+            setMapStatus('That pin appears outside Cavite. Move the pin inside the highlighted Cavite service area.', false);
+        }
+        saveDraft();
+        return isCavite;
     }
 
-    async function initPsgc() {
-        if (!psgcRegion) return;
+    async function reverseGeocodePin(lat, lng) {
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+        setMapStatus('Looking up the pinned address...', null);
         try {
-            const regions = await fetchPsgc('/regions');
-            psgcRegion.innerHTML = '<option value="">Select region</option>';
-            regions.forEach(r => {
-                const opt = document.createElement('option');
-                opt.value = r.code;
-                opt.textContent = r.name;
-                if (r.code === psgcRegion.dataset.selected || r.code === '040000000') opt.selected = true;
-                psgcRegion.appendChild(opt);
-            });
-
-            if (!psgcRegion.value) {
-                psgcRegion.value = '040000000';
-            }
-            if (psgcRegion.value) {
-                await loadProvinces(psgcRegion.value);
-            }
-        } catch (err) {
-            console.error('PSGC init error:', err);
+            const endpoint = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&countrycodes=ph&lat=' + encodeURIComponent(lat) + '&lon=' + encodeURIComponent(lng);
+            const response = await fetch(endpoint, { headers: { Accept: 'application/json' } });
+            const data = response.ok ? await response.json() : {};
+            applyReverseGeocode(data, lat, lng);
+        } catch (error) {
+            applyReverseGeocode({}, lat, lng);
+            console.error('Franchise location reverse geocode error:', error);
         }
     }
 
-    async function loadProvinces(rCode) {
-        if (!psgcProvince) return;
-        psgcProvince.innerHTML = '<option value="">Select province</option>';
-        psgcProvince.disabled = true;
-        if (!rCode) return;
-
-        const provinces = await fetchPsgc('/regions/' + rCode + '/provinces');
-        const caviteOnly = provinces.filter(p => p.code === '042100000' || p.name.toLowerCase() === 'cavite');
-
-        caviteOnly.forEach(p => {
-            const opt = document.createElement('option');
-            opt.value = p.code;
-            opt.textContent = p.name + ' (Partnership Scope)';
-            opt.selected = true;
-            psgcProvince.appendChild(opt);
-        });
-        psgcProvince.disabled = false;
-
-        if (psgcProvince.value) {
-            await loadCities(psgcProvince.value);
-        }
+    function moveFranchisePin(latlng, reverseGeocode) {
+        if (!franchiseMarker || !latlng) return;
+        franchiseMarker.setLatLng(latlng);
+        if (franchiseMap) franchiseMap.panTo(latlng);
+        if (reverseGeocode) reverseGeocodePin(latlng.lat, latlng.lng);
     }
 
-    async function loadCities(pCode) {
-        if (!psgcCity) return;
-        psgcCity.innerHTML = '<option value="">Select city / municipality</option>';
-        psgcCity.disabled = true;
-        if (!pCode) return;
-
-        const cities = await fetchPsgc('/provinces/' + pCode + '/cities-municipalities');
-        cities.forEach(c => {
-            const opt = document.createElement('option');
-            opt.value = c.code;
-            opt.textContent = c.name;
-            if (c.code === psgcCity.dataset.selected) opt.selected = true;
-            psgcCity.appendChild(opt);
-        });
-        psgcCity.disabled = false;
-
-        if (psgcCity.value) {
-            await loadBarangays(psgcCity.value);
-        }
+    function initFranchiseMap() {
+        if (!franchiseMapElement || !window.L) return;
+        const pinIcon = L.divIcon({ className: 'franchise-pin-icon', iconSize: [34, 34], iconAnchor: [17, 34] });
+        franchiseMap = L.map(franchiseMapElement, { center: CAVITE_CENTER, zoom: 11, minZoom: 10, maxZoom: 19 });
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'
+        }).addTo(franchiseMap);
+        franchiseMarker = L.marker(CAVITE_CENTER, { draggable: true, icon: pinIcon }).addTo(franchiseMap);
+        franchiseMap.on('click', event => moveFranchisePin(event.latlng, true));
+        franchiseMarker.on('dragend', () => moveFranchisePin(franchiseMarker.getLatLng(), true));
+        setTimeout(() => franchiseMap.invalidateSize(), 100);
     }
 
-    async function loadBarangays(cCode) {
-        if (!psgcBarangay) return;
-        psgcBarangay.innerHTML = '<option value="">Select barangay</option>';
-        psgcBarangay.disabled = true;
-        if (!cCode) return;
-
-        const barangays = await fetchPsgc('/cities-municipalities/' + cCode + '/barangays');
-        barangays.forEach(b => {
-            const opt = document.createElement('option');
-            opt.value = b.code;
-            opt.textContent = b.name;
-            if (b.code === psgcBarangay.dataset.selected) opt.selected = true;
-            psgcBarangay.appendChild(opt);
-        });
-        psgcBarangay.disabled = false;
+    if (businessStreetInput) businessStreetInput.addEventListener('input', () => {
+        businessStreetInput.dataset.pinGenerated = '0';
+        composeBusinessAddress();
+    });
+    if (franchiseMapElement) {
+        if (window.L) initFranchiseMap();
+        else setMapStatus('Map is still loading. Please refresh if it does not appear.', false);
     }
-
-    if (psgcRegion) psgcRegion.addEventListener('change', function() { loadProvinces(this.value); syncPsgcHiddenNames(); composeBusinessAddress(); });
-    if (psgcProvince) psgcProvince.addEventListener('change', function() { loadCities(this.value); syncPsgcHiddenNames(); composeBusinessAddress(); });
-    if (psgcCity) psgcCity.addEventListener('change', function() { loadBarangays(this.value); syncPsgcHiddenNames(); composeBusinessAddress(); });
-    if (psgcBarangay) psgcBarangay.addEventListener('change', function() { syncPsgcHiddenNames(); composeBusinessAddress(); });
-    if (businessStreetInput) businessStreetInput.addEventListener('input', composeBusinessAddress);
-
-    initPsgc();
 });
 </script>
 

@@ -183,16 +183,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_action'])) {
 
         mysqli_commit($conn);
 
-        if ($new_status === 'approved') {
-            $title = "Franchise Application Approved!";
-            $message = "Congratulations! Your franchise application for " . htmlspecialchars($app_data['business_name']) . " has been approved. You can now access the admin portal and manage your own store products. Your 1-month platform trial starts today.";
-        } elseif ($new_status === 'incomplete') {
-            $title = "Action Required: Franchise Application Incomplete";
-            $message = "Your franchise application for " . htmlspecialchars($app_data['business_name']) . " has missing requirements. " . (!empty($notes) ? "Details: " . substr($notes, 0, 100) . "..." : "Please upload your complete compliance documents.");
-        } else {
-            $title = "Franchise Application Update";
-            $message = "Your franchise application has been reviewed. " . (!empty($notes) ? "Feedback: " . substr($notes, 0, 100) . "..." : "Please check your email for more details.");
-        }
+        $status_label = strtoupper($new_status === 'incomplete' ? 'INCOMPLETE' : $new_status);
+        $reason = $notes !== '' ? $notes : ($new_status === 'approved'
+            ? 'Your application passed the current review requirements. Your one-month platform trial starts today.'
+            : ($new_status === 'incomplete'
+                ? 'Please provide the missing requirements or corrected documents.'
+                : 'The application did not meet the current review requirements.'));
+        $business_name = trim((string)($app_data['business_name'] ?? ''));
+        $title = 'Franchise Application: ' . $status_label;
+        $message = "Status: {$status_label}\nReason: {$reason}\nBusiness: {$business_name}";
 
         createNotification(
             $conn,

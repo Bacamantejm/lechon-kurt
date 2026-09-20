@@ -194,7 +194,8 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
         }
         body.dark-mode .user-dropdown-header,
         body.dark-mode .notification-header,
-        body.dark-mode .user-dropdown-item.logout-btn {
+        body.dark-mode .user-dropdown-item.logout-btn,
+        body.dark-mode .notification-pagination {
             border-color: #334155 !important;
         }
         body.dark-mode .user-name,
@@ -204,9 +205,15 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
             color: #f8fafc !important;
         }
         body.dark-mode .user-email,
-        body.dark-mode .notification-empty {
+        body.dark-mode .notification-empty,
+        body.dark-mode .notification-reason,
+        body.dark-mode .notification-business,
+        body.dark-mode .notification-time,
+        body.dark-mode .notification-page-label {
             color: #94a3b8 !important;
         }
+        body.dark-mode .notification-pagination { background:#111827 !important; }
+        body.dark-mode .notification-page-btn { background:#1e293b; border-color:#475569; color:#cbd5e1; }
         body.dark-mode .user-dropdown-item:hover,
         body.dark-mode .mobile-menu a:hover {
             background: #334155 !important;
@@ -615,7 +622,7 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
         .user-menu-wrapper,.notification-wrapper { position:relative; }
         .user-dropdown,.notification-dropdown { position:absolute; top:calc(100% + 10px); right:0; min-width:260px; background:#fff; border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow); padding:8px 0; opacity:0; visibility:hidden; pointer-events:none; transform:translateY(8px); transition:var(--transition-fade); z-index:1500 !important; }
         .user-dropdown::before,.notification-dropdown::before { content:''; position:absolute; top:-14px; left:0; right:0; height:14px; background:transparent; }
-        .notification-dropdown { min-width:310px; }
+        .notification-dropdown { width:320px; min-width:320px; height:430px; max-height:calc(100vh - 90px); overflow:hidden; display:flex; flex-direction:column; }
         .user-menu-wrapper:hover .user-dropdown,
         .user-menu-wrapper.is-open .user-dropdown,
         .user-menu-wrapper.active .user-dropdown,
@@ -634,6 +641,26 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
         .user-dropdown-item.logout-btn { border-top:1px solid var(--line); color:#b4233c; margin-top:6px; }
         .notification-header { padding:10px 13px; border-bottom:1px solid var(--line); font-weight:800; font-size:.9rem; }
         .notification-empty { padding:18px 13px; font-size:.9rem; color:var(--muted); }
+        .notification-list { flex:1 1 auto; min-height:0; overflow-y:auto; }
+        .notification-status-item { display:block; padding:11px 13px; border-bottom:1px solid var(--line); color:inherit; text-decoration:none; }
+        .notification-status-item:hover { background:#fff8f3; }
+        .notification-status-line { display:flex; align-items:center; gap:7px; font-size:.78rem; font-weight:900; letter-spacing:.04em; }
+        .notification-status-line i { font-size:.8rem; }
+        .notification-status-line.is-approved { color:#027a48; }
+        .notification-status-line.is-rejected { color:#b42318; }
+        .notification-status-line.is-incomplete { color:#b54708; }
+        .notification-status-line.is-default { color:#475467; }
+        .notification-reason { margin-top:4px; color:#475467; font-size:.8rem; line-height:1.45; }
+        .notification-business { margin-top:5px; color:#667085; font-size:.74rem; font-weight:700; }
+        .notification-time { display:block; margin-top:6px; color:#98a2b3; font-size:.7rem; }
+        .notification-pagination { flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 10px; border-top:1px solid var(--line); background:#fff8f3; }
+        .notification-page-btn { width:28px; height:28px; border:1px solid var(--line); border-radius:8px; background:#fff; color:#475467; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; }
+        .notification-page-btn:hover:not(:disabled) { background:#b3261e; border-color:#b3261e; color:#fff; }
+        .notification-page-btn:disabled { opacity:.35; cursor:not-allowed; }
+        .notification-page-label { color:#667085; font-size:.7rem; font-weight:800; }
+        @media (max-width:480px) {
+            .notification-dropdown { width:min(320px, calc(100vw - 24px)); min-width:0; right:-48px; }
+        }
         .mobile-toggle { display:none !important; }
 
         /* Header Active Order Pill */
@@ -3357,6 +3384,102 @@ document.addEventListener('DOMContentLoaded', function () {
     // User Profile Menu & Notifications Dropdown toggles
     const userMenuWrappers = Array.from(document.querySelectorAll('.user-menu-wrapper'));
     const notificationWrappers = Array.from(document.querySelectorAll('.notification-wrapper'));
+    const notificationDropdown = document.getElementById('notificationDropdown');
+    const notificationBadge = document.getElementById('notificationBadge');
+    const notificationApiPath = <?php echo json_encode($path_prefix . 'api/get_notifications.php'); ?>;
+
+    function escapeNotificationText(value) {
+        return String(value ?? '').replace(/[&<>'"]/g, function (character) {
+            return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character];
+        });
+    }
+
+    function getNotificationStatus(notification) {
+        const type = String(notification.type || '').toLowerCase();
+        if (type.includes('approved')) return { label: 'APPROVED', className: 'is-approved', icon: 'fa-circle-check' };
+        if (type.includes('rejected')) return { label: 'REJECTED', className: 'is-rejected', icon: 'fa-circle-xmark' };
+        if (type.includes('incomplete')) return { label: 'INCOMPLETE', className: 'is-incomplete', icon: 'fa-triangle-exclamation' };
+        return { label: 'UPDATE', className: 'is-default', icon: 'fa-circle-info' };
+    }
+
+    let userNotifications = [];
+    let userNotificationPage = 0;
+    const userNotificationPageSize = 3;
+
+    function renderUserNotifications(notifications) {
+        if (!notificationDropdown) return;
+        userNotifications = Array.isArray(notifications) ? notifications : [];
+        const totalPages = Math.max(1, Math.ceil(userNotifications.length / userNotificationPageSize));
+        userNotificationPage = Math.min(Math.max(0, userNotificationPage), totalPages - 1);
+        if (userNotifications.length === 0) {
+            notificationDropdown.innerHTML = '<div class="notification-header">Notifications</div><div class="notification-empty">No new notifications yet.</div>';
+            return;
+        }
+
+        const pageStart = userNotificationPage * userNotificationPageSize;
+        const pageNotifications = userNotifications.slice(pageStart, pageStart + userNotificationPageSize);
+        const html = pageNotifications.map(function (notification) {
+            const status = getNotificationStatus(notification);
+            const rawMessage = String(notification.message || '');
+            const reasonMatch = rawMessage.match(/(?:^|\n)Reason:\s*([^\n]*)/i);
+            const businessMatch = rawMessage.match(/(?:^|\n)Business:\s*([^\n]*)/i);
+            const reason = reasonMatch ? reasonMatch[1].trim() : rawMessage.replace(/^Status:\s*[^\n]*\n?/i, '').trim();
+            const business = businessMatch ? businessMatch[1].trim() : '';
+            const relatedId = parseInt(notification.related_id || '0', 10) || 0;
+            const target = relatedId > 0 ? 'my_account.php#profile' : 'my_account.php';
+            const createdAt = notification.created_at ? new Date(String(notification.created_at).replace(' ', 'T')) : null;
+            const timeLabel = createdAt && !Number.isNaN(createdAt.getTime()) ? createdAt.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '';
+            return '<a href="' + target + '" class="notification-status-item js-user-notification" data-notification-id="' + (parseInt(notification.id || '0', 10) || 0) + '">' +
+                '<div class="notification-status-line ' + status.className + '"><i class="fas ' + status.icon + '"></i><span>' + status.label + '</span></div>' +
+                '<div class="notification-reason"><strong>Reason:</strong> ' + escapeNotificationText(reason || 'No additional reason provided.') + '</div>' +
+                (business ? '<div class="notification-business">' + escapeNotificationText(business) + '</div>' : '') +
+                (timeLabel ? '<time class="notification-time">' + escapeNotificationText(timeLabel) + '</time>' : '') +
+                '</a>';
+        }).join('');
+        notificationDropdown.innerHTML = '<div class="notification-header">Notifications</div><div class="notification-list">' + html + '</div>' +
+            '<div class="notification-pagination">' +
+            '<button type="button" class="notification-page-btn js-notification-prev" aria-label="Previous notifications"' + (userNotificationPage === 0 ? ' disabled' : '') + '><i class="fas fa-chevron-left"></i></button>' +
+            '<span class="notification-page-label">' + (userNotificationPage + 1) + ' / ' + totalPages + '</span>' +
+            '<button type="button" class="notification-page-btn js-notification-next" aria-label="Next notifications"' + (userNotificationPage >= totalPages - 1 ? ' disabled' : '') + '><i class="fas fa-chevron-right"></i></button>' +
+            '</div>';
+    }
+
+    function loadUserNotifications() {
+        if (!notificationDropdown || !notificationApiPath) return;
+        fetch(notificationApiPath + '?action=get_unread', { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+            .then(function (response) { return response.json(); })
+            .then(function (payload) {
+                const notifications = Array.isArray(payload.notifications) ? payload.notifications : [];
+                renderUserNotifications(notifications);
+                if (notificationBadge) {
+                    notificationBadge.textContent = notifications.length > 99 ? '99+' : String(notifications.length);
+                    notificationBadge.style.display = notifications.length > 0 ? 'inline-flex' : 'none';
+                }
+            })
+            .catch(function (error) { console.error('User notification load error:', error); });
+    }
+
+    if (notificationDropdown) {
+        loadUserNotifications();
+        window.setInterval(loadUserNotifications, 30000);
+        notificationDropdown.addEventListener('click', function (event) {
+            const previousButton = event.target.closest('.js-notification-prev');
+            const nextButton = event.target.closest('.js-notification-next');
+            if (previousButton || nextButton) {
+                event.preventDefault();
+                if (previousButton && userNotificationPage > 0) userNotificationPage--;
+                if (nextButton && userNotificationPage < Math.ceil(userNotifications.length / userNotificationPageSize) - 1) userNotificationPage++;
+                renderUserNotifications(userNotifications);
+                return;
+            }
+            const notificationLink = event.target.closest('.js-user-notification');
+            if (!notificationLink) return;
+            const notificationId = parseInt(notificationLink.dataset.notificationId || '0', 10);
+            if (notificationId > 0) {
+                fetch(notificationApiPath + '?action=mark_read&id=' + encodeURIComponent(notificationId), { credentials: 'same-origin' }).catch(function () {});
+            }
+        });
+    }
 
     const closeAllUserMenus = function () {
         userMenuWrappers.forEach(function (wrap) {
