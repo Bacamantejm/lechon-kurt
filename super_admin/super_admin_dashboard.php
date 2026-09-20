@@ -1402,6 +1402,24 @@ if ($dashboard_flash_payload === false) {
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
     <link rel="stylesheet" href="style.css">
     <style>
+        .owner-notification-wrap { position:relative; margin-right:12px; }
+        .owner-notification-btn { position:relative; width:38px; height:38px; border:1px solid #d0d5dd; border-radius:9px; background:#fff; color:#344054; cursor:pointer; }
+        .owner-notification-badge { position:absolute; top:-6px; right:-6px; min-width:18px; height:18px; padding:0 4px; border-radius:99px; background:#b3261e; color:#fff; font-size:10px; font-weight:800; display:none; align-items:center; justify-content:center; }
+        .owner-notification-dropdown { position:absolute; top:calc(100% + 10px); right:0; z-index:2000; width:320px; height:430px; max-height:calc(100vh - 90px); display:none; flex-direction:column; overflow:hidden; background:#fff; border:1px solid #e4e7ec; border-radius:12px; box-shadow:0 14px 32px rgba(16,24,40,.18); }
+        .owner-notification-dropdown.show { display:flex; }
+        .owner-notification-head { padding:12px 14px; border-bottom:1px solid #eaecf0; font-weight:800; }
+        .owner-notification-list { flex:1 1 auto; min-height:0; overflow-y:auto; }
+        .owner-notification-item { display:block; padding:11px 13px; border-bottom:1px solid #eaecf0; color:#344054; text-decoration:none; }
+        .owner-notification-status { font-size:.77rem; font-weight:900; letter-spacing:.04em; }
+        .owner-notification-status.approved { color:#027a48; }
+        .owner-notification-status.rejected { color:#b42318; }
+        .owner-notification-status.incomplete { color:#b54708; }
+        .owner-notification-reason { margin-top:4px; font-size:.8rem; line-height:1.4; color:#667085; }
+        .owner-notification-pages { display:flex; justify-content:space-between; padding:8px 10px; border-top:1px solid #eaecf0; background:#fff8f3; }
+        .owner-notification-page-btn { width:28px; height:28px; border:1px solid #d0d5dd; border-radius:7px; background:#fff; cursor:pointer; }
+        .owner-notification-page-btn:disabled { opacity:.35; cursor:not-allowed; }
+        @media (max-width:520px) { .owner-notification-dropdown { width:min(320px, calc(100vw - 24px)); right:-70px; } }
+
         .admin-topbar .topbar-content {
             display: flex;
             align-items: center;
@@ -2266,6 +2284,14 @@ if ($dashboard_flash_payload === false) {
                     <button class="theme-toggler" id="themeToggler" title="Toggle Theme"><i class="fas fa-moon"></i></button>
                     <div class="topbar-right">
                         <div class="date-display" id="currentDate"></div>
+                        <div class="owner-notification-wrap">
+                            <button type="button" class="owner-notification-btn" id="ownerNotificationBtn" aria-label="Open notifications" title="Notifications"><i class="fas fa-bell"></i><span class="owner-notification-badge" id="ownerNotificationBadge">0</span></button>
+                            <div class="owner-notification-dropdown" id="ownerNotificationDropdown">
+                                <div class="owner-notification-head">Notifications</div>
+                                <div class="owner-notification-list" id="ownerNotificationList"><div class="p-3 text-muted">Loading...</div></div>
+                                <div class="owner-notification-pages" id="ownerNotificationPages" hidden><button type="button" class="owner-notification-page-btn" id="ownerNotificationPrev" aria-label="Previous notifications"><i class="fas fa-chevron-left"></i></button><span id="ownerNotificationPageLabel">1 / 1</span><button type="button" class="owner-notification-page-btn" id="ownerNotificationNext" aria-label="Next notifications"><i class="fas fa-chevron-right"></i></button></div>
+                            </div>
+                        </div>
                         <div class="admin-profile">
                             <span><?php echo htmlspecialchars($admin_info['full_name'] ?? 'System Owner'); ?></span>
                             <i class="fas fa-user-shield"></i>
@@ -3031,6 +3057,57 @@ if ($dashboard_flash_payload === false) {
     <script src="../js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="admin.js"></script>
+    <script>
+        (function () {
+            const button = document.getElementById('ownerNotificationBtn');
+            const dropdown = document.getElementById('ownerNotificationDropdown');
+            const badge = document.getElementById('ownerNotificationBadge');
+            const list = document.getElementById('ownerNotificationList');
+            const pages = document.getElementById('ownerNotificationPages');
+            const previous = document.getElementById('ownerNotificationPrev');
+            const next = document.getElementById('ownerNotificationNext');
+            const pageLabel = document.getElementById('ownerNotificationPageLabel');
+            if (!button || !dropdown || !list) return;
+            let notifications = [];
+            let page = 0;
+            const pageSize = 3;
+            const endpoint = '../admin/get_notifications.php';
+            const escapeText = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
+            function render() {
+                const totalPages = Math.max(1, Math.ceil(notifications.length / pageSize));
+                page = Math.min(Math.max(0, page), totalPages - 1);
+                list.innerHTML = '';
+                if (!notifications.length) { list.innerHTML = '<div class="p-3 text-muted">No notifications</div>'; pages.hidden = true; return; }
+                notifications.slice(page * pageSize, (page + 1) * pageSize).forEach((notification) => {
+                    const type = String(notification.type || '').toLowerCase();
+                    const match = type.match(/franchise_(approved|rejected|incomplete)/);
+                    const status = match ? match[1] : '';
+                    const rawMessage = String(notification.message || '');
+                    const reasonMatch = rawMessage.match(/(?:^|\n)Reason:\s*([^\n]*)/i);
+                    const reason = reasonMatch ? reasonMatch[1].trim() : rawMessage.replace(/^Status:\s*[^\n]*\n?/i, '').trim();
+                    const item = document.createElement('a');
+                    item.className = 'owner-notification-item';
+                    item.href = notification.related_type === 'franchise_application' && notification.related_id ? 'franchise_applications.php?search=' + encodeURIComponent(notification.related_id) : '#';
+                    item.innerHTML = (status ? '<div class="owner-notification-status ' + status + '">' + status.toUpperCase() + '</div>' : '<div class="owner-notification-status">' + escapeText(notification.title || 'UPDATE') + '</div>') + '<div class="owner-notification-reason"><strong>' + (status ? 'Reason:' : 'Message:') + '</strong> ' + escapeText(reason || notification.message || 'No additional details.') + '</div>';
+                    item.addEventListener('click', () => {
+                        if (notification.is_read == 0) { const form = new FormData(); form.append('id', notification.id); fetch(endpoint + '?action=mark_read', { method: 'POST', body: form }).catch(() => {}); }
+                    });
+                    list.appendChild(item);
+                });
+                pages.hidden = totalPages <= 1;
+                pageLabel.textContent = (page + 1) + ' / ' + totalPages;
+                previous.disabled = page === 0;
+                next.disabled = page >= totalPages - 1;
+            }
+            function load() { fetch(endpoint + '?action=get').then((response) => response.json()).then((data) => { notifications = Array.isArray(data) ? data : []; const unread = notifications.filter((notification) => Number(notification.is_read) === 0).length; badge.textContent = unread > 99 ? '99+' : String(unread); badge.style.display = unread > 0 ? 'inline-flex' : 'none'; render(); }).catch(() => {}); }
+            button.addEventListener('click', (event) => { event.stopPropagation(); dropdown.classList.toggle('show'); if (dropdown.classList.contains('show')) load(); });
+            previous.addEventListener('click', (event) => { event.stopPropagation(); if (page > 0) { page--; render(); } });
+            next.addEventListener('click', (event) => { event.stopPropagation(); if (page < Math.ceil(notifications.length / pageSize) - 1) { page++; render(); } });
+            document.addEventListener('click', (event) => { if (!dropdown.contains(event.target) && event.target !== button) dropdown.classList.remove('show'); });
+            load();
+            window.setInterval(load, 30000);
+        })();
+    </script>
     <script>
         const dashboardFlashMessages = <?php echo $dashboard_flash_payload; ?>;
         const body = document.body;

@@ -1280,6 +1280,8 @@ body.dark-mode .sidebar-footer .logout-btn {
         top: 100%;
         right: 0;
         width: 320px;
+        height: 430px;
+        max-height: calc(100vh - 90px);
         background: white;
         border-radius: 8px;
         box-shadow: 0 5px 15px rgba(0,0,0,0.15);
@@ -1313,9 +1315,48 @@ body.dark-mode .sidebar-footer .logout-btn {
     }
     
     .notification-list {
+        flex: 1 1 auto;
+        min-height: 0;
         max-height: 350px;
         overflow-y: auto;
     }
+
+    #adminNotifDropdown {
+        display: none;
+        flex-direction: column;
+    }
+
+    #adminNotifDropdown.show {
+        display: flex;
+    }
+
+    .admin-notification-pagination {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 10px;
+        border-top: 1px solid #eee;
+        background: #fff8f3;
+    }
+
+    .admin-notification-page-btn {
+        width: 28px;
+        height: 28px;
+        border: 1px solid #ddd;
+        border-radius: 7px;
+        background: #fff;
+        color: #475467;
+        cursor: pointer;
+    }
+
+    .admin-notification-page-btn:disabled { opacity: .35; cursor: not-allowed; }
+    .admin-notification-page-label { font-size: .72rem; font-weight: 800; color: #667085; }
+    .admin-franchise-status { font-size: .76rem; font-weight: 900; letter-spacing: .04em; }
+    .admin-franchise-status.approved { color: #027a48; }
+    .admin-franchise-status.rejected { color: #b42318; }
+    .admin-franchise-status.incomplete { color: #b54708; }
+    .admin-franchise-reason { font-size: .8rem; line-height: 1.35; color: #667085; margin-top: 4px; }
     
     .notification-item {
         padding: 12px 15px;
@@ -1390,6 +1431,10 @@ body.dark-mode .sidebar-footer .logout-btn {
     body.dark-mode .notif-title { color: #e0e0e0; }
     body.dark-mode .notif-message { color: #b0b0b0; }
     body.dark-mode .notification-empty { color: #b0b0b0; }
+    body.dark-mode .admin-notification-pagination { background: #1f2937; border-color: var(--border-color-dark); }
+    body.dark-mode .admin-notification-page-btn { background: #2f3543; border-color: #475569; color: #cbd5e1; }
+    body.dark-mode .admin-notification-page-label,
+    body.dark-mode .admin-franchise-reason { color: #94a3b8; }
 
     @keyframes bell-shake {
         0% { transform: rotate(0); }
@@ -1948,6 +1993,11 @@ body.dark-mode .sidebar-footer .logout-btn {
                         <div class="notification-list" id="adminNotifList">
                             <div class="notification-empty">Loading...</div>
                         </div>
+                        <div class="admin-notification-pagination" id="adminNotifPagination" hidden>
+                            <button type="button" class="admin-notification-page-btn" id="adminNotifPrev" aria-label="Previous notifications"><i class="fas fa-chevron-left"></i></button>
+                            <span class="admin-notification-page-label" id="adminNotifPageLabel">1 / 1</span>
+                            <button type="button" class="admin-notification-page-btn" id="adminNotifNext" aria-label="Next notifications"><i class="fas fa-chevron-right"></i></button>
+                        </div>
                     </div>
                 </div>
             `;
@@ -2075,6 +2125,13 @@ body.dark-mode .sidebar-footer .logout-btn {
             const badge = notifWrapper.querySelector('#adminNotifBadge');
             const list = notifWrapper.querySelector('#adminNotifList');
             const markAllBtn = notifWrapper.querySelector('#markAllRead');
+            const pagination = notifWrapper.querySelector('#adminNotifPagination');
+            const previousPageBtn = notifWrapper.querySelector('#adminNotifPrev');
+            const nextPageBtn = notifWrapper.querySelector('#adminNotifNext');
+            const pageLabel = notifWrapper.querySelector('#adminNotifPageLabel');
+            let adminNotifications = [];
+            let adminNotificationPage = 0;
+            const adminNotificationPageSize = 3;
             
             // Chat Variables
             const chatBtn = notifWrapper.querySelector('#adminChatBtn');
@@ -2226,14 +2283,23 @@ body.dark-mode .sidebar-footer .logout-btn {
                 fetch('get_notifications.php?action=get')
                     .then(res => res.json())
                     .then(data => {
-                        const notifications = Array.isArray(data) ? data : [];
-                        list.innerHTML = '';
-                        if (notifications.length === 0) {
-                            list.innerHTML = '<div class="notification-empty">No notifications</div>';
-                            return;
-                        }
-                        
-                        notifications.forEach(notif => {
+                        adminNotifications = Array.isArray(data) ? data : [];
+                        renderAdminNotifications();
+                    });
+            }
+
+            function renderAdminNotifications() {
+                const totalPages = Math.max(1, Math.ceil(adminNotifications.length / adminNotificationPageSize));
+                adminNotificationPage = Math.min(Math.max(0, adminNotificationPage), totalPages - 1);
+                list.innerHTML = '';
+                if (adminNotifications.length === 0) {
+                    list.innerHTML = '<div class="notification-empty">No notifications</div>';
+                    if (pagination) pagination.hidden = true;
+                    return;
+                }
+
+                const pageItems = adminNotifications.slice(adminNotificationPage * adminNotificationPageSize, (adminNotificationPage + 1) * adminNotificationPageSize);
+                pageItems.forEach(notif => {
                             const item = document.createElement('div');
                             item.className = `notification-item ${notif.is_read == 0 ? 'unread' : ''}`;
                             
@@ -2247,14 +2313,20 @@ body.dark-mode .sidebar-footer .logout-btn {
                             else if (notifType.includes('alert')) { icon = 'fa-exclamation-triangle'; color = '#c62828'; bg = '#ffebee'; }
                             else if (notifType.includes('user')) { icon = 'fa-user'; color = '#ef6c00'; bg = '#fff3e0'; }
                             else if (notifType.includes('franchise')) { icon = 'fa-store'; color = '#7c3aed'; bg = '#f3e8ff'; }
-                            
+                            const statusMatch = notifType.match(/franchise_(approved|rejected|incomplete)/);
+                            const status = statusMatch ? statusMatch[1].toUpperCase() : '';
+                            const reasonMatch = String(notif.message || '').match(/(?:^|\n)Reason:\s*([^\n]*)/i);
+                            const reason = reasonMatch ? reasonMatch[1].trim() : String(notif.message || '').replace(/^Status:\s*[^\n]*\n?/i, '').trim();
+                            const titleMarkup = status
+                                ? `<div class="admin-franchise-status ${status.toLowerCase()}">${status}</div>`
+                                : `<div class="notif-title">${escapeInlineHtml(notif.title)}</div>`;
                             item.innerHTML = `
                                 <div class="notif-icon" style="color: ${color}; background: ${bg}">
                                     <i class="fas ${icon}"></i>
                                 </div>
                                 <div class="notif-content">
-                                    <div class="notif-title">${escapeInlineHtml(notif.title)}</div>
-                                    <div class="notif-message">${escapeInlineHtml(notif.message)}</div>
+                                    ${titleMarkup}
+                                    <div class="${status ? 'admin-franchise-reason' : 'notif-message'}">${status ? '<strong>Reason:</strong> ' + escapeInlineHtml(reason || 'No additional reason provided.') : escapeInlineHtml(notif.message)}</div>
                                     <div class="notif-time">${escapeInlineHtml(notif.time_ago)}</div>
                                 </div>
                             `;
@@ -2279,7 +2351,27 @@ body.dark-mode .sidebar-footer .logout-btn {
                             
                             list.appendChild(item);
                         });
-                    });
+
+                if (pagination) pagination.hidden = totalPages <= 1;
+                if (pageLabel) pageLabel.textContent = `${adminNotificationPage + 1} / ${totalPages}`;
+                if (previousPageBtn) previousPageBtn.disabled = adminNotificationPage === 0;
+                if (nextPageBtn) nextPageBtn.disabled = adminNotificationPage >= totalPages - 1;
+            }
+
+            if (previousPageBtn) previousPageBtn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                if (adminNotificationPage > 0) {
+                    adminNotificationPage--;
+                    renderAdminNotifications();
+                }
+            });
+            if (nextPageBtn) nextPageBtn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                if (adminNotificationPage < Math.ceil(adminNotifications.length / adminNotificationPageSize) - 1) {
+                    adminNotificationPage++;
+                    renderAdminNotifications();
+                }
+            });
             }
             
             // Initial load and polling

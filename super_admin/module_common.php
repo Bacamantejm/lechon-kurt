@@ -311,6 +311,35 @@ function saRenderModuleHeader($page_title, $page_heading, $admin_info) {
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="../super_admin/modules.css">
+    <style>
+        .sa-notification-wrap { position:relative; margin-right:12px; }
+        .sa-notification-btn { position:relative; width:38px; height:38px; border:1px solid #d0d5dd; border-radius:9px; background:#fff; color:#344054; cursor:pointer; }
+        .sa-notification-btn:hover, .sa-notification-btn.is-active { background:#fff1f0; color:#b3261e; border-color:#fda29b; }
+        .sa-notification-badge { position:absolute; top:-6px; right:-6px; min-width:18px; height:18px; padding:0 4px; border-radius:99px; background:#b3261e; color:#fff; font-size:10px; font-weight:800; display:none; align-items:center; justify-content:center; }
+        .sa-notification-dropdown { position:absolute; top:calc(100% + 10px); right:0; z-index:2000; width:320px; height:430px; max-height:calc(100vh - 90px); display:none; flex-direction:column; overflow:hidden; background:#fff; border:1px solid #e4e7ec; border-radius:12px; box-shadow:0 14px 32px rgba(16,24,40,.18); }
+        .sa-notification-dropdown.show { display:flex; }
+        .sa-notification-head { flex:0 0 auto; padding:12px 14px; border-bottom:1px solid #eaecf0; font-weight:800; }
+        .sa-notification-list { flex:1 1 auto; min-height:0; overflow-y:auto; }
+        .sa-notification-item { display:block; padding:11px 13px; border-bottom:1px solid #eaecf0; color:#344054; text-decoration:none; }
+        .sa-notification-item:hover { background:#fff8f3; }
+        .sa-notification-status { font-size:.77rem; font-weight:900; letter-spacing:.04em; }
+        .sa-notification-status.approved { color:#027a48; }
+        .sa-notification-status.rejected { color:#b42318; }
+        .sa-notification-status.incomplete { color:#b54708; }
+        .sa-notification-reason { margin-top:4px; font-size:.8rem; line-height:1.4; color:#667085; }
+        .sa-notification-time { display:block; margin-top:5px; color:#98a2b3; font-size:.7rem; }
+        .sa-notification-pages { flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; padding:8px 10px; border-top:1px solid #eaecf0; background:#fff8f3; }
+        .sa-notification-page-btn { width:28px; height:28px; border:1px solid #d0d5dd; border-radius:7px; background:#fff; cursor:pointer; }
+        .sa-notification-page-btn:disabled { opacity:.35; cursor:not-allowed; }
+        .sa-notification-page-label { font-size:.72rem; font-weight:800; color:#667085; }
+        body.dark-mode .sa-notification-btn { background:#1e293b; color:#f8fafc; border-color:#475569; }
+        body.dark-mode .sa-notification-dropdown { background:#1e293b; border-color:#475569; }
+        body.dark-mode .sa-notification-head, body.dark-mode .sa-notification-item { border-color:#334155; color:#f8fafc; }
+        body.dark-mode .sa-notification-item:hover { background:#334155; }
+        body.dark-mode .sa-notification-reason, body.dark-mode .sa-notification-time, body.dark-mode .sa-notification-page-label { color:#94a3b8; }
+        body.dark-mode .sa-notification-pages { background:#111827; border-color:#334155; }
+        @media (max-width:520px) { .sa-notification-dropdown { width:min(320px, calc(100vw - 24px)); right:-70px; } }
+    </style>
 </head>
 <body>
     <div class="page-loader"><div class="spinner"></div></div>
@@ -327,6 +356,20 @@ function saRenderModuleHeader($page_title, $page_heading, $admin_info) {
                     </button>
                     <div class="topbar-right">
                         <div class="date-display" id="currentDate"></div>
+                        <div class="sa-notification-wrap">
+                            <button type="button" class="sa-notification-btn" id="saNotificationBtn" aria-label="Open notifications" title="Notifications">
+                                <i class="fas fa-bell"></i><span class="sa-notification-badge" id="saNotificationBadge">0</span>
+                            </button>
+                            <div class="sa-notification-dropdown" id="saNotificationDropdown">
+                                <div class="sa-notification-head">Notifications</div>
+                                <div class="sa-notification-list" id="saNotificationList"><div class="p-3 text-muted">Loading...</div></div>
+                                <div class="sa-notification-pages" id="saNotificationPages" hidden>
+                                    <button type="button" class="sa-notification-page-btn" id="saNotificationPrev" aria-label="Previous notifications"><i class="fas fa-chevron-left"></i></button>
+                                    <span class="sa-notification-page-label" id="saNotificationPageLabel">1 / 1</span>
+                                    <button type="button" class="sa-notification-page-btn" id="saNotificationNext" aria-label="Next notifications"><i class="fas fa-chevron-right"></i></button>
+                                </div>
+                            </div>
+                        </div>
                         <div class="admin-profile">
                             <span><?php echo $safe_admin_name; ?></span>
                             <i class="fas fa-user-circle"></i>
@@ -352,6 +395,102 @@ function saRenderModuleFooter($extra_scripts = '') {
     <script src="../js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="admin.js"></script>
+    <script>
+        (function () {
+            const button = document.getElementById('saNotificationBtn');
+            const dropdown = document.getElementById('saNotificationDropdown');
+            const badge = document.getElementById('saNotificationBadge');
+            const list = document.getElementById('saNotificationList');
+            const pages = document.getElementById('saNotificationPages');
+            const previous = document.getElementById('saNotificationPrev');
+            const next = document.getElementById('saNotificationNext');
+            const pageLabel = document.getElementById('saNotificationPageLabel');
+            if (!button || !dropdown || !list) return;
+
+            let notifications = [];
+            let page = 0;
+            const pageSize = 3;
+            const endpoint = '../admin/get_notifications.php';
+
+            const escapeText = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
+            const statusFor = (notification) => {
+                const type = String(notification.type || '').toLowerCase();
+                const match = type.match(/franchise_(approved|rejected|incomplete)/);
+                return match ? match[1] : '';
+            };
+
+            function render() {
+                const totalPages = Math.max(1, Math.ceil(notifications.length / pageSize));
+                page = Math.min(Math.max(0, page), totalPages - 1);
+                list.innerHTML = '';
+                if (!notifications.length) {
+                    list.innerHTML = '<div class="p-3 text-muted">No notifications</div>';
+                    pages.hidden = true;
+                    return;
+                }
+
+                notifications.slice(page * pageSize, (page + 1) * pageSize).forEach((notification) => {
+                    const status = statusFor(notification);
+                    const rawMessage = String(notification.message || '');
+                    const reasonMatch = rawMessage.match(/(?:^|\n)Reason:\s*([^\n]*)/i);
+                    const reason = reasonMatch ? reasonMatch[1].trim() : rawMessage.replace(/^Status:\s*[^\n]*\n?/i, '').trim();
+                    const item = document.createElement('a');
+                    item.className = 'sa-notification-item';
+                    item.href = notification.related_type === 'franchise_application' && notification.related_id
+                        ? 'franchise_applications.php?search=' + encodeURIComponent(notification.related_id)
+                        : '#';
+                    item.innerHTML = (status
+                        ? '<div class="sa-notification-status ' + status + '">' + status.toUpperCase() + '</div>'
+                        : '<div class="sa-notification-status">' + escapeText(notification.title || 'UPDATE') + '</div>') +
+                        '<div class="sa-notification-reason"><strong>' + (status ? 'Reason:' : 'Message:') + '</strong> ' + escapeText(reason || notification.message || 'No additional details.') + '</div>' +
+                        '<time class="sa-notification-time">' + escapeText(notification.time_ago || notification.created_at || '') + '</time>';
+                    item.addEventListener('click', () => {
+                        if (notification.is_read == 0) {
+                            const form = new FormData();
+                            form.append('id', notification.id);
+                            fetch(endpoint + '?action=mark_read', { method: 'POST', body: form }).catch(() => {});
+                        }
+                    });
+                    list.appendChild(item);
+                });
+
+                pages.hidden = totalPages <= 1;
+                pageLabel.textContent = (page + 1) + ' / ' + totalPages;
+                previous.disabled = page === 0;
+                next.disabled = page >= totalPages - 1;
+            }
+
+            function load() {
+                fetch(endpoint + '?action=get', { credentials: 'same-origin' })
+                    .then((response) => response.json())
+                    .then((data) => {
+                        notifications = Array.isArray(data) ? data : [];
+                        const unread = notifications.filter((notification) => Number(notification.is_read) === 0).length;
+                        badge.textContent = unread > 99 ? '99+' : String(unread);
+                        badge.style.display = unread > 0 ? 'inline-flex' : 'none';
+                        render();
+                    })
+                    .catch(() => { list.innerHTML = '<div class="p-3 text-muted">Notifications unavailable</div>'; });
+            }
+
+            button.addEventListener('click', (event) => {
+                event.stopPropagation();
+                dropdown.classList.toggle('show');
+                button.classList.toggle('is-active', dropdown.classList.contains('show'));
+                if (dropdown.classList.contains('show')) load();
+            });
+            previous.addEventListener('click', (event) => { event.stopPropagation(); if (page > 0) { page--; render(); } });
+            next.addEventListener('click', (event) => { event.stopPropagation(); if (page < Math.ceil(notifications.length / pageSize) - 1) { page++; render(); } });
+            document.addEventListener('click', (event) => {
+                if (!dropdown.contains(event.target) && event.target !== button) {
+                    dropdown.classList.remove('show');
+                    button.classList.remove('is-active');
+                }
+            });
+            load();
+            window.setInterval(load, 30000);
+        })();
+    </script>
     <script>
         (function() {
             const themeToggler = document.getElementById('themeToggler');
