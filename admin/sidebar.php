@@ -1,4 +1,6 @@
 <?php
+global $conn;
+
 $current_page = basename($_SERVER['PHP_SELF']);
 $user_id = $_SESSION['user_id'] ?? 0;
 $is_partner_scoped_admin = false;
