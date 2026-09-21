@@ -2028,51 +2028,61 @@ body.dark-mode .sidebar-footer .logout-btn {
                 });
             }
 
-            let notifWrapper = topbarRight ? topbarRight.querySelector('.admin-header-actions') : null;
-            if (!notifWrapper) {
-                notifWrapper = document.createElement('div');
-                notifWrapper.className = 'admin-header-actions';
+            const isSuperAdminPage = Boolean(
+                (topbarRight && (
+                    topbarRight.querySelector('.sa-alert-wrap, .sa-notification-wrap, .owner-notification-wrap, .sa-topbar-action-wrap')
+                )) ||
+                window.location.pathname.includes('/super_admin/')
+            );
+
+            let notifWrapper = null;
+            if (!isSuperAdminPage) {
+                notifWrapper = topbarRight ? topbarRight.querySelector('.admin-header-actions') : null;
+                if (!notifWrapper) {
+                    notifWrapper = document.createElement('div');
+                    notifWrapper.className = 'admin-header-actions';
+                }
+                notifWrapper.innerHTML = `
+                    <!-- Chat Button -->
+                    <div class="admin-chat-wrapper">
+                        <button class="notification-btn topbar-action-btn" id="adminChatBtn" type="button" title="Chat Support" aria-label="Open chat support conversations">
+                            <i class="fas fa-comment-dots"></i>
+                            <span class="admin-action-label">Messages</span>
+                            <span class="notification-badge" id="adminChatBadge" style="display: none;">0</span>
+                        </button>
+                        <div class="notification-dropdown" id="adminChatDropdown">
+                            <div class="notification-header">
+                                <span>Messages</span>
+                                <a href="chat.php" class="mark-read-btn">View All</a>
+                            </div>
+                            <div class="notification-list" id="adminChatList"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Notification Button -->
+                    <div class="admin-notification-wrapper">
+                        <button class="notification-btn topbar-action-btn" id="adminNotifBtn" type="button" title="Notifications" aria-label="Open notifications">
+                            <i class="fas fa-bell"></i>
+                            <span class="admin-action-label">Notifications</span>
+                            <span class="notification-badge" id="adminNotifBadge" style="display: none;">0</span>
+                        </button>
+                        <div class="notification-dropdown" id="adminNotifDropdown">
+                            <div class="notification-header">
+                                <span>Notifications</span>
+                                <span class="mark-read-btn" id="markAllRead">Mark all read</span>
+                            </div>
+                            <div class="notification-list" id="adminNotifList">
+                                <div class="notification-empty">Loading...</div>
+                            </div>
+                            <div class="admin-notification-pagination" id="adminNotifPagination" hidden>
+                                <button type="button" class="admin-notification-page-btn" id="adminNotifPrev" aria-label="Previous notifications"><i class="fas fa-chevron-left"></i></button>
+                                <span class="admin-notification-page-label" id="adminNotifPageLabel">1 / 1</span>
+                                <button type="button" class="admin-notification-page-btn" id="adminNotifNext" aria-label="Next notifications"><i class="fas fa-chevron-right"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                `;
             }
-            notifWrapper.innerHTML = `
-                <!-- Chat Button -->
-                <div class="admin-chat-wrapper">
-                    <button class="notification-btn topbar-action-btn" id="adminChatBtn" type="button" title="Chat Support" aria-label="Open chat support conversations">
-                        <i class="fas fa-comment-dots"></i>
-                        <span class="admin-action-label">Messages</span>
-                        <span class="notification-badge" id="adminChatBadge" style="display: none;">0</span>
-                    </button>
-                    <div class="notification-dropdown" id="adminChatDropdown">
-                        <div class="notification-header">
-                            <span>Messages</span>
-                            <a href="chat.php" class="mark-read-btn">View All</a>
-                        </div>
-                        <div class="notification-list" id="adminChatList"></div>
-                    </div>
-                </div>
-                
-                <!-- Notification Button -->
-                <div class="admin-notification-wrapper">
-                    <button class="notification-btn topbar-action-btn" id="adminNotifBtn" type="button" title="Notifications" aria-label="Open notifications">
-                        <i class="fas fa-bell"></i>
-                        <span class="admin-action-label">Alerts</span>
-                        <span class="notification-badge" id="adminNotifBadge" style="display: none;">0</span>
-                    </button>
-                    <div class="notification-dropdown" id="adminNotifDropdown">
-                        <div class="notification-header">
-                            <span>Notifications</span>
-                            <span class="mark-read-btn" id="markAllRead">Mark all read</span>
-                        </div>
-                        <div class="notification-list" id="adminNotifList">
-                            <div class="notification-empty">Loading...</div>
-                        </div>
-                        <div class="admin-notification-pagination" id="adminNotifPagination" hidden>
-                            <button type="button" class="admin-notification-page-btn" id="adminNotifPrev" aria-label="Previous notifications"><i class="fas fa-chevron-left"></i></button>
-                            <span class="admin-notification-page-label" id="adminNotifPageLabel">1 / 1</span>
-                            <button type="button" class="admin-notification-page-btn" id="adminNotifNext" aria-label="Next notifications"><i class="fas fa-chevron-right"></i></button>
-                        </div>
-                    </div>
-                </div>
-            `;
 
             const adminProfile = topbarRight ? topbarRight.querySelector('.admin-profile') : null;
 
@@ -2120,7 +2130,7 @@ body.dark-mode .sidebar-footer .logout-btn {
                             <div class="admin-profile-links">
                                 <a href="${safeMyAccountLink}" class="admin-profile-link"><i class="fas fa-user-circle"></i><span>My Account</span></a>
                                 ${billingMarkup}
-                                <a href="logout.php" class="admin-profile-link" style="color: #b3261e; background: #fff1f0;"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+                                <a href="../logout.php" class="admin-profile-link text-danger"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
                             </div>
                         </div>
                     `);
@@ -2178,281 +2188,284 @@ body.dark-mode .sidebar-footer .logout-btn {
                 themeToggler.style.marginRight = '0';
             }
 
-            // Place message + notification beside profile, then dark mode button.
-            if (topbarRight) {
-                if (themeToggler && themeToggler.parentNode === topbarRight) {
-                    topbarRight.insertBefore(notifWrapper, themeToggler);
-                } else if (adminProfile) {
-                    topbarRight.insertBefore(notifWrapper, adminProfile);
-                } else {
-                    topbarRight.appendChild(notifWrapper);
+            // Place message + notification beside profile, then dark mode button for standard admin pages.
+            if (!isSuperAdminPage && notifWrapper) {
+                if (topbarRight) {
+                    if (themeToggler && themeToggler.parentNode === topbarRight) {
+                        topbarRight.insertBefore(notifWrapper, themeToggler);
+                    } else if (adminProfile) {
+                        topbarRight.insertBefore(notifWrapper, adminProfile);
+                    } else {
+                        topbarRight.appendChild(notifWrapper);
+                    }
+                } else if (themeToggler && themeToggler.parentNode) {
+                    themeToggler.parentNode.insertBefore(notifWrapper, themeToggler);
                 }
-            } else if (themeToggler && themeToggler.parentNode) {
-                themeToggler.parentNode.insertBefore(notifWrapper, themeToggler);
-            }
 
-            // Notification Logic
-            const btn = notifWrapper.querySelector('#adminNotifBtn');
-            const dropdown = notifWrapper.querySelector('#adminNotifDropdown');
-            const badge = notifWrapper.querySelector('#adminNotifBadge');
-            const list = notifWrapper.querySelector('#adminNotifList');
-            const markAllBtn = notifWrapper.querySelector('#markAllRead');
-            const pagination = notifWrapper.querySelector('#adminNotifPagination');
-            const previousPageBtn = notifWrapper.querySelector('#adminNotifPrev');
-            const nextPageBtn = notifWrapper.querySelector('#adminNotifNext');
-            const pageLabel = notifWrapper.querySelector('#adminNotifPageLabel');
-            let adminNotifications = [];
-            let adminNotificationPage = 0;
-            const adminNotificationPageSize = 3;
-            
-            // Chat Variables
-            const chatBtn = notifWrapper.querySelector('#adminChatBtn');
-            const chatDropdown = notifWrapper.querySelector('#adminChatDropdown');
-            const chatBadge = notifWrapper.querySelector('#adminChatBadge');
-            const chatList = notifWrapper.querySelector('#adminChatList');
-            
-            // Toggle Dropdown
-            if (btn && dropdown) {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    if (chatDropdown) {
-                        chatDropdown.classList.remove('show');
-                    }
-                    if (chatBtn) {
-                        chatBtn.classList.remove('is-active');
-                    }
-                    dropdown.classList.toggle('show');
-                    btn.classList.toggle('is-active', dropdown.classList.contains('show'));
-                    if (dropdown.classList.contains('show')) {
-                        loadNotifications();
-                        btn.classList.remove('shaking');
-                    }
-                });
-            }
-            
-            // Toggle Chat Dropdown
-            if (chatBtn && chatDropdown) {
-                chatBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    if (dropdown) {
-                        dropdown.classList.remove('show');
-                    }
-                    if (btn) {
-                        btn.classList.remove('is-active');
-                    }
-                    chatDropdown.classList.toggle('show');
-                    chatBtn.classList.toggle('is-active', chatDropdown.classList.contains('show'));
-                    if (chatDropdown.classList.contains('show')) {
-                        loadChatConversations();
-                    }
-                });
-            }
-            
-            // Close on outside click
-            document.addEventListener('click', (e) => {
-                if (!notifWrapper.contains(e.target)) {
-                    if (dropdown) {
-                        dropdown.classList.remove('show');
-                    }
-                    if (btn) {
-                        btn.classList.remove('is-active');
-                    }
-                    if (chatDropdown) {
-                        chatDropdown.classList.remove('show');
-                    }
-                    if (chatBtn) {
-                        chatBtn.classList.remove('is-active');
-                    }
-                }
-                if (!adminProfile || !adminProfile.contains(e.target)) {
-                    closeProfileMenu();
-                }
-            });
-            
-            // Mark all read
-            if (markAllBtn) {
-                markAllBtn.addEventListener('click', () => {
-                    fetch('get_notifications.php?action=mark_read', { method: 'POST' })
-                        .then(res => res.json())
-                        .then(data => {
-                            if (data.success) {
-                                loadNotificationCount();
-                                loadNotifications();
-                            }
-                        });
-                });
-            }
-            
-            function loadNotificationCount() {
-                if (!btn || !badge) return;
-                fetch('get_notifications.php?action=count')
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.count > 0) {
-                            badge.style.display = 'block';
-                            badge.textContent = data.count > 99 ? '99+' : data.count;
-                            // Add shaking animation if not already open
-                            if (!dropdown || !dropdown.classList.contains('show')) {
-                                btn.classList.add('shaking');
-                            }
-                        } else {
-                            badge.style.display = 'none';
+                // Notification Logic
+                const btn = notifWrapper.querySelector('#adminNotifBtn');
+                const dropdown = notifWrapper.querySelector('#adminNotifDropdown');
+                const badge = notifWrapper.querySelector('#adminNotifBadge');
+                const list = notifWrapper.querySelector('#adminNotifList');
+                const markAllBtn = notifWrapper.querySelector('#markAllRead');
+                const pagination = notifWrapper.querySelector('#adminNotifPagination');
+                const previousPageBtn = notifWrapper.querySelector('#adminNotifPrev');
+                const nextPageBtn = notifWrapper.querySelector('#adminNotifNext');
+                const pageLabel = notifWrapper.querySelector('#adminNotifPageLabel');
+                let adminNotifications = [];
+                let adminNotificationPage = 0;
+                const adminNotificationPageSize = 3;
+                
+                // Chat Variables
+                const chatBtn = notifWrapper.querySelector('#adminChatBtn');
+                const chatDropdown = notifWrapper.querySelector('#adminChatDropdown');
+                const chatBadge = notifWrapper.querySelector('#adminChatBadge');
+                const chatList = notifWrapper.querySelector('#adminChatList');
+                
+                // Toggle Dropdown
+                if (btn && dropdown) {
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        if (chatDropdown) {
+                            chatDropdown.classList.remove('show');
+                        }
+                        if (chatBtn) {
+                            chatBtn.classList.remove('is-active');
+                        }
+                        dropdown.classList.toggle('show');
+                        btn.classList.toggle('is-active', dropdown.classList.contains('show'));
+                        if (dropdown.classList.contains('show')) {
+                            loadNotifications();
                             btn.classList.remove('shaking');
                         }
                     });
-            }
-            
-            function loadChatConversations() {
-                if (!chatList) return;
+                }
                 
-                fetch('../api/get_conversations.php?limit=5')
-                    .then(res => res.json())
-                    .then(data => {
-                        chatList.innerHTML = '';
-                        if (!data.success || !data.conversations || data.conversations.length === 0) {
-                            chatList.innerHTML = '<div class="notification-empty">No messages</div>';
-                            return;
+                // Toggle Chat Dropdown
+                if (chatBtn && chatDropdown) {
+                    chatBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        if (dropdown) {
+                            dropdown.classList.remove('show');
                         }
-
-                        let totalUnread = 0;
-                        data.conversations.forEach(conv => {
-                            totalUnread += parseInt(conv.unread_count || 0);
-                            
-                            const item = document.createElement('div');
-                            item.className = `notification-item ${parseInt(conv.unread_count) > 0 ? 'unread' : ''}`;
-                            
-                            // Calculate time ago
-                            const date = new Date(conv.last_message_time);
-                            const seconds = Math.floor((new Date() - date) / 1000);
-                            let timeString = "just now";
-                            if (seconds > 86400) timeString = Math.floor(seconds/86400) + "d ago";
-                            else if (seconds > 3600) timeString = Math.floor(seconds/3600) + "h ago";
-                            else if (seconds > 60) timeString = Math.floor(seconds/60) + "m ago";
-
-                            item.innerHTML = `
-                                <div class="notif-icon" style="background: #e3f2fd; color: #1976d2;">
-                                    <i class="fas fa-user"></i>
-                                </div>
-                                <div class="notif-content">
-                                    <div class="notif-title">${escapeInlineHtml(conv.counterpart_name || conv.customer_name || 'Customer')}</div>
-                                    <div class="notif-message">${escapeInlineHtml((conv.channel_label ? conv.channel_label + ' · ' : '') + (conv.last_message_preview || 'No messages'))}</div>
-                                    <div class="notif-time">${timeString}</div>
-                                </div>
-                            `;
-                            item.onclick = () => window.location.href = `chat.php?conversation_id=${conv.id}`;
-                            chatList.appendChild(item);
-                        });
-
-                        if (chatBadge) {
-                            chatBadge.textContent = totalUnread > 99 ? '99+' : totalUnread;
-                            chatBadge.style.display = totalUnread > 0 ? 'block' : 'none';
+                        if (btn) {
+                            btn.classList.remove('is-active');
                         }
-                    }).catch(e => console.error(e));
-            }
-            
-            function loadNotifications() {
-                if (!list) return;
-                fetch('get_notifications.php?action=get')
-                    .then(res => res.json())
-                    .then(data => {
-                        adminNotifications = Array.isArray(data) ? data : [];
-                        renderAdminNotifications();
+                        chatDropdown.classList.toggle('show');
+                        chatBtn.classList.toggle('is-active', chatDropdown.classList.contains('show'));
+                        if (chatDropdown.classList.contains('show')) {
+                            loadChatConversations();
+                            chatBtn.classList.remove('shaking');
+                        }
                     });
-            }
-
-            function renderAdminNotifications() {
-                const totalPages = Math.max(1, Math.ceil(adminNotifications.length / adminNotificationPageSize));
-                adminNotificationPage = Math.min(Math.max(0, adminNotificationPage), totalPages - 1);
-                list.innerHTML = '';
-                if (adminNotifications.length === 0) {
-                    list.innerHTML = '<div class="notification-empty">No notifications</div>';
-                    if (pagination) pagination.hidden = true;
-                    return;
                 }
-
-                const pageItems = adminNotifications.slice(adminNotificationPage * adminNotificationPageSize, (adminNotificationPage + 1) * adminNotificationPageSize);
-                pageItems.forEach(notif => {
-                            const item = document.createElement('div');
-                            item.className = `notification-item ${notif.is_read == 0 ? 'unread' : ''}`;
-                            
-                            // Determine icon based on type
-                            let icon = 'fa-bell';
-                            let color = '#1976d2';
-                            let bg = '#e3f2fd';
-                            const notifType = String(notif.type || '').toLowerCase();
-                            
-                            if (notifType.includes('order')) { icon = 'fa-shopping-cart'; color = '#2e7d32'; bg = '#e8f5e9'; }
-                            else if (notifType.includes('alert')) { icon = 'fa-exclamation-triangle'; color = '#c62828'; bg = '#ffebee'; }
-                            else if (notifType.includes('user')) { icon = 'fa-user'; color = '#ef6c00'; bg = '#fff3e0'; }
-                            else if (notifType.includes('franchise')) { icon = 'fa-store'; color = '#7c3aed'; bg = '#f3e8ff'; }
-                            const statusMatch = notifType.match(/franchise_(approved|rejected|incomplete)/);
-                            const status = statusMatch ? statusMatch[1].toUpperCase() : '';
-                            const reasonMatch = String(notif.message || '').match(/(?:^|\n)Reason:\s*([^\n]*)/i);
-                            const reason = reasonMatch ? reasonMatch[1].trim() : String(notif.message || '').replace(/^Status:\s*[^\n]*\n?/i, '').trim();
-                            const titleMarkup = status
-                                ? `<div class="admin-franchise-status ${status.toLowerCase()}">${status}</div>`
-                                : `<div class="notif-title">${escapeInlineHtml(notif.title)}</div>`;
-                            item.innerHTML = `
-                                <div class="notif-icon" style="color: ${color}; background: ${bg}">
-                                    <i class="fas ${icon}"></i>
-                                </div>
-                                <div class="notif-content">
-                                    ${titleMarkup}
-                                    <div class="${status ? 'admin-franchise-reason' : 'notif-message'}">${status ? '<strong>Reason:</strong> ' + escapeInlineHtml(reason || 'No additional reason provided.') : escapeInlineHtml(notif.message)}</div>
-                                    <div class="notif-time">${escapeInlineHtml(notif.time_ago)}</div>
-                                </div>
-                            `;
-                            
-                            item.addEventListener('click', () => {
-                                // Mark as read on click
-                                if (notif.is_read == 0) {
-                                    const formData = new FormData();
-                                    formData.append('id', notif.id);
-                                    fetch('get_notifications.php?action=mark_read', {
-                                        method: 'POST',
-                                        body: formData
-                                    }).then(() => loadNotificationCount());
-                                    item.classList.remove('unread');
-                                }
-                                
-                                // Redirect if related_id exists (basic mapping)
-                                if (notif.related_type === 'order') window.location.href = `orders.php?search=${notif.related_id}`;
-                                else if (notif.related_type === 'pre_order') window.location.href = `preorders.php?search=${notif.related_id}`;
-                                else if (notif.related_type === 'franchise_application') window.location.href = `../super_admin/franchise_applications.php?search=${notif.related_id}`;
+                
+                // Close dropdown when clicking outside
+                document.addEventListener('click', (e) => {
+                    if (dropdown && !dropdown.contains(e.target) && btn && !btn.contains(e.target)) {
+                        dropdown.classList.remove('show');
+                        btn.classList.remove('is-active');
+                    }
+                    if (chatDropdown && !chatDropdown.contains(e.target) && chatBtn && !chatBtn.contains(e.target)) {
+                        chatDropdown.classList.remove('show');
+                        chatBtn.classList.remove('is-active');
+                    }
+                });
+                
+                // Mark all as read
+                if (markAllBtn) {
+                    markAllBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        fetch('get_notifications.php?action=mark_read', { method: 'POST' })
+                            .then(() => {
+                                loadNotifications();
+                                loadNotificationCount();
                             });
-                            
-                            list.appendChild(item);
+                    });
+                }
+                
+                function loadNotificationCount() {
+                    if (!badge) return;
+                    fetch('get_notifications.php?action=count')
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.count > 0) {
+                                badge.textContent = data.count > 99 ? '99+' : data.count;
+                                badge.style.display = 'flex';
+                                if (btn) btn.classList.add('shaking');
+                            } else {
+                                badge.style.display = 'none';
+                                if (btn) btn.classList.remove('shaking');
+                            }
+                        })
+                        .catch(err => console.error("Error loading notification count:", err));
+                }
+                
+                function loadChatConversations() {
+                    if (!chatList) return;
+                    fetch('../chat_endpoint.php?action=get_active_conversations')
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.success && data.conversations) {
+                                renderChatList(data.conversations);
+                                updateChatBadge(data.conversations);
+                            }
+                        }).catch(e => console.error(e));
+                }
+                
+                function updateChatBadge(conversations) {
+                    if (!chatBadge) return;
+                    let unreadTotal = 0;
+                    conversations.forEach(c => {
+                        unreadTotal += parseInt(c.unread_count || 0);
+                    });
+                    if (unreadTotal > 0) {
+                        chatBadge.textContent = unreadTotal > 99 ? '99+' : unreadTotal;
+                        chatBadge.style.display = 'flex';
+                        if (chatBtn) chatBtn.classList.add('shaking');
+                    } else {
+                        chatBadge.style.display = 'none';
+                        if (chatBtn) chatBtn.classList.remove('shaking');
+                    }
+                }
+                
+                function renderChatList(conversations) {
+                    chatList.innerHTML = '';
+                    if (conversations.length === 0) {
+                        chatList.innerHTML = '<div class="notification-empty">No active conversations</div>';
+                        return;
+                    }
+                    conversations.forEach(conv => {
+                        const item = document.createElement('div');
+                        item.className = `chat-item ${conv.unread_count > 0 ? 'unread' : ''}`;
+                        const safeInitials = escapeInlineHtml(conv.customer_initials || 'C');
+                        const avatarMarkup = conv.customer_profile_image
+                            ? `<img src="${escapeInlineHtml(conv.customer_profile_image)}" alt="${escapeInlineHtml(conv.customer_name || 'Customer')} avatar" class="chat-avatar-image">`
+                            : `<div class="chat-avatar-fallback">${safeInitials}</div>`;
+                        item.innerHTML = `
+                            <div class="chat-avatar">
+                                ${avatarMarkup}
+                            </div>
+                            <div class="chat-details">
+                                <div class="chat-name">
+                                    <span>${escapeInlineHtml(conv.customer_name || 'Customer')}</span>
+                                    <span class="chat-time">${escapeInlineHtml(conv.time_ago || '')}</span>
+                                </div>
+                                <div class="chat-message-preview">${escapeInlineHtml(conv.last_message || 'No messages yet')}</div>
+                            </div>
+                        `;
+                        item.addEventListener('click', () => {
+                            window.location.href = `chat.php?conversation_id=${encodeURIComponent(conv.id)}`;
                         });
-
-                if (pagination) pagination.hidden = totalPages <= 1;
-                if (pageLabel) pageLabel.textContent = `${adminNotificationPage + 1} / ${totalPages}`;
-                if (previousPageBtn) previousPageBtn.disabled = adminNotificationPage === 0;
-                if (nextPageBtn) nextPageBtn.disabled = adminNotificationPage >= totalPages - 1;
-            }
-
-            if (previousPageBtn) previousPageBtn.addEventListener('click', (event) => {
-                event.stopPropagation();
-                if (adminNotificationPage > 0) {
-                    adminNotificationPage--;
-                    renderAdminNotifications();
+                        chatList.appendChild(item);
+                    });
                 }
-            });
-            if (nextPageBtn) nextPageBtn.addEventListener('click', (event) => {
-                event.stopPropagation();
-                if (adminNotificationPage < Math.ceil(adminNotifications.length / adminNotificationPageSize) - 1) {
-                    adminNotificationPage++;
-                    renderAdminNotifications();
+                
+                function loadNotifications() {
+                    if (!list) return;
+                    fetch('get_notifications.php?action=get')
+                        .then(res => res.json())
+                        .then(data => {
+                            adminNotifications = Array.isArray(data) ? data : [];
+                            renderAdminNotifications();
+                        });
                 }
-            });
-            
-            // Initial load and polling
-            if (btn && badge) {
-                loadNotificationCount();
-                setInterval(loadNotificationCount, 30000);
-            }
-            if (chatBtn && chatList) {
-                loadChatConversations();
-                setInterval(loadChatConversations, 10000);
+
+                function renderAdminNotifications() {
+                    const totalPages = Math.max(1, Math.ceil(adminNotifications.length / adminNotificationPageSize));
+                    adminNotificationPage = Math.min(Math.max(0, adminNotificationPage), totalPages - 1);
+                    list.innerHTML = '';
+                    if (adminNotifications.length === 0) {
+                        list.innerHTML = '<div class="notification-empty">No notifications</div>';
+                        if (pagination) pagination.hidden = true;
+                        return;
+                    }
+
+                    const pageItems = adminNotifications.slice(adminNotificationPage * adminNotificationPageSize, (adminNotificationPage + 1) * adminNotificationPageSize);
+                    pageItems.forEach(notif => {
+                                const item = document.createElement('div');
+                                item.className = `notification-item ${notif.is_read == 0 ? 'unread' : ''}`;
+                                
+                                // Determine icon based on type
+                                let icon = 'fa-bell';
+                                let color = '#1976d2';
+                                let bg = '#e3f2fd';
+                                const notifType = String(notif.type || '').toLowerCase();
+                                
+                                if (notifType.includes('order')) { icon = 'fa-shopping-cart'; color = '#2e7d32'; bg = '#e8f5e9'; }
+                                else if (notifType.includes('alert')) { icon = 'fa-exclamation-triangle'; color = '#c62828'; bg = '#ffebee'; }
+                                else if (notifType.includes('user')) { icon = 'fa-user'; color = '#ef6c00'; bg = '#fff3e0'; }
+                                else if (notifType.includes('franchise')) { icon = 'fa-store'; color = '#7c3aed'; bg = '#f3e8ff'; }
+                                const statusMatch = notifType.match(/franchise_(approved|rejected|incomplete)/);
+                                const status = statusMatch ? statusMatch[1].toUpperCase() : '';
+                                const reasonMatch = String(notif.message || '').match(/(?:^|\n)Reason:\s*([^\n]*)/i);
+                                const reason = reasonMatch ? reasonMatch[1].trim() : String(notif.message || '').replace(/^Status:\s*[^\n]*\n?/i, '').trim();
+                                const titleMarkup = status
+                                    ? `<div class="admin-franchise-status ${status.toLowerCase()}">${status}</div>`
+                                    : `<div class="notif-title">${escapeInlineHtml(notif.title)}</div>`;
+                                item.innerHTML = `
+                                    <div class="notif-icon" style="color: ${color}; background: ${bg}">
+                                        <i class="fas ${icon}"></i>
+                                    </div>
+                                    <div class="notif-content">
+                                        ${titleMarkup}
+                                        <div class="${status ? 'admin-franchise-reason' : 'notif-message'}">${status ? '<strong>Reason:</strong> ' + escapeInlineHtml(reason || 'No additional reason provided.') : escapeInlineHtml(notif.message)}</div>
+                                        <div class="notif-time">${escapeInlineHtml(notif.time_ago)}</div>
+                                    </div>
+                                `;
+                                
+                                item.addEventListener('click', () => {
+                                    // Mark as read on click
+                                    if (notif.is_read == 0) {
+                                        const formData = new FormData();
+                                        formData.append('id', notif.id);
+                                        fetch('get_notifications.php?action=mark_read', {
+                                            method: 'POST',
+                                            body: formData
+                                        }).then(() => loadNotificationCount());
+                                        item.classList.remove('unread');
+                                    }
+                                    
+                                    // Redirect if related_id exists (basic mapping)
+                                    if (notif.related_type === 'order') window.location.href = `orders.php?search=${notif.related_id}`;
+                                    else if (notif.related_type === 'pre_order') window.location.href = `preorders.php?search=${notif.related_id}`;
+                                    else if (notif.related_type === 'franchise_application') window.location.href = `../super_admin/franchise_applications.php?search=${notif.related_id}`;
+                                });
+                                
+                                list.appendChild(item);
+                            });
+
+                    if (pagination) pagination.hidden = totalPages <= 1;
+                    if (pageLabel) pageLabel.textContent = `${adminNotificationPage + 1} / ${totalPages}`;
+                    if (previousPageBtn) previousPageBtn.disabled = adminNotificationPage === 0;
+                    if (nextPageBtn) nextPageBtn.disabled = adminNotificationPage >= totalPages - 1;
+                }
+
+                if (previousPageBtn) previousPageBtn.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    if (adminNotificationPage > 0) {
+                        adminNotificationPage--;
+                        renderAdminNotifications();
+                    }
+                });
+
+                if (nextPageBtn) nextPageBtn.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    if (adminNotificationPage < Math.ceil(adminNotifications.length / adminNotificationPageSize) - 1) {
+                        adminNotificationPage++;
+                        renderAdminNotifications();
+                    }
+                });
+                
+                // Initial load and polling
+                if (btn && badge) {
+                    loadNotificationCount();
+                    setInterval(loadNotificationCount, 30000);
+                }
+                if (chatBtn && chatList) {
+                    loadChatConversations();
+                    setInterval(loadChatConversations, 10000);
+                }
             }
         }
 

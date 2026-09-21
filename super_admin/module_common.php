@@ -312,33 +312,56 @@ function saRenderModuleHeader($page_title, $page_heading, $admin_info) {
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="../super_admin/modules.css">
     <style>
-        .sa-notification-wrap { position:relative; margin-right:12px; }
-        .sa-notification-btn { position:relative; width:38px; height:38px; border:1px solid #d0d5dd; border-radius:9px; background:#fff; color:#344054; cursor:pointer; }
-        .sa-notification-btn:hover, .sa-notification-btn.is-active { background:#fff1f0; color:#b3261e; border-color:#fda29b; }
-        .sa-notification-badge { position:absolute; top:-6px; right:-6px; min-width:18px; height:18px; padding:0 4px; border-radius:99px; background:#b3261e; color:#fff; font-size:10px; font-weight:800; display:none; align-items:center; justify-content:center; }
-        .sa-notification-dropdown { position:absolute; top:calc(100% + 10px); right:0; z-index:2000; width:320px; height:430px; max-height:calc(100vh - 90px); display:none; flex-direction:column; overflow:hidden; background:#fff; border:1px solid #e4e7ec; border-radius:12px; box-shadow:0 14px 32px rgba(16,24,40,.18); }
-        .sa-notification-dropdown.show { display:flex; }
-        .sa-notification-head { flex:0 0 auto; padding:12px 14px; border-bottom:1px solid #eaecf0; font-weight:800; }
-        .sa-notification-list { flex:1 1 auto; min-height:0; overflow-y:auto; }
-        .sa-notification-item { display:block; padding:11px 13px; border-bottom:1px solid #eaecf0; color:#344054; text-decoration:none; }
-        .sa-notification-item:hover { background:#fff8f3; }
-        .sa-notification-status { font-size:.77rem; font-weight:900; letter-spacing:.04em; }
-        .sa-notification-status.approved { color:#027a48; }
-        .sa-notification-status.rejected { color:#b42318; }
-        .sa-notification-status.incomplete { color:#b54708; }
-        .sa-notification-reason { margin-top:4px; font-size:.8rem; line-height:1.4; color:#667085; }
-        .sa-notification-time { display:block; margin-top:5px; color:#98a2b3; font-size:.7rem; }
-        .sa-notification-pages { flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; padding:8px 10px; border-top:1px solid #eaecf0; background:#fff8f3; }
-        .sa-notification-page-btn { width:28px; height:28px; border:1px solid #d0d5dd; border-radius:7px; background:#fff; cursor:pointer; }
-        .sa-notification-page-btn:disabled { opacity:.35; cursor:not-allowed; }
-        .sa-notification-page-label { font-size:.72rem; font-weight:800; color:#667085; }
-        body.dark-mode .sa-notification-btn { background:#1e293b; color:#f8fafc; border-color:#475569; }
-        body.dark-mode .sa-notification-dropdown { background:#1e293b; border-color:#475569; }
-        body.dark-mode .sa-notification-head, body.dark-mode .sa-notification-item { border-color:#334155; color:#f8fafc; }
-        body.dark-mode .sa-notification-item:hover { background:#334155; }
-        body.dark-mode .sa-notification-reason, body.dark-mode .sa-notification-time, body.dark-mode .sa-notification-page-label { color:#94a3b8; }
-        body.dark-mode .sa-notification-pages { background:#111827; border-color:#334155; }
-        @media (max-width:520px) { .sa-notification-dropdown { width:min(320px, calc(100vw - 24px)); right:-70px; } }
+        .sa-topbar-action-wrap { position:relative; margin-right:8px; }
+        .sa-topbar-action-btn { position:relative; width:38px; height:38px; border:1px solid #d0d5dd; border-radius:9px; background:#fff; color:#344054; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; transition:all 0.2s ease; }
+        .sa-topbar-action-btn:hover, .sa-topbar-action-btn.is-active { background:#fff1f0; color:#b3261e; border-color:#fda29b; }
+        .sa-alert-btn:hover, .sa-alert-btn.is-active { background:#fff1f0; color:#b3261e; border-color:#fda29b; }
+        .sa-action-badge { position:absolute; top:-5px; right:-5px; min-width:18px; height:18px; padding:0 4px; border-radius:99px; font-size:10px; font-weight:800; display:none; align-items:center; justify-content:center; color:#fff; border:1px solid #fff; }
+        .sa-alert-badge { background:#b3261e; }
+        .sa-notification-badge { background:#175cd3; }
+        .sa-dropdown-panel { position:absolute; top:calc(100% + 10px); right:0; z-index:2000; width:350px; height:460px; max-height:calc(100vh - 90px); display:none; flex-direction:column; overflow:hidden; background:#fff; border:1px solid #e4e7ec; border-radius:12px; box-shadow:0 14px 32px rgba(16,24,40,.14); }
+        .sa-dropdown-panel.show { display:flex; }
+        .sa-dropdown-head { flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid #eaecf0; font-weight:800; font-size:0.9rem; color:#101828; }
+        .sa-dropdown-head-link { font-size:0.78rem; font-weight:700; color:#b3261e; text-decoration:none; cursor:pointer; background:none; border:none; padding:0; }
+        .sa-dropdown-head-link:hover { color:#981b15; text-decoration:underline; }
+        .sa-filter-bar { flex:0 0 auto; display:flex; gap:6px; padding:8px 12px; background:#f8f9fa; border-bottom:1px solid #eaecf0; overflow-x:auto; }
+        .sa-filter-pill { border:1px solid #d0d5dd; background:#fff; color:#475467; font-size:0.74rem; font-weight:700; padding:3px 10px; border-radius:20px; cursor:pointer; white-space:nowrap; transition:all 0.15s ease; }
+        .sa-filter-pill:hover { background:#f2f4f7; color:#1d2939; }
+        .sa-filter-pill.active { background:#b3261e; color:#fff; border-color:#b3261e; }
+        .sa-dropdown-list { flex:1 1 auto; min-height:0; overflow-y:auto; }
+        .sa-item { display:block; padding:11px 13px; border-bottom:1px solid #eaecf0; color:#344054; text-decoration:none; transition:background 0.15s ease; }
+        .sa-item:hover { background:#f8f9fa; }
+        .sa-item.unread { background:#eff8ff; }
+        .sa-item-header { display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:4px; }
+        .sa-tag { font-size:0.68rem; font-weight:800; letter-spacing:0.03em; padding:2px 7px; border-radius:6px; text-transform:uppercase; }
+        .sa-tag.security { background:#f4f3ff; color:#5925dc; border:1px solid #d9d6fe; }
+        .sa-tag.complaint { background:#fff1f0; color:#b3261e; border:1px solid #fee4e2; }
+        .sa-tag.anomaly { background:#fffaeb; color:#b54708; border:1px solid #fedf89; }
+        .sa-tag.warning { background:#fffaeb; color:#b54708; border:1px solid #fedf89; }
+        .sa-tag.incident { background:#fef3f2; color:#b42318; border:1px solid #fee4e2; }
+        .sa-tag.approved { background:#ecfdf3; color:#027a48; border:1px solid #abefc6; }
+        .sa-tag.rejected { background:#fff1f0; color:#b3261e; border:1px solid #fee4e2; }
+        .sa-tag.incomplete { background:#fffaeb; color:#b54708; border:1px solid #fedf89; }
+        .sa-tag.default { background:#f2f4f7; color:#344054; border:1px solid #eaecf0; }
+        .sa-item-title { font-size:0.83rem; font-weight:700; color:#101828; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .sa-item-desc { margin-top:3px; font-size:0.79rem; line-height:1.38; color:#475467; word-break:break-word; }
+        .sa-item-time { display:block; margin-top:5px; color:#98a2b3; font-size:0.71rem; font-weight:600; }
+        .sa-dropdown-pages { flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; padding:8px 12px; border-top:1px solid #eaecf0; background:#f8f9fa; }
+        .sa-dropdown-page-btn { width:28px; height:28px; border:1px solid #d0d5dd; border-radius:7px; background:#fff; cursor:pointer; color:#344054; display:inline-flex; align-items:center; justify-content:center; }
+        .sa-dropdown-page-btn:disabled { opacity:.35; cursor:not-allowed; }
+        .sa-dropdown-page-label { font-size:.72rem; font-weight:800; color:#667085; }
+        body.dark-mode .sa-topbar-action-btn { background:#1e293b; color:#f8fafc; border-color:#475569; }
+        body.dark-mode .sa-dropdown-panel { background:#1e293b; border-color:#475569; }
+        body.dark-mode .sa-dropdown-head, body.dark-mode .sa-item { border-color:#334155; color:#f8fafc; }
+        body.dark-mode .sa-dropdown-head { color:#f8fafc; }
+        body.dark-mode .sa-item-title { color:#f8fafc; }
+        body.dark-mode .sa-item:hover { background:#334155; }
+        body.dark-mode .sa-item.unread { background:#1e3a5f; }
+        body.dark-mode .sa-filter-bar, body.dark-mode .sa-dropdown-pages { background:#0f172a; border-color:#334155; }
+        body.dark-mode .sa-filter-pill { background:#1e293b; border-color:#475569; color:#cbd5e1; }
+        body.dark-mode .sa-filter-pill.active { background:#b3261e; color:#fff; border-color:#b3261e; }
+        body.dark-mode .sa-item-desc, body.dark-mode .sa-item-time, body.dark-mode .sa-dropdown-page-label { color:#94a3b8; }
+        @media (max-width:560px) { .sa-dropdown-panel { width:min(320px, calc(100vw - 20px)); right:-60px; } }
     </style>
 </head>
 <body>
@@ -356,20 +379,50 @@ function saRenderModuleHeader($page_title, $page_heading, $admin_info) {
                     </button>
                     <div class="topbar-right">
                         <div class="date-display" id="currentDate"></div>
-                        <div class="sa-notification-wrap">
-                            <button type="button" class="sa-notification-btn" id="saNotificationBtn" aria-label="Open notifications" title="Notifications">
-                                <i class="fas fa-bell"></i><span class="sa-notification-badge" id="saNotificationBadge">0</span>
+                        
+                        <!-- 1. System & Shop Alerts -->
+                        <div class="sa-topbar-action-wrap sa-alert-wrap">
+                            <button type="button" class="sa-topbar-action-btn sa-alert-btn" id="saAlertBtn" aria-label="Open Security and Shop Alerts" title="Security & Shop Alerts">
+                                <i class="fas fa-triangle-exclamation"></i><span class="sa-action-badge sa-alert-badge" id="saAlertBadge">0</span>
                             </button>
-                            <div class="sa-notification-dropdown" id="saNotificationDropdown">
-                                <div class="sa-notification-head">Notifications</div>
-                                <div class="sa-notification-list" id="saNotificationList"><div class="p-3 text-muted">Loading...</div></div>
-                                <div class="sa-notification-pages" id="saNotificationPages" hidden>
-                                    <button type="button" class="sa-notification-page-btn" id="saNotificationPrev" aria-label="Previous notifications"><i class="fas fa-chevron-left"></i></button>
-                                    <span class="sa-notification-page-label" id="saNotificationPageLabel">1 / 1</span>
-                                    <button type="button" class="sa-notification-page-btn" id="saNotificationNext" aria-label="Next notifications"><i class="fas fa-chevron-right"></i></button>
+                            <div class="sa-dropdown-panel sa-alert-dropdown" id="saAlertDropdown">
+                                <div class="sa-dropdown-head">
+                                    <span>Security & Shop Alerts</span>
+                                    <a href="../super_admin/reports_complaints.php" class="sa-dropdown-head-link">View All</a>
+                                </div>
+                                <div class="sa-filter-bar" id="saAlertFilters">
+                                    <button type="button" class="sa-filter-pill active" data-filter="all">All</button>
+                                    <button type="button" class="sa-filter-pill" data-filter="security">Security & Logs</button>
+                                    <button type="button" class="sa-filter-pill" data-filter="complaints">Complaints & Reports</button>
+                                </div>
+                                <div class="sa-dropdown-list" id="saAlertList"><div class="p-3 text-muted">Loading alerts...</div></div>
+                                <div class="sa-dropdown-pages" id="saAlertPages" hidden>
+                                    <button type="button" class="sa-dropdown-page-btn" id="saAlertPrev" aria-label="Previous alerts"><i class="fas fa-chevron-left"></i></button>
+                                    <span class="sa-dropdown-page-label" id="saAlertPageLabel">1 / 1</span>
+                                    <button type="button" class="sa-dropdown-page-btn" id="saAlertNext" aria-label="Next alerts"><i class="fas fa-chevron-right"></i></button>
                                 </div>
                             </div>
                         </div>
+
+                        <!-- 2. Platform Notifications -->
+                        <div class="sa-topbar-action-wrap sa-notification-wrap">
+                            <button type="button" class="sa-topbar-action-btn sa-notification-btn" id="saNotificationBtn" aria-label="Open Notifications" title="Platform Notifications">
+                                <i class="fas fa-bell"></i><span class="sa-action-badge sa-notification-badge" id="saNotificationBadge">0</span>
+                            </button>
+                            <div class="sa-dropdown-panel sa-notification-dropdown" id="saNotificationDropdown">
+                                <div class="sa-dropdown-head">
+                                    <span>Notifications</span>
+                                    <button type="button" class="sa-dropdown-head-link" id="saMarkAllNotifsRead">Mark all read</button>
+                                </div>
+                                <div class="sa-dropdown-list" id="saNotificationList"><div class="p-3 text-muted">Loading notifications...</div></div>
+                                <div class="sa-dropdown-pages" id="saNotificationPages" hidden>
+                                    <button type="button" class="sa-dropdown-page-btn" id="saNotificationPrev" aria-label="Previous notifications"><i class="fas fa-chevron-left"></i></button>
+                                    <span class="sa-dropdown-page-label" id="saNotificationPageLabel">1 / 1</span>
+                                    <button type="button" class="sa-dropdown-page-btn" id="saNotificationNext" aria-label="Next notifications"><i class="fas fa-chevron-right"></i></button>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="admin-profile">
                             <span><?php echo $safe_admin_name; ?></span>
                             <i class="fas fa-user-circle"></i>
@@ -397,98 +450,275 @@ function saRenderModuleFooter($extra_scripts = '') {
     <script src="admin.js"></script>
     <script>
         (function () {
-            const button = document.getElementById('saNotificationBtn');
-            const dropdown = document.getElementById('saNotificationDropdown');
-            const badge = document.getElementById('saNotificationBadge');
-            const list = document.getElementById('saNotificationList');
-            const pages = document.getElementById('saNotificationPages');
-            const previous = document.getElementById('saNotificationPrev');
-            const next = document.getElementById('saNotificationNext');
-            const pageLabel = document.getElementById('saNotificationPageLabel');
-            if (!button || !dropdown || !list) return;
+            // Endpoints
+            const alertsEndpoint = '../super_admin/get_alerts.php';
+            const escapeHtml = (val) => String(val ?? '').replace(/[&<>'"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[c]);
 
-            let notifications = [];
-            let page = 0;
-            const pageSize = 3;
-            const endpoint = '../admin/get_notifications.php';
+            // -------------------------------------------------------------
+            // 1. Alerts Logic
+            // -------------------------------------------------------------
+            const alertBtn = document.getElementById('saAlertBtn');
+            const alertDropdown = document.getElementById('saAlertDropdown');
+            const alertBadge = document.getElementById('saAlertBadge');
+            const alertList = document.getElementById('saAlertList');
+            const alertPages = document.getElementById('saAlertPages');
+            const alertPrev = document.getElementById('saAlertPrev');
+            const alertNext = document.getElementById('saAlertNext');
+            const alertPageLabel = document.getElementById('saAlertPageLabel');
+            const alertFilters = document.getElementById('saAlertFilters');
 
-            const escapeText = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
-            const statusFor = (notification) => {
-                const type = String(notification.type || '').toLowerCase();
-                const match = type.match(/franchise_(approved|rejected|incomplete)/);
-                return match ? match[1] : '';
-            };
+            let rawAlerts = [];
+            let filteredAlerts = [];
+            let alertPage = 0;
+            const alertPageSize = 4;
+            let currentFilter = 'all';
 
-            function render() {
-                const totalPages = Math.max(1, Math.ceil(notifications.length / pageSize));
-                page = Math.min(Math.max(0, page), totalPages - 1);
-                list.innerHTML = '';
-                if (!notifications.length) {
-                    list.innerHTML = '<div class="p-3 text-muted">No notifications</div>';
-                    pages.hidden = true;
+            function filterAndRenderAlerts() {
+                if (currentFilter === 'all') {
+                    filteredAlerts = rawAlerts;
+                } else if (currentFilter === 'security') {
+                    filteredAlerts = rawAlerts.filter(a => a.category === 'security' || a.category === 'anomaly' || a.category === 'incident');
+                } else if (currentFilter === 'complaints') {
+                    filteredAlerts = rawAlerts.filter(a => a.category === 'complaint' || a.category === 'warning');
+                }
+                const totalAlertPages = Math.max(1, Math.ceil(filteredAlerts.length / alertPageSize));
+                alertPage = Math.min(Math.max(0, alertPage), totalAlertPages - 1);
+                alertList.innerHTML = '';
+
+                if (!filteredAlerts.length) {
+                    alertList.innerHTML = '<div class="p-4 text-center text-muted" style="font-size:0.83rem;"><i class="fas fa-check-circle text-success me-1"></i> No active alerts found</div>';
+                    if (alertPages) alertPages.hidden = true;
                     return;
                 }
 
-                notifications.slice(page * pageSize, (page + 1) * pageSize).forEach((notification) => {
-                    const status = statusFor(notification);
-                    const rawMessage = String(notification.message || '');
-                    const reasonMatch = rawMessage.match(/(?:^|\n)Reason:\s*([^\n]*)/i);
-                    const reason = reasonMatch ? reasonMatch[1].trim() : rawMessage.replace(/^Status:\s*[^\n]*\n?/i, '').trim();
-                    const item = document.createElement('a');
-                    item.className = 'sa-notification-item';
-                    item.href = notification.related_type === 'franchise_application' && notification.related_id
-                        ? 'franchise_applications.php?search=' + encodeURIComponent(notification.related_id)
-                        : '#';
-                    item.innerHTML = (status
-                        ? '<div class="sa-notification-status ' + status + '">' + status.toUpperCase() + '</div>'
-                        : '<div class="sa-notification-status">' + escapeText(notification.title || 'UPDATE') + '</div>') +
-                        '<div class="sa-notification-reason"><strong>' + (status ? 'Reason:' : 'Message:') + '</strong> ' + escapeText(reason || notification.message || 'No additional details.') + '</div>' +
-                        '<time class="sa-notification-time">' + escapeText(notification.time_ago || notification.created_at || '') + '</time>';
-                    item.addEventListener('click', () => {
-                        if (notification.is_read == 0) {
-                            const form = new FormData();
-                            form.append('id', notification.id);
-                            fetch(endpoint + '?action=mark_read', { method: 'POST', body: form }).catch(() => {});
-                        }
-                    });
-                    list.appendChild(item);
+                const pageItems = filteredAlerts.slice(alertPage * alertPageSize, (alertPage + 1) * alertPageSize);
+                pageItems.forEach(item => {
+                    const el = document.createElement('a');
+                    el.className = 'sa-item';
+                    el.href = item.link || '#';
+                    const tagClass = item.category ? item.category : 'default';
+                    el.innerHTML = `
+                        <div class="sa-item-header">
+                            <span class="sa-tag ${tagClass}">${escapeHtml(item.category_label || item.category || 'Alert')}</span>
+                            <span class="sa-tag ${item.severity === 'critical' ? 'rejected' : (item.severity === 'high' ? 'incomplete' : 'default')}">${escapeHtml(item.severity || 'info')}</span>
+                        </div>
+                        <div class="sa-item-title"><i class="fas ${escapeHtml(item.icon || 'fa-triangle-exclamation')} me-1 text-muted"></i> ${escapeHtml(item.title)}</div>
+                        <div class="sa-item-desc">${escapeHtml(item.message)}</div>
+                        <time class="sa-item-time">${escapeHtml(item.time_ago || '')}</time>
+                    `;
+                    alertList.appendChild(el);
                 });
 
-                pages.hidden = totalPages <= 1;
-                pageLabel.textContent = (page + 1) + ' / ' + totalPages;
-                previous.disabled = page === 0;
-                next.disabled = page >= totalPages - 1;
+                if (alertPages) alertPages.hidden = totalAlertPages <= 1;
+                if (alertPageLabel) alertPageLabel.textContent = (alertPage + 1) + ' / ' + totalAlertPages;
+                if (alertPrev) alertPrev.disabled = alertPage === 0;
+                if (alertNext) alertNext.disabled = alertPage >= totalAlertPages - 1;
             }
 
-            function load() {
-                fetch(endpoint + '?action=get', { credentials: 'same-origin' })
-                    .then((response) => response.json())
-                    .then((data) => {
-                        notifications = Array.isArray(data) ? data : [];
-                        const unread = notifications.filter((notification) => Number(notification.is_read) === 0).length;
-                        badge.textContent = unread > 99 ? '99+' : String(unread);
-                        badge.style.display = unread > 0 ? 'inline-flex' : 'none';
-                        render();
+            function loadAlerts() {
+                fetch(alertsEndpoint + '?action=get_alerts', { credentials: 'same-origin' })
+                    .then(res => res.json())
+                    .then(data => {
+                        rawAlerts = Array.isArray(data.alerts) ? data.alerts : [];
+                        const criticalOrHigh = rawAlerts.filter(a => ['critical', 'high', 'medium'].includes(a.severity)).length;
+                        if (alertBadge) {
+                            alertBadge.textContent = criticalOrHigh > 99 ? '99+' : String(criticalOrHigh);
+                            alertBadge.style.display = criticalOrHigh > 0 ? 'inline-flex' : 'none';
+                        }
+                        filterAndRenderAlerts();
                     })
-                    .catch(() => { list.innerHTML = '<div class="p-3 text-muted">Notifications unavailable</div>'; });
+                    .catch(() => {
+                        if (alertList) alertList.innerHTML = '<div class="p-3 text-muted">Alerts unavailable</div>';
+                    });
             }
 
-            button.addEventListener('click', (event) => {
-                event.stopPropagation();
-                dropdown.classList.toggle('show');
-                button.classList.toggle('is-active', dropdown.classList.contains('show'));
-                if (dropdown.classList.contains('show')) load();
-            });
-            previous.addEventListener('click', (event) => { event.stopPropagation(); if (page > 0) { page--; render(); } });
-            next.addEventListener('click', (event) => { event.stopPropagation(); if (page < Math.ceil(notifications.length / pageSize) - 1) { page++; render(); } });
+            if (alertFilters) {
+                alertFilters.querySelectorAll('.sa-filter-pill').forEach(pill => {
+                    pill.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        alertFilters.querySelectorAll('.sa-filter-pill').forEach(p => p.classList.remove('active'));
+                        pill.classList.add('active');
+                        currentFilter = pill.getAttribute('data-filter') || 'all';
+                        alertPage = 0;
+                        filterAndRenderAlerts();
+                    });
+                });
+            }
+
+            if (alertBtn && alertDropdown) {
+                alertBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (notifDropdown) {
+                        notifDropdown.classList.remove('show');
+                        if (notifBtn) notifBtn.classList.remove('is-active');
+                    }
+                    alertDropdown.classList.toggle('show');
+                    alertBtn.classList.toggle('is-active', alertDropdown.classList.contains('show'));
+                    if (alertDropdown.classList.contains('show')) loadAlerts();
+                });
+            }
+            if (alertPrev) {
+                alertPrev.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (alertPage > 0) { alertPage--; filterAndRenderAlerts(); }
+                });
+            }
+            if (alertNext) {
+                alertNext.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const totalAlertPages = Math.max(1, Math.ceil(filteredAlerts.length / alertPageSize));
+                    if (alertPage < totalAlertPages - 1) { alertPage++; filterAndRenderAlerts(); }
+                });
+            }
+
+            // -------------------------------------------------------------
+            // 2. Notifications Logic
+            // -------------------------------------------------------------
+            const notifBtn = document.getElementById('saNotificationBtn');
+            const notifDropdown = document.getElementById('saNotificationDropdown');
+            const notifBadge = document.getElementById('saNotificationBadge');
+            const notifList = document.getElementById('saNotificationList');
+            const notifPages = document.getElementById('saNotificationPages');
+            const notifPrev = document.getElementById('saNotificationPrev');
+            const notifNext = document.getElementById('saNotificationNext');
+            const notifPageLabel = document.getElementById('saNotificationPageLabel');
+            const markAllBtn = document.getElementById('saMarkAllNotifsRead');
+
+            let notifications = [];
+            let notifPage = 0;
+            const notifPageSize = 4;
+
+            function renderNotifications() {
+                const totalPages = Math.max(1, Math.ceil(notifications.length / notifPageSize));
+                notifPage = Math.min(Math.max(0, notifPage), totalPages - 1);
+                notifList.innerHTML = '';
+
+                if (!notifications.length) {
+                    notifList.innerHTML = '<div class="p-4 text-center text-muted" style="font-size:0.83rem;"><i class="fas fa-bell-slash text-muted me-1"></i> No notifications</div>';
+                    if (notifPages) notifPages.hidden = true;
+                    return;
+                }
+
+                const pageItems = notifications.slice(notifPage * notifPageSize, (notifPage + 1) * notifPageSize);
+                pageItems.forEach((notification) => {
+                    const rawType = String(notification.type || '').toLowerCase();
+                    const match = rawType.match(/franchise_(approved|rejected|incomplete)/);
+                    const statusTag = match ? match[1] : (notification.related_type || 'update');
+                    const isUnread = Number(notification.is_read) === 0;
+
+                    const item = document.createElement('a');
+                    item.className = `sa-item ${isUnread ? 'unread' : ''}`;
+                    item.href = notification.link || '#';
+                    item.innerHTML = `
+                        <div class="sa-item-header">
+                            <span class="sa-tag ${statusTag}">${escapeHtml(statusTag.toUpperCase())}</span>
+                            ${isUnread ? '<span class="sa-tag complaint" style="font-size:0.6rem; padding:1px 5px;">NEW</span>' : ''}
+                        </div>
+                        <div class="sa-item-title"><i class="fas fa-bell me-1 text-muted"></i> ${escapeHtml(notification.title || 'Platform Notification')}</div>
+                        <div class="sa-item-desc">${escapeHtml(notification.message || '')}</div>
+                        <time class="sa-item-time">${escapeHtml(notification.time_ago || '')}</time>
+                    `;
+                    item.addEventListener('click', () => {
+                        if (isUnread) {
+                            const form = new FormData();
+                            form.append('id', notification.id);
+                            fetch(alertsEndpoint + '?action=mark_notification_read', { method: 'POST', body: form }).catch(() => {});
+                        }
+                    });
+                    notifList.appendChild(item);
+                });
+
+                if (notifPages) notifPages.hidden = totalPages <= 1;
+                if (notifPageLabel) notifPageLabel.textContent = (notifPage + 1) + ' / ' + totalPages;
+                if (notifPrev) notifPrev.disabled = notifPage === 0;
+                if (notifNext) notifNext.disabled = notifPage >= totalPages - 1;
+            }
+
+            function loadNotifications() {
+                fetch(alertsEndpoint + '?action=get_notifications', { credentials: 'same-origin' })
+                    .then(res => res.json())
+                    .then(data => {
+                        notifications = Array.isArray(data.notifications) ? data.notifications : [];
+                        const unread = Number(data.unread_count ?? notifications.filter(n => Number(n.is_read) === 0).length);
+                        if (notifBadge) {
+                            notifBadge.textContent = unread > 99 ? '99+' : String(unread);
+                            notifBadge.style.display = unread > 0 ? 'inline-flex' : 'none';
+                        }
+                        renderNotifications();
+                    })
+                    .catch(() => {
+                        if (notifList) notifList.innerHTML = '<div class="p-3 text-muted">Notifications unavailable</div>';
+                    });
+            }
+
+            if (notifBtn && notifDropdown) {
+                notifBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (alertDropdown) {
+                        alertDropdown.classList.remove('show');
+                        if (alertBtn) alertBtn.classList.remove('is-active');
+                    }
+                    notifDropdown.classList.toggle('show');
+                    notifBtn.classList.toggle('is-active', notifDropdown.classList.contains('show'));
+                    if (notifDropdown.classList.contains('show')) loadNotifications();
+                });
+            }
+            if (notifPrev) {
+                notifPrev.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (notifPage > 0) { notifPage--; renderNotifications(); }
+                });
+            }
+            if (notifNext) {
+                notifNext.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const totalPages = Math.max(1, Math.ceil(notifications.length / notifPageSize));
+                    if (notifPage < totalPages - 1) { notifPage++; renderNotifications(); }
+                });
+            }
+            if (markAllBtn) {
+                markAllBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    fetch(alertsEndpoint + '?action=mark_all_notifications_read', { method: 'POST' })
+                        .then(() => loadNotifications())
+                        .catch(() => {});
+                });
+            }
+
+            // Close on outside click
             document.addEventListener('click', (event) => {
-                if (!dropdown.contains(event.target) && event.target !== button) {
-                    dropdown.classList.remove('show');
-                    button.classList.remove('is-active');
+                if (alertDropdown && !alertDropdown.contains(event.target) && event.target !== alertBtn) {
+                    alertDropdown.classList.remove('show');
+                    if (alertBtn) alertBtn.classList.remove('is-active');
+                }
+                if (notifDropdown && !notifDropdown.contains(event.target) && event.target !== notifBtn) {
+                    notifDropdown.classList.remove('show');
+                    if (notifBtn) notifBtn.classList.remove('is-active');
                 }
             });
-            load();
-            window.setInterval(load, 30000);
+
+            // Initial counts & periodic sync
+            function refreshAllCounts() {
+                fetch(alertsEndpoint + '?action=count', { credentials: 'same-origin' })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data && data.success) {
+                            if (alertBadge) {
+                                alertBadge.textContent = data.alerts_count > 99 ? '99+' : String(data.alerts_count);
+                                alertBadge.style.display = data.alerts_count > 0 ? 'inline-flex' : 'none';
+                            }
+                            if (notifBadge) {
+                                notifBadge.textContent = data.notifications_count > 99 ? '99+' : String(data.notifications_count);
+                                notifBadge.style.display = data.notifications_count > 0 ? 'inline-flex' : 'none';
+                            }
+                        }
+                    }).catch(() => {});
+            }
+
+            loadAlerts();
+            loadNotifications();
+            refreshAllCounts();
+            window.setInterval(refreshAllCounts, 30000);
         })();
     </script>
     <script>
