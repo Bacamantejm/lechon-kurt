@@ -158,13 +158,27 @@ if ($can_operations_modules) {
     $show_admin = true;
 }
 
-if ($is_partner_scoped_admin) {
-    // Only partner owners get full operational visibility by default.
-    // Partner staff must follow explicit RBAC permissions.
+require_once __DIR__ . '/../includes/SubscriptionAccessService.php';
+$sidebar_sub_details = SubscriptionAccessService::getShopSubscriptionDetails($conn, (int)$user_id);
+$sidebar_tier = $sidebar_sub_details['tier']; // 'none', 'starter', 'growth', 'pro'
+$sidebar_tier_name = $sidebar_sub_details['tier_name'];
+$sidebar_active_plan_name = $sidebar_sub_details['is_active'] ? $sidebar_sub_details['plan_name'] : '';
+
+if (!$is_super_admin_user) {
+    // Determine feature allowances from SubscriptionAccessService
+    $partner_can_hr = !empty($sidebar_sub_details['can_access_hr']);
+    $partner_can_inventory_mrp = !empty($sidebar_sub_details['can_access_inventory_mrp']);
+    $partner_can_forecasting = !empty($sidebar_sub_details['can_access_forecasting']);
+    $partner_can_dss = !empty($sidebar_sub_details['can_access_dss_reports']);
+    $partner_can_rbac = !empty($sidebar_sub_details['can_access_custom_rbac']);
+    $partner_can_store_settings = !empty($sidebar_sub_details['can_access_store_settings']);
+    $partner_can_expenses = !empty($sidebar_sub_details['can_access_expenses']);
+    $partner_can_receipt_banking = !empty($sidebar_sub_details['can_access_receipt_banking']);
+
     if ($is_partner_owner_admin) {
         $can_dashboard = true;
         $can_products = true;
-        $can_vouchers = true;
+        $can_vouchers = ($sidebar_tier !== 'none');
 
         $can_orders = true;
         $can_preorders = true;
@@ -174,45 +188,99 @@ if ($is_partner_scoped_admin) {
         $can_chat = true;
         $show_sales_logistics = true;
 
-        $can_inventory = true;
-        $can_mrp = true;
-        $show_inventory = true;
+        $can_inventory = $partner_can_inventory_mrp;
+        $can_mrp = $partner_can_inventory_mrp;
+        $show_inventory = $can_products || $can_inventory || $can_mrp;
 
-        $can_hr_overview = true;
-        $can_employees = true;
-        $can_departments = true;
-        $can_attendance = true;
-        $can_schedules = true;
-        $can_leave = true;
-        $can_payroll = true;
-        $can_payslips = true;
-        $can_performance = true;
-        $can_recruitment = true;
-        $can_candidates = true;
-        $can_turnover = true;
-        $can_hr_reports = true;
+        $can_hr_overview = $partner_can_hr;
+        $can_employees = $partner_can_hr;
+        $can_departments = $partner_can_hr;
+        $can_attendance = $partner_can_hr;
+        $can_schedules = $partner_can_hr;
+        $can_leave = $partner_can_hr;
+        $can_payroll = $partner_can_hr;
+        $can_payslips = $partner_can_hr;
+        $can_performance = $partner_can_hr;
+        $can_recruitment = $partner_can_hr;
+        $can_candidates = $partner_can_hr;
+        $can_turnover = $partner_can_hr;
+        $can_hr_reports = $partner_can_hr;
         $can_hr_db_checker = false;
-        $show_hr = true;
+        $show_hr = $partner_can_hr;
+    } else {
+        // Enforce tier capabilities as upper bounds for all other non-super-admin accounts
+        if (!$partner_can_hr) {
+            $can_hr_overview = false;
+            $can_employees = false;
+            $can_departments = false;
+            $can_attendance = false;
+            $can_schedules = false;
+            $can_leave = false;
+            $can_payroll = false;
+            $can_payslips = false;
+            $can_performance = false;
+            $can_recruitment = false;
+            $can_candidates = false;
+            $can_turnover = false;
+            $can_hr_reports = false;
+            $can_hr_db_checker = false;
+            $show_hr = false;
+        }
+        if (!$partner_can_inventory_mrp) {
+            $can_inventory = false;
+            $can_mrp = false;
+            $show_inventory = $can_products;
+        }
     }
 
-    $can_finance = $is_partner_owner_admin || $canPermission('finance.view') || $canPermission('finance.manage') || $canModule('finance');
-    $can_expenses = $is_partner_owner_admin || $canPermission('expenses.view') || $canPermission('expenses.manage') || $canPermission('finance.manage');
-    $can_order_policy = $is_partner_scoped_admin && ($is_partner_owner_admin || $canPermission('orders.edit'));
-    $can_store_availability = $is_partner_scoped_admin && ($is_partner_owner_admin || $canPermission('orders.edit') || $canPermission('products.edit'));
+    $can_finance = $partner_can_expenses && ($is_partner_owner_admin || $canPermission('finance.view') || $canPermission('finance.manage') || $canModule('finance'));
+    $can_expenses = $partner_can_expenses && ($is_partner_owner_admin || $canPermission('expenses.view') || $canPermission('expenses.manage') || $canPermission('finance.manage'));
+    $can_order_policy = $partner_can_store_settings && ($is_partner_owner_admin || $canPermission('orders.edit'));
+    $can_store_availability = $partner_can_store_settings && ($is_partner_owner_admin || $canPermission('orders.edit') || $canPermission('products.edit'));
     $can_partner_billing = $is_partner_owner_admin || $canPermission('billing.view') || $canPermission('billing.manage') || $canModule('billing');
-    $can_receipt_settings = $is_partner_owner_admin || $canPermission('billing.manage');
-    $can_partner_banking = $is_partner_owner_admin || $canPermission('billing.manage');
+    $can_receipt_settings = $partner_can_receipt_banking && ($is_partner_owner_admin || $canPermission('billing.manage'));
+    $can_partner_banking = $partner_can_receipt_banking && ($is_partner_owner_admin || $canPermission('billing.manage'));
     $can_business_account = $is_partner_owner_admin;
     $show_finance = $can_finance || $can_expenses || $can_partner_billing || $can_receipt_settings || $can_partner_banking;
 
     $can_users = false;
     $can_franchise = false;
-    $can_statistics = $is_partner_owner_admin || $canPermission('dashboard.analytics') || $canPermission('audit.view');
-    $can_dss_reports = $is_partner_owner_admin || $canPermission('reports.view');
-    $can_forecasting = $is_partner_owner_admin || $canPermission('forecasting.view') || $canModule('forecasting');
-    $can_rbac = $is_partner_owner_admin || $canPermission('roles.manage');
+    $can_statistics = $partner_can_dss && ($is_partner_owner_admin || $canPermission('dashboard.analytics') || $canPermission('audit.view'));
+    $can_dss_reports = $partner_can_dss && ($is_partner_owner_admin || $canPermission('reports.view'));
+    $can_forecasting = $partner_can_forecasting && ($is_partner_owner_admin || $canPermission('forecasting.view') || $canModule('forecasting'));
+    $can_rbac = $partner_can_rbac && ($is_partner_owner_admin || $canPermission('roles.manage'));
     $can_operations_modules = false;
     $show_admin = $can_statistics || $can_dss_reports || $can_forecasting || $can_rbac;
+
+    if (is_array($partner_ops_flow)) {
+        if (!empty($partner_ops_flow['modules'])) {
+            $partner_ops_flow['modules'] = array_values(array_filter($partner_ops_flow['modules'], static function($m) use ($can_orders, $can_preorders, $can_logistics, $can_finance, $can_inventory, $can_hr_overview, $can_payroll) {
+                $url = (string)($m['url'] ?? '');
+                if (strpos($url, 'inventory.php') !== false && !$can_inventory) return false;
+                if (strpos($url, 'hr.php') !== false && !$can_hr_overview) return false;
+                if (strpos($url, 'payroll.php') !== false && !$can_payroll) return false;
+                if (strpos($url, 'finance.php') !== false && !$can_finance) return false;
+                if (strpos($url, 'orders.php') !== false && !$can_orders) return false;
+                if (strpos($url, 'preorders.php') !== false && !$can_preorders) return false;
+                if (strpos($url, 'logistics.php') !== false && !$can_logistics) return false;
+                return true;
+            }));
+        }
+        if (!empty($partner_ops_flow['steps'])) {
+            $partner_ops_flow['steps'] = array_values(array_filter($partner_ops_flow['steps'], static function($s) use ($can_orders, $can_preorders, $can_logistics, $can_finance, $can_inventory, $can_hr_overview) {
+                $url = (string)($s['url'] ?? '');
+                if (strpos($url, 'inventory.php') !== false && !$can_inventory) return false;
+                if (strpos($url, 'hr.php') !== false && !$can_hr_overview) return false;
+                if (strpos($url, 'finance.php') !== false && !$can_finance) return false;
+                if (strpos($url, 'orders.php') !== false && !$can_orders) return false;
+                if (strpos($url, 'logistics.php') !== false && !$can_logistics) return false;
+                return true;
+            }));
+        }
+        if (empty($partner_ops_flow['modules']) && empty($partner_ops_flow['steps'])) {
+            $partner_ops_flow = null;
+        }
+    }
 }
 
 if ($is_partner_restricted) {
@@ -451,6 +519,8 @@ body.dark-mode .sidebar-footer .logout-btn {
                 <?php echo htmlspecialchars($sidebar_role_label); ?>
                 <?php if ($sidebar_active_plan_name !== ''): ?>
                     &bull; <span class="badge" style="background:#b3261e;color:#fff;font-size:0.68rem;font-weight:800;padding:2px 6px;border-radius:4px;letter-spacing:0.04em;"><i class="fas fa-crown"></i> <?php echo htmlspecialchars(strtoupper($sidebar_active_plan_name)); ?></span>
+                <?php elseif ($is_partner_scoped_admin): ?>
+                    &bull; <span class="badge" style="background:#fff1f0;color:#b3261e;border:1px solid #fee4e2;font-size:0.68rem;font-weight:700;padding:2px 6px;border-radius:4px;"><i class="fas fa-lock"></i> NON-SUBSCRIBED</span>
                 <?php endif; ?>
             </p>
         </a>
@@ -3438,5 +3508,53 @@ function formatTime(str) {
 }
 </script>
 <?php endif; ?>
+
+<!-- Subscription Upgrade Required Modal -->
+<div id="sidebarUpgradeModal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.65); backdrop-filter:blur(4px); z-index:99999; align-items:center; justify-content:center; padding:16px;">
+    <div style="background:#ffffff; border-radius:20px; max-width:480px; width:100%; padding:32px 28px; box-shadow:0 24px 48px rgba(0,0,0,0.25); border:1px solid #eaecf0; text-align:center; position:relative;">
+        <button type="button" onclick="closeSidebarUpgradeModal()" style="position:absolute; top:16px; right:16px; border:none; background:#f1f5f9; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#64748b;">
+            <i class="fas fa-times"></i>
+        </button>
+        <div style="width:64px; height:64px; border-radius:50%; background:#fff1f0; border:1.5px solid #fee4e2; display:inline-flex; align-items:center; justify-content:center; color:#b3261e; font-size:1.75rem; margin-bottom:16px;">
+            <i class="fas fa-lock"></i>
+        </div>
+        <h3 id="upgradeModalTitle" style="font-size:1.3rem; font-weight:800; color:#101828; margin:0 0 10px;">Upgrade Required</h3>
+        <p id="upgradeModalDesc" style="font-size:0.93rem; color:#475467; margin:0 0 24px; line-height:1.5;">
+            This feature is locked on your current plan. Please upgrade your subscription plan to unlock full access.
+        </p>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+            <a id="upgradeModalBtn" href="subscription_plans.php" style="background:#b3261e; color:#ffffff; font-weight:700; padding:12px 24px; border-radius:999px; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 4px 14px rgba(179,38,30,0.3);">
+                <i class="fas fa-crown"></i> <span>View Plans &amp; Upgrade</span>
+            </a>
+            <button type="button" onclick="closeSidebarUpgradeModal()" style="background:none; border:none; color:#64748b; font-size:0.88rem; font-weight:600; cursor:pointer; padding:6px;">
+                Maybe Later
+            </button>
+        </div>
+    </div>
+</div>
+<script>
+function openSidebarUpgradeModal(e, featureName, requiredPlanName, targetUrl) {
+    if (e && e.preventDefault) e.preventDefault();
+    const modal = document.getElementById('sidebarUpgradeModal');
+    if (!modal) return false;
+    const titleEl = document.getElementById('upgradeModalTitle');
+    const descEl = document.getElementById('upgradeModalDesc');
+    const btnEl = document.getElementById('upgradeModalBtn');
+    
+    if (titleEl) titleEl.innerText = 'Upgrade to Unlock ' + (featureName || 'Feature');
+    if (descEl) descEl.innerHTML = 'The feature <strong>' + (featureName || 'this module') + '</strong> requires an active <strong>' + (requiredPlanName || 'higher tier') + '</strong> subscription. Upgrade your shop plan to gain instant access.';
+    if (btnEl) btnEl.href = targetUrl || 'subscription_plans.php';
+    modal.style.display = 'flex';
+    return false;
+}
+function closeSidebarUpgradeModal() {
+    const modal = document.getElementById('sidebarUpgradeModal');
+    if (modal) modal.style.display = 'none';
+}
+window.addEventListener('click', function(e) {
+    const modal = document.getElementById('sidebarUpgradeModal');
+    if (modal && e.target === modal) closeSidebarUpgradeModal();
+});
+</script>
 
 <?php require_once __DIR__ . '/../includes/popup_alert.php'; ?>

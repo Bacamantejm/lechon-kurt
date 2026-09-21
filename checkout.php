@@ -31,8 +31,19 @@ if (!empty($_SESSION['cart']) && is_array($_SESSION['cart'])) {
         }
     }
 }
+$pickup_store_id = (int)($_SESSION['pickup_location'] ?? 0);
+$preorder_params = [];
+if ($storefront_seller_id > 0) {
+    $preorder_params['seller_id'] = $storefront_seller_id;
+}
+if ($pickup_store_id > 0) {
+    $preorder_params['store_id'] = $pickup_store_id;
+}
+if (count($_co_prefill_parts) > 0) {
+    $preorder_params['prefill'] = implode(',', $_co_prefill_parts);
+}
 $_co_prefill_param = count($_co_prefill_parts) > 0 ? '&prefill=' . urlencode(implode(',', $_co_prefill_parts)) : '';
-$preorder_switch_link = 'preorder.php' . ($storefront_seller_id > 0 ? '?seller_id=' . $storefront_seller_id . $_co_prefill_param : (count($_co_prefill_parts) > 0 ? '?prefill=' . urlencode(implode(',', $_co_prefill_parts)) : ''));
+$preorder_switch_link = 'preorder.php' . (!empty($preorder_params) ? '?' . http_build_query($preorder_params) : '');
 pvEnsureVoucherSchema($conn);
 caEnsureUserSavedAddressSchema($conn);
 
@@ -429,7 +440,8 @@ $checkout_tenant_message = $checkout_tenant_blocked
 if (!$checkout_tenant_blocked && (int)($checkout_tenant_scope['seller_id'] ?? 0) > 0) {
     $storefront_seller_id = (int)$checkout_tenant_scope['seller_id'];
     $_SESSION['storefront_seller_id'] = $storefront_seller_id;
-    $preorder_switch_link = 'preorder.php?seller_id=' . $storefront_seller_id . $_co_prefill_param;
+    $preorder_params['seller_id'] = $storefront_seller_id;
+    $preorder_switch_link = 'preorder.php' . (!empty($preorder_params) ? '?' . http_build_query($preorder_params) : '');
 }
 $total = max(0, $subtotal + $vat_amount + $delivery_fee - $voucher_discount);
 

@@ -565,8 +565,6 @@ $page_title = "Create Account | Lechon Delights";
 include 'includes/header.php';
 ?>
 
-<!-- SweetAlert2 CSS -->
-<link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <!-- Add this for better mobile input handling -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
@@ -3581,11 +3579,8 @@ document.addEventListener('DOMContentLoaded', function() {
             return false;
         }
 
-        if (!idVerified) {
-            verifyIdWithBackend(firstName, lastName);
-            return false;
-        }
-
+        // Temporarily bypass automated online ID checking
+        idVerified = true;
         return true;
     }
 

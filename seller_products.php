@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once 'includes/config.php';
+require_once 'includes/SubscriptionAccessService.php';
 
 // Require login
 if (!isset($_SESSION['user_id'])) {
@@ -69,6 +70,9 @@ if (!$has_seller_access) {
     exit;
 }
 
+$seller_sub_details = SubscriptionAccessService::getShopSubscriptionDetails($conn, $user_id);
+$can_upload_products = !empty($seller_sub_details['can_upload_products']);
+
 // Handle product status toggle
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_product'])) {
     $product_id = intval($_POST['product_id']);
@@ -96,6 +100,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_product'])) {
 
 // Handle add new product
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_new_product'])) {
+    if (!$can_upload_products) {
+        $_SESSION['error'] = "Uploading products is restricted. Please upgrade to an active Starter, Growth, or Pro Subscription Plan.";
+        header("Location: seller_products.php");
+        exit;
+    }
+
     $name = trim($_POST['product_name']);
     $category = trim($_POST['product_category']);
     $price = floatval($_POST['product_price']);
@@ -695,11 +705,29 @@ include 'includes/header.php';
                 <a href="seller_vouchers.php" class="btn btn-dark">
                     <i class="fas fa-tags"></i> Manage Vouchers
                 </a>
-                <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addProductModal">
-                    <i class="fas fa-plus-circle"></i> Add New Product
-                </button>
+                <?php if ($can_upload_products): ?>
+                    <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addProductModal">
+                        <i class="fas fa-plus-circle"></i> Add New Product
+                    </button>
+                <?php else: ?>
+                    <a href="subscription_plans.php?locked_feature=upload_products&required_tier=starter" class="btn btn-outline-danger" style="border-radius:8px; font-weight:600;">
+                        <i class="fas fa-lock"></i> Add New Product (Plan Required)
+                    </a>
+                <?php endif; ?>
             </div>
         </div>
+
+        <?php if (!$can_upload_products): ?>
+            <div style="background:#fff8ef; border:1px solid #fedf89; border-radius:12px; padding:14px 18px; margin-bottom:20px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+                <div style="color:#b54708; font-size:0.92rem; display:flex; align-items:center; gap:10px;">
+                    <i class="fas fa-lock" style="font-size:1.2rem; color:#b54708;"></i>
+                    <span><strong>Limited Access (Non-Subscribed Account):</strong> Product uploading is locked. Subscribe to the Starter Plan or higher to upload and sell products.</span>
+                </div>
+                <a href="subscription_plans.php?locked_feature=upload_products&required_tier=starter" class="btn btn-sm" style="background:#b3261e; color:#ffffff; border-radius:999px; font-weight:700; padding:8px 20px; text-decoration:none;">
+                    <i class="fas fa-arrow-up"></i> Upgrade to Starter
+                </a>
+            </div>
+        <?php endif; ?>
 
         <?php if (isset($_SESSION['success'])): ?>
             <div class="alert alert-success">

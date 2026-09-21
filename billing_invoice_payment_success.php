@@ -20,10 +20,11 @@ $service->ensureReady($current_user_id);
 $result = $service->completeInvoicePayment($invoice_id, (int)$seller_scope_id, null, $current_user_id);
 
 if (!empty($result['success'])) {
-    $_SESSION['success'] = (string)($result['message'] ?? 'Invoice payment confirmed successfully.');
-} else {
-    $_SESSION['error'] = (string)($result['message'] ?? 'We could not confirm the invoice payment yet.');
+    $_SESSION['success'] = 'Subscription payment confirmed! Your plan is now active. Welcome to your dashboard.';
+    header('Location: admin/index.php');
+    exit;
 }
 
-header('Location: admin/partner_billing.php');
+$_SESSION['error'] = (string)($result['message'] ?? 'We could not confirm the invoice payment yet.');
+header('Location: admin/subscription_plans.php');
 exit;

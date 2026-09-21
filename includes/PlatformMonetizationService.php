@@ -1715,7 +1715,7 @@ class PlatformMonetizationService
                  ended_at = NULL,
                  updated_by = ?,
                  updated_at = NOW()
-             WHERE id = ? AND subscription_status IN ('trial', 'active', 'past_due', 'paused')
+             WHERE id = ?
              LIMIT 1"
         );
         if ($stmt) {

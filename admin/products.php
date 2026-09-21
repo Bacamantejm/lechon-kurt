@@ -10,6 +10,9 @@ $current_user_id = (int)($_SESSION['user_id'] ?? 0);
 $is_partner_scoped_admin = isApprovedFranchiseSellerAccount($conn, $current_user_id);
 $seller_scope_id = $is_partner_scoped_admin ? getFranchiseSellerScopeOwnerId($conn, $current_user_id) : null;
 
+$shop_sub_details = SubscriptionAccessService::getShopSubscriptionDetails($conn, $current_user_id);
+$can_upload_products = !empty($shop_sub_details['can_upload_products']);
+
 /**
  * Safe helper to keep DSS widgets non-blocking if optional tables are missing.
  */
@@ -72,6 +75,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_product'])) {
 
 // Handle add new product
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_new_product'])) {
+    if (!$can_upload_products) {
+        $_SESSION['error'] = "Uploading and adding products is restricted. Please upgrade to a Starter, Growth, or Pro Subscription Plan to start selling products.";
+        header("Location: products.php");
+        exit();
+    }
+
     $name = trim($_POST['product_name']);
     $category = trim($_POST['product_category']);
     $price = floatval($_POST['product_price']);
@@ -883,12 +892,30 @@ if (empty($product_decisions)) {
                     </ul>
                 </div>
                 
+                <?php if (!$can_upload_products): ?>
+                <div style="background:#fff8ef; border:1px solid #fedf89; border-radius:12px; padding:14px 18px; margin-bottom:20px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+                    <div style="color:#b54708; font-size:0.92rem; display:flex; align-items:center; gap:10px;">
+                        <i class="fas fa-lock" style="font-size:1.2rem; color:#b54708;"></i>
+                        <span><strong>Limited Access (Non-Subscribed):</strong> Product uploading is locked. Subscribe to the Starter Plan or higher to upload and sell products.</span>
+                    </div>
+                    <a href="subscription_plans.php?locked_feature=upload_products&required_tier=starter" class="btn btn-sm" style="background:#b3261e; color:#ffffff; border-radius:999px; font-weight:700; padding:8px 20px; text-decoration:none;">
+                        <i class="fas fa-arrow-up"></i> Upgrade to Starter
+                    </a>
+                </div>
+                <?php endif; ?>
+
                 <div class="section-header">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                         <h2>All Products</h2>
-                        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addProductModal">
-                            <i class="fas fa-plus"></i> Add New Product
-                        </button>
+                        <?php if ($can_upload_products): ?>
+                            <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addProductModal">
+                                <i class="fas fa-plus"></i> Add New Product
+                            </button>
+                        <?php else: ?>
+                            <a href="subscription_plans.php?locked_feature=upload_products&required_tier=starter" class="btn btn-outline-danger" style="border-radius:8px; font-weight:600;">
+                                <i class="fas fa-lock"></i> Add New Product (Plan Required)
+                            </a>
+                        <?php endif; ?>
                     </div>
                     <form method="GET" class="filter-form">
                         <input type="text" name="search" placeholder="Search products..." value="<?php echo htmlspecialchars($search); ?>" class="form-control">

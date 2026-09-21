@@ -4,6 +4,7 @@
 if (!function_exists('hasPermission')) {
     require_once __DIR__ . '/../includes/rbac.php';
 }
+require_once __DIR__ . '/../includes/SubscriptionAccessService.php';
 
 /**
  * Ensure session exists before reading/writing auth state.
@@ -1575,28 +1576,34 @@ function checkAdminAccess() {
             'get_products_for_kiosk.php',
             'create_walkin_order.php',
             'logout.php',
-            'get_notifications.php'
+            'get_notifications.php',
+            'billing_invoice_payment_success.php',
+            'billing_invoice_payment_cancel.php',
+            'billing_invoice_view.php',
+            'billing_invoice_pdf.php'
         ];
         if (!$is_super_admin_session_user && !in_array($current_page, $partner_allowed_pages, true)) {
+            $fallback_redirect = (strpos($_SERVER['PHP_SELF'] ?? '', '/admin/') !== false) ? 'index.php' : 'admin/index.php';
             if (isAjaxRequest()) {
                 http_response_code(403);
                 header('Content-Type: application/json');
                 echo json_encode([
                     'success' => false,
                     'message' => 'This module is not available for partner admin accounts.',
-                    'redirect' => 'products.php'
+                    'redirect' => $fallback_redirect
                 ]);
                 exit;
             }
 
             $_SESSION['error'] = 'This module is not available for partner admin accounts.';
-            header("Location: products.php");
+            header("Location: " . $fallback_redirect);
             exit;
         }
 
         if (!$is_super_admin_session_user) {
             enforcePartnerRoleScopedPageAccess($conn, $user_id, $current_page);
             enforcePartnerTenantScopedRequestAccess($conn, $user_id, $current_page);
+            SubscriptionAccessService::enforcePageAccess($conn, $user_id, $current_page, 'subscription_plans.php');
         }
 
         if (!$is_super_admin_session_user && $account_control_status === 'restricted') {

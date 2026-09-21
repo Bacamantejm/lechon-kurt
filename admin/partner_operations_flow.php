@@ -114,7 +114,13 @@ if (!function_exists('partnerOpsGetSummary')) {
             return null;
         }
 
-        $cache_key = 'partner_ops_flow_' . $seller_scope_id;
+        require_once __DIR__ . '/../includes/SubscriptionAccessService.php';
+        $sub_details = SubscriptionAccessService::getShopSubscriptionDetails($conn, (int)$seller_scope_id);
+        $can_inv = !empty($sub_details['can_access_inventory_mrp']);
+        $can_hr = !empty($sub_details['can_access_hr']);
+        $can_exp = !empty($sub_details['can_access_expenses']);
+
+        $cache_key = 'partner_ops_flow_' . $seller_scope_id . '_' . ($sub_details['tier'] ?? 'none');
         $cache_ttl_seconds = 45;
         $now = time();
         if (isset($_SESSION[$cache_key]['ts'], $_SESSION[$cache_key]['data'])) {
@@ -204,7 +210,7 @@ if (!function_exists('partnerOpsGetSummary')) {
             );
         }
 
-        if (partnerOpsTableExists($conn, 'inventory')
+        if ($can_inv && partnerOpsTableExists($conn, 'inventory')
             && partnerOpsTableExists($conn, 'products')
             && partnerOpsColumnExists($conn, 'inventory', 'product_id')
             && partnerOpsColumnExists($conn, 'inventory', 'current_stock')
@@ -230,7 +236,7 @@ if (!function_exists('partnerOpsGetSummary')) {
             );
         }
 
-        if (partnerOpsTableExists($conn, 'expenses')
+        if ($can_exp && partnerOpsTableExists($conn, 'expenses')
             && partnerOpsColumnExists($conn, 'expenses', 'recorded_by')
             && partnerOpsColumnExists($conn, 'expenses', 'status')) {
             $counts['pending_expenses'] = partnerOpsCountQuery(
@@ -242,53 +248,55 @@ if (!function_exists('partnerOpsGetSummary')) {
             );
         }
 
-        $scope_user_ids = partnerOpsScopedUserIds($conn, $seller_scope_id);
-        $scope_user_csv = implode(',', array_map('intval', $scope_user_ids));
-        $employee_scope_sql = $scope_user_csv !== '' ? "e.user_id IN ({$scope_user_csv})" : "1=0";
+        if ($can_hr) {
+            $scope_user_ids = partnerOpsScopedUserIds($conn, $seller_scope_id);
+            $scope_user_csv = implode(',', array_map('intval', $scope_user_ids));
+            $employee_scope_sql = $scope_user_csv !== '' ? "e.user_id IN ({$scope_user_csv})" : "1=0";
 
-        if (partnerOpsTableExists($conn, 'attendance')
-            && partnerOpsTableExists($conn, 'employees')
-            && partnerOpsColumnExists($conn, 'attendance', 'employee_id')
-            && partnerOpsColumnExists($conn, 'attendance', 'hr_status')
-            && partnerOpsColumnExists($conn, 'employees', 'user_id')) {
-            $counts['pending_attendance'] = partnerOpsCountQuery(
-                $conn,
-                "SELECT COUNT(*) AS count
-                 FROM attendance a
-                 INNER JOIN employees e ON e.id = a.employee_id
-                 WHERE a.hr_status = 'pending'
-                   AND {$employee_scope_sql}"
-            );
-        }
+            if (partnerOpsTableExists($conn, 'attendance')
+                && partnerOpsTableExists($conn, 'employees')
+                && partnerOpsColumnExists($conn, 'attendance', 'employee_id')
+                && partnerOpsColumnExists($conn, 'attendance', 'hr_status')
+                && partnerOpsColumnExists($conn, 'employees', 'user_id')) {
+                $counts['pending_attendance'] = partnerOpsCountQuery(
+                    $conn,
+                    "SELECT COUNT(*) AS count
+                     FROM attendance a
+                     INNER JOIN employees e ON e.id = a.employee_id
+                     WHERE a.hr_status = 'pending'
+                       AND {$employee_scope_sql}"
+                );
+            }
 
-        if (partnerOpsTableExists($conn, 'leave_requests')
-            && partnerOpsTableExists($conn, 'employees')
-            && partnerOpsColumnExists($conn, 'leave_requests', 'employee_id')
-            && partnerOpsColumnExists($conn, 'leave_requests', 'status')
-            && partnerOpsColumnExists($conn, 'employees', 'user_id')) {
-            $counts['pending_leaves'] = partnerOpsCountQuery(
-                $conn,
-                "SELECT COUNT(*) AS count
-                 FROM leave_requests lr
-                 INNER JOIN employees e ON e.id = lr.employee_id
-                 WHERE lr.status = 'pending'
-                   AND {$employee_scope_sql}"
-            );
-        }
+            if (partnerOpsTableExists($conn, 'leave_requests')
+                && partnerOpsTableExists($conn, 'employees')
+                && partnerOpsColumnExists($conn, 'leave_requests', 'employee_id')
+                && partnerOpsColumnExists($conn, 'leave_requests', 'status')
+                && partnerOpsColumnExists($conn, 'employees', 'user_id')) {
+                $counts['pending_leaves'] = partnerOpsCountQuery(
+                    $conn,
+                    "SELECT COUNT(*) AS count
+                     FROM leave_requests lr
+                     INNER JOIN employees e ON e.id = lr.employee_id
+                     WHERE lr.status = 'pending'
+                       AND {$employee_scope_sql}"
+                );
+            }
 
-        if (partnerOpsTableExists($conn, 'payroll')
-            && partnerOpsTableExists($conn, 'employees')
-            && partnerOpsColumnExists($conn, 'payroll', 'employee_id')
-            && partnerOpsColumnExists($conn, 'payroll', 'status')
-            && partnerOpsColumnExists($conn, 'employees', 'user_id')) {
-            $counts['pending_payroll'] = partnerOpsCountQuery(
-                $conn,
-                "SELECT COUNT(*) AS count
-                 FROM payroll p
-                 INNER JOIN employees e ON e.id = p.employee_id
-                 WHERE p.status = 'pending'
-                   AND {$employee_scope_sql}"
-            );
+            if (partnerOpsTableExists($conn, 'payroll')
+                && partnerOpsTableExists($conn, 'employees')
+                && partnerOpsColumnExists($conn, 'payroll', 'employee_id')
+                && partnerOpsColumnExists($conn, 'payroll', 'status')
+                && partnerOpsColumnExists($conn, 'employees', 'user_id')) {
+                $counts['pending_payroll'] = partnerOpsCountQuery(
+                    $conn,
+                    "SELECT COUNT(*) AS count
+                     FROM payroll p
+                     INNER JOIN employees e ON e.id = p.employee_id
+                     WHERE p.status = 'pending'
+                       AND {$employee_scope_sql}"
+                );
+            }
         }
 
         $steps = [];
@@ -298,13 +306,13 @@ if (!function_exists('partnerOpsGetSummary')) {
         if ($counts['active_deliveries'] > 0) {
             $steps[] = ['label' => 'Monitor active deliveries', 'url' => 'logistics.php'];
         }
-        if ($counts['pending_refunds'] > 0 || $counts['cancellation_requests'] > 0) {
+        if ($can_exp && ($counts['pending_refunds'] > 0 || $counts['cancellation_requests'] > 0)) {
             $steps[] = ['label' => 'Resolve refunds and cancellations', 'url' => 'finance.php?tab=refunds'];
         }
-        if ($counts['low_stock_items'] > 0) {
+        if ($can_inv && $counts['low_stock_items'] > 0) {
             $steps[] = ['label' => 'Replenish low-stock items', 'url' => 'inventory.php'];
         }
-        if ($counts['pending_attendance'] > 0 || $counts['pending_leaves'] > 0 || $counts['pending_payroll'] > 0) {
+        if ($can_hr && ($counts['pending_attendance'] > 0 || $counts['pending_leaves'] > 0 || $counts['pending_payroll'] > 0)) {
             $steps[] = ['label' => 'Complete HR and payroll queue', 'url' => 'hr.php'];
         }
         if (empty($steps)) {
@@ -314,12 +322,19 @@ if (!function_exists('partnerOpsGetSummary')) {
         $modules = [
             ['label' => 'Orders', 'url' => 'orders.php?status=pending', 'count' => $counts['pending_orders']],
             ['label' => 'Pre-Orders', 'url' => 'preorders.php?status=pending', 'count' => $counts['pending_preorders']],
-            ['label' => 'Logistics', 'url' => 'logistics.php', 'count' => $counts['active_deliveries']],
-            ['label' => 'Refunds', 'url' => 'finance.php?tab=refunds', 'count' => ($counts['pending_refunds'] + $counts['cancellation_requests'])],
-            ['label' => 'Inventory', 'url' => 'inventory.php', 'count' => $counts['low_stock_items']],
-            ['label' => 'HR', 'url' => 'hr.php', 'count' => ($counts['pending_attendance'] + $counts['pending_leaves'])],
-            ['label' => 'Payroll', 'url' => 'payroll.php', 'count' => $counts['pending_payroll']]
+            ['label' => 'Logistics', 'url' => 'logistics.php', 'count' => $counts['active_deliveries']]
         ];
+
+        if ($can_exp) {
+            $modules[] = ['label' => 'Refunds', 'url' => 'finance.php?tab=refunds', 'count' => ($counts['pending_refunds'] + $counts['cancellation_requests'])];
+        }
+        if ($can_inv) {
+            $modules[] = ['label' => 'Inventory', 'url' => 'inventory.php', 'count' => $counts['low_stock_items']];
+        }
+        if ($can_hr) {
+            $modules[] = ['label' => 'HR', 'url' => 'hr.php', 'count' => ($counts['pending_attendance'] + $counts['pending_leaves'])];
+            $modules[] = ['label' => 'Payroll', 'url' => 'payroll.php', 'count' => $counts['pending_payroll']];
+        }
 
         $data = [
             'counts' => $counts,

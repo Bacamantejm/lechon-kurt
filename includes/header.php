@@ -524,9 +524,86 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
             color: #f8fafc !important;
             border: 1px solid #334155 !important;
         }
-        body.dark-mode .swal2-title,
-        body.dark-mode .swal2-html-container {
+        body.dark-mode .swal2-title {
             color: #f8fafc !important;
+        }
+        body.dark-mode .swal2-html-container {
+            color: #cbd5e1 !important;
+        }
+        body.dark-mode .swal2-html-container * {
+            color: inherit;
+        }
+        body.dark-mode .swal2-html-container strong,
+        body.dark-mode .swal2-html-container b {
+            color: #ffffff !important;
+        }
+        body.dark-mode .swal2-html-container [style*="color: #101828"],
+        body.dark-mode .swal2-html-container [style*="color:#101828"] {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .swal2-html-container [style*="color: #475467"],
+        body.dark-mode .swal2-html-container [style*="color:#475467"],
+        body.dark-mode .swal2-html-container [style*="color: #344054"],
+        body.dark-mode .swal2-html-container [style*="color:#344054"] {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode .swal2-html-container [style*="background: #fff1f0"],
+        body.dark-mode .swal2-html-container [style*="background:#fff1f0"] {
+            background: rgba(179, 38, 30, 0.22) !important;
+            border-color: rgba(240, 68, 56, 0.35) !important;
+            color: #fca5a5 !important;
+        }
+        body.dark-mode .swal2-html-container [style*="background: #ecfdf3"],
+        body.dark-mode .swal2-html-container [style*="background:#ecfdf3"] {
+            background: rgba(2, 122, 72, 0.22) !important;
+            border-color: rgba(18, 183, 106, 0.35) !important;
+            color: #86efac !important;
+        }
+        body.dark-mode .swal2-icon.swal2-error {
+            border-color: rgba(240, 68, 56, 0.35) !important;
+            background-color: rgba(179, 38, 30, 0.22) !important;
+            color: #f87171 !important;
+        }
+        body.dark-mode .swal2-icon.swal2-error [class^=swal2-x-mark-line] {
+            background-color: #f87171 !important;
+        }
+        body.dark-mode .swal2-icon.swal2-warning {
+            border-color: rgba(247, 144, 9, 0.35) !important;
+            background-color: rgba(181, 71, 8, 0.22) !important;
+            color: #fbbf24 !important;
+        }
+        body.dark-mode .swal2-icon.swal2-warning .swal2-icon-content {
+            color: #fbbf24 !important;
+        }
+        body.dark-mode .swal2-icon.swal2-success {
+            border-color: rgba(18, 183, 106, 0.35) !important;
+            background-color: rgba(2, 122, 72, 0.22) !important;
+            color: #4ade80 !important;
+        }
+        body.dark-mode .swal2-icon.swal2-success [class^=swal2-success-line] {
+            background-color: #4ade80 !important;
+        }
+        body.dark-mode .swal2-icon.swal2-info {
+            border-color: rgba(46, 144, 250, 0.35) !important;
+            background-color: rgba(23, 92, 211, 0.22) !important;
+            color: #60a5fa !important;
+        }
+        body.dark-mode .swal2-icon.swal2-info .swal2-icon-content {
+            color: #60a5fa !important;
+        }
+        body.dark-mode .swal2-icon.swal2-question {
+            border-color: #334155 !important;
+            background-color: #0f172a !important;
+            color: #cbd5e1 !important;
+        }
+        body.dark-mode .swal2-styled.swal2-cancel {
+            background-color: #1e293b !important;
+            color: #cbd5e1 !important;
+            border-color: #334155 !important;
+        }
+        body.dark-mode .swal2-styled.swal2-cancel:hover {
+            background-color: #334155 !important;
+            color: #ffffff !important;
         }
 
         /* Customer Chat Dark Theme */
@@ -856,18 +933,28 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
             padding: 0 4px !important;
         }
         .swal2-icon {
-            width: 58px !important;
-            height: 58px !important;
-            margin: 0 auto 10px !important;
+            width: 60px !important;
+            height: 60px !important;
+            min-width: 60px !important;
+            min-height: 60px !important;
+            margin: 0 auto 12px !important;
             border-width: 2.5px !important;
             border-style: solid !important;
+            border-radius: 50% !important;
+            box-sizing: border-box !important;
+            position: relative !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
         }
         .swal2-icon .swal2-icon-content {
-            font-size: 2.2rem !important;
+            font-size: 1.85rem !important;
             font-weight: 800 !important;
             display: flex !important;
             align-items: center !important;
             justify-content: center !important;
+            line-height: 1 !important;
+            margin: 0 !important;
         }
         /* Error / Danger Icon */
         .swal2-icon.swal2-error {
@@ -875,11 +962,31 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
             background-color: #fff1f0 !important;
             color: #b3261e !important;
         }
+        .swal2-icon.swal2-error .swal2-x-mark {
+            position: relative !important;
+            width: 100% !important;
+            height: 100% !important;
+            display: block !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
         .swal2-icon.swal2-error [class^=swal2-x-mark-line] {
-            background-color: #b3261e !important;
+            position: absolute !important;
             height: 3px !important;
+            width: 24px !important;
+            background-color: #b3261e !important;
             border-radius: 2px !important;
-            top: 28px !important;
+            top: calc(50% - 1.5px) !important;
+            left: calc(50% - 12px) !important;
+            right: auto !important;
+            margin: 0 !important;
+            transform-origin: center center !important;
+        }
+        .swal2-icon.swal2-error [class^=swal2-x-mark-line][class$=left] {
+            transform: rotate(45deg) !important;
+        }
+        .swal2-icon.swal2-error [class^=swal2-x-mark-line][class$=right] {
+            transform: rotate(-45deg) !important;
         }
         /* Warning Icon */
         .swal2-icon.swal2-warning {
@@ -896,13 +1003,33 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
             background-color: #ecfdf3 !important;
             color: #027a48 !important;
         }
+        .swal2-icon.swal2-success [class^=swal2-success-circular-line],
+        .swal2-icon.swal2-success .swal2-success-fix,
+        .swal2-icon.swal2-success .swal2-success-ring {
+            display: none !important;
+        }
         .swal2-icon.swal2-success [class^=swal2-success-line] {
             background-color: #027a48 !important;
             height: 3px !important;
             border-radius: 2px !important;
+            position: absolute !important;
+            z-index: 2 !important;
+            display: block !important;
         }
-        .swal2-icon.swal2-success .swal2-success-ring {
-            border: 3px solid rgba(2, 122, 72, 0.25) !important;
+        .swal2-icon.swal2-success .swal2-success-line-tip {
+            width: 14px !important;
+            top: 31px !important;
+            left: 14px !important;
+            transform: rotate(45deg) !important;
+            transform-origin: left bottom !important;
+        }
+        .swal2-icon.swal2-success .swal2-success-line-long {
+            width: 24px !important;
+            top: 26px !important;
+            left: 23px !important;
+            right: auto !important;
+            transform: rotate(-45deg) !important;
+            transform-origin: left bottom !important;
         }
         /* Info Icon */
         .swal2-icon.swal2-info {
@@ -917,6 +1044,9 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
         .swal2-icon.swal2-question {
             border-color: #eaecf0 !important;
             background-color: #f8f9fa !important;
+            color: #344054 !important;
+        }
+        .swal2-icon.swal2-question .swal2-icon-content {
             color: #344054 !important;
         }
         /* Modal Action Buttons */

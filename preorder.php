@@ -191,7 +191,7 @@ $products_sql = "SELECT p.id, p.product_id, p.seller_id, p.name, p.description, 
                          GROUP BY product_id
                      ) im ON i.product_id = im.product_id AND i.inventory_date = im.max_date AND i.is_archived = 0
                  ) latest_i ON p.id = latest_i.product_id
-                  WHERE p.is_active = 1" . ($active_seller_id > 0 ? " AND p.seller_id = $active_seller_id" : "") . "
+                 WHERE p.is_active = 1
                    AND (p.is_archived = 0 OR p.is_archived IS NULL)
                  ORDER BY p.category, p.name ASC";
 $products_result = mysqli_query($conn, $products_sql);
@@ -201,7 +201,7 @@ if ($products_result) {
         $all_products[] = [
             'id' => (int)$row['id'],
             'product_id' => (string)($row['product_id'] ?? ''),
-            'seller_id' => (int)($row['seller_id'] ?? 1),
+            'seller_id' => ($row['seller_id'] !== null && (int)$row['seller_id'] > 0) ? (int)$row['seller_id'] : 1,
             'name' => (string)($row['name'] ?? ''),
             'description' => (string)($row['description'] ?? ''),
             'price' => (float)($row['price'] ?? 0),
@@ -3186,16 +3186,16 @@ let cart = []; // Array to store selected items: { id, name, price, quantity, im
     const prefill = <?php echo json_encode($prefill_cart_items); ?>;
     if (!prefill || prefill.length === 0) return;
     prefill.forEach(function(pf) {
-        const prod = products.find(function(p) { return p.id === pf.id; });
+        const targetId = parseInt(pf.id, 10);
+        const prod = products.find(function(p) { return parseInt(p.id, 10) === targetId; });
         if (!prod) return;
-        const stock = typeof prod.stock !== 'undefined' ? parseInt(prod.stock) : 0;
-        if (stock <= 0) return; // skip sold-out
-        const qty = Math.min(pf.qty, stock);
+        const stock = typeof prod.stock !== 'undefined' ? parseInt(prod.stock, 10) : 10;
+        const qty = stock > 0 ? Math.min(parseInt(pf.qty, 10) || 1, stock) : (parseInt(pf.qty, 10) || 1);
         cart.push({
             id: prod.id,
             product_id: prod.product_id || '',
             name: prod.name,
-            price: prod.price,
+            price: parseFloat(prod.price) || 0,
             quantity: qty,
             image: prod.image || ''
         });
@@ -3524,6 +3524,14 @@ function prioritizeAndSelectNearbyReservationStore() {
             initialStoreId = found.dataset.storeId;
             initialSellerId = requestedSellerId;
         }
+    }
+
+    if (!initialStoreId && cart.length > 0 && typeof stores !== 'undefined' && stores.length > 0) {
+        const firstCartProd = products.find(p => parseInt(p.id, 10) === parseInt(cart[0].id, 10));
+        const cartSellerId = firstCartProd ? (parseInt(firstCartProd.seller_id, 10) || 1) : 1;
+        const matchingStore = stores.find(s => parseInt(s.seller_id || s.owner_user_id || 1, 10) === cartSellerId) || stores[0];
+        initialStoreId = String(matchingStore.id || matchingStore.store_id || '1');
+        initialSellerId = String(matchingStore.seller_id || matchingStore.owner_user_id || '1');
     }
 
     if (initialStoreId) {
