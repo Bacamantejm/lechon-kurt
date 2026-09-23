@@ -475,6 +475,7 @@ $query = "
         o.pickup_location,
         o.delivery_location,
         o.is_archived,
+        COALESCE(NULLIF(lt.proof_of_delivery_path, ''), (SELECT photo_path FROM proof_of_delivery WHERE order_id = o.id AND photo_path IS NOT NULL AND photo_path != '' ORDER BY id DESC LIMIT 1), (SELECT photo_path FROM delivery_proofs WHERE order_id = o.id AND photo_path IS NOT NULL AND photo_path != '' ORDER BY id DESC LIMIT 1), '') AS proof_photo,
         oi.product_name,
         oi.price,
         oi.quantity,
@@ -483,6 +484,7 @@ $query = "
         oi.total as item_total,
         p.image as product_image
     FROM orders o
+    LEFT JOIN logistics_tracking lt ON lt.order_id = o.id
     LEFT JOIN order_items oi ON o.id = oi.order_id
     LEFT JOIN products p ON oi.product_id = p.id
     WHERE o.user_id = ? AND (o.is_archived IS NULL OR o.is_archived = 0)
@@ -524,6 +526,7 @@ while ($row = mysqli_fetch_assoc($result)) {
             'pickup_location' => $row['pickup_location'],
             'delivery_location' => $row['delivery_location'],
             'is_archived' => $row['is_archived'],
+            'proof_photo' => !empty($row['proof_photo']) ? ('uploads/proof_of_delivery/' . basename($row['proof_photo'])) : '',
             'items' => []
         ];
     }
@@ -799,6 +802,20 @@ unset($order);
                                         <div class="info-group full">
                                             <span class="label">Instructions</span>
                                             <span class="val"><?php echo htmlspecialchars($order['special_instructions']); ?></span>
+                                        </div>
+                                    <?php endif; ?>
+                                    <?php if (!empty($order['proof_photo'])): ?>
+                                        <div class="info-group full pod-proof-card" style="margin-top: 10px; padding: 14px; background: #ecfdf3; border: 1px solid #abefc6; border-radius: 12px;">
+                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                                <span class="label" style="color: #027a48; font-weight: 700; margin: 0; font-size: 0.85rem;"><i class="fas fa-camera me-1"></i> Proof of Delivery Photo</span>
+                                                <span class="badge" style="background: #ffffff; color: #027a48; border: 1px solid #abefc6; font-size: 11px; font-weight: 600; padding: 4px 8px; border-radius: 6px;"><i class="fas fa-check-circle me-1"></i> Delivered</span>
+                                            </div>
+                                            <div style="text-align: center;">
+                                                <a href="<?php echo htmlspecialchars($order['proof_photo']); ?>" target="_blank" title="Click to view full image">
+                                                    <img src="<?php echo htmlspecialchars($order['proof_photo']); ?>" alt="Proof of Delivery" style="max-height: 220px; width: auto; max-width: 100%; border-radius: 8px; border: 1px solid #d0d5dd; object-fit: cover; box-shadow: 0 1px 3px rgba(16,24,40,0.06); cursor: pointer;" onerror="this.onerror=null;this.src='assets/images/promo_lechon.jpg';">
+                                                </a>
+                                                <div style="font-size: 11px; color: #475467; margin-top: 8px;"><i class="fas fa-info-circle me-1"></i> Photo taken by rider upon handover at your doorstep. Click image to view full size.</div>
+                                            </div>
                                         </div>
                                     <?php endif; ?>
                                 </div>
@@ -1500,6 +1517,21 @@ body.dark-mode .page-num {
     background: #111827 !important;
     border-color: #334155 !important;
     color: #cbd5e1 !important;
+}
+body.dark-mode .pod-proof-card {
+    background: #052e16 !important;
+    border-color: #047857 !important;
+}
+body.dark-mode .pod-proof-card span.label {
+    color: #6ee7b7 !important;
+}
+body.dark-mode .pod-proof-card span.badge {
+    background: #064e3b !important;
+    border-color: #047857 !important;
+    color: #6ee7b7 !important;
+}
+body.dark-mode .pod-proof-card div {
+    color: #94a3b8 !important;
 }
 </style>
 

@@ -244,15 +244,32 @@ function getFranchiseSellerScopeOwnerId($conn, $user_id) {
         return $cache[$user_id];
     }
 
+    // 1. Direct check: Is this user a registered store owner, business owner, or approved franchise partner?
     $query = "SELECT u.id
               FROM users u
+              LEFT JOIN roles r ON u.role_id = r.id
               WHERE u.id = ?
-                AND u.account_type = 'organization'
-                AND EXISTS (
-                    SELECT 1
-                    FROM franchise_applications fa
-                    WHERE fa.user_id = u.id
-                      AND fa.status = 'approved'
+                AND (
+                    -- Approved franchise application
+                    EXISTS (
+                        SELECT 1
+                        FROM franchise_applications fa
+                        WHERE fa.user_id = u.id
+                          AND fa.status = 'approved'
+                    )
+                    -- Or registered owner in store_locations
+                    OR EXISTS (
+                        SELECT 1
+                        FROM store_locations sl
+                        WHERE sl.owner_user_id = u.id
+                    )
+                    -- Or shop owner / business owner role
+                    OR LOWER(TRIM(COALESCE(r.name, ''))) IN ('business_owner', 'partner_owner', 'store_owner', 'shop_owner')
+                )
+                -- Super admins are platform administrators, not single-store scoped unless explicitly owning a store
+                AND (
+                    LOWER(TRIM(COALESCE(r.name, ''))) != 'super_admin'
+                    OR EXISTS (SELECT 1 FROM store_locations sl WHERE sl.owner_user_id = u.id)
                 )
               LIMIT 1";
     $stmt = mysqli_prepare($conn, $query);
@@ -269,20 +286,28 @@ function getFranchiseSellerScopeOwnerId($conn, $user_id) {
         return $cache[$user_id] = (int)$row['id'];
     }
 
-    // Partner-managed sub-users inherit the partner owner's seller scope.
+    // 2. Partner/Shop-managed sub-users inherit the partner/shop owner's seller scope.
     if (adminAuthTableExists($conn, 'partner_user_links')
         && adminAuthColumnExists($conn, 'partner_user_links', 'owner_user_id')
         && adminAuthColumnExists($conn, 'partner_user_links', 'managed_user_id')) {
         $link_query = "SELECT pul.owner_user_id
                        FROM partner_user_links pul
                        INNER JOIN users owner_u ON owner_u.id = pul.owner_user_id
+                       LEFT JOIN roles owner_r ON owner_u.role_id = owner_r.id
                        WHERE pul.managed_user_id = ?
-                         AND owner_u.account_type = 'organization'
-                         AND EXISTS (
-                             SELECT 1
-                             FROM franchise_applications fa
-                             WHERE fa.user_id = pul.owner_user_id
-                               AND fa.status = 'approved'
+                         AND (
+                             EXISTS (
+                                 SELECT 1
+                                 FROM franchise_applications fa
+                                 WHERE fa.user_id = pul.owner_user_id
+                                   AND fa.status = 'approved'
+                             )
+                             OR EXISTS (
+                                 SELECT 1
+                                 FROM store_locations sl
+                                 WHERE sl.owner_user_id = pul.owner_user_id
+                             )
+                             OR LOWER(TRIM(COALESCE(owner_r.name, ''))) IN ('business_owner', 'partner_owner', 'store_owner', 'shop_owner')
                          )
                        LIMIT 1";
         $link_stmt = mysqli_prepare($conn, $link_query);
@@ -299,7 +324,7 @@ function getFranchiseSellerScopeOwnerId($conn, $user_id) {
         }
     }
 
-    // Fallback: infer partner owner scope from role ownership (`roles.owner_user_id`).
+    // 3. Fallback: infer partner owner scope from role ownership (`roles.owner_user_id`).
     // This keeps tenant isolation working for partner-managed staff accounts
     // even when partner_user_links rows were not created historically.
     if (adminAuthColumnExists($conn, 'roles', 'owner_user_id') && adminAuthColumnExists($conn, 'users', 'role_id')) {
@@ -307,14 +332,22 @@ function getFranchiseSellerScopeOwnerId($conn, $user_id) {
                              FROM users managed_u
                              INNER JOIN roles r ON r.id = managed_u.role_id
                              INNER JOIN users owner_u ON owner_u.id = r.owner_user_id
+                             LEFT JOIN roles owner_r ON owner_u.role_id = owner_r.id
                              WHERE managed_u.id = ?
                                AND r.owner_user_id IS NOT NULL
-                               AND owner_u.account_type = 'organization'
-                               AND EXISTS (
-                                   SELECT 1
-                                   FROM franchise_applications fa
-                                   WHERE fa.user_id = r.owner_user_id
-                                     AND fa.status = 'approved'
+                               AND (
+                                   EXISTS (
+                                       SELECT 1
+                                       FROM franchise_applications fa
+                                       WHERE fa.user_id = r.owner_user_id
+                                         AND fa.status = 'approved'
+                                   )
+                                   OR EXISTS (
+                                       SELECT 1
+                                       FROM store_locations sl
+                                       WHERE sl.owner_user_id = r.owner_user_id
+                                   )
+                                   OR LOWER(TRIM(COALESCE(owner_r.name, ''))) IN ('business_owner', 'partner_owner', 'store_owner', 'shop_owner')
                                )
                              LIMIT 1";
         $role_owner_stmt = mysqli_prepare($conn, $role_owner_query);
@@ -448,12 +481,14 @@ if (!function_exists('getFranchiseScopedOrderExistsSql')) {
             return '1=0';
         }
 
-        $seller_scope_condition = getFranchiseSellerScopeConditionSql($conn, 'p_scope.seller_id', $seller_scope_owner_id);
-        if ($seller_scope_condition === '1=0') {
+        $owner_id = (int)$seller_scope_owner_id;
+        if ($owner_id <= 0) {
             return '1=0';
         }
 
-        return "EXISTS (
+        $seller_scope_condition = getFranchiseSellerScopeConditionSql($conn, 'p_scope.seller_id', $owner_id);
+
+        return "((EXISTS (
             SELECT 1
             FROM order_items oi_scope
             INNER JOIN products p_scope
@@ -464,7 +499,19 @@ if (!function_exists('getFranchiseScopedOrderExistsSql')) {
                 )
             WHERE oi_scope.order_id = {$order_id_expr}
               AND {$seller_scope_condition}
-        )";
+        )) OR (EXISTS (
+            SELECT 1
+            FROM orders o_scope
+            WHERE o_scope.id = {$order_id_expr}
+              AND (
+                  o_scope.seller_id = {$owner_id}
+                  OR o_scope.pickup_location IN (SELECT store_id FROM store_locations WHERE owner_user_id = {$owner_id})
+                  OR (
+                      o_scope.special_instructions IS NOT NULL 
+                      AND o_scope.special_instructions LIKE CONCAT('%', (SELECT store_name FROM store_locations WHERE owner_user_id = {$owner_id} LIMIT 1), '%')
+                  )
+              )
+        )))";
     }
 }
 
@@ -927,6 +974,7 @@ function getAdminModuleByPage($page_name) {
         'cancel_delivery.php' => 'logistics',
         'update_delivery_status.php' => 'logistics',
         'ajax_get_driver_status.php' => 'logistics',
+        'ajax_accept_delivery.php' => 'logistics',
         'products.php' => 'products',
         'vouchers.php' => 'products',
         'inventory.php' => 'inventory',
@@ -1524,8 +1572,11 @@ function checkAdminAccess() {
             'assign_driver.php',
             'cancel_delivery.php',
             'update_delivery_status.php',
+            'ajax_confirm_pickup.php',
+            'ajax_handover_action.php',
             'get_logistics_details.php',
             'ajax_get_driver_status.php',
+            'ajax_accept_delivery.php',
             'get_driver_locations.php',
             'get_available_drivers.php',
             'kiosk.php',

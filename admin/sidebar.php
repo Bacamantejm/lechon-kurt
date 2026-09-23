@@ -430,7 +430,13 @@ $topbar_account_type_label = strtolower(trim((string)($_SESSION['account_type'] 
     ? 'Business Partner'
     : 'Customer Account';
 $topbar_current_shop_label = $sidebar_brand_name;
-$topbar_my_account_link = '../my_account.php';
+require_once __DIR__ . '/../includes/rider_helper.php';
+$is_logistics_active_page = (basename($_SERVER['PHP_SELF'] ?? '') === 'logistics.php');
+if ($is_logistics_active_page || isDeliveryDriverUser($conn, $user_id)) {
+    $topbar_my_account_link = '../my_account.php?from=logistics';
+} else {
+    $topbar_my_account_link = '../my_account.php';
+}
 $topbar_billing_link = '';
 if ($can_partner_billing) {
     $topbar_billing_link = 'partner_billing.php';
@@ -655,6 +661,13 @@ body.dark-mode .sidebar-footer .logout-btn {
                     <a href="logistics.php" class="menu-item <?php echo (in_array($current_page, ['logistics.php', 'logistics_settings.php'])) ? 'active' : ''; ?>">
                         <i class="fas fa-truck"></i>
                         <span>Logistics</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="../rider/index.php" target="_blank" class="menu-item" title="Open Mobile Rider Portal">
+                        <i class="fas fa-motorcycle"></i>
+                        <span>Rider Portal</span>
+                        <span style="font-size: 10px; background: #eaecf0; color: #344054; padding: 2px 6px; border-radius: 4px; margin-left: auto;">Mobile</span>
                     </a>
                 </li>
             <?php endif; ?>
@@ -3094,10 +3107,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const adminContainer = document.querySelector('.admin-container') || document.body;
     const sidebar = document.getElementById('adminSidebar');
     
-    // Ensure Burger Button & Theme Toggler are always present on ANY admin/seller/partner topbar
-    const topbars = document.querySelectorAll('.topbar-content, .admin-topbar, header.admin-topbar');
-    topbars.forEach(function(topbar) {
-        if (!topbar.querySelector('#sidebarToggler, .sidebar-toggler')) {
+    // Ensure Burger Button & Theme Toggler are always present on ANY admin/seller/partner topbar (without duplicates)
+    if (!document.querySelector('#sidebarToggler, .sidebar-toggler')) {
+        const topbarTarget = document.querySelector('.topbar-content') || document.querySelector('.admin-topbar, header.admin-topbar');
+        if (topbarTarget) {
             const btn = document.createElement('button');
             btn.className = 'sidebar-toggler';
             btn.id = 'sidebarToggler';
@@ -3105,11 +3118,14 @@ document.addEventListener('DOMContentLoaded', function() {
             btn.title = 'Toggle Navigation';
             btn.setAttribute('aria-label', 'Toggle Navigation');
             btn.innerHTML = '<i class="fas fa-bars"></i>';
-            topbar.prepend(btn);
+            topbarTarget.prepend(btn);
         }
+    }
 
-        if (!topbar.querySelector('#themeToggler, .theme-toggler')) {
-            const rightWrap = topbar.querySelector('.topbar-right') || topbar.querySelector('.topbar-content') || topbar;
+    if (!document.querySelector('#themeToggler, .theme-toggler')) {
+        const topbarTarget = document.querySelector('.topbar-content') || document.querySelector('.admin-topbar, header.admin-topbar');
+        if (topbarTarget) {
+            const rightWrap = topbarTarget.querySelector('.topbar-right') || topbarTarget;
             const tBtn = document.createElement('button');
             tBtn.className = 'theme-toggler';
             tBtn.id = 'themeToggler';
@@ -3117,14 +3133,14 @@ document.addEventListener('DOMContentLoaded', function() {
             tBtn.title = (currentSavedTheme === 'dark') ? 'Switch to Light Mode' : 'Switch to Dark Mode';
             tBtn.setAttribute('aria-label', 'Toggle Theme');
             tBtn.innerHTML = (currentSavedTheme === 'dark') ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
-            const profile = topbar.querySelector('.admin-profile');
+            const profile = topbarTarget.querySelector('.admin-profile');
             if (profile && profile.parentNode) {
                 profile.parentNode.insertBefore(tBtn, profile);
             } else {
                 rightWrap.appendChild(tBtn);
             }
         }
-    });
+    }
 
     // Global Event Listener for Theme Toggling with capture phase to prevent double-toggle interference
     document.addEventListener('click', function(e) {

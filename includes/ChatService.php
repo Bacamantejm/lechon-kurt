@@ -274,11 +274,12 @@ class ChatService {
             }
         }
 
-        if ($this->tableExists('logistics_tracking') && $this->tableExists('employees')) {
+        if ($this->tableExists('logistics_tracking')) {
             $stmt = $this->conn->prepare(
-                "SELECT e.user_id
+                "SELECT COALESCE(r.user_id, e.user_id) AS rider_user_id
                  FROM logistics_tracking lt
-                 INNER JOIN employees e ON e.id = lt.driver_id
+                 LEFT JOIN riders r ON r.id = lt.driver_id
+                 LEFT JOIN employees e ON (e.id = lt.driver_id OR (r.employee_id IS NOT NULL AND e.id = r.employee_id))
                  WHERE lt.order_id = ?
                  ORDER BY lt.updated_at DESC, lt.id DESC
                  LIMIT 1"
@@ -289,7 +290,7 @@ class ChatService {
                 $result = $stmt->get_result();
                 $row = $result ? $result->fetch_assoc() : null;
                 $stmt->close();
-                $rider_user_id = (int)($row['user_id'] ?? 0);
+                $rider_user_id = (int)($row['rider_user_id'] ?? 0);
             }
         }
 
@@ -326,7 +327,7 @@ class ChatService {
         }
 
         $stmt = $this->conn->prepare(
-            "SELECT customer_id, seller_id, platform_owner_id, rider_user_id, assigned_agent_id
+            "SELECT customer_id, seller_id, platform_owner_id, rider_user_id, assigned_agent_id, order_id, conversation_channel
              FROM chat_conversations
              WHERE id = ?
              LIMIT 1"
@@ -351,6 +352,22 @@ class ChatService {
         $platform_owner_id = (int)($conversation['platform_owner_id'] ?? 0);
         $rider_user_id = (int)($conversation['rider_user_id'] ?? 0);
         $assigned_agent_id = (int)($conversation['assigned_agent_id'] ?? 0);
+        $order_id = (int)($conversation['order_id'] ?? 0);
+
+        // Auto-link rider if assigned after conversation creation
+        if ($rider_user_id <= 0 && $order_id > 0) {
+            $party_data = $this->getOrderPartyData($order_id);
+            $new_rider_user_id = (int)($party_data['rider_user_id'] ?? 0);
+            if ($new_rider_user_id > 0) {
+                $rider_user_id = $new_rider_user_id;
+                $upd_r = $this->conn->prepare("UPDATE chat_conversations SET rider_user_id = ? WHERE id = ?");
+                if ($upd_r) {
+                    $upd_r->bind_param("ii", $rider_user_id, $conversation_id);
+                    $upd_r->execute();
+                    $upd_r->close();
+                }
+            }
+        }
 
         if ($customer_id > 0) {
             $this->ensureConversationMember($conversation_id, $customer_id, 'customer');
@@ -724,6 +741,38 @@ class ChatService {
             if ($channel === 'delivery' && $rider_user_id <= 0 && $order_id > 0) {
                 $party_data = $this->getOrderPartyData($order_id);
                 $rider_user_id = (int)($party_data['rider_user_id'] ?? 0);
+            }
+
+            if ($channel === 'delivery' && $order_id > 0) {
+                $deliv_check = $this->conn->prepare(
+                    "SELECT id, status, rider_user_id
+                     FROM chat_conversations
+                     WHERE order_id = ?
+                       AND conversation_channel = 'delivery'
+                       AND status IN ('open', 'in_progress')
+                     ORDER BY id DESC
+                     LIMIT 1"
+                );
+                if ($deliv_check) {
+                    $deliv_check->bind_param("i", $order_id);
+                    $deliv_check->execute();
+                    $deliv_res = $deliv_check->get_result();
+                    if ($deliv_res && ($deliv_row = $deliv_res->fetch_assoc())) {
+                        $deliv_check->close();
+                        $c_id = (int)$deliv_row['id'];
+                        if ($rider_user_id > 0 && (int)($deliv_row['rider_user_id'] ?? 0) !== $rider_user_id) {
+                            $upd_r = $this->conn->prepare("UPDATE chat_conversations SET rider_user_id = ? WHERE id = ?");
+                            if ($upd_r) {
+                                $upd_r->bind_param("ii", $rider_user_id, $c_id);
+                                $upd_r->execute();
+                                $upd_r->close();
+                            }
+                        }
+                        $this->syncConversationMembers($c_id);
+                        return $deliv_row;
+                    }
+                    $deliv_check->close();
+                }
             }
 
             $query = "SELECT id, status

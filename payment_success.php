@@ -247,51 +247,49 @@ try {
                     }
                 }
                 
-                // --- AUTO-ASSIGN DRIVER ---
+                // --- INITIALIZE DELIVERY TRACKING (Waiting for Rider to Accept) ---
                 if (($order['delivery_option'] ?? 'pickup') === 'delivery') {
                     try {
                         $logisticsService = new LogisticsService($conn);
                         
-                        // 1. Create tracking record for the order
-                        $trackingResult = $logisticsService->createTrackingForOrder($order_id, 1, 1, $order['special_instructions'] ?? '', $order['latitude'] ?? null, $order['longitude'] ?? null); // Provider 1 = In-house, Method 1 = Standard
-                        
-                        if ($trackingResult['success']) {
-                            $tracking_id = $trackingResult['tracking_id'];
-                            error_log("Logistics tracking record #{$tracking_id} created for order #{$order_id}.");
-                            
-                            // 2. Find an available driver
-                            $availableDriver = $logisticsService->findAvailableDriver(
-                                (int)$order_id,
-                                (string)($order['delivery_date'] ?? '')
-                            );
-                            
-                            if ($availableDriver) {
-                                // 3. Assign the driver to the newly created tracking record
-                                $logisticsService->assignDriver(
-                                    $tracking_id,
-                                    $availableDriver['id'],
-                                    $availableDriver['first_name'] . ' ' . $availableDriver['last_name'],
-                                    $availableDriver['phone'],
-                                    $availableDriver['vehicle_details'] ?? ''
-                                );
-                                error_log("Order #{$order_id} auto-assigned to driver ID {$availableDriver['id']}.");
-                            } else {
-                            error_log("Auto-assign failed for order #{$order_id}: No available drivers found. Order needs manual assignment.");
-                            // --- NEW: Notify admins ---
-                            $admin_ids = getAdminUserIds($conn);
-                            $notif_title = "Driver Assignment Needed";
-                            $notif_message = "Order #" . $order['order_number'] . " requires manual driver assignment. No drivers were available.";
-                            foreach ($admin_ids as $admin_id) {
-                                createNotification($conn, $admin_id, 'driver_assignment_needed', $notif_title, $notif_message, $order_id, 'order');
-                            }
-                            // --- END NOTIFY ---
+                        // Check if tracking record already exists
+                        $t_chk_stmt = mysqli_prepare($conn, "SELECT id FROM logistics_tracking WHERE order_id = ? LIMIT 1");
+                        if ($t_chk_stmt) {
+                            mysqli_stmt_bind_param($t_chk_stmt, "i", $order_id);
+                            mysqli_stmt_execute($t_chk_stmt);
+                            $t_chk_res = mysqli_stmt_get_result($t_chk_stmt);
+                            $existing_tracking = mysqli_fetch_assoc($t_chk_res);
+                            mysqli_stmt_close($t_chk_stmt);
                         }
-                    }
+
+                        if (empty($existing_tracking)) {
+                            // Create tracking record with pending status and NO driver assigned
+                            $trackingResult = $logisticsService->createTrackingForOrder(
+                                $order_id, 1, 1,
+                                $order['special_instructions'] ?? '',
+                                $order['latitude'] ?? null,
+                                $order['longitude'] ?? null
+                            );
+                            if ($trackingResult['success']) {
+                                $tracking_id = $trackingResult['tracking_id'];
+                                error_log("Logistics tracking record #{$tracking_id} created for order #{$order_id} (Awaiting Rider Acceptance).");
+                            }
+                        }
+
+                        // Notify admins and delivery riders that an order is waiting for pickup
+                        if (function_exists('getAdminUserIds') && function_exists('createNotification')) {
+                            $admin_ids = getAdminUserIds($conn);
+                            $notif_title = "Delivery Order Waiting for Rider";
+                            $notif_message = "Order #" . $order['order_number'] . " has been paid and is waiting for a delivery rider to accept and pick up.";
+                            foreach ($admin_ids as $admin_id) {
+                                createNotification($conn, (int)$admin_id, 'delivery_waiting', $notif_title, $notif_message, (int)$order_id, 'order');
+                            }
+                        }
                     } catch (Exception $e) {
-                        error_log("Auto-assign driver exception for order #{$order_id}: " . $e->getMessage());
+                        error_log("Delivery tracking init exception for order #{$order_id}: " . $e->getMessage());
                     }
                 }
-                // --- END AUTO-ASSIGN ---
+                // --- END INITIALIZE DELIVERY TRACKING ---
                 
                 // Send payment confirmation email
                 try {

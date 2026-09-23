@@ -1,6 +1,11 @@
 <?php
 session_start();
 require_once 'includes/config.php';
+require_once __DIR__ . '/includes/rider_helper.php';
+if (!empty($_SESSION['user_id']) && isDeliveryDriverUser($conn, (int)$_SESSION['user_id'])) {
+    header("Location: rider/index.php");
+    exit();
+}
 require_once __DIR__ . '/includes/favorites_helper.php';
 require_once __DIR__ . '/includes/store_availability_helper.php';
 require_once __DIR__ . '/includes/partner_advertisement_helper.php';

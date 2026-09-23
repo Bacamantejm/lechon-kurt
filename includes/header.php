@@ -2,6 +2,14 @@
 if (session_status() === PHP_SESSION_NONE) session_start();
 if (!isset($current_page)) $current_page = basename($_SERVER['PHP_SELF'], '.php');
 
+global $conn;
+if (!isset($conn) || !($conn instanceof mysqli)) {
+    $config_file = __DIR__ . '/config.php';
+    if (file_exists($config_file)) {
+        require_once $config_file;
+    }
+}
+
 $page_title = $page_title ?? 'Lechon Delights';
 $script_parent = basename(dirname($_SERVER['PHP_SELF']));
 $path_prefix = ($script_parent === 'admin') ? '../' : '';
@@ -64,6 +72,20 @@ if ($is_logged_in_user) {
         }
     }
 }
+
+require_once __DIR__ . '/rider_helper.php';
+$is_driver_account = false;
+$is_rider_context = false;
+if ($is_logged_in_user) {
+    $header_db_conn = (isset($conn) && ($conn instanceof mysqli)) ? $conn : null;
+    $is_driver_account = isDeliveryDriverUser($header_db_conn, (int)$_SESSION['user_id']);
+    if ($is_driver_account) {
+        header("Location: " . $path_prefix . "rider/index.php");
+        exit();
+    }
+    $is_rider_context = isRiderSessionActive($header_db_conn);
+}
+$nav_logo_href = $is_rider_context ? ($path_prefix . 'rider/index.php') : ($path_prefix . 'index.php');
 
 $ongoing_order_id = 0;
 $ongoing_order_number = '';
@@ -1652,7 +1674,7 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
 <?php if ($is_market_home_header): ?>
 <header class="site-header market-main-header">
     <div class="market-header-top">
-        <a href="<?php echo $path_prefix; ?>index.php" class="logo-link">
+        <a href="<?php echo htmlspecialchars($nav_logo_href); ?>" class="logo-link">
             <span class="logo-icon"><img src="<?php echo $path_prefix; ?>assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block;"></span>
             <span class="logo-copy"><span class="logo-title">Lechon Delights</span><span class="logo-sub">Marketplace</span></span>
         </a>
@@ -1868,9 +1890,9 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
 <?php else: ?>
 <header class="site-header standard-header">
     <div class="header-shell standard-top">
-        <a href="<?php echo $path_prefix; ?>index.php" class="logo-link">
+        <a href="<?php echo htmlspecialchars($nav_logo_href); ?>" class="logo-link">
             <span class="logo-icon"><img src="<?php echo $path_prefix; ?>assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block;"></span>
-            <span class="logo-copy"><span class="logo-title">Lechon Delights</span><span class="logo-sub">Marketplace</span></span>
+            <span class="logo-copy"><span class="logo-title">Lechon Delights</span><span class="logo-sub"><?php echo $is_rider_context ? 'Rider Portal' : 'Marketplace'; ?></span></span>
         </a>
         <?php if (!$is_auth_page): ?>
         <nav class="main-nav">
@@ -1896,7 +1918,10 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
                 </button>
                 <div class="user-dropdown">
                     <div class="user-dropdown-header"><div class="user-name"><?php echo htmlspecialchars($viewer_name !== '' ? $viewer_name : $viewer_first_name); ?></div><?php if ($viewer_email !== ''): ?><div class="user-email"><?php echo htmlspecialchars($viewer_email); ?></div><?php endif; ?></div>
-                    <a href="<?php echo $path_prefix; ?>my_account.php" class="user-dropdown-item"><i class="fas fa-user"></i> My Profile</a>
+                    <?php if ($is_rider_context): ?>
+                    <a href="<?php echo $path_prefix; ?>admin/logistics.php" class="user-dropdown-item" style="color:#b3261e; font-weight:700;"><i class="fas fa-motorcycle"></i> Delivery Rider Dashboard</a>
+                    <?php endif; ?>
+                    <a href="<?php echo $path_prefix; ?>my_account.php<?php echo $is_rider_context ? '?from=logistics' : ''; ?>" class="user-dropdown-item"><i class="fas fa-user"></i> My Profile</a>
                     <a href="<?php echo $path_prefix; ?>my_account.php#addresses" class="user-dropdown-item"><i class="fas fa-address-book"></i> Address Book</a>
                     <a href="<?php echo $path_prefix; ?>my_orders.php" class="user-dropdown-item"><i class="fas fa-shopping-bag"></i> My Orders</a>
                     <a href="<?php echo $path_prefix; ?>help_center.php" class="user-dropdown-item"><i class="fas fa-life-ring"></i> Help Center</a>
@@ -1942,9 +1967,9 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
 <div class="mobile-menu-overlay" id="mobileOverlay"></div>
 <aside class="mobile-menu" id="mobileMenu">
     <div class="mobile-menu-header">
-        <a href="<?php echo $path_prefix; ?>index.php" class="logo-link" style="display:flex !important;">
+        <a href="<?php echo htmlspecialchars($nav_logo_href); ?>" class="logo-link" style="display:flex !important;">
             <span class="logo-icon" style="width:34px;height:34px;font-size:.88rem;"><img src="<?php echo $path_prefix; ?>assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block;"></span>
-            <span class="logo-copy"><span class="logo-title" style="font-size:0.98rem;">Lechon Delights</span><span class="logo-sub" style="font-size:0.58rem;">Marketplace</span></span>
+            <span class="logo-copy"><span class="logo-title" style="font-size:0.98rem;">Lechon Delights</span><span class="logo-sub" style="font-size:0.58rem;"><?php echo $is_rider_context ? 'Rider Portal' : 'Marketplace'; ?></span></span>
         </a>
         <button class="mobile-menu-close" id="mobileMenuClose" aria-label="Close menu"><i class="fas fa-times"></i></button>
     </div>

@@ -75,6 +75,30 @@ if ($seller_scope_id === null) {
     $payment = mysqli_fetch_assoc($payment_result);
     mysqli_stmt_close($stmt);
 }
+
+// Fetch logistics tracking and assigned rider details for delivery orders
+$tracking_info = null;
+if ($order['delivery_option'] === 'delivery') {
+    $tracking_stmt = mysqli_prepare($conn, "
+        SELECT lt.*, 
+               r.rider_code, r.vehicle_type, r.vehicle_plate,
+               COALESCE(NULLIF(lt.driver_name, ''), u_rdr.full_name, CONCAT(e_rdr.first_name, ' ', e_rdr.last_name), 'Assigned Rider') AS driver_display_name,
+               COALESCE(NULLIF(lt.driver_phone, ''), u_rdr.phone, e_rdr.phone, '') AS driver_display_phone
+        FROM logistics_tracking lt
+        LEFT JOIN riders r ON lt.driver_id = r.id
+        LEFT JOIN users u_rdr ON r.user_id = u_rdr.id
+        LEFT JOIN employees e_rdr ON r.employee_id = e_rdr.id
+        WHERE lt.order_id = ?
+        LIMIT 1
+    ");
+    if ($tracking_stmt) {
+        mysqli_stmt_bind_param($tracking_stmt, "i", $order_id);
+        mysqli_stmt_execute($tracking_stmt);
+        $t_res = mysqli_stmt_get_result($tracking_stmt);
+        $tracking_info = mysqli_fetch_assoc($t_res);
+        mysqli_stmt_close($tracking_stmt);
+    }
+}
 ?>
 
 <div class="order-details">
@@ -110,6 +134,134 @@ if ($seller_scope_id === null) {
             <?php endif; ?>
         </div>
     </div>
+
+    <?php if ($order['delivery_option'] === 'delivery'): ?>
+        <div class="card mb-3 border-0 shadow-sm" style="border: 1px solid #eaecf0 !important; border-radius: 12px; overflow: hidden;">
+            <div class="card-header py-2 px-3 d-flex justify-content-between align-items-center" style="background: #ffffff; border-bottom: 1px solid #eaecf0;">
+                <span class="fw-bold small" style="color: #101828;">
+                    <i class="fas fa-motorcycle text-danger me-1"></i> Delivery &amp; Rider Handover
+                </span>
+                <?php if ($tracking_info): ?>
+                    <span class="badge" style="background: #eff8ff; color: #175cd3; border: 1px solid #b2ddff; font-size: 11px;">
+                        Status: <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $tracking_info['current_status']))); ?>
+                    </span>
+                <?php endif; ?>
+            </div>
+            <div class="card-body p-3">
+                <?php if ($tracking_info && !empty($tracking_info['driver_id'])): ?>
+                    <div class="row g-2 mb-2">
+                        <div class="col-sm-6 small">
+                            <span class="text-muted">Assigned Rider:</span> 
+                            <strong><?php echo htmlspecialchars($tracking_info['driver_display_name']); ?></strong>
+                            <?php if (!empty($tracking_info['rider_code'])): ?>
+                                <span class="badge bg-light text-dark border ms-1"><?php echo htmlspecialchars($tracking_info['rider_code']); ?></span>
+                            <?php endif; ?>
+                        </div>
+                        <div class="col-sm-6 small">
+                            <span class="text-muted">Rider Phone:</span>
+                            <?php if (!empty($tracking_info['driver_display_phone'])): ?>
+                                <a href="tel:<?php echo htmlspecialchars($tracking_info['driver_display_phone']); ?>" class="text-success text-decoration-none fw-semibold">
+                                    <i class="fas fa-phone-alt me-1"></i><?php echo htmlspecialchars($tracking_info['driver_display_phone']); ?>
+                                </a>
+                            <?php else: ?>
+                                <span class="text-muted">N/A</span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+
+                    <?php if (!empty($order['delivery_pin'])): ?>
+                        <div class="d-flex align-items-center justify-content-between p-2 rounded mb-2" style="background: #fff8f8; border: 1px solid #fee4e2;">
+                            <span class="small fw-bold text-danger"><i class="fas fa-key me-1"></i> Delivery PIN:</span>
+                            <strong style="letter-spacing: 2px; font-size: 1.15rem; color: #b3261e;"><?php echo htmlspecialchars($order['delivery_pin']); ?></strong>
+                        </div>
+                    <?php endif; ?>
+
+                    <?php if (in_array($tracking_info['current_status'], ['picked_up', 'on_the_way', 'arriving', 'delivered'])): ?>
+                        <div class="p-2 rounded text-center small fw-semibold" style="background: #ecfdf3; color: #027a48; border: 1px solid #abefc6;">
+                            <i class="fas fa-check-circle me-1"></i> Handover Confirmed &bull; Picked up at <?php echo !empty($tracking_info['pickup_time']) ? date('M d, Y h:i A', strtotime($tracking_info['pickup_time'])) : date('h:i A'); ?>
+                        </div>
+                    <?php elseif ($tracking_info['current_status'] === 'arrived_at_restaurant'): ?>
+                        <div class="p-3 rounded mb-2" style="background: #fffbeb; border: 1px solid #fedf89;">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <div>
+                                    <div class="fw-bold text-dark"><i class="fas fa-motorcycle text-warning me-1"></i> Rider Arrived at Store!</div>
+                                    <div class="small text-muted"><?php echo htmlspecialchars($tracking_info['driver_display_name']); ?> is waiting to pick up this order.</div>
+                                </div>
+                                <span class="badge" style="background:#fef08a; color:#854d0e; border:1px solid #fde047;">Waiting Handover</span>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-success fw-bold flex-fill py-2" onclick="approveRiderHandover(<?php echo (int)$order['id']; ?>)">
+                                    <i class="fas fa-check-circle me-1"></i> Approve Handover
+                                </button>
+                                <button type="button" class="btn btn-outline-danger fw-bold px-3 py-2" onclick="rejectRiderHandover(<?php echo (int)$order['id']; ?>)">
+                                    <i class="fas fa-times-circle me-1"></i> Reject
+                                </button>
+                            </div>
+                        </div>
+                        <div class="p-2 rounded" style="background: #f8f9fa; border: 1px solid #eaecf0;">
+                            <label class="form-label small fw-bold text-dark mb-1">
+                                Or Verify with PIN / Code
+                            </label>
+                            <div class="input-group">
+                                <input type="text" id="detailHandoverCode" class="form-control fw-bold form-control-sm" placeholder="Enter PIN (<?php echo htmlspecialchars($order['delivery_pin'] ?? ''); ?>) or Rider Code" value="<?php echo htmlspecialchars($order['delivery_pin'] ?? ''); ?>">
+                                <button type="button" class="btn btn-sm btn-outline-success fw-bold px-2" onclick="submitDetailHandover(<?php echo (int)$order['id']; ?>)">
+                                    <i class="fas fa-check me-1"></i> Verify
+                                </button>
+                            </div>
+                        </div>
+                    <?php else: ?>
+                        <div class="p-3 rounded" style="background: #f8f9fa; border: 1px solid #eaecf0;">
+                            <label class="form-label small fw-bold text-dark mb-1">
+                                Enter Confirmation Code to Release Order
+                            </label>
+                            <div class="input-group mb-1">
+                                <input type="text" id="detailHandoverCode" class="form-control fw-bold" placeholder="Enter PIN (<?php echo htmlspecialchars($order['delivery_pin'] ?? ''); ?>) or Rider Code" value="<?php echo htmlspecialchars($order['delivery_pin'] ?? ''); ?>">
+                                <button type="button" class="btn btn-success fw-bold px-3" onclick="submitDetailHandover(<?php echo (int)$order['id']; ?>)">
+                                    <i class="fas fa-check-circle me-1"></i> Confirm Pickup
+                                </button>
+                            </div>
+                            <div class="text-muted" style="font-size: 11px;">
+                                Confirming the handover will immediately notify the customer and advance the rider to customer delivery mode.
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                <?php else: ?>
+                    <div class="text-muted small">
+                        <i class="fas fa-info-circle me-1"></i> No rider has been assigned yet. When a rider accepts the order, you will be able to verify their code and confirm handover here.
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+        <?php
+        $pod_path = $tracking_info['proof_of_delivery_path'] ?? '';
+        if (empty($pod_path)) {
+            $pod_chk = mysqli_query($conn, "SELECT photo_path FROM proof_of_delivery WHERE order_id = " . (int)$order['id'] . " ORDER BY id DESC LIMIT 1");
+            if ($pod_chk && ($pod_r = mysqli_fetch_assoc($pod_chk))) {
+                $pod_path = $pod_r['photo_path'];
+            }
+        }
+        ?>
+        <?php if (!empty($pod_path)): ?>
+            <?php
+            $pod_file = basename($pod_path);
+            $pod_display_url = '../uploads/proof_of_delivery/' . $pod_file;
+            ?>
+            <div class="card mb-3 border-0 shadow-sm" style="border: 1px solid #eaecf0 !important; border-radius: 12px; overflow: hidden;">
+                <div class="card-header bg-white py-2 px-3 fw-bold small text-dark d-flex justify-content-between align-items-center border-bottom">
+                    <span><i class="fas fa-camera text-success me-1"></i> Proof of Delivery Photo</span>
+                    <span class="badge" style="background:#ecfdf3; color:#027a48; border:1px solid #abefc6;"><i class="fas fa-check-circle"></i> Verified Delivered</span>
+                </div>
+                <div class="card-body p-3 text-center">
+                    <a href="<?php echo htmlspecialchars($pod_display_url); ?>" target="_blank" title="Click to view full image">
+                        <img src="<?php echo htmlspecialchars($pod_display_url); ?>" alt="Proof of Delivery" style="max-height: 240px; max-width: 100%; border-radius: 8px; border: 1px solid #eaecf0; object-fit: cover; box-shadow: 0 1px 3px rgba(16,24,40,0.06);" onerror="this.onerror=null;this.src='../assets/images/promo_lechon.jpg';">
+                    </a>
+                    <div class="mt-2 text-muted small">
+                        <i class="fas fa-info-circle me-1"></i> Captured by rider upon handover to customer. Click image to open in full size.
+                    </div>
+                </div>
+            </div>
+        <?php endif; ?>
+    <?php endif; ?>
     
     <div class="order-items">
         <h6>Order Items<?php echo $seller_scope_id !== null ? ' (Your Store)' : ''; ?></h6>

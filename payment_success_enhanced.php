@@ -70,82 +70,36 @@ try {
         }
     }
     
-    // Automatic driver assignment for delivery orders
+    // Delivery tracking initialization (Waiting for Rider to Accept)
     if ($order['delivery_option'] === 'delivery') {
-        $logistics_service = new EnhancedLogisticsService($conn);
-        
-        // Get user's latitude/longitude or calculate from address
-        $address = $order['delivery_address'];
-        $latitude = null;
-        $longitude = null;
-        
-        // Check if coordinates are stored in order
-        if (isset($order['customer_coordinates'])) {
-            $coords = json_decode($order['customer_coordinates'], true);
-            if ($coords && isset($coords['latitude'], $coords['longitude'])) {
-                $latitude = floatval($coords['latitude']);
-                $longitude = floatval($coords['longitude']);
-            }
-        }
-        
-        // Auto-assign driver
-        $assignment_result = $logistics_service->autoAssignDriver(
-            $order_id,
-            $address,
-            $latitude,
-            $longitude,
-            EnhancedLogisticsService::ASSIGNMENT_ALGORITHM_HYBRID
-        );
-        
-        if ($assignment_result['success']) {
-            // Send SMS to customer about driver assignment
-            try {
-                $sms_service = new SmsService($conn); // Corrected instantiation
-                $driver_name = $assignment_result['driver_name'] ?? 'Your driver';
-                $driver_phone = $assignment_result['driver_phone'] ?? '';
-                
-                $message = "Hi {$order['customer_name']}, your order #{$order['order_number']} has been assigned to driver $driver_name. They will call you soon at $driver_phone. Track your order: " . $_SERVER['HTTP_HOST'];
-                
-                if (!empty($order['customer_phone'])) {
-                    $sms_service->send($order['customer_phone'], $message); // Corrected method call
-                }
-            } catch (Exception $e) {
-                error_log("SMS sending error: " . $e->getMessage());
-            }
+        $check_tracking = "SELECT id FROM logistics_tracking WHERE order_id = ? LIMIT 1";
+        $check_stmt = mysqli_prepare($conn, $check_tracking);
+        if ($check_stmt) {
+            mysqli_stmt_bind_param($check_stmt, "i", $order_id);
+            mysqli_stmt_execute($check_stmt);
+            $check_result = mysqli_stmt_get_result($check_stmt);
+            $existing_row = mysqli_fetch_assoc($check_result);
+            mysqli_stmt_close($check_stmt);
             
-            // Send email notification
-            try {
-                if (class_exists('EmailService')) {
-                    $email_service = new EmailService($conn);
-                    $email_subject = "Driver Assigned - Order #" . $order['order_number'];
-                    $email_body = "Hello {$order['customer_name']},\n\nYour order has been assigned to driver {$assignment_result['driver_name']}. They will contact you shortly.\n\nOrder #: {$order['order_number']}\nDelivery Address: {$order['delivery_address']}";
-                    $email_service->sendNotificationEmail($order['customer_email'], $email_subject, $email_body);
-                }
-            } catch (Exception $e) {
-                error_log("Email notification error: " . $e->getMessage());
-            }
-        } else {
-            // Log failed assignment but don't fail the payment flow
-            error_log("Failed to assign driver for order $order_id: " . $assignment_result['message']);
-            
-            // Mark for manual assignment - create tracking if missing
-            $check_tracking = "SELECT id FROM logistics_tracking WHERE order_id = ?";
-            $check_stmt = mysqli_prepare($conn, $check_tracking);
-            if ($check_stmt) {
-                mysqli_stmt_bind_param($check_stmt, "i", $order_id);
-                mysqli_stmt_execute($check_stmt);
-                $check_result = mysqli_stmt_get_result($check_stmt);
-                mysqli_stmt_close($check_stmt);
-                
-                if ($check_result->num_rows === 0) {
-                    $mark_manual = "INSERT INTO logistics_tracking (order_id, current_status, created_at, updated_at) 
-                                   VALUES (?, 'pending', NOW(), NOW())";
-                    $manual_stmt = mysqli_prepare($conn, $mark_manual);
-                    if ($manual_stmt) {
-                        mysqli_stmt_bind_param($manual_stmt, "i", $order_id);
-                        mysqli_stmt_execute($manual_stmt);
-                        mysqli_stmt_close($manual_stmt);
+            if (!$existing_row) {
+                $address = $order['delivery_address'];
+                $latitude = null;
+                $longitude = null;
+                if (isset($order['customer_coordinates'])) {
+                    $coords = json_decode($order['customer_coordinates'], true);
+                    if ($coords && isset($coords['latitude'], $coords['longitude'])) {
+                        $latitude = floatval($coords['latitude']);
+                        $longitude = floatval($coords['longitude']);
                     }
+                }
+                
+                $mark_manual = "INSERT INTO logistics_tracking (order_id, current_status, current_latitude, current_longitude, created_at, updated_at) 
+                               VALUES (?, 'pending', ?, ?, NOW(), NOW())";
+                $manual_stmt = mysqli_prepare($conn, $mark_manual);
+                if ($manual_stmt) {
+                    mysqli_stmt_bind_param($manual_stmt, "idd", $order_id, $latitude, $longitude);
+                    mysqli_stmt_execute($manual_stmt);
+                    mysqli_stmt_close($manual_stmt);
                 }
             }
         }

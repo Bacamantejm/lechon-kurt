@@ -654,6 +654,19 @@ function resolveBackofficeDashboardRoute($conn = null, $user_id = 0) {
 }
 
 function getUserDashboardRoute($conn, $user_id, $user_type = '') {
+    $user_id = (int)$user_id;
+
+    // Check if user is a registered delivery rider
+    if ($conn && $user_id > 0) {
+        if (function_exists('isDeliveryDriverUser') && isDeliveryDriverUser($conn, $user_id)) {
+            return 'rider/index.php';
+        }
+        $r_chk = mysqli_query($conn, "SELECT id FROM riders WHERE user_id = $user_id AND verification_status = 'verified' LIMIT 1");
+        if ($r_chk && mysqli_num_rows($r_chk) > 0) {
+            return 'rider/index.php';
+        }
+    }
+
     if (hasBackofficeAccess($conn, $user_id)) {
         return resolveBackofficeDashboardRoute($conn, $user_id);
     }

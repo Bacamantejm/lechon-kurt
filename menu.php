@@ -4,6 +4,11 @@ $current_page = 'menu';
 $page_title = "Menu & Order | Lechon Delights";
 
 require_once 'includes/config.php';
+require_once __DIR__ . '/includes/rider_helper.php';
+if (!empty($_SESSION['user_id']) && isDeliveryDriverUser($conn, (int)$_SESSION['user_id'])) {
+    header("Location: rider/index.php");
+    exit();
+}
 
 $scoped_partner_seller_id = 0;
 if (!empty($_SESSION['user_id']) && isset($conn) && $conn) {

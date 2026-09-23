@@ -106,14 +106,14 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
             top: 0;
             left: 0;
             width: var(--sidebar-width);
-            background: #171922;
-            color: #ffffff;
+            background: #ffffff;
+            color: #344054;
             transition: var(--transition);
             z-index: 1000;
-            box-shadow: 4px 0 20px rgba(0,0,0,0.12);
+            box-shadow: 0 1px 3px rgba(16, 24, 40, 0.05), 0 4px 16px rgba(16, 24, 40, 0.03);
             display: flex;
             flex-direction: column;
-            border-right: 1px solid #2a2d3a;
+            border-right: 1px solid #eaecf0;
         }
 
         .admin-sidebar h3 {
@@ -122,16 +122,16 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
             font-family: 'Outfit', sans-serif;
             font-weight: 800;
             margin-bottom: 10px;
-            color: #ffffff;
+            color: #101828;
             font-size: 1.35rem;
             display: flex;
             align-items: center;
             gap: 10px;
-            border-bottom: 1px solid #2a2d3a;
+            border-bottom: 1px solid #eaecf0;
         }
 
         .admin-sidebar h3 i {
-            color: var(--food-orange);
+            color: #b3261e;
             font-size: 1.25rem;
         }
 
@@ -140,13 +140,14 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
             display: flex;
             flex-direction: column;
             gap: 4px;
+            height: calc(100% - 80px);
         }
 
         .admin-sidebar a {
             padding: 12px 18px;
             text-decoration: none;
             font-size: 0.92rem;
-            color: rgba(255,255,255,0.75);
+            color: #475467;
             display: flex;
             align-items: center;
             gap: 12px;
@@ -156,15 +157,26 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
         }
 
         .admin-sidebar a:hover {
-            color: #ffffff;
-            background-color: rgba(255,255,255,0.08);
+            color: #101828;
+            background-color: #f8f9fa;
             transform: translateX(3px);
         }
 
         .admin-sidebar a.active {
             color: #ffffff;
-            background: linear-gradient(135deg, #b3261e 0%, #ef6b2e 100%);
-            box-shadow: 0 6px 16px rgba(179, 38, 30, 0.35);
+            background: #b3261e;
+            box-shadow: 0 4px 12px rgba(179, 38, 30, 0.25);
+        }
+
+        .admin-sidebar a.logout-link {
+            margin-top: auto;
+            color: #b3261e;
+            font-weight: 600;
+        }
+
+        .admin-sidebar a.logout-link:hover {
+            background-color: #fff1f0;
+            color: #981b15;
         }
 
         .admin-sidebar i {
@@ -490,7 +502,46 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
         body.dark-mode,
         html.dark-mode { background-color: var(--bg-color-dark) !important; color: var(--text-color-dark) !important; }
         body.dark-mode .admin-content { background-color: var(--bg-color-dark) !important; color: var(--text-color-dark) !important; }
-        body.dark-mode .admin-sidebar { background: #121319; border-color: #272a37; }
+        body.dark-mode .admin-sidebar,
+        html.dark-mode .admin-sidebar {
+            background: #181d26 !important;
+            border-right: 1px solid #27303f !important;
+            color: #e2e8f0 !important;
+            box-shadow: 4px 0 20px rgba(0, 0, 0, 0.3) !important;
+        }
+        body.dark-mode .admin-sidebar h3,
+        html.dark-mode .admin-sidebar h3 {
+            color: #f8fafc !important;
+            border-bottom: 1px solid #27303f !important;
+        }
+        body.dark-mode .admin-sidebar h3 i,
+        html.dark-mode .admin-sidebar h3 i {
+            color: #ef4444 !important;
+        }
+        body.dark-mode .admin-sidebar a,
+        html.dark-mode .admin-sidebar a {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode .admin-sidebar a:hover,
+        html.dark-mode .admin-sidebar a:hover {
+            color: #ffffff !important;
+            background-color: #222936 !important;
+        }
+        body.dark-mode .admin-sidebar a.active,
+        html.dark-mode .admin-sidebar a.active {
+            color: #ffffff !important;
+            background: #b3261e !important;
+            box-shadow: 0 4px 14px rgba(179, 38, 30, 0.4) !important;
+        }
+        body.dark-mode .admin-sidebar a.logout-link,
+        html.dark-mode .admin-sidebar a.logout-link {
+            color: #f87171 !important;
+        }
+        body.dark-mode .admin-sidebar a.logout-link:hover,
+        html.dark-mode .admin-sidebar a.logout-link:hover {
+            background-color: rgba(239, 68, 68, 0.15) !important;
+            color: #fca5a5 !important;
+        }
         body.dark-mode .admin-topbar,
         body.dark-mode .stat-card,
         body.dark-mode .recent-section,
@@ -570,7 +621,32 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
     </style>
 </head>
 <body class="<?php echo $is_initial_dark ? 'dark-mode' : ''; ?>">
-<script>(function(){if(document.documentElement.classList.contains('dark-mode')&&document.body){document.body.classList.add('dark-mode');}})();</script>
+<script>
+(function(){
+    function syncThemeClasses() {
+        var isDark = document.body && document.body.classList.contains('dark-mode');
+        if (document.documentElement) {
+            document.documentElement.classList.toggle('dark-mode', isDark);
+            document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+        }
+        document.cookie = "theme=" + (isDark ? 'dark' : 'light') + "; path=/; max-age=31536000";
+    }
+    if (document.documentElement.classList.contains('dark-mode') && document.body) {
+        document.body.classList.add('dark-mode');
+    }
+    syncThemeClasses();
+    if (window.MutationObserver && document.body) {
+        new MutationObserver(function(mutations) {
+            for (var i = 0; i < mutations.length; i++) {
+                if (mutations[i].attributeName === 'class') {
+                    syncThemeClasses();
+                    break;
+                }
+            }
+        }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    }
+})();
+</script>
 <div class="page-loader"><div class="spinner"></div></div>
 <div class="admin-container">
     <nav class="admin-sidebar" id="adminSidebar">
@@ -586,7 +662,7 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
             <?php if ($can_back_to_admin): ?>
                 <a href="../admin/index.php"><i class="fas fa-user-shield"></i> Back to Admin</a>
             <?php endif; ?>
-            <a href="../logout.php" id="logoutBtn" style="margin-top:auto; color:#ef4444;"><i class="fas fa-right-from-bracket"></i> Logout</a>
+            <a href="../logout.php" id="logoutBtn" class="logout-link"><i class="fas fa-right-from-bracket"></i> Logout</a>
         </div>
     </nav>
 

@@ -502,6 +502,8 @@ if (!empty($name_parts[1])) $avatar_initials .= strtoupper(substr($name_parts[1]
 if ($avatar_initials === '') $avatar_initials = 'U';
 
 $page_title = "My Account | Lechon Delights";
+require_once __DIR__ . '/includes/rider_helper.php';
+$is_rider_context = isRiderSessionActive($conn);
 include 'includes/header.php';
 ?>
 
@@ -1165,6 +1167,14 @@ body.dark-mode .mobile-segment-btn.active {
 <div class="account-page-v2">
     <div class="account-container-v2">
         
+        <?php if ($is_rider_context): ?>
+        <div class="mb-3">
+            <a href="admin/logistics.php" class="btn" style="background:#ffffff; color:#b3261e; border:1.5px solid #fee4e2; font-weight:700; border-radius:10px; padding:9px 18px; display:inline-flex; align-items:center; gap:8px; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.05); text-decoration:none;">
+                <i class="fas fa-arrow-left"></i> Back to Delivery Rider Dashboard
+            </a>
+        </div>
+        <?php endif; ?>
+
         <!-- Top Profile Summary Banner (Hierarchy Level 1) -->
         <div class="account-hero-card">
             <div class="account-hero-left">
@@ -1185,7 +1195,7 @@ body.dark-mode .mobile-segment-btn.active {
                     <h2><?php echo htmlspecialchars($user['full_name'] ?? 'My Account'); ?></h2>
                     <div class="hero-user-tags">
                         <span class="hero-tag type-tag">
-                            <i class="fas fa-user-tag"></i> <?php echo $is_organization_account ? 'Store Partner' : 'Customer Account'; ?>
+                            <i class="fas fa-user-tag"></i> <?php echo $is_rider_context ? 'Delivery Rider' : ($is_organization_account ? 'Store Partner' : 'Customer Account'); ?>
                         </span>
                         <?php if ($partner_subscription): ?>
                         <a href="subscription_plans.php" class="hero-tag" style="background:#b3261e;color:#fff;border:1px solid #b3261e;text-decoration:none;font-weight:800;" title="Active Partner Plan: <?php echo htmlspecialchars($partner_subscription['plan_name']); ?>">
@@ -1203,6 +1213,14 @@ body.dark-mode .mobile-segment-btn.active {
             </div>
 
             <div class="account-hero-right">
+                <?php if ($is_rider_context): ?>
+                <a href="admin/logistics.php" class="hero-action-btn" style="background:#b3261e; color:#ffffff; border-color:#b3261e; font-weight:700;">
+                    <i class="fas fa-motorcycle"></i> Rider Dashboard
+                </a>
+                <a href="help_center.php" class="hero-action-btn">
+                    <i class="fas fa-headset"></i> Support
+                </a>
+                <?php else: ?>
                 <a href="my_orders.php" class="hero-action-btn">
                     <i class="fas fa-bag-shopping"></i> My Orders
                 </a>
@@ -1212,6 +1230,7 @@ body.dark-mode .mobile-segment-btn.active {
                 <a href="help_center.php" class="hero-action-btn">
                     <i class="fas fa-headset"></i> Help Center
                 </a>
+                <?php endif; ?>
             </div>
         </div>
 

@@ -236,7 +236,14 @@ if ($status_filter) {
     $where_clauses[] = "o.status = '" . mysqli_real_escape_string($conn, $status_filter) . "'";
 }
 if ($search) {
-    $where_clauses[] = "(o.order_number LIKE '%" . mysqli_real_escape_string($conn, $search) . "%' OR o.customer_name LIKE '%" . mysqli_real_escape_string($conn, $search) . "%' OR o.customer_email LIKE '%" . mysqli_real_escape_string($conn, $search) . "%')";
+    $clean_search = mysqli_real_escape_string($conn, trim($search));
+    $id_search = preg_replace('/[^0-9]/', '', $search);
+    $id_clause = ($id_search !== '') ? " OR o.id = " . intval($id_search) : "";
+    $where_clauses[] = "(o.order_number LIKE '%{$clean_search}%' 
+        OR o.customer_name LIKE '%{$clean_search}%' 
+        OR o.customer_email LIKE '%{$clean_search}%' 
+        OR o.customer_phone LIKE '%{$clean_search}%'
+        {$id_clause})";
 }
 if ($date_from) {
     $where_clauses[] = "DATE(o.created_at) >= '" . mysqli_real_escape_string($conn, $date_from) . "'";
@@ -253,7 +260,20 @@ $count_result = mysqli_query($conn, $count_query);
 $total_records = mysqli_fetch_assoc($count_result)['total'];
 $total_pages = ceil($total_records / $records_per_page);
 
-$orders_query = "SELECT o.*{$partner_order_amount_sql} FROM orders o WHERE $where_clause ORDER BY o.created_at DESC LIMIT $records_per_page OFFSET $offset";
+$orders_query = "SELECT o.*{$partner_order_amount_sql},
+    lt.id AS tracking_id,
+    lt.current_status AS tracking_status,
+    COALESCE(lt.proof_of_delivery_path, (SELECT photo_path FROM proof_of_delivery WHERE order_id = o.id ORDER BY id DESC LIMIT 1), '') AS proof_photo,
+    COALESCE(NULLIF(lt.driver_name, ''), u_rdr.full_name, CONCAT(e_rdr.first_name, ' ', e_rdr.last_name), '') AS driver_name,
+    r.rider_code
+FROM orders o
+LEFT JOIN logistics_tracking lt ON lt.order_id = o.id
+LEFT JOIN riders r ON lt.driver_id = r.id
+LEFT JOIN users u_rdr ON r.user_id = u_rdr.id
+LEFT JOIN employees e_rdr ON r.employee_id = e_rdr.id
+WHERE $where_clause
+ORDER BY o.created_at DESC
+LIMIT $records_per_page OFFSET $offset";
 $orders_result = mysqli_query($conn, $orders_query);
 ?>
 <!DOCTYPE html>
@@ -473,12 +493,44 @@ $orders_result = mysqli_query($conn, $orders_query);
                                     $status_options_html = "<option value=''>Change Status</option>";
                                     $next_statuses = $allowed_order_transitions[$order['status']] ?? [];
                                     $status_select_disabled = empty($next_statuses) ? "disabled" : "";
-                                    $display_amount = ($seller_scope_id !== null)
-                                        ? (float)($order['scoped_total_amount'] ?? 0)
-                                        : (float)($order['total_amount'] ?? 0);
+                                    $scoped_amt = ($seller_scope_id !== null) ? (float)($order['scoped_total_amount'] ?? 0) : 0;
+                                    $display_amount = ($scoped_amt > 0) ? $scoped_amt : (float)($order['total_amount'] ?? 0);
                                     foreach ($next_statuses as $next_status) {
                                         $status_options_html .= "<option value='{$next_status}'>" . ucwords(str_replace('_', ' ', $next_status)) . "</option>";
                                     }
+
+                                    $is_delivery = ($order['delivery_option'] === 'delivery');
+                                    $tracking_status = $order['tracking_status'] ?? '';
+                                    $handover_btn = '';
+                                    if ($is_delivery) {
+                                        if (in_array($tracking_status, ['picked_up', 'on_the_way', 'arriving', 'delivered'])) {
+                                            $handover_btn = "<span class='badge' style='background:#ecfdf3; color:#027a48; border:1px solid #abefc6; font-size:11px; margin-right:4px;' title='Food handed over to rider'><i class='fas fa-check'></i> Handed Over</span>";
+                                        } elseif ($tracking_status === 'arrived_at_restaurant') {
+                                            $handover_btn = "<button class='btn btn-sm btn-success fw-bold' type='button' style='font-size:11.5px; padding:3px 8px; margin-right:4px; border-radius:6px;' onclick=\"approveRiderHandover({$order['id']})\" title='Rider is at store! Approve handover now'>
+                                                <i class='fas fa-check'></i> Approve
+                                            </button>
+                                            <button class='btn btn-sm btn-outline-danger fw-bold' type='button' style='font-size:11.5px; padding:3px 8px; margin-right:4px; border-radius:6px;' onclick=\"rejectRiderHandover({$order['id']})\" title='Reject or pause handover'>
+                                                <i class='fas fa-times'></i> Reject
+                                            </button>";
+                                        } elseif (!in_array($order['status'], ['delivered', 'cancelled', 'failed'])) {
+                                            $safe_ord_num = htmlspecialchars(addslashes($order['order_number']));
+                                            $safe_pin = htmlspecialchars(addslashes($order['delivery_pin'] ?? ''));
+                                            $safe_driver = htmlspecialchars(addslashes(!empty($order['driver_name']) ? $order['driver_name'] : 'Assigned Rider'));
+                                            $safe_rider_code = htmlspecialchars(addslashes($order['rider_code'] ?? ''));
+                                            $handover_btn = "<button class='btn btn-sm btn-outline-success' type='button' style='font-size:11.5px; padding:3px 8px; margin-right:4px; border-radius:6px; font-weight:600;' onclick=\"openHandoverModal({$order['id']}, '{$safe_ord_num}', '{$safe_pin}', '{$safe_driver}', '{$safe_rider_code}')\" title='Enter Handover Confirmation Code'>
+                                                <i class='fas fa-handshake'></i> Handover Code
+                                            </button>";
+                                        }
+                                    }
+
+                                    $proof_btn = '';
+                                    if (!empty($order['proof_photo'])) {
+                                        $safe_proof = htmlspecialchars(addslashes($order['proof_photo']));
+                                        $proof_btn = "<button class='btn-icon' type='button' style='color:#027a48; margin-right:4px;' onclick=\"viewProofModal('{$safe_proof}')\" title='View Proof of Delivery Photo'>
+                                            <i class='fas fa-camera'></i>
+                                        </button>";
+                                    }
+
                                     echo "
                                     <tr>
                                         <td><strong>{$order['order_number']}</strong></td>
@@ -489,6 +541,8 @@ $orders_result = mysqli_query($conn, $orders_query);
                                         <td>" . ucfirst($order['delivery_option']) . "</td>
                                         <td>" . date('M d, Y', strtotime($order['created_at'])) . "</td>
                                         <td>
+                                            {$handover_btn}
+                                            {$proof_btn}
                                             <button class='btn-icon' data-bs-toggle='modal' data-bs-target='#orderModal' onclick='loadOrderDetails({$order['id']})' title='View Details'>
                                                 <i class='fas fa-eye'></i>
                                             </button>
@@ -557,6 +611,58 @@ $orders_result = mysqli_query($conn, $orders_query);
             </div>
         </div>
     </div>
+
+    <!-- Pickup Handover Verification Modal -->
+    <div class="modal fade" id="pickupHandoverModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="border-radius: 16px; border: 1px solid #eaecf0; box-shadow: 0 10px 25px rgba(0,0,0,0.08); overflow: hidden;">
+                <div class="modal-header border-bottom py-3" style="background: #ffffff;">
+                    <h5 class="modal-title fw-bold mb-0" style="color: #101828; font-size: 1.05rem;">
+                        <i class="fas fa-handshake text-success me-2"></i> Confirm Rider Pickup Handover
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <input type="hidden" id="handoverOrderId" value="">
+
+                    <div class="p-3 rounded mb-3" style="background: #f8f9fa; border: 1px solid #eaecf0;">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="text-muted small">Order Number:</span>
+                            <strong class="text-dark" id="modalHandoverOrderNum"></strong>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="text-muted small">Assigned Rider:</span>
+                            <span class="fw-semibold text-dark" id="modalHandoverRiderName">Assigned Rider</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="text-muted small">Order Delivery PIN:</span>
+                            <span class="badge" style="background:#eff8ff; color:#175cd3; border:1px solid #b2ddff; font-size: 13px;" id="modalHandoverPinBadge">----</span>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-dark mb-1">
+                            Enter Confirmation Code or Delivery PIN
+                        </label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-white"><i class="fas fa-shield-alt text-muted"></i></span>
+                            <input type="text" id="handoverCodeInput" class="form-control form-control-lg fw-bold text-center" placeholder="e.g. 7794 or RDR-0011" style="letter-spacing: 2px;">
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mt-2">
+                            <small class="text-muted" style="font-size: 11.5px;">Ask the rider for their PIN or Rider ID code.</small>
+                            <button type="button" class="btn btn-sm btn-link text-decoration-none p-0" style="font-size: 11.5px; color: #b3261e;" onclick="autofillExpectedPin()">
+                                <i class="fas fa-magic me-1"></i> Auto-fill PIN
+                            </button>
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn w-100 py-2 fw-bold text-white" id="confirmHandoverBtn" style="background: #027a48; border-color: #027a48; border-radius: 8px;" onclick="submitPickupHandover()">
+                        <i class="fas fa-check-circle me-1"></i> Confirm Handover & Dispatch Rider
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
     
     <script src="../js/jquery-3.7.1.min.js"></script>
     <script src="../js/bootstrap.bundle.min.js"></script>
@@ -612,6 +718,142 @@ $orders_result = mysqli_query($conn, $orders_query);
             });
         }
 
+        let currentExpectedPin = '';
+
+        function openHandoverModal(orderId, orderNum, pin, riderName, riderCode) {
+            document.getElementById('handoverOrderId').value = orderId;
+            document.getElementById('modalHandoverOrderNum').textContent = '#' + orderNum;
+            
+            let riderLabel = riderName || 'Assigned Rider';
+            if (riderCode) {
+                riderLabel += ' (' + riderCode + ')';
+            }
+            document.getElementById('modalHandoverRiderName').textContent = riderLabel;
+            
+            currentExpectedPin = pin || '';
+            document.getElementById('modalHandoverPinBadge').textContent = pin ? pin : 'None';
+            
+            const input = document.getElementById('handoverCodeInput');
+            input.value = '';
+            
+            const modal = new bootstrap.Modal(document.getElementById('pickupHandoverModal'));
+            modal.show();
+            setTimeout(() => input.focus(), 400);
+        }
+
+        function autofillExpectedPin() {
+            if (currentExpectedPin) {
+                document.getElementById('handoverCodeInput').value = currentExpectedPin;
+            }
+        }
+
+        function submitPickupHandover() {
+            const orderId = document.getElementById('handoverOrderId').value;
+            const code = document.getElementById('handoverCodeInput').value.trim();
+            const btn = document.getElementById('confirmHandoverBtn');
+            
+            if (!code) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Code Required',
+                    text: 'Please enter the delivery PIN, rider code, or order number to verify handover.'
+                });
+                return;
+            }
+            
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Verifying...';
+            
+            const formData = new FormData();
+            formData.append('order_id', orderId);
+            formData.append('verification_code', code);
+            formData.append('csrf_token', '<?php echo $csrf_token; ?>');
+            
+            fetch('ajax_confirm_pickup.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(r => r.json())
+            .then(data => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-check-circle me-1"></i> Confirm Handover & Dispatch Rider';
+                
+                if (data.success) {
+                    bootstrap.Modal.getInstance(document.getElementById('pickupHandoverModal')).hide();
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Pickup Confirmed!',
+                        text: data.message,
+                        confirmButtonColor: '#027a48'
+                    }).then(() => {
+                        location.reload();
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Verification Failed',
+                        text: data.message || 'Invalid verification code.'
+                    });
+                }
+            })
+            .catch(err => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-check-circle me-1"></i> Confirm Handover & Dispatch Rider';
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Network Error',
+                    text: 'Unable to communicate with the server. Please try again.'
+                });
+            });
+        }
+
+        function submitDetailHandover(orderId) {
+            const input = document.getElementById('detailHandoverCode');
+            const code = input ? input.value.trim() : '';
+            if (!code) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Code Required',
+                    text: 'Please enter the verification code or delivery PIN.'
+                });
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('order_id', orderId);
+            formData.append('verification_code', code);
+            formData.append('csrf_token', '<?php echo $csrf_token; ?>');
+            
+            fetch('ajax_confirm_pickup.php', { method: 'POST', body: formData })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        const modalEl = document.getElementById('orderModal');
+                        const modalInstance = bootstrap.Modal.getInstance(modalEl);
+                        if (modalInstance) modalInstance.hide();
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Pickup Confirmed!',
+                            text: data.message,
+                            confirmButtonColor: '#027a48'
+                        }).then(() => location.reload());
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Verification Failed',
+                            text: data.message || 'Invalid verification code.'
+                        });
+                    }
+                })
+                .catch(() => {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Network Error',
+                        text: 'Failed to connect to server.'
+                    });
+                });
+        }
+
         function confirmStatusChange(selectElement, orderId) {
             if (!selectElement.value) return;
             
@@ -631,6 +873,183 @@ $orders_result = mysqli_query($conn, $orders_query);
                 }
             })
         }
+
+        function approveRiderHandover(orderId) {
+            Swal.fire({
+                title: 'Approve Rider Handover?',
+                text: 'Confirm that you are handing over the package to the arrived rider. The rider will be cleared to proceed to the customer.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#027a48',
+                cancelButtonColor: '#667085',
+                confirmButtonText: '<i class="fas fa-check"></i> Yes, Approve & Dispatch',
+                cancelButtonText: 'Cancel'
+            }).then((res) => {
+                if (!res.isConfirmed) return;
+
+                const formData = new FormData();
+                formData.append('order_id', orderId);
+                formData.append('csrf_token', '<?php echo $csrf_token; ?>');
+
+                fetch('ajax_handover_action.php?action=approve', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Handover Approved!',
+                            text: data.message,
+                            confirmButtonColor: '#027a48'
+                        }).then(() => location.reload());
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Action Failed',
+                            text: data.message || 'Failed to approve handover.'
+                        });
+                    }
+                })
+                .catch(() => {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Network Error',
+                        text: 'Could not connect to server.'
+                    });
+                });
+            });
+        }
+
+        function rejectRiderHandover(orderId) {
+            Swal.fire({
+                title: 'Reject / Pause Handover?',
+                text: 'Provide a reason for the rider (e.g. food still cooking, missing item):',
+                input: 'text',
+                inputPlaceholder: 'e.g. Order still cooking, please wait 5-10 minutes',
+                inputValue: 'Order is still being prepared. Please wait 5-10 minutes.',
+                showCancelButton: true,
+                confirmButtonColor: '#b3261e',
+                cancelButtonColor: '#667085',
+                confirmButtonText: 'Submit Rejection / Note',
+                cancelButtonText: 'Cancel',
+                inputValidator: (value) => {
+                    if (!value || !value.trim()) {
+                        return 'Please enter a brief note for the rider.';
+                    }
+                }
+            }).then((res) => {
+                if (!res.isConfirmed) return;
+
+                const formData = new FormData();
+                formData.append('order_id', orderId);
+                formData.append('reason', res.value.trim());
+                formData.append('csrf_token', '<?php echo $csrf_token; ?>');
+
+                fetch('ajax_handover_action.php?action=reject', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        Swal.fire({
+                            icon: 'info',
+                            title: 'Rider Notified',
+                            text: data.message,
+                            confirmButtonColor: '#b3261e'
+                        }).then(() => location.reload());
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Action Failed',
+                            text: data.message || 'Failed to submit rejection.'
+                        });
+                    }
+                })
+                .catch(() => {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Network Error',
+                        text: 'Could not connect to server.'
+                    });
+                });
+            });
+        }
+
+        function viewProofModal(imageUrl) {
+            if (!imageUrl) return;
+            let cleanUrl = imageUrl;
+            if (!cleanUrl.startsWith('http') && !cleanUrl.startsWith('/')) {
+                const fname = cleanUrl.split('/').pop();
+                cleanUrl = '../uploads/proof_of_delivery/' + fname;
+            }
+            Swal.fire({
+                title: 'Proof of Delivery Photo',
+                html: `<div style="text-align:center;">
+                    <img src="${cleanUrl}" alt="Proof of Delivery" style="max-height: 400px; max-width: 100%; border-radius: 8px; border: 1px solid #eaecf0; margin-bottom: 8px;" class="img-fluid" onerror="this.onerror=null;this.src='../assets/images/promo_lechon.jpg';">
+                    <div style="font-size: 12px; color: #667085;"><i class="fas fa-camera me-1"></i> Captured by rider upon delivery to customer.</div>
+                </div>`,
+                showCloseButton: true,
+                showConfirmButton: true,
+                confirmButtonText: '<i class="fas fa-external-link-alt me-1"></i> Open Original',
+                confirmButtonColor: '#b3261e',
+                showCancelButton: true,
+                cancelButtonText: 'Close'
+            }).then((res) => {
+                if (res.isConfirmed) {
+                    window.open(cleanUrl, '_blank');
+                }
+            });
+        }
+
+        // Real-time polling for riders arriving at store
+        let lastPromptedArrivalOrder = null;
+        function checkRiderArrivals() {
+            fetch('ajax_handover_action.php?action=check_arrivals')
+                .then(r => r.json())
+                .then(data => {
+                    if (data && data.success && data.has_arrivals && data.arrivals.length > 0) {
+                        const firstArrival = data.arrivals[0];
+                        if (lastPromptedArrivalOrder !== firstArrival.order_id && !Swal.isVisible()) {
+                            lastPromptedArrivalOrder = firstArrival.order_id;
+                            Swal.fire({
+                                title: 'Rider Arrived at Store!',
+                                html: `<div style="text-align:left; font-size:14px; line-height:1.6;">
+                                    <div><strong>Order:</strong> #${escapeHtmlAdmin(firstArrival.order_number)}</div>
+                                    <div><strong>Rider:</strong> ${escapeHtmlAdmin(firstArrival.driver_name)}</div>
+                                    <div><strong>Phone:</strong> ${escapeHtmlAdmin(firstArrival.driver_phone || 'N/A')}</div>
+                                    <div class="mt-2 text-muted">The rider is at your branch waiting for the food package. Ready for handover?</div>
+                                </div>`,
+                                icon: 'info',
+                                showCancelButton: true,
+                                confirmButtonColor: '#027a48',
+                                cancelButtonColor: '#b3261e',
+                                confirmButtonText: '<i class="fas fa-check-circle me-1"></i> Approve Handover',
+                                cancelButtonText: '<i class="fas fa-times-circle me-1"></i> Reject / Wait',
+                                allowOutsideClick: false
+                            }).then((result) => {
+                                if (result.isConfirmed) {
+                                    approveRiderHandover(firstArrival.order_id);
+                                } else if (result.dismiss === Swal.DismissReason.cancel) {
+                                    rejectRiderHandover(firstArrival.order_id);
+                                }
+                            });
+                        }
+                    }
+                })
+                .catch(() => {});
+        }
+
+        function escapeHtmlAdmin(str) {
+            return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        setInterval(checkRiderArrivals, 6000);
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(checkRiderArrivals, 2000);
+        });
     </script>
 </body>
 </html>

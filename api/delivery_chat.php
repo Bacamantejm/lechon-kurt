@@ -7,8 +7,8 @@
 header('Content-Type: application/json');
 session_start();
 
-require_once '../includes/config.php';
-require_once '../includes/ChatService.php';
+require_once __DIR__ . '/../includes/config.php';
+require_once __DIR__ . '/../includes/ChatService.php';
 
 function jsonErrorResponse($code, $message) {
     http_response_code($code);
@@ -25,15 +25,17 @@ function getDeliveryChatContext(mysqli $conn, int $order_id): ?array {
                      o.user_id AS customer_user_id,
                      lt.id AS tracking_id,
                      lt.current_status,
-                     lt.driver_phone,
-                     e.user_id AS driver_user_id,
+                     COALESCE(NULLIF(TRIM(lt.driver_phone), ''), ru.phone, e.phone, du.phone, '') AS driver_phone,
+                     COALESCE(r.user_id, e.user_id) AS driver_user_id,
                      cu.full_name AS customer_name,
-                     du.full_name AS driver_name
+                     COALESCE(NULLIF(TRIM(lt.driver_name), ''), ru.full_name, CONCAT(e.first_name, ' ', e.last_name), du.full_name, 'Driver') AS driver_name
               FROM orders o
               LEFT JOIN logistics_tracking lt ON lt.order_id = o.id
-              LEFT JOIN employees e ON e.id = lt.driver_id
+              LEFT JOIN riders r ON r.id = lt.driver_id
+              LEFT JOIN employees e ON (e.id = lt.driver_id OR e.id = r.employee_id)
               LEFT JOIN users cu ON cu.id = o.user_id
               LEFT JOIN users du ON du.id = e.user_id
+              LEFT JOIN users ru ON ru.id = r.user_id
               WHERE o.id = ?
               ORDER BY lt.updated_at DESC, lt.id DESC
               LIMIT 1";
@@ -74,6 +76,9 @@ if ($order_id <= 0) {
 }
 
 $user_id = intval($_SESSION['user_id']);
+$user_type = $_SESSION['user_type'] ?? '';
+$is_admin_or_staff = in_array($user_type, ['admin', 'employee', 'staff'], true);
+
 $context = getDeliveryChatContext($conn, $order_id);
 if (!$context) {
     jsonErrorResponse(404, 'Order not found.');
@@ -81,15 +86,17 @@ if (!$context) {
 
 $customer_user_id = intval($context['customer_user_id'] ?? 0);
 $driver_user_id = intval($context['driver_user_id'] ?? 0);
-$chat_available = $customer_user_id > 0 && $driver_user_id > 0;
 
 $can_customer_access = $customer_user_id > 0 && $customer_user_id === $user_id;
-$can_driver_access = $driver_user_id > 0 && $driver_user_id === $user_id;
+$can_driver_access = ($driver_user_id > 0 && $driver_user_id === $user_id) || ($is_admin_or_staff && !empty($context['tracking_id']));
+
 if (!$can_customer_access && !$can_driver_access) {
     jsonErrorResponse(403, 'You do not have access to this delivery chat.');
 }
 
-$sender_role = $can_driver_access ? 'driver' : 'customer';
+$sender_role = $can_customer_access ? 'customer' : 'driver';
+$chat_available = $customer_user_id > 0 && (!empty($context['driver_name']) || $driver_user_id > 0 || $can_driver_access);
+
 $chatService = new ChatService($conn);
 $conversation = null;
 $conversation_id = 0;
@@ -115,6 +122,7 @@ if ($method === 'GET') {
         $chatService->markMessagesAsRead($conversation_id, $user_id);
         foreach ($messages as &$message) {
             $message['sender_role'] = (($message['sender_type'] ?? '') === 'rider') ? 'driver' : 'customer';
+            $message['message'] = $message['message_text'] ?? '';
         }
         unset($message);
     }
@@ -170,6 +178,7 @@ if ($method === 'POST') {
 
     $chatService->markMessagesAsRead($conversation_id, $user_id);
     $new_message['sender_role'] = $can_driver_access ? 'driver' : 'customer';
+    $new_message['message'] = $new_message['message_text'] ?? $message_text;
 
     echo json_encode([
         'success' => true,

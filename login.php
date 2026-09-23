@@ -3,6 +3,7 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 require_once 'includes/config.php';
+require_once __DIR__ . '/includes/rider_helper.php';
 
 function loginSessionUserExists($conn, $user_id) {
     $user_id = (int)$user_id;
@@ -55,6 +56,10 @@ function sanitizeRelativePhpRedirect($target) {
 if (isset($_SESSION['user_id'])) {
     $session_user_id = (int)$_SESSION['user_id'];
     if (loginSessionUserExists($conn, $session_user_id)) {
+        if (isDeliveryDriverUser($conn, $session_user_id)) {
+            header("Location: rider/index.php");
+            exit;
+        }
         $redirect = getUserDashboardRoute($conn, $session_user_id, $_SESSION['user_type'] ?? '');
         $custom_redirect = sanitizeRelativePhpRedirect($_GET['redirect'] ?? '');
         if ($custom_redirect !== null) {
@@ -153,13 +158,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
             }
             $check_emp->close();
             
-            // Determine default redirect from RBAC role permissions first, then legacy fallback
-            $redirect = getUserDashboardRoute($conn, $result['user_id'], $result['user_type']);
-            if ($redirect === 'index.php' && ($user_type === 'employee' || $is_employee_record)) {
-                $redirect = 'employee/dashboard.php';
-            }
-            
-            
             // Handle remember me
             if ($remember) {
                 $token = bin2hex(random_bytes(32));
@@ -185,23 +183,41 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
                     mysqli_stmt_close($token_stmt);
                 }
             }
-            
-            // Check for redirect URL (override role-based default if specific page requested)
-            if (isset($_GET['redirect']) && !empty($_GET['redirect'])) {
-                $custom_redirect = sanitizeRelativePhpRedirect($_GET['redirect']);
-                if ($custom_redirect !== null) {
-                    $custom_redirect_path = parse_url($custom_redirect, PHP_URL_PATH) ?: $custom_redirect;
-                    $is_admin_redirect = strpos($custom_redirect_path, 'admin/') === 0;
-                    $is_employee_redirect = strpos($custom_redirect_path, 'employee/') === 0;
-                    $can_access_admin = hasBackofficeAccess($conn, $result['user_id']);
-                    $can_access_employee = ($user_type === 'employee' || $is_employee_record);
-                    $target_exists = file_exists(__DIR__ . '/' . ltrim($custom_redirect_path, '/'));
 
-                    if (($is_admin_redirect && $can_access_admin) ||
-                        ($is_employee_redirect && $can_access_employee) ||
-                        (!$is_admin_redirect && !$is_employee_redirect)) {
-                        if ($target_exists) {
-                            $redirect = $custom_redirect;
+            // Strict check: if user is a delivery rider, direct ONLY to rider portal
+            $is_rider_account = isDeliveryDriverUser($conn, $result['user_id']);
+            if ($is_rider_account) {
+                $_SESSION['is_driver'] = true;
+                $r_fetch = mysqli_query($conn, "SELECT id, rider_code FROM riders WHERE user_id = " . (int)$result['user_id'] . " LIMIT 1");
+                if ($r_fetch && ($r_row = mysqli_fetch_assoc($r_fetch))) {
+                    $_SESSION['rider_id'] = (int)$r_row['id'];
+                    $_SESSION['rider_code'] = $r_row['rider_code'];
+                }
+                $redirect = 'rider/index.php';
+            } else {
+                // Determine default redirect from RBAC role permissions first, then legacy fallback
+                $redirect = getUserDashboardRoute($conn, $result['user_id'], $result['user_type']);
+                if ($redirect === 'index.php' && ($user_type === 'employee' || $is_employee_record)) {
+                    $redirect = 'employee/dashboard.php';
+                }
+                
+                // Check for redirect URL (override role-based default if specific page requested)
+                if (isset($_GET['redirect']) && !empty($_GET['redirect'])) {
+                    $custom_redirect = sanitizeRelativePhpRedirect($_GET['redirect']);
+                    if ($custom_redirect !== null) {
+                        $custom_redirect_path = parse_url($custom_redirect, PHP_URL_PATH) ?: $custom_redirect;
+                        $is_admin_redirect = strpos($custom_redirect_path, 'admin/') === 0;
+                        $is_employee_redirect = strpos($custom_redirect_path, 'employee/') === 0;
+                        $can_access_admin = hasBackofficeAccess($conn, $result['user_id']);
+                        $can_access_employee = ($user_type === 'employee' || $is_employee_record);
+                        $target_exists = file_exists(__DIR__ . '/' . ltrim($custom_redirect_path, '/'));
+
+                        if (($is_admin_redirect && $can_access_admin) ||
+                            ($is_employee_redirect && $can_access_employee) ||
+                            (!$is_admin_redirect && !$is_employee_redirect)) {
+                            if ($target_exists) {
+                                $redirect = $custom_redirect;
+                            }
                         }
                     }
                 }

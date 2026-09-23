@@ -71,6 +71,23 @@ if (!$store_details) {
 $logisticsService = new LogisticsService($conn);
 $tracking_info = $logisticsService->getTrackingByOrderId($order_id);
 
+$initial_proof_path = $tracking_info['proof_of_delivery_path'] ?? null;
+if (empty($initial_proof_path)) {
+    $pod_chk = $conn->prepare("SELECT photo_path FROM proof_of_delivery WHERE order_id = ? ORDER BY id DESC LIMIT 1");
+    if ($pod_chk) {
+        $pod_chk->bind_param("i", $order_id);
+        $pod_chk->execute();
+        $pod_res = $pod_chk->get_result();
+        if ($pod_res && $pod_row = $pod_res->fetch_assoc()) {
+            $initial_proof_path = $pod_row['photo_path'];
+        }
+        $pod_chk->close();
+    }
+}
+if (!empty($initial_proof_path)) {
+    $initial_proof_path = 'uploads/proof_of_delivery/' . basename($initial_proof_path);
+}
+
 $page_title = ($is_pickup ? "Pick-up Order #" : "Track Order #") . $order['order_number'];
 include 'includes/header.php';
 ?>
@@ -1222,10 +1239,43 @@ include 'includes/header.php';
                         <span class="fp-live-dot"></span> <?php echo $is_pickup ? 'Store Pick-up Order' : 'Live Order Tracking'; ?>
                     </div>
                     <h1 class="fp-hero-title" id="fpHeroTitle">
-                        <?php echo $is_pickup ? 'Store is preparing your pick-up order' : 'Preparing your delicious order'; ?>
+                        <?php 
+                        $display_driver_name = htmlspecialchars(!empty($tracking_info['driver_name']) ? $tracking_info['driver_name'] : 'Your rider');
+                        if ($is_pickup) {
+                            echo 'Store is preparing your pick-up order';
+                        } elseif (empty($tracking_info['driver_id']) || ($tracking_info['current_status'] ?? '') === 'pending') {
+                            echo 'Waiting for Rider to Pick Up';
+                        } elseif (($tracking_info['current_status'] ?? '') === 'assigned') {
+                            echo $display_driver_name . ' accepted your delivery!';
+                        } elseif (($tracking_info['current_status'] ?? '') === 'arrived_at_restaurant') {
+                            echo $display_driver_name . ' arrived at the store!';
+                        } elseif (in_array(($tracking_info['current_status'] ?? ''), ['picked_up', 'on_the_way'])) {
+                            echo $display_driver_name . ' is on the way!';
+                        } elseif (($tracking_info['current_status'] ?? '') === 'delivered') {
+                            echo 'Order Delivered!';
+                        } else {
+                            echo 'Preparing your delicious order';
+                        }
+                        ?>
                     </h1>
                     <p class="fp-hero-subtitle" id="fpHeroSubtitle">
-                        <?php echo $is_pickup ? 'Your dishes are being cooked fresh and packed for collection at the store counter.' : 'The kitchen is preparing your freshly roasted lechon with care.'; ?>
+                        <?php 
+                        if ($is_pickup) {
+                            echo 'Your dishes are being cooked fresh and packed for collection at the store counter.';
+                        } elseif (empty($tracking_info['driver_id']) || ($tracking_info['current_status'] ?? '') === 'pending') {
+                            echo 'Your order is confirmed and being prepared. Nearby delivery riders are currently being notified to accept your delivery.';
+                        } elseif (($tracking_info['current_status'] ?? '') === 'assigned') {
+                            echo 'Your rider has accepted the delivery and is heading to the store to pick up your order.';
+                        } elseif (($tracking_info['current_status'] ?? '') === 'arrived_at_restaurant') {
+                            echo 'Your rider has arrived at the store and is waiting for the store owner to hand over your package.';
+                        } elseif (in_array(($tracking_info['current_status'] ?? ''), ['picked_up', 'on_the_way'])) {
+                            echo 'Your rider has picked up your food and is driving to your address.';
+                        } elseif (($tracking_info['current_status'] ?? '') === 'delivered') {
+                            echo 'Your order was successfully delivered. Thank you for choosing Lechon Delights!';
+                        } else {
+                            echo 'The kitchen is preparing your freshly roasted lechon with care.';
+                        }
+                        ?>
                     </p>
                 </div>
 
@@ -1246,40 +1296,81 @@ include 'includes/header.php';
                         </div>
                     </div>
                     <div class="fp-order-number-pill">Order #<?php echo htmlspecialchars($order['order_number']); ?></div>
+                    <?php if (!$is_pickup && !empty($order['delivery_pin'])): ?>
+                        <div style="background:#fff1f0; border:1px solid #fee4e2; color:#b3261e; font-weight:800; font-size:0.82rem; padding:4px 12px; border-radius:8px; display:inline-flex; align-items:center; gap:6px;" title="Provide this 4-digit PIN to your rider upon arrival">
+                            <i class="fas fa-key"></i> Delivery PIN: <span style="letter-spacing:2px; font-size:0.95rem; font-family:monospace;"><?php echo htmlspecialchars($order['delivery_pin']); ?></span>
+                        </div>
+                    <?php endif; ?>
                 </div>
             </div>
 
+            <?php
+            $init_trk_status = $tracking_info['current_status'] ?? 'pending';
+            $step1_cls = 'is-completed';
+            $step2_cls = '';
+            $step3_cls = '';
+            $step4_cls = '';
+            $step2_time = 'In Progress';
+            $step3_time = $is_pickup ? 'At Store' : 'Delivery';
+            $stepper_pct = '30%';
+
+            if ($is_pickup) {
+                if (in_array($order['status'], ['ready', 'on_the_way'])) {
+                    $step1_cls = 'is-completed'; $step2_cls = 'is-completed'; $step3_cls = 'is-active'; $stepper_pct = '70%';
+                } elseif ($order['status'] === 'delivered') {
+                    $step1_cls = 'is-completed'; $step2_cls = 'is-completed'; $step3_cls = 'is-completed'; $step4_cls = 'is-completed'; $stepper_pct = '100%';
+                } else {
+                    $step1_cls = 'is-completed'; $step2_cls = 'is-active'; $stepper_pct = '30%';
+                }
+            } else {
+                if (empty($tracking_info['driver_id']) || $init_trk_status === 'pending') {
+                    $step1_cls = 'is-completed'; $step2_cls = 'is-active'; $stepper_pct = '30%';
+                } elseif ($init_trk_status === 'assigned') {
+                    $step1_cls = 'is-completed'; $step2_cls = 'is-completed'; $step2_time = 'Heading to store'; $step3_time = 'Waiting for pickup'; $stepper_pct = '40%';
+                } elseif ($init_trk_status === 'arrived_at_restaurant') {
+                    $step1_cls = 'is-completed'; $step2_cls = 'is-completed'; $step3_cls = 'is-active'; $step2_time = 'At Store'; $step3_time = 'Awaiting Handover'; $stepper_pct = '60%';
+                } elseif (in_array($init_trk_status, ['picked_up', 'on_the_way'])) {
+                    $step1_cls = 'is-completed'; $step2_cls = 'is-completed'; $step3_cls = 'is-active'; $step2_time = 'Picked Up'; $step3_time = 'En Route'; $stepper_pct = '75%';
+                } elseif ($init_trk_status === 'arriving') {
+                    $step1_cls = 'is-completed'; $step2_cls = 'is-completed'; $step3_cls = 'is-active'; $step3_time = 'Arriving'; $stepper_pct = '88%';
+                } elseif ($init_trk_status === 'delivered') {
+                    $step1_cls = 'is-completed'; $step2_cls = 'is-completed'; $step3_cls = 'is-completed'; $step4_cls = 'is-completed'; $stepper_pct = '100%';
+                } else {
+                    $step1_cls = 'is-completed'; $step2_cls = 'is-active'; $stepper_pct = '30%';
+                }
+            }
+            ?>
             <!-- Foodpanda 4-Step Animated Progress Stepper -->
             <div class="fp-stepper-wrapper">
                 <div class="fp-stepper-track-bg"></div>
-                <div class="fp-stepper-track-fill" id="fpStepperFill"></div>
+                <div class="fp-stepper-track-fill" id="fpStepperFill" style="width: <?php echo $stepper_pct; ?>;"></div>
 
                 <div class="fp-stepper-steps">
                     <!-- Step 1 -->
-                    <div class="fp-step-item is-completed" id="fpStep1">
+                    <div class="fp-step-item <?php echo $step1_cls; ?>" id="fpStep1">
                         <div class="fp-step-icon-wrap"><i class="fas fa-receipt"></i></div>
                         <span class="fp-step-label">Order Placed</span>
                         <span class="fp-step-sub"><?php echo date('g:i A', strtotime((string)$order['created_at'])); ?></span>
                     </div>
 
                     <!-- Step 2 -->
-                    <div class="fp-step-item is-active" id="fpStep2">
+                    <div class="fp-step-item <?php echo $step2_cls; ?>" id="fpStep2">
                         <div class="fp-step-icon-wrap"><i class="fas fa-utensils"></i></div>
                         <span class="fp-step-label">Kitchen Preparing</span>
-                        <span class="fp-step-sub" id="fpStep2Time">In Progress</span>
+                        <span class="fp-step-sub" id="fpStep2Time"><?php echo $step2_time; ?></span>
                     </div>
 
                     <!-- Step 3 -->
-                    <div class="fp-step-item" id="fpStep3">
+                    <div class="fp-step-item <?php echo $step3_cls; ?>" id="fpStep3">
                         <div class="fp-step-icon-wrap">
                             <i class="<?php echo $is_pickup ? 'fas fa-bag-shopping' : 'fas fa-motorcycle'; ?>"></i>
                         </div>
                         <span class="fp-step-label" id="fpStep3Label"><?php echo $is_pickup ? 'Ready for Pick-up' : 'On the Way'; ?></span>
-                        <span class="fp-step-sub" id="fpStep3Time"><?php echo $is_pickup ? 'At Store' : 'Delivery'; ?></span>
+                        <span class="fp-step-sub" id="fpStep3Time"><?php echo $step3_time; ?></span>
                     </div>
 
                     <!-- Step 4 -->
-                    <div class="fp-step-item" id="fpStep4">
+                    <div class="fp-step-item <?php echo $step4_cls; ?>" id="fpStep4">
                         <div class="fp-step-icon-wrap"><i class="fas fa-circle-check"></i></div>
                         <span class="fp-step-label" id="fpStep4Label"><?php echo $is_pickup ? 'Picked Up' : 'Delivered'; ?></span>
                         <span class="fp-step-sub" id="fpStep4Time">Completed</span>
@@ -1367,9 +1458,27 @@ include 'includes/header.php';
                     </div>
                 </div>
 
-                <?php else: ?>
+                <?php else: 
+                $has_valid_rider = (!empty($tracking_info['driver_id']) && in_array(($tracking_info['current_status'] ?? ''), ['assigned', 'arrived_at_restaurant', 'picked_up', 'on_the_way', 'arriving', 'delivered'], true));
+                ?>
+                <!-- Waiting for Rider Card (Shown when order has not yet been accepted by a driver) -->
+                <div class="fp-waiting-rider-card" id="fpWaitingRiderCard" style="<?php echo $has_valid_rider ? 'display:none;' : 'display:block;'; ?> background:#ffffff; border:1px solid #eaecf0; border-radius:16px; padding:18px 20px; margin-bottom:16px; box-shadow:0 1px 3px rgba(16,24,40,0.04);">
+                    <div style="display:flex; align-items:center; gap:16px;">
+                        <div style="width:48px; height:48px; border-radius:14px; background:#fff1f0; color:#b3261e; display:flex; align-items:center; justify-content:center; font-size:1.3rem; flex-shrink:0;">
+                            <i class="fas fa-motorcycle"></i>
+                        </div>
+                        <div>
+                            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                                <strong style="font-size:0.95rem; color:#101828;">Waiting for Rider to Accept & Pick Up</strong>
+                                <span class="badge" style="background:#fffaeb; color:#b54708; border:1px solid #fedf89; font-size:10px; font-weight:700;">Finding a Rider</span>
+                            </div>
+                            <p style="font-size:0.82rem; color:#667085; margin:4px 0 0 0;">Nearby delivery riders are being notified. Once an active rider accepts your delivery, their name, contact, and live map tracker will appear here.</p>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Delivery Order: 1. Rider Profile Card (Live when assigned) -->
-                <div class="fp-rider-card" id="fpRiderCard" style="<?php echo empty($tracking_info['driver_name']) ? 'display:none;' : ''; ?>">
+                <div class="fp-rider-card" id="fpRiderCard" style="<?php echo $has_valid_rider ? '' : 'display:none;'; ?>">
                     <div class="fp-rider-row">
                         <div class="fp-rider-meta">
                             <div class="fp-rider-avatar-wrap">
@@ -1382,7 +1491,7 @@ include 'includes/header.php';
                                 <h4 id="fpDriverName"><?php echo htmlspecialchars($tracking_info['driver_name'] ?? 'Assigned Rider'); ?></h4>
                                 <div class="fp-rider-tags">
                                     <span class="fp-tag-verified"><i class="fas fa-check-circle"></i> Verified Rider</span>
-                                    <span class="fp-tag-vehicle" id="fpDriverVehicle"><i class="fas fa-motorcycle"></i> Motorcycle</span>
+                                    <span class="fp-tag-vehicle" id="fpDriverVehicle"><i class="fas fa-motorcycle"></i> <?php echo htmlspecialchars(ucfirst((string)($tracking_info['driver_vehicle'] ?? 'Motorcycle'))); ?></span>
                                 </div>
                             </div>
                         </div>
@@ -1392,6 +1501,18 @@ include 'includes/header.php';
                                 <i class="fas fa-phone-alt"></i> Call
                             </a>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Delivery Order: 1.5 Proof of Delivery Photo Card (When delivered) -->
+                <div class="fp-card" id="fpProofCard" style="<?php echo !empty($initial_proof_path) ? '' : 'display:none;'; ?> margin-bottom: 16px; border: 1px solid #eaecf0; border-radius: 16px; padding: 18px 20px; background: #ffffff; box-shadow: 0 1px 3px rgba(16,24,40,0.04);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <h4 style="font-size:0.95rem; font-weight:700; color:#101828; margin:0;"><i class="fas fa-camera" style="color:#027a48; margin-right:6px;"></i> Proof of Delivery</h4>
+                        <span class="badge" style="background:#ecfdf3; color:#027a48; border:1px solid #abefc6; font-size:11px; font-weight:600;"><i class="fas fa-check-circle"></i> Delivered</span>
+                    </div>
+                    <div style="text-align:center;">
+                        <img id="fpProofImg" src="<?php echo !empty($initial_proof_path) ? htmlspecialchars($initial_proof_path) : ''; ?>" alt="Delivery Proof" style="max-height: 240px; width: auto; max-width: 100%; border-radius: 10px; border: 1px solid #d0d5dd; object-fit: cover; cursor: pointer;" onclick="window.open(this.src, '_blank')">
+                        <p style="font-size:0.75rem; color:#667085; margin:8px 0 0 0;"><i class="fas fa-info-circle me-1"></i> Photo taken by rider upon handover at your doorstep. Click to view full image.</p>
                     </div>
                 </div>
 
@@ -1544,6 +1665,11 @@ include 'includes/header.php';
     const customerLat = <?php echo json_encode(isset($order['latitude']) ? (is_numeric($order['latitude']) ? (float)$order['latitude'] : null) : null); ?>;
     const customerLng = <?php echo json_encode(isset($order['longitude']) ? (is_numeric($order['longitude']) ? (float)$order['longitude'] : null) : null); ?>;
     const customerAddress = <?php echo json_encode((string)($order['delivery_address'] ?? '')); ?>;
+
+    const initialDriverLat = <?php echo json_encode(isset($tracking_info['current_latitude']) && is_numeric($tracking_info['current_latitude']) ? (float)$tracking_info['current_latitude'] : null); ?>;
+    const initialDriverLng = <?php echo json_encode(isset($tracking_info['current_longitude']) && is_numeric($tracking_info['current_longitude']) ? (float)$tracking_info['current_longitude'] : null); ?>;
+    const initialDriverName = <?php echo json_encode((string)($tracking_info['driver_name'] ?? 'Assigned Rider')); ?>;
+    const initialDeliveryStatus = <?php echo json_encode(strtolower(trim((string)($tracking_info['current_status'] ?? $order['status'] ?? 'pending')))); ?>;
 
     const storeLat = <?php echo json_encode(isset($store_details['latitude']) ? (is_numeric($store_details['latitude']) ? (float)$store_details['latitude'] : 14.4167) : 14.4167); ?>;
     const storeLng = <?php echo json_encode(isset($store_details['longitude']) ? (is_numeric($store_details['longitude']) ? (float)$store_details['longitude'] : 120.9333) : 120.9333); ?>;
@@ -1731,6 +1857,14 @@ include 'includes/header.php';
             btnFitRoute.addEventListener('click', fitMapAllMarkers);
         }
 
+        // Initialize driver marker immediately on page load if coordinates are available
+        if (Number.isFinite(initialDriverLat) && Number.isFinite(initialDriverLng) && ['assigned', 'arrived_at_restaurant', 'picked_up', 'on_the_way', 'arriving'].includes(initialDeliveryStatus)) {
+            updateDriverMarker(initialDriverLat, initialDriverLng, initialDriverName, initialDeliveryStatus);
+            if (['picked_up', 'on_the_way', 'arriving'].includes(initialDeliveryStatus)) {
+                updateRouteAndEta(initialDriverLat, initialDriverLng);
+            }
+        }
+
         fetchTrackingData();
         trackingPollTimer = setInterval(fetchTrackingData, 3500);
 
@@ -1817,10 +1951,29 @@ include 'includes/header.php';
                 updateFoodpandaPickupStatusUI(status, data);
             } else {
                 updateFoodpandaDeliveryStatusUI(status, data);
-                updateDriverMarker(data.latitude, data.longitude, data.driver_name || 'Driver', status);
-
-                if (['assigned', 'picked_up', 'on_the_way', 'arriving'].includes(status) && data.latitude && data.longitude) {
-                    updateRouteAndEta(data.latitude, data.longitude);
+                const activeDeliveryStatuses = ['assigned', 'arrived_at_restaurant', 'picked_up', 'on_the_way', 'arriving'];
+                if (activeDeliveryStatuses.includes(status) && data.latitude && data.longitude) {
+                    updateDriverMarker(data.latitude, data.longitude, data.driver_name || 'Driver', status);
+                    if (['picked_up', 'on_the_way', 'arriving'].includes(status)) {
+                        updateRouteAndEta(data.latitude, data.longitude);
+                    }
+                } else if (status === 'delivered') {
+                    if (data.latitude && data.longitude) {
+                        updateDriverMarker(data.latitude, data.longitude, data.driver_name || 'Driver', status);
+                    }
+                    if (routePolyline) {
+                        map.removeLayer(routePolyline);
+                        routePolyline = null;
+                    }
+                } else {
+                    if (driverMarker) {
+                        map.removeLayer(driverMarker);
+                        driverMarker = null;
+                    }
+                    if (routePolyline) {
+                        map.removeLayer(routePolyline);
+                        routePolyline = null;
+                    }
                 }
             }
         } catch (err) {
@@ -1892,25 +2045,48 @@ include 'includes/header.php';
 
         [step1, step2, step3, step4].forEach(s => s.classList.remove('is-active', 'is-completed'));
 
-        if (status === 'pending') {
-            heroTitle.textContent = "Order Placed & Confirmed";
-            heroSubtitle.textContent = "We have received your order and are preparing to start cooking.";
-            stepperFill.style.width = "20%";
-            step1.classList.add('is-active');
-        } else if (status === 'preparing' || status === 'confirmed') {
-            heroTitle.textContent = "Kitchen is Roasting Your Lechon";
-            heroSubtitle.textContent = "Your delicious dishes are being cooked fresh and packed with care.";
-            stepperFill.style.width = "45%";
+        const waitingCard = document.getElementById('fpWaitingRiderCard');
+        const vehicleTag = document.getElementById('fpDriverVehicle');
+
+        if (data.waiting_for_rider || status === 'pending' || (!data.driver_id && !data.driver_name)) {
+            heroTitle.textContent = "Waiting for Rider to Pick Up";
+            heroSubtitle.textContent = "Your order is confirmed and being prepared. Nearby delivery riders are currently being notified to accept your delivery.";
+            stepperFill.style.width = "30%";
             step1.classList.add('is-completed');
             step2.classList.add('is-active');
+            const step2Sub = document.getElementById('fpStep2Time');
+            if (step2Sub) step2Sub.textContent = "In Progress";
+            const step3Sub = document.getElementById('fpStep3Time');
+            if (step3Sub) step3Sub.textContent = "Delivery";
+            if (waitingCard) waitingCard.style.display = 'block';
+            if (riderCard) riderCard.style.display = 'none';
         } else if (status === 'assigned') {
-            const dName = data.driver_name || 'A rider';
-            heroTitle.textContent = `${dName} is on the way to the store`;
-            heroSubtitle.textContent = "Your rider has been assigned and is heading to the store to pick up your order.";
-            stepperFill.style.width = "65%";
+            const dName = data.driver_name || 'Your rider';
+            heroTitle.textContent = `${dName} accepted your delivery!`;
+            heroSubtitle.textContent = "Your rider has accepted the delivery and is heading to the store to pick up your order.";
+            stepperFill.style.width = "40%";
+            step1.classList.add('is-completed');
+            step2.classList.add('is-completed');
+            const step2Sub = document.getElementById('fpStep2Time');
+            if (step2Sub) step2Sub.textContent = "Heading to store";
+            const step3Sub = document.getElementById('fpStep3Time');
+            if (step3Sub) step3Sub.textContent = "Waiting for pickup";
+            if (waitingCard) waitingCard.style.display = 'none';
+            if (riderCard) riderCard.style.display = 'block';
+        } else if (status === 'arrived_at_restaurant') {
+            const dName = data.driver_name || 'Your rider';
+            heroTitle.textContent = `${dName} arrived at the store!`;
+            heroSubtitle.textContent = "Your rider has arrived at the store and is waiting for the store owner to hand over your package.";
+            stepperFill.style.width = "60%";
             step1.classList.add('is-completed');
             step2.classList.add('is-completed');
             step3.classList.add('is-active');
+            const step2Sub = document.getElementById('fpStep2Time');
+            if (step2Sub) step2Sub.textContent = "At Store";
+            const step3Sub = document.getElementById('fpStep3Time');
+            if (step3Sub) step3Sub.textContent = "Awaiting Handover";
+            if (waitingCard) waitingCard.style.display = 'none';
+            if (riderCard) riderCard.style.display = 'block';
         } else if (status === 'picked_up' || status === 'on_the_way') {
             const dName = data.driver_name || 'Rider';
             heroTitle.textContent = `${dName} is on the way!`;
@@ -1919,6 +2095,12 @@ include 'includes/header.php';
             step1.classList.add('is-completed');
             step2.classList.add('is-completed');
             step3.classList.add('is-active');
+            const step2Sub = document.getElementById('fpStep2Time');
+            if (step2Sub) step2Sub.textContent = "Picked Up";
+            const step3Sub = document.getElementById('fpStep3Time');
+            if (step3Sub) step3Sub.textContent = "En Route";
+            if (waitingCard) waitingCard.style.display = 'none';
+            if (riderCard) riderCard.style.display = 'block';
         } else if (status === 'arriving') {
             heroTitle.textContent = "Rider is Arriving Soon!";
             heroSubtitle.textContent = "Your rider is right outside your location. Please prepare to receive your order.";
@@ -1926,6 +2108,10 @@ include 'includes/header.php';
             step1.classList.add('is-completed');
             step2.classList.add('is-completed');
             step3.classList.add('is-active');
+            const step3Sub = document.getElementById('fpStep3Time');
+            if (step3Sub) step3Sub.textContent = "Arriving";
+            if (waitingCard) waitingCard.style.display = 'none';
+            if (riderCard) riderCard.style.display = 'block';
         } else if (status === 'delivered') {
             heroTitle.textContent = "Order Delivered!";
             heroSubtitle.textContent = "Your order was successfully delivered. Thank you for choosing Lechon Delights!";
@@ -1935,12 +2121,16 @@ include 'includes/header.php';
             step3.classList.add('is-completed');
             step4.classList.add('is-completed');
             document.getElementById('fpEtaValue').textContent = "Delivered";
+            if (waitingCard) waitingCard.style.display = 'none';
+            if (riderCard) riderCard.style.display = 'block';
         }
 
-        // Update Driver Card
-        if (data.driver_name) {
-            if (riderCard) riderCard.style.display = 'block';
-            if (driverName) driverName.textContent = data.driver_name;
+        // Update Driver Card details
+        if (data.driver_name || data.driver_id) {
+            if (driverName) driverName.textContent = data.driver_name || 'Assigned Rider';
+            if (vehicleTag) {
+                vehicleTag.innerHTML = `<i class="fas fa-motorcycle me-1"></i> ${escapeHtml(data.driver_vehicle || 'Motorcycle')}`;
+            }
             if (data.driver_phone) {
                 if (phoneWrap) phoneWrap.style.display = 'block';
                 if (phoneLink) {
@@ -1950,8 +2140,17 @@ include 'includes/header.php';
             } else {
                 if (phoneWrap) phoneWrap.style.display = 'none';
             }
-        } else {
-            if (riderCard) riderCard.style.display = 'none';
+        }
+
+        // Update Delivery Proof Photo Card
+        if (data.proof_path) {
+            const proofCard = document.getElementById('fpProofCard');
+            const proofImg = document.getElementById('fpProofImg');
+            if (proofCard && proofImg) {
+                const fname = data.proof_path.split('/').pop();
+                proofImg.src = 'uploads/proof_of_delivery/' + fname;
+                proofCard.style.display = 'block';
+            }
         }
     }
 
@@ -2143,7 +2342,7 @@ include 'includes/header.php';
 
         const bubble = document.createElement('div');
         bubble.className = 'fp-chat-bubble';
-        bubble.textContent = msg.message_text;
+        bubble.textContent = msg.message_text || msg.message || '';
 
         const time = document.createElement('div');
         time.className = 'fp-chat-time';

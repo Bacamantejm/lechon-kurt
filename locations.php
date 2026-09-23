@@ -4,6 +4,11 @@ if (session_status() !== PHP_SESSION_ACTIVE) { session_start(); }
 $current_page = 'locations';
 $page_title = 'Locations | Browse Shops and Store Menus';
 require_once 'includes/config.php';
+require_once __DIR__ . '/includes/rider_helper.php';
+if (!empty($_SESSION['user_id']) && isDeliveryDriverUser($conn, (int)$_SESSION['user_id'])) {
+    header("Location: rider/index.php");
+    exit();
+}
 require_once 'includes/store_availability_helper.php';
 
 function locationsAssetPath(string $path, string $fallback = 'images/store-bg.jpg'): string {

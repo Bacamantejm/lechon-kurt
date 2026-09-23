@@ -351,9 +351,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($checkout_seller_owner_id <= 0) {
         if ($delivery_option === 'delivery' && !empty($delivery_quote['nearest_store_id'])) {
             $nStoreId = (int)$delivery_quote['nearest_store_id'];
-            $sStmt = mysqli_prepare($conn, "SELECT owner_user_id FROM store_locations WHERE store_id = ? OR id = ? LIMIT 1");
+            $pickup_location = $nStoreId;
+            $sStmt = mysqli_prepare($conn, "SELECT owner_user_id FROM store_locations WHERE store_id = ? LIMIT 1");
             if ($sStmt) {
-                mysqli_stmt_bind_param($sStmt, "ii", $nStoreId, $nStoreId);
+                mysqli_stmt_bind_param($sStmt, "i", $nStoreId);
                 mysqli_stmt_execute($sStmt);
                 $sRes = mysqli_stmt_get_result($sStmt);
                 if ($sRow = mysqli_fetch_assoc($sRes)) {
@@ -362,9 +363,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 mysqli_stmt_close($sStmt);
             }
         } elseif ($delivery_option === 'pickup' && !empty($pickup_location)) {
-            $sStmt = mysqli_prepare($conn, "SELECT owner_user_id FROM store_locations WHERE store_id = ? OR id = ? LIMIT 1");
+            $sStmt = mysqli_prepare($conn, "SELECT owner_user_id FROM store_locations WHERE store_id = ? LIMIT 1");
             if ($sStmt) {
-                mysqli_stmt_bind_param($sStmt, "ii", $pickup_location, $pickup_location);
+                mysqli_stmt_bind_param($sStmt, "i", $pickup_location);
                 mysqli_stmt_execute($sStmt);
                 $sRes = mysqli_stmt_get_result($sStmt);
                 if ($sRow = mysqli_fetch_assoc($sRes)) {

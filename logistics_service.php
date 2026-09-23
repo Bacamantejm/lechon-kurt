@@ -466,10 +466,19 @@ class LogisticsService {
     public function getTrackingByOrderId($order_id) {
         $query = "SELECT lt.*, 
                          lp.provider_name, 
-                         dm.method_name
+                         dm.method_name,
+                         COALESCE(NULLIF(lt.driver_name, ''), u_rdr.full_name, CONCAT(e_rdr.first_name, ' ', e_rdr.last_name), 'Assigned Rider') AS driver_name,
+                         COALESCE(NULLIF(lt.driver_phone, ''), u_rdr.phone, e_rdr.phone, '') AS driver_phone,
+                         COALESCE(NULLIF(lt.driver_vehicle, ''), r.vehicle_type, 'Motorcycle') AS driver_vehicle,
+                         r.rider_code,
+                         r.rating AS driver_rating,
+                         r.vehicle_plate
                   FROM logistics_tracking lt
                   LEFT JOIN logistics_providers lp ON lt.logistics_provider_id = lp.id
                   LEFT JOIN delivery_methods dm ON lt.delivery_method_id = dm.id
+                  LEFT JOIN riders r ON lt.driver_id = r.id
+                  LEFT JOIN users u_rdr ON r.user_id = u_rdr.id
+                  LEFT JOIN employees e_rdr ON r.employee_id = e_rdr.id
                   WHERE lt.order_id = ?";
         
         if ($stmt = mysqli_prepare($this->conn, $query)) {
@@ -600,11 +609,11 @@ class LogisticsService {
      */
     private function updateOrderStatus($order_id, $logistics_status) {
         $status_map = [
-            'pending' => 'confirmed', // Logistics pending means order is confirmed
+            'pending' => 'confirmed',
             'assigned' => 'preparing',
             'picked_up' => 'preparing',
-            'on_the_way' => 'delivered', // Or a new 'shipping' status
-            'arriving' => 'delivered',
+            'on_the_way' => 'preparing',
+            'arriving' => 'preparing',
             'delivered' => 'delivered',
             'failed' => 'failed',
             'cancelled' => 'cancelled'
