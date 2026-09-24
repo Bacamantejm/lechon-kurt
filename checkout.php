@@ -3847,7 +3847,117 @@ function showVoucherShortfall(code, minSpend, shortfall, customReason) {
     }
 }
 
+let latestDeliveryQuoteRequestToken = 0;
+
+function calculateDeliveryFeeFallbackLocally(lat, lng) {
+    const userLat = parseFloat(lat);
+    const userLng = parseFloat(lng);
+    if (Number.isNaN(userLat) || Number.isNaN(userLng)) return;
+
+    let minDistance = Infinity;
+    let nearestStoreName = 'Nearest Store';
+
+    if (typeof getDeliveryCandidateStores === 'function') {
+        getDeliveryCandidateStores().forEach((store) => {
+            if (store.latitude && store.longitude) {
+                const storeLat = parseFloat(store.latitude);
+                const storeLng = parseFloat(store.longitude);
+                const distance = calculateCoordinatesDistance(userLat, userLng, storeLat, storeLng);
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    nearestStoreName = store.name || store.store_name;
+                }
+            }
+        });
+    }
+
+    if (minDistance === Infinity) {
+        const timeEl = document.getElementById('summaryDeliveryTime');
+        const detailsEl = document.getElementById('summaryDeliveryDetails');
+        if (timeEl) timeEl.innerHTML = '';
+        if (detailsEl) detailsEl.textContent = 'No mapped store coordinates are available for delivery pricing yet.';
+        return;
+    }
+
+    const distanceKm = minDistance / 1000;
+    const fee = Math.ceil(baseDeliveryFee + (distanceKm * perKmRate));
+    const travelTimeMinutes = (distanceKm / avgSpeed) * 60;
+    const totalTimeMinutes = prepTime + travelTimeMinutes;
+    const minEta = Math.ceil(totalTimeMinutes / 5) * 5;
+    const maxEta = minEta + 15;
+    const etaText = `Estimated Delivery: ${minEta} - ${maxEta} minutes`;
+
+    currentDeliveryFee = fee;
+    const summaryDeliveryTime = document.getElementById('summaryDeliveryTime');
+    const summaryDeliveryFee = document.getElementById('summaryDeliveryFee');
+    const summaryDeliveryDetails = document.getElementById('summaryDeliveryDetails');
+    const calcDeliveryFeeInput = document.getElementById('calculated_delivery_fee');
+    const distanceKmInput = document.getElementById('distance_km');
+
+    if (summaryDeliveryTime) summaryDeliveryTime.innerHTML = `<i class="fas fa-clock"></i> ${etaText}`;
+    if (summaryDeliveryFee) summaryDeliveryFee.textContent = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(fee);
+    if (summaryDeliveryDetails) summaryDeliveryDetails.innerHTML = `Delivery via ${nearestStoreName} (${distanceKm.toFixed(1)} km)`;
+    if (calcDeliveryFeeInput) calcDeliveryFeeInput.value = fee;
+    if (distanceKmInput) distanceKmInput.value = distanceKm.toFixed(2);
+    if (typeof recalculateOrderTotals === 'function') {
+        recalculateOrderTotals();
+    }
+}
+
+async function persistDeliveryQuote(lat, lng) {
+    const response = await fetch('update_delivery_option.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+            delivery_option: 'delivery',
+            latitude: String(lat),
+            longitude: String(lng)
+        })
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+        throw new Error(result.message || 'Unable to refresh delivery pricing.');
+    }
+    return result;
+}
+
+async function calculateDeliveryFee(lat, lng) {
+    const latValue = Number(lat);
+    const lngValue = Number(lng);
+    if (!Number.isFinite(latValue) || !Number.isFinite(lngValue)) return;
+
+    const latitudeInput = document.getElementById('latitude');
+    const longitudeInput = document.getElementById('longitude');
+    if (latitudeInput) latitudeInput.value = String(latValue);
+    if (longitudeInput) longitudeInput.value = String(lngValue);
+
+    const requestToken = ++latestDeliveryQuoteRequestToken;
+    const summaryDeliveryDetails = document.getElementById('summaryDeliveryDetails');
+    const summaryDeliveryTime = document.getElementById('summaryDeliveryTime');
+    if (summaryDeliveryDetails) summaryDeliveryDetails.textContent = 'Calculating delivery fee from nearest store...';
+    if (summaryDeliveryTime) summaryDeliveryTime.innerHTML = '';
+
+    try {
+        const quote = await persistDeliveryQuote(latValue, lngValue);
+        if (requestToken !== latestDeliveryQuoteRequestToken) return;
+        if (typeof updateSummaryUI === 'function') {
+            updateSummaryUI(quote);
+        } else if (typeof window.updateSummaryUI === 'function') {
+            window.updateSummaryUI(quote);
+        }
+    } catch (error) {
+        if (requestToken !== latestDeliveryQuoteRequestToken) return;
+        console.error('Unable to fetch delivery quote from server:', error);
+        calculateDeliveryFeeFallbackLocally(latValue, lngValue);
+    }
+}
+
 // Explicit global exports
+window.calculateDeliveryFee = calculateDeliveryFee;
+window.calculateDeliveryFeeFallbackLocally = calculateDeliveryFeeFallbackLocally;
+window.persistDeliveryQuote = persistDeliveryQuote;
+window.recalculateOrderTotals = recalculateOrderTotals;
 window.applyVoucherCode = applyVoucherCode;
 window.removeVoucherCode = removeVoucherCode;
 window.applySelectedVoucher = applySelectedVoucher;
@@ -4024,7 +4134,7 @@ const deliveryOptionHiddenInput = document.getElementById('delivery_option_hidde
 const pickupLocationHiddenInput = document.getElementById('pickup_location_hidden');
 const deliveryLocationHiddenInput = document.getElementById('delivery_location_hidden');
 let shouldAutoPinFromMarketPayload = false;
-let latestDeliveryQuoteRequestToken = 0;
+latestDeliveryQuoteRequestToken = 0;
 
 const normalizeDeliveryOption = (value) => (String(value || '').toLowerCase() === 'delivery' ? 'delivery' : 'pickup');
 
@@ -5022,93 +5132,10 @@ if (findNearestStoreBtn) {
     });
 }
 
-function calculateDeliveryFeeFallbackLocally(lat, lng) {
-    const userLat = parseFloat(lat);
-    const userLng = parseFloat(lng);
-    if (Number.isNaN(userLat) || Number.isNaN(userLng)) return;
-
-    let minDistance = Infinity;
-    let nearestStoreName = 'Nearest Store';
-
-    getDeliveryCandidateStores().forEach((store) => {
-        if (store.latitude && store.longitude) {
-            const storeLat = parseFloat(store.latitude);
-            const storeLng = parseFloat(store.longitude);
-            const distance = calculateCoordinatesDistance(userLat, userLng, storeLat, storeLng);
-            if (distance < minDistance) {
-                minDistance = distance;
-                nearestStoreName = store.name || store.store_name;
-            }
-        }
-    });
-
-    if (minDistance === Infinity) {
-        document.getElementById('summaryDeliveryTime').innerHTML = '';
-        document.getElementById('summaryDeliveryDetails').textContent = 'No mapped store coordinates are available for delivery pricing yet.';
-        return;
-    }
-
-    const distanceKm = minDistance / 1000;
-    const fee = Math.ceil(baseDeliveryFee + (distanceKm * perKmRate));
-    const travelTimeMinutes = (distanceKm / avgSpeed) * 60;
-    const totalTimeMinutes = prepTime + travelTimeMinutes;
-    const minEta = Math.ceil(totalTimeMinutes / 5) * 5;
-    const maxEta = minEta + 15;
-    const etaText = `Estimated Delivery: ${minEta} - ${maxEta} minutes`;
-
-    currentDeliveryFee = fee;
-    document.getElementById('summaryDeliveryTime').innerHTML = `<i class="fas fa-clock"></i> ${etaText}`;
-    document.getElementById('summaryDeliveryFee').textContent = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(fee);
-    document.getElementById('summaryDeliveryDetails').innerHTML = `Delivery via ${nearestStoreName} (${distanceKm.toFixed(1)} km)`;
-    document.getElementById('calculated_delivery_fee').value = fee;
-    document.getElementById('distance_km').value = distanceKm.toFixed(2);
-    recalculateOrderTotals();
-}
-
-async function calculateDeliveryFee(lat, lng) {
-    const latValue = Number(lat);
-    const lngValue = Number(lng);
-    if (!Number.isFinite(latValue) || !Number.isFinite(lngValue)) return;
-
-    const latitudeInput = document.getElementById('latitude');
-    const longitudeInput = document.getElementById('longitude');
-    if (latitudeInput) latitudeInput.value = String(latValue);
-    if (longitudeInput) longitudeInput.value = String(lngValue);
-
-    const requestToken = ++latestDeliveryQuoteRequestToken;
-    const summaryDeliveryDetails = document.getElementById('summaryDeliveryDetails');
-    const summaryDeliveryTime = document.getElementById('summaryDeliveryTime');
-    if (summaryDeliveryDetails) summaryDeliveryDetails.textContent = 'Calculating delivery fee from nearest store...';
-    if (summaryDeliveryTime) summaryDeliveryTime.innerHTML = '';
-
-    try {
-        const quote = await persistDeliveryQuote(latValue, lngValue);
-        if (requestToken !== latestDeliveryQuoteRequestToken) return;
-        updateSummaryUI(quote);
-    } catch (error) {
-        if (requestToken !== latestDeliveryQuoteRequestToken) return;
-        console.error('Unable to fetch delivery quote from server:', error);
-        calculateDeliveryFeeFallbackLocally(latValue, lngValue);
-    }
-}
-
-async function persistDeliveryQuote(lat, lng) {
-    const response = await fetch('update_delivery_option.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-            delivery_option: 'delivery',
-            latitude: String(lat),
-            longitude: String(lng)
-        })
-    });
-
-    const result = await response.json();
-    if (!result.success) {
-        throw new Error(result.message || 'Unable to refresh delivery pricing.');
-    }
-    return result;
-}
+// Ensure global pricing functions are bound to window
+window.calculateDeliveryFee = calculateDeliveryFee;
+window.calculateDeliveryFeeFallbackLocally = calculateDeliveryFeeFallbackLocally;
+window.persistDeliveryQuote = persistDeliveryQuote;
 
 async function updateAddressFromCoordinates(lat, lng) {
     const latVal = parseFloat(lat);
@@ -5809,6 +5836,9 @@ let deliveryOverviewMap = null;
 let deliveryOverviewStoreMarker = null;
 let deliveryOverviewCustomerMarker = null;
 let deliveryOverviewRouteLine = null;
+let deliveryOverviewRouteCasing = null;
+let deliveryOverviewRouteDash = null;
+let lastOverviewRouteKey = '';
 
 function createOverviewPinIcon(type, iconClass) {
     const isStore = type === 'store';
@@ -5950,34 +5980,125 @@ function refreshDeliveryOverviewMap(quoteData = null) {
     }
 
     if (validStore && validCustomer) {
-        const routeCoords = [[storeLat, storeLng], [custLat, custLng]];
-        if (!deliveryOverviewRouteLine) {
-            deliveryOverviewRouteLine = L.polyline(routeCoords, {
-                color: '#b3261e',
-                weight: 4,
-                opacity: 0.85,
-                dashArray: '8, 8',
-                lineJoin: 'round'
-            }).addTo(deliveryOverviewMap);
-        } else {
-            deliveryOverviewRouteLine.setLatLngs(routeCoords);
-        }
-
-        try {
-            const bounds = L.latLngBounds(routeCoords);
-            if (bounds.isValid()) {
-                deliveryOverviewMap.fitBounds(bounds, {
-                    padding: [45, 45],
-                    maxZoom: 16
-                });
-            }
-        } catch (e) {
-            console.warn('fitBounds error:', e);
-        }
+        fetchCheckoutStreetRoute(storeLat, storeLng, custLat, custLng);
     } else if (validStore) {
+        clearCheckoutRouteLayers();
         deliveryOverviewMap.setView([storeLat, storeLng], 14);
     } else if (validCustomer) {
+        clearCheckoutRouteLayers();
         deliveryOverviewMap.setView([custLat, custLng], 14);
+    }
+}
+
+function ensureCheckoutRouteLayers() {
+    if (!deliveryOverviewMap) return;
+    if (!deliveryOverviewRouteCasing) {
+        deliveryOverviewRouteCasing = L.polyline([], {
+            color: '#ffffff',
+            weight: 7,
+            opacity: 0.95,
+            lineCap: 'round',
+            lineJoin: 'round'
+        }).addTo(deliveryOverviewMap);
+    }
+    if (!deliveryOverviewRouteLine) {
+        deliveryOverviewRouteLine = L.polyline([], {
+            color: '#b3261e',
+            weight: 4.5,
+            opacity: 0.95,
+            lineCap: 'round',
+            lineJoin: 'round'
+        }).addTo(deliveryOverviewMap);
+    }
+    if (!deliveryOverviewRouteDash) {
+        deliveryOverviewRouteDash = L.polyline([], {
+            color: '#fee4e2',
+            weight: 2,
+            opacity: 0.85,
+            dashArray: '6, 10',
+            lineCap: 'round',
+            lineJoin: 'round'
+        }).addTo(deliveryOverviewMap);
+    }
+}
+
+function setCheckoutRouteCoords(coords) {
+    ensureCheckoutRouteLayers();
+    if (!coords || coords.length === 0) return;
+    if (deliveryOverviewRouteCasing) deliveryOverviewRouteCasing.setLatLngs(coords);
+    if (deliveryOverviewRouteLine) deliveryOverviewRouteLine.setLatLngs(coords);
+    if (deliveryOverviewRouteDash) deliveryOverviewRouteDash.setLatLngs(coords);
+}
+
+function clearCheckoutRouteLayers() {
+    if (deliveryOverviewRouteCasing) deliveryOverviewRouteCasing.setLatLngs([]);
+    if (deliveryOverviewRouteLine) deliveryOverviewRouteLine.setLatLngs([]);
+    if (deliveryOverviewRouteDash) deliveryOverviewRouteDash.setLatLngs([]);
+}
+
+async function fetchCheckoutStreetRoute(originLat, originLng, destLat, destLng) {
+    ensureCheckoutRouteLayers();
+    if (!originLat || !originLng || !destLat || !destLng) return;
+
+    // Instant direct fallback so user never sees a blank route while loading
+    const cur = deliveryOverviewRouteLine ? deliveryOverviewRouteLine.getLatLngs() : [];
+    if (!cur || cur.length === 0) {
+        setCheckoutRouteCoords([[originLat, originLng], [destLat, destLng]]);
+        try {
+            const b = L.latLngBounds([[originLat, originLng], [destLat, destLng]]);
+            if (b.isValid() && deliveryOverviewMap) {
+                deliveryOverviewMap.fitBounds(b, { padding: [45, 45], maxZoom: 16 });
+            }
+        } catch (e) {}
+    }
+
+    const key = `${Math.round(originLat * 1000)}_${Math.round(originLng * 1000)}_${Math.round(destLat * 1000)}_${Math.round(destLng * 1000)}`;
+    if (lastOverviewRouteKey === key && cur && cur.length > 2) {
+        return;
+    }
+    lastOverviewRouteKey = key;
+
+    // 1. Fetch precise turn-by-turn road geometry from our local proxy (Streets & Highways)
+    try {
+        const apiUrl = `api/get_directions.php?origin_lat=${originLat}&origin_lng=${originLng}&dest_lat=${destLat}&dest_lng=${destLng}`;
+        const res = await fetch(apiUrl);
+        if (res.ok) {
+            const data = await res.json();
+            if (data.success && Array.isArray(data.coordinates) && data.coordinates.length > 0) {
+                setCheckoutRouteCoords(data.coordinates);
+                if (deliveryOverviewMap) {
+                    const bounds = L.latLngBounds(data.coordinates);
+                    if (bounds.isValid()) {
+                        deliveryOverviewMap.fitBounds(bounds, { padding: [45, 45], maxZoom: 16 });
+                    }
+                }
+                return;
+            }
+        }
+    } catch (e) {
+        console.debug('Checkout directions proxy notice:', e);
+    }
+
+    // 2. Direct OSRM mirror fallback
+    try {
+        const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=full&geometries=geojson`;
+        const res2 = await fetch(osrmUrl);
+        if (res2.ok) {
+            const data2 = await res2.json();
+            if (data2.routes && data2.routes.length > 0) {
+                const latLngs = data2.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+                setCheckoutRouteCoords(latLngs);
+                if (deliveryOverviewMap) {
+                    const bounds = L.latLngBounds(latLngs);
+                    if (bounds.isValid()) {
+                        deliveryOverviewMap.fitBounds(bounds, { padding: [45, 45], maxZoom: 16 });
+                    }
+                }
+                return;
+            }
+        }
+    } catch (e2) {
+        console.debug('OSRM direct notice:', e2);
     }
 }
 
@@ -5992,6 +6113,13 @@ document.addEventListener('click', function(e) {
         e.preventDefault();
         if (deliveryOverviewMap) {
             deliveryOverviewMap.invalidateSize();
+            if (deliveryOverviewRouteLine && deliveryOverviewRouteLine.getLatLngs().length > 0) {
+                const bounds = L.latLngBounds(deliveryOverviewRouteLine.getLatLngs());
+                if (bounds.isValid()) {
+                    deliveryOverviewMap.fitBounds(bounds, { padding: [45, 45], maxZoom: 16 });
+                    return;
+                }
+            }
             if (deliveryOverviewStoreMarker && deliveryOverviewCustomerMarker) {
                 const bounds = L.latLngBounds([
                     deliveryOverviewStoreMarker.getLatLng(),
@@ -6213,6 +6341,12 @@ if (activeCheckoutDeliveryOption === 'delivery' && initialDeliveryQuote && initi
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const calculateDeliveryFee = async (...args) => {
+        if (typeof window.calculateDeliveryFee === 'function') {
+            return await window.calculateDeliveryFee(...args);
+        }
+    };
+
     function updateDisplayAddressText(streetText, cityText) {
         const streetEl = document.getElementById('displayStreetAddress');
         const cityEl = document.getElementById('displayCityAddress');
@@ -6530,6 +6664,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 if (typeof calculateDeliveryFee === 'function') {
                     calculateDeliveryFee(lat, lng);
+                } else if (typeof window.calculateDeliveryFee === 'function') {
+                    window.calculateDeliveryFee(lat, lng);
                 }
             }
         })().catch(err => console.warn('Coord fee error:', err));
@@ -6748,9 +6884,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }).catch(err => console.error('Auto-save address error:', err));
 
-                await calculateDeliveryFee(lat, lng);
-                if (typeof refreshDeliveryOverviewMap === 'function') {
-                    refreshDeliveryOverviewMap({ customer_lat: lat, customer_lng: lng });
+                if (typeof calculateDeliveryFee === 'function') {
+                    await calculateDeliveryFee(lat, lng);
+                } else if (typeof window.calculateDeliveryFee === 'function') {
+                    await window.calculateDeliveryFee(lat, lng);
+                }
+                const refreshMapFn = window.refreshDeliveryOverviewMap || (typeof refreshDeliveryOverviewMap === 'function' ? refreshDeliveryOverviewMap : null);
+                if (refreshMapFn) {
+                    refreshMapFn({ customer_lat: lat, customer_lng: lng });
                 }
             }
 
@@ -6808,6 +6949,8 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             if (typeof calculateDeliveryFee === 'function') {
                 calculateDeliveryFee(lat, lng);
+            } else if (typeof window.calculateDeliveryFee === 'function') {
+                window.calculateDeliveryFee(lat, lng);
             }
         }
 

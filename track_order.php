@@ -477,6 +477,19 @@ include 'includes/header.php';
     border-color: #d0d5dd;
 }
 
+.fp-map-btn.is-active {
+    background: #b3261e;
+    color: #ffffff;
+    border-color: #b3261e;
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.2);
+}
+
+.fp-map-btn.is-active:hover {
+    background: #981b15;
+    color: #ffffff;
+    border-color: #981b15;
+}
+
 /* Custom Foodpanda Map Marker Styles */
 .fp-marker-rider {
     position: relative;
@@ -1399,7 +1412,7 @@ include 'includes/header.php';
                     <div class="fp-map-actions">
                         <button type="button" class="fp-map-btn" id="btnFocusStore" title="Focus Store Location"><i class="fas fa-store"></i></button>
                         <?php if (!$is_pickup): ?>
-                        <button type="button" class="fp-map-btn" id="btnFocusRider" title="Focus Rider"><i class="fas fa-motorcycle"></i></button>
+                        <button type="button" class="fp-map-btn is-active" id="btnFocusRider" title="Auto-track / Focus Rider"><i class="fas fa-motorcycle"></i></button>
                         <button type="button" class="fp-map-btn" id="btnFocusHome" title="Focus Delivery Location"><i class="fas fa-house"></i></button>
                         <?php endif; ?>
                         <button type="button" class="fp-map-btn" id="btnFitRoute" title="Fit Map View"><i class="fas fa-expand"></i></button>
@@ -1667,12 +1680,17 @@ include 'includes/header.php';
     let customerMarker = null;
     let storeMarker = null;
     let routePolyline = null;
+    let routeCasingPolyline = null;
+    let routeDashPolyline = null;
+    let secondaryRoutePolyline = null;
     let riderTrailPolyline = null;
 
     let customerLocationObj = null;
     let storeLocationObj = null;
     let lastDriverLatLng = null;
     let lastRouteRefreshAt = 0;
+    let lastRouteCoordsKey = '';
+    let isAutoTrackingRider = true;
     let hasAutoFitBounds = false;
     let driverMoveRaf = null;
 
@@ -1818,26 +1836,16 @@ include 'includes/header.php';
         }
 
         // For Delivery Orders: Set up Route Lines & Customer Marker
-        routePolyline = L.polyline([], {
-            color: '#b3261e',
-            weight: 5,
-            opacity: 0.85,
-            lineCap: 'round',
-            lineJoin: 'round'
-        }).addTo(map);
-
-        riderTrailPolyline = L.polyline([], {
-            color: '#ef6b2e',
-            weight: 4,
-            opacity: 0.9,
-            dashArray: '6, 8'
-        }).addTo(map);
+        ensureRouteLayers();
 
         // Add Customer Marker
         if (Number.isFinite(customerLat) && Number.isFinite(customerLng)) {
             customerLocationObj = [customerLat, customerLng];
             customerMarker = L.marker(customerLocationObj, { icon: customerIcon }).addTo(map);
             map.setView(customerLocationObj, 14);
+            if (lastDriverLatLng) {
+                updateRouteAndEta(lastDriverLatLng[0], lastDriverLatLng[1], initialDeliveryStatus, true);
+            }
         } else {
             forwardGeocodeFromNominatim(customerAddress).then(coords => {
                 if (coords) {
@@ -1845,7 +1853,7 @@ include 'includes/header.php';
                     customerMarker = L.marker(customerLocationObj, { icon: customerIcon }).addTo(map);
                     fitMapAllMarkers();
                     if (lastDriverLatLng) {
-                        updateRouteAndEta(lastDriverLatLng[0], lastDriverLatLng[1], true);
+                        updateRouteAndEta(lastDriverLatLng[0], lastDriverLatLng[1], previousDeliveryStatus || initialDeliveryStatus, true);
                     }
                 }
             });
@@ -1854,36 +1862,52 @@ include 'includes/header.php';
         // Attach Map Action Buttons for Delivery
         const btnFocusRider = document.getElementById('btnFocusRider');
         if (btnFocusRider) {
+            btnFocusRider.classList.add('is-active');
             btnFocusRider.addEventListener('click', () => {
-                if (driverMarker) map.setView(driverMarker.getLatLng(), 16);
+                isAutoTrackingRider = true;
+                btnFocusRider.classList.add('is-active');
+                if (driverMarker) {
+                    map.setView(driverMarker.getLatLng(), 16, { animate: true });
+                }
             });
         }
 
         const btnFocusHome = document.getElementById('btnFocusHome');
         if (btnFocusHome) {
             btnFocusHome.addEventListener('click', () => {
-                if (customerMarker) map.setView(customerMarker.getLatLng(), 16);
+                isAutoTrackingRider = false;
+                if (btnFocusRider) btnFocusRider.classList.remove('is-active');
+                if (customerMarker) map.setView(customerMarker.getLatLng(), 16, { animate: true });
             });
         }
 
         const btnFocusStore = document.getElementById('btnFocusStore');
         if (btnFocusStore) {
             btnFocusStore.addEventListener('click', () => {
-                if (storeMarker) map.setView(storeMarker.getLatLng(), 16);
+                isAutoTrackingRider = false;
+                if (btnFocusRider) btnFocusRider.classList.remove('is-active');
+                if (storeMarker) map.setView(storeMarker.getLatLng(), 16, { animate: true });
             });
         }
 
         const btnFitRoute = document.getElementById('btnFitRoute');
         if (btnFitRoute) {
-            btnFitRoute.addEventListener('click', fitMapAllMarkers);
+            btnFitRoute.addEventListener('click', () => {
+                isAutoTrackingRider = false;
+                if (btnFocusRider) btnFocusRider.classList.remove('is-active');
+                fitMapAllMarkers();
+            });
         }
+
+        map.on('dragstart', () => {
+            isAutoTrackingRider = false;
+            if (btnFocusRider) btnFocusRider.classList.remove('is-active');
+        });
 
         // Initialize driver marker immediately on page load if coordinates are available
         if (Number.isFinite(initialDriverLat) && Number.isFinite(initialDriverLng) && ['assigned', 'arrived_at_restaurant', 'picked_up', 'on_the_way', 'arriving'].includes(initialDeliveryStatus)) {
             updateDriverMarker(initialDriverLat, initialDriverLng, initialDriverName, initialDeliveryStatus);
-            if (['picked_up', 'on_the_way', 'arriving'].includes(initialDeliveryStatus)) {
-                updateRouteAndEta(initialDriverLat, initialDriverLng);
-            }
+            updateRouteAndEta(initialDriverLat, initialDriverLng, initialDeliveryStatus, true);
         }
 
         fetchTrackingData();
@@ -1975,26 +1999,18 @@ include 'includes/header.php';
                 const activeDeliveryStatuses = ['assigned', 'arrived_at_restaurant', 'picked_up', 'on_the_way', 'arriving'];
                 if (activeDeliveryStatuses.includes(status) && data.latitude && data.longitude) {
                     updateDriverMarker(data.latitude, data.longitude, data.driver_name || 'Driver', status);
-                    if (['picked_up', 'on_the_way', 'arriving'].includes(status)) {
-                        updateRouteAndEta(data.latitude, data.longitude);
-                    }
+                    updateRouteAndEta(data.latitude, data.longitude, status);
                 } else if (status === 'delivered') {
                     if (data.latitude && data.longitude) {
                         updateDriverMarker(data.latitude, data.longitude, data.driver_name || 'Driver', status);
                     }
-                    if (routePolyline) {
-                        map.removeLayer(routePolyline);
-                        routePolyline = null;
-                    }
+                    clearRouteLines();
                 } else {
                     if (driverMarker) {
                         map.removeLayer(driverMarker);
                         driverMarker = null;
                     }
-                    if (routePolyline) {
-                        map.removeLayer(routePolyline);
-                        routePolyline = null;
-                    }
+                    clearRouteLines();
                 }
             }
         } catch (err) {
@@ -2175,11 +2191,137 @@ include 'includes/header.php';
         }
     }
 
+    function calculateHaversineDistanceKm(lat1, lon1, lat2, lon2) {
+        const R = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                  Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    }
+
+    function ensureRouteLayers() {
+        if (!map) return;
+        if (!routeCasingPolyline) {
+            routeCasingPolyline = L.polyline([], {
+                color: '#ffffff',
+                weight: 8,
+                opacity: 0.95,
+                lineCap: 'round',
+                lineJoin: 'round'
+            }).addTo(map);
+        }
+        if (!routePolyline) {
+            routePolyline = L.polyline([], {
+                color: '#b3261e',
+                weight: 5,
+                opacity: 0.95,
+                lineCap: 'round',
+                lineJoin: 'round'
+            }).addTo(map);
+        }
+        if (!routeDashPolyline) {
+            routeDashPolyline = L.polyline([], {
+                color: '#fee4e2',
+                weight: 2.5,
+                opacity: 0.85,
+                dashArray: '6, 10',
+                lineCap: 'round',
+                lineJoin: 'round'
+            }).addTo(map);
+        }
+        if (!secondaryRoutePolyline) {
+            secondaryRoutePolyline = L.polyline([], {
+                color: '#667085',
+                weight: 3.5,
+                opacity: 0.7,
+                dashArray: '6, 8',
+                lineCap: 'round',
+                lineJoin: 'round'
+            }).addTo(map);
+        }
+        if (!riderTrailPolyline) {
+            riderTrailPolyline = L.polyline([], {
+                color: '#f97316',
+                weight: 3.5,
+                opacity: 0.85,
+                dashArray: '4, 6',
+                lineCap: 'round'
+            }).addTo(map);
+        }
+    }
+
+    function setRouteCoordinates(latLngs) {
+        ensureRouteLayers();
+        if (!latLngs || latLngs.length === 0) return;
+        if (routeCasingPolyline) routeCasingPolyline.setLatLngs(latLngs);
+        if (routePolyline) routePolyline.setLatLngs(latLngs);
+        if (routeDashPolyline) routeDashPolyline.setLatLngs(latLngs);
+    }
+
+    function setSecondaryRouteCoordinates(latLngs) {
+        ensureRouteLayers();
+        if (secondaryRoutePolyline) {
+            secondaryRoutePolyline.setLatLngs(latLngs || []);
+        }
+    }
+
+    function clearRouteLines() {
+        if (routeCasingPolyline) routeCasingPolyline.setLatLngs([]);
+        if (routePolyline) routePolyline.setLatLngs([]);
+        if (routeDashPolyline) routeDashPolyline.setLatLngs([]);
+        if (secondaryRoutePolyline) secondaryRoutePolyline.setLatLngs([]);
+    }
+
+    function updateRouteHeadPoint(currentPos) {
+        if (!routePolyline) return;
+        const latLngs = routePolyline.getLatLngs();
+        if (latLngs && latLngs.length > 0) {
+            latLngs[0] = L.latLng(currentPos[0], currentPos[1]);
+            setRouteCoordinates(latLngs);
+        }
+    }
+
+    function updateMapEtaPill(distKm, durMins, isHeadingToStore, status) {
+        const distEl = document.getElementById('mapDistStat');
+        const etaEl = document.getElementById('mapEtaStat');
+        const fpEtaVal = document.getElementById('fpEtaValue');
+
+        const etaText = durMins > 1 ? `${durMins} mins` : '1 min';
+
+        if (distEl) {
+            if (isHeadingToStore) {
+                distEl.textContent = `${distKm} km to store`;
+            } else {
+                distEl.textContent = `${distKm} km`;
+            }
+        }
+
+        if (etaEl) {
+            if (isHeadingToStore) {
+                etaEl.textContent = (status === 'arrived_at_restaurant') ? 'At Restaurant' : 'Heading to Store';
+            } else {
+                etaEl.textContent = etaText;
+            }
+        }
+
+        if (fpEtaVal && previousDeliveryStatus !== 'delivered') {
+            if (isHeadingToStore) {
+                fpEtaVal.textContent = (status === 'arrived_at_restaurant') ? 'At Store (Waiting)' : `~${etaText} to store`;
+            } else {
+                fpEtaVal.textContent = `${etaText} (${distKm} km)`;
+            }
+        }
+    }
+
     function animateDriverMovement(targetPosition, durationMs = 1200) {
         if (!driverMarker || !targetPosition) return;
         const startLatLng = driverMarker.getLatLng();
         if (!startLatLng) {
             driverMarker.setLatLng(targetPosition);
+            updateRouteHeadPoint(targetPosition);
             return;
         }
 
@@ -2196,11 +2338,17 @@ include 'includes/header.php';
             const eased = 1 - Math.pow(1 - t, 3);
             const curLat = startLat + (endLat - startLat) * eased;
             const curLng = startLng + (endLng - startLng) * eased;
+            
             driverMarker.setLatLng([curLat, curLng]);
+            updateRouteHeadPoint([curLat, curLng]);
+
             if (t < 1) {
                 driverMoveRaf = requestAnimationFrame(step);
             } else {
                 driverMoveRaf = null;
+                if (isAutoTrackingRider && map) {
+                    map.panTo([endLat, endLng], { animate: true, duration: 0.6 });
+                }
             }
         };
         driverMoveRaf = requestAnimationFrame(step);
@@ -2219,6 +2367,9 @@ include 'includes/header.php';
 
         if (!driverMarker) {
             driverMarker = L.marker(point, { icon: riderIcon, title: name }).addTo(map);
+            if (isAutoTrackingRider && map) {
+                map.setView(point, 16);
+            }
         } else {
             animateDriverMovement(point, 1100);
         }
@@ -2229,45 +2380,147 @@ include 'includes/header.php';
         }
 
         // Add point to trail
+        ensureRouteLayers();
         if (riderTrailPolyline) {
             const pts = riderTrailPolyline.getLatLngs();
-            pts.push(point);
-            riderTrailPolyline.setLatLngs(pts);
+            const shouldAdd = pts.length === 0 || 
+                Math.abs(pts[pts.length - 1].lat - point[0]) > 0.00003 || 
+                Math.abs(pts[pts.length - 1].lng - point[1]) > 0.00003;
+            if (shouldAdd) {
+                pts.push(L.latLng(point[0], point[1]));
+                if (pts.length > 200) pts.shift();
+                riderTrailPolyline.setLatLngs(pts);
+            }
         }
 
         lastDriverLatLng = point;
     }
 
-    async function updateRouteAndEta(driverLat, driverLng, force = false) {
-        if (!customerLocationObj) return;
+    async function updateRouteAndEta(driverLat, driverLng, status = 'on_the_way', force = false) {
+        ensureRouteLayers();
+        if (!driverLat || !driverLng) return;
+
+        // Determine destination target based on current fulfillment status
+        let targetCoords = null;
+        const isHeadingToStore = ['assigned', 'arrived_at_restaurant'].includes(status);
+
+        if (isHeadingToStore && storeLocationObj) {
+            targetCoords = storeLocationObj;
+        } else if (customerLocationObj) {
+            targetCoords = customerLocationObj;
+        } else if (storeLocationObj) {
+            targetCoords = storeLocationObj;
+        }
+
+        if (!targetCoords) return;
+
+        const driverPoint = [parseFloat(driverLat), parseFloat(driverLng)];
+        const destPoint = [parseFloat(targetCoords[0]), parseFloat(targetCoords[1])];
+
+        // 1. INSTANT FALLBACK POLYLINE: Always ensure a visible line connects driver to destination immediately!
+        const currentLatLngs = routePolyline ? routePolyline.getLatLngs() : [];
+        if (!currentLatLngs || currentLatLngs.length === 0) {
+            setRouteCoordinates([driverPoint, destPoint]);
+            if (isHeadingToStore && customerLocationObj) {
+                setSecondaryRouteCoordinates([storeLocationObj, customerLocationObj]);
+            } else {
+                setSecondaryRouteCoordinates([]);
+            }
+        }
+
+        // Throttle external OSRM API calls to avoid rate limits
         const now = Date.now();
-        if (!force && now - lastRouteRefreshAt < 12000) return;
+        const coordsKey = `${Math.round(driverPoint[0] * 1000)}_${Math.round(driverPoint[1] * 1000)}_${status}`;
+        if (!force && now - lastRouteRefreshAt < 7000 && lastRouteCoordsKey === coordsKey) {
+            updateRouteHeadPoint(driverPoint);
+            return;
+        }
         lastRouteRefreshAt = now;
+        lastRouteCoordsKey = coordsKey;
 
+        // Direct distance calculation (Haversine)
+        const straightDistKm = calculateHaversineDistanceKm(driverPoint[0], driverPoint[1], destPoint[0], destPoint[1]);
+        const estimatedRoadDistKm = (straightDistKm * 1.25).toFixed(1);
+        const estimatedMins = Math.max(1, Math.round((estimatedRoadDistKm / 25) * 60));
+
+        // Update display with instantaneous calculation immediately
+        updateMapEtaPill(estimatedRoadDistKm, estimatedMins, isHeadingToStore, status);
+
+        // 2. FETCH PRECISE TURN-BY-TURN STREET GEOMETRY (Streets & Highways)
         try {
-            const endpoint = `https://router.project-osrm.org/route/v1/driving/${driverLng},${driverLat};${customerLocationObj[1]},${customerLocationObj[0]}?overview=full&geometries=geojson`;
-            const response = await fetch(endpoint);
-            if (!response.ok) return;
-            const data = await response.json();
-            if (data.routes && data.routes.length > 0) {
-                const route = data.routes[0];
-                const latLngs = route.geometry.coordinates.map(c => [c[1], c[0]]);
-                if (routePolyline) routePolyline.setLatLngs(latLngs);
+            const apiUrl = `api/get_directions.php?origin_lat=${driverPoint[0]}&origin_lng=${driverPoint[1]}&dest_lat=${destPoint[0]}&dest_lng=${destPoint[1]}`;
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 6000);
+            
+            const response = await fetch(apiUrl, { signal: controller.signal });
+            clearTimeout(timeoutId);
 
-                const durMins = Math.round(route.duration / 60);
-                const etaText = durMins > 1 ? `${durMins} mins` : '1 min';
-                const distKm = (route.distance / 1000).toFixed(1);
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success && Array.isArray(data.coordinates) && data.coordinates.length > 0) {
+                    setRouteCoordinates(data.coordinates);
 
-                document.getElementById('mapDistStat').textContent = `${distKm} km`;
-                document.getElementById('mapEtaStat').textContent = etaText;
-                
-                if (previousDeliveryStatus !== 'delivered') {
-                    document.getElementById('fpEtaValue').textContent = `${etaText} (${distKm} km)`;
+                    if (isHeadingToStore && customerLocationObj) {
+                        fetchSecondaryStreetRoute(storeLocationObj, customerLocationObj);
+                    } else {
+                        setSecondaryRouteCoordinates([]);
+                    }
+
+                    updateMapEtaPill(data.distance_km, data.duration_mins, isHeadingToStore, status);
+                    return;
                 }
             }
         } catch (e) {
-            console.error('Route calculation error:', e);
+            console.debug('Local directions proxy notice:', e.message);
         }
+
+        // Direct fallback to OSRM if local proxy had network glitch
+        try {
+            const endpoint = `https://router.project-osrm.org/route/v1/driving/${driverPoint[1]},${driverPoint[0]};${destPoint[1]},${destPoint[0]}?overview=full&geometries=geojson`;
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 6000);
+            
+            const response = await fetch(endpoint, { signal: controller.signal });
+            clearTimeout(timeoutId);
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.routes && data.routes.length > 0) {
+                    const route = data.routes[0];
+                    const latLngs = route.geometry.coordinates.map(c => [c[1], c[0]]);
+                    setRouteCoordinates(latLngs);
+
+                    if (isHeadingToStore && customerLocationObj) {
+                        setSecondaryRouteCoordinates([storeLocationObj, customerLocationObj]);
+                    } else {
+                        setSecondaryRouteCoordinates([]);
+                    }
+
+                    const durMins = Math.round(route.duration / 60);
+                    const distKm = (route.distance / 1000).toFixed(1);
+
+                    updateMapEtaPill(distKm, durMins, isHeadingToStore, status);
+                }
+            }
+        } catch (e) {
+            console.debug('OSRM direct fallback notice:', e.message);
+        }
+    }
+
+    async function fetchSecondaryStreetRoute(fromCoords, toCoords) {
+        if (!fromCoords || !toCoords) return;
+        try {
+            const url = `api/get_directions.php?origin_lat=${fromCoords[0]}&origin_lng=${fromCoords[1]}&dest_lat=${toCoords[0]}&dest_lng=${toCoords[1]}`;
+            const res = await fetch(url);
+            if (res.ok) {
+                const d = await res.json();
+                if (d.success && Array.isArray(d.coordinates) && d.coordinates.length > 0) {
+                    setSecondaryRouteCoordinates(d.coordinates);
+                    return;
+                }
+            }
+        } catch (e) {}
+        setSecondaryRouteCoordinates([fromCoords, toCoords]);
     }
 
     // In-App Rider Chat Controller (for Delivery)

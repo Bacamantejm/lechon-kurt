@@ -449,6 +449,9 @@ const custLng = <?php echo json_encode($cust_lng); ?>;
 let riderMarker = null;
 let targetMarker = null;
 let routeLine = null;
+let routeCasingLine = null;
+let lastRiderRouteFetch = 0;
+let lastRiderRouteCoords = '';
 
 function initActiveMap() {
     if (typeof L === 'undefined') return;
@@ -473,9 +476,138 @@ function initActiveMap() {
         iconAnchor: [18, 18]
     });
 
-    riderMarker = L.marker([currentRiderLat, currentRiderLng], { icon: riderIcon }).addTo(activeDeliveryMap);
+    riderMarker = L.marker([currentRiderLat, currentRiderLng], { 
+        icon: riderIcon,
+        draggable: true
+    }).addTo(activeDeliveryMap);
+
+    riderMarker.on('dragend', (e) => {
+        const pos = e.target.getLatLng();
+        handleManualRiderLocationChange(pos.lat, pos.lng);
+    });
+
+    activeDeliveryMap.on('click', (e) => {
+        handleManualRiderLocationChange(e.latlng.lat, e.latlng.lng);
+    });
 
     updateMapNavigationTarget();
+}
+
+function ensureRiderRouteLayers() {
+    if (!activeDeliveryMap) return;
+    if (!routeCasingLine) {
+        routeCasingLine = L.polyline([], {
+            color: '#ffffff',
+            weight: 8,
+            opacity: 0.95,
+            lineCap: 'round',
+            lineJoin: 'round'
+        }).addTo(activeDeliveryMap);
+    }
+    if (!routeLine) {
+        routeLine = L.polyline([], {
+            color: '#b3261e',
+            weight: 5,
+            opacity: 0.95,
+            lineCap: 'round',
+            lineJoin: 'round'
+        }).addTo(activeDeliveryMap);
+    }
+}
+
+function setRiderRouteCoordinates(latLngs) {
+    ensureRiderRouteLayers();
+    if (!latLngs || latLngs.length === 0) return;
+    if (routeCasingLine) routeCasingLine.setLatLngs(latLngs);
+    if (routeLine) routeLine.setLatLngs(latLngs);
+}
+
+function updateRiderRouteHead(lat, lng) {
+    if (!routeLine) return;
+    const latLngs = routeLine.getLatLngs();
+    if (latLngs && latLngs.length > 0) {
+        latLngs[0] = L.latLng(lat, lng);
+        setRiderRouteCoordinates(latLngs);
+    }
+}
+
+async function fetchRiderStreetRoute(originLat, originLng, destLat, destLng, force = false) {
+    ensureRiderRouteLayers();
+    if (!originLat || !originLng || !destLat || !destLng) return;
+
+    // Direct fallback straight line in case API is delayed
+    const cur = routeLine ? routeLine.getLatLngs() : [];
+    if (!cur || cur.length === 0) {
+        setRiderRouteCoordinates([[originLat, originLng], [destLat, destLng]]);
+    }
+
+    const key = `${Math.round(originLat * 1000)}_${Math.round(originLng * 1000)}_${Math.round(destLat * 1000)}_${Math.round(destLng * 1000)}`;
+    const now = Date.now();
+    if (!force && now - lastRiderRouteFetch < 5000 && lastRiderRouteCoords === key) {
+        updateRiderRouteHead(originLat, originLng);
+        return;
+    }
+    lastRiderRouteFetch = now;
+    lastRiderRouteCoords = key;
+
+    try {
+        const apiUrl = `../api/get_directions.php?origin_lat=${originLat}&origin_lng=${originLng}&dest_lat=${destLat}&dest_lng=${destLng}`;
+        const res = await fetch(apiUrl);
+        if (res.ok) {
+            const data = await res.json();
+            if (data.success && Array.isArray(data.coordinates) && data.coordinates.length > 0) {
+                setRiderRouteCoordinates(data.coordinates);
+                if (force && activeDeliveryMap) {
+                    activeDeliveryMap.fitBounds(L.latLngBounds(data.coordinates).pad(0.2), { padding: [30, 30] });
+                }
+                return;
+            }
+        }
+    } catch (e) {
+        console.debug('Directions proxy fallback:', e);
+    }
+
+    try {
+        const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=full&geometries=geojson`;
+        const res2 = await fetch(osrmUrl);
+        if (res2.ok) {
+            const data2 = await res2.json();
+            if (data2.routes && data2.routes.length > 0) {
+                const latLngs = data2.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+                setRiderRouteCoordinates(latLngs);
+                if (force && activeDeliveryMap) {
+                    activeDeliveryMap.fitBounds(L.latLngBounds(latLngs).pad(0.2), { padding: [30, 30] });
+                }
+                return;
+            }
+        }
+    } catch (e2) {
+        console.debug('OSRM fallback notice:', e2);
+    }
+}
+
+function onRiderLocationChanged(lat, lng) {
+    currentRiderLat = lat;
+    currentRiderLng = lng;
+    if (riderMarker) riderMarker.setLatLng([lat, lng]);
+
+    let destLat = (stepIndex < 3) ? storeLat : (custLat || storeLat);
+    let destLng = (stepIndex < 3) ? storeLng : (custLng || storeLng);
+
+    updateRiderRouteHead(lat, lng);
+    fetchRiderStreetRoute(lat, lng, destLat, destLng, false);
+}
+
+function handleManualRiderLocationChange(lat, lng) {
+    onRiderLocationChanged(lat, lng);
+
+    const formData = new FormData();
+    formData.append('action', 'update_location');
+    formData.append('latitude', lat);
+    formData.append('longitude', lng);
+    formData.append('accuracy', 10);
+    fetch('api_rider.php', { method: 'POST', body: formData })
+        .catch(err => console.debug('Manual location sync error:', err));
 }
 
 function updateMapNavigationTarget() {
@@ -500,7 +632,6 @@ function updateMapNavigationTarget() {
     }
 
     if (targetMarker) activeDeliveryMap.removeLayer(targetMarker);
-    if (routeLine) activeDeliveryMap.removeLayer(routeLine);
 
     const destIcon = L.divIcon({
         className: 'custom-pin-dest',
@@ -511,13 +642,7 @@ function updateMapNavigationTarget() {
 
     targetMarker = L.marker([destLat, destLng], { icon: destIcon }).addTo(activeDeliveryMap);
 
-    routeLine = L.polyline([[currentRiderLat, currentRiderLng], [destLat, destLng]], {
-        color: '#b3261e',
-        weight: 5,
-        opacity: 0.85
-    }).addTo(activeDeliveryMap);
-
-    activeDeliveryMap.fitBounds([[currentRiderLat, currentRiderLng], [destLat, destLng]], { padding: [40, 40] });
+    fetchRiderStreetRoute(currentRiderLat, currentRiderLng, destLat, destLng, true);
 }
 
 function updateProgressUI(newStep) {
@@ -867,12 +992,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initActiveMap();
     startPickupSyncPolling();
     broadcastRiderLocation((lat, lng) => {
-        currentRiderLat = lat;
-        currentRiderLng = lng;
-        if (riderMarker) riderMarker.setLatLng([lat, lng]);
-        if (routeLine && targetMarker) {
-            routeLine.setLatLngs([[lat, lng], targetMarker.getLatLng()]);
-        }
+        onRiderLocationChanged(lat, lng);
     });
 });
 </script>
