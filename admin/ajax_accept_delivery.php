@@ -81,7 +81,21 @@ try {
         }
     }
 
-    if (!$employee) {
+    $is_partner_scoped = function_exists('isApprovedFranchiseSellerAccount') && isApprovedFranchiseSellerAccount($conn, $current_user_id);
+    $seller_scope_id = $is_partner_scoped && function_exists('getFranchiseSellerScopeOwnerId') ? getFranchiseSellerScopeOwnerId($conn, $current_user_id) : null;
+
+    if (!$employee && $seller_scope_id !== null && function_exists('getFranchiseSellerScopeUserIds')) {
+        $scoped_user_ids = getFranchiseSellerScopeUserIds($conn, (int)$seller_scope_id);
+        if (!empty($scoped_user_ids)) {
+            $in_users = implode(',', array_map('intval', $scoped_user_ids));
+            $scoped_emp_res = mysqli_query($conn, "SELECT id, first_name, last_name, phone, vehicle_details FROM employees WHERE user_id IN ($in_users) AND status = 'active' ORDER BY id ASC LIMIT 1");
+            if ($scoped_emp_res && mysqli_num_rows($scoped_emp_res) > 0) {
+                $employee = mysqli_fetch_assoc($scoped_emp_res);
+            }
+        }
+    }
+
+    if (!$employee && $seller_scope_id === null) {
         $find_d = mysqli_query($conn, "SELECT id, first_name, last_name, phone, vehicle_details FROM employees WHERE status = 'active' ORDER BY id ASC LIMIT 1");
         if ($find_d && mysqli_num_rows($find_d) > 0) {
             $employee = mysqli_fetch_assoc($find_d);

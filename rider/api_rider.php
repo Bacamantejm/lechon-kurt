@@ -50,6 +50,16 @@ if (!$rider) {
     jsonRes(['success' => false, 'message' => 'No active rider profile associated with this account.'], 403);
 }
 
+if (empty($_POST) && stripos($_SERVER['CONTENT_TYPE'] ?? '', 'application/json') !== false) {
+    $raw_input = file_get_contents('php://input');
+    if (!empty($raw_input)) {
+        $json_data = json_decode($raw_input, true);
+        if (is_array($json_data)) {
+            $_POST = $json_data;
+        }
+    }
+}
+
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
 // Helper to compute straight-line distance in km
@@ -71,7 +81,7 @@ function distanceKm($lat1, $lon1, $lat2, $lon2) {
 if ($action === 'toggle_status') {
     $new_status = strtolower(trim($_POST['status'] ?? ''));
     if (!in_array($new_status, ['offline', 'online', 'busy'], true)) {
-        jsonRes(['success' => false, 'message' => 'Invalid status option.'], 400);
+        jsonRes(['success' => false, 'message' => 'Invalid status option.'], 200);
     }
 
     // If changing to offline, ensure rider has no ongoing delivery
@@ -81,7 +91,7 @@ if ($action === 'toggle_status') {
             jsonRes([
                 'success' => false,
                 'message' => 'Cannot go offline while you have an active delivery in progress (Order #' . $active_del['order_number'] . ').'
-            ], 400);
+            ], 200);
         }
     }
 
@@ -421,9 +431,9 @@ if ($action === 'advance_step') {
         if ($ord_q && ($ord_info = mysqli_fetch_assoc($ord_q))) {
             $seller_id = (int)($ord_info['seller_id'] ?? 0);
             if ($seller_id <= 0 && !empty($ord_info['pickup_location'])) {
-                $st_q = mysqli_query($conn, "SELECT user_id FROM users WHERE store_id = " . (int)$ord_info['pickup_location'] . " LIMIT 1");
+                $st_q = mysqli_query($conn, "SELECT owner_user_id FROM store_locations WHERE store_id = " . (int)$ord_info['pickup_location'] . " LIMIT 1");
                 if ($st_q && ($st_row = mysqli_fetch_assoc($st_q))) {
-                    $seller_id = (int)$st_row['user_id'];
+                    $seller_id = (int)($st_row['owner_user_id'] ?? 0);
                 }
             }
             $r_label = !empty($ord_info['rider_full_name']) ? $ord_info['rider_full_name'] : 'Rider';
@@ -774,4 +784,4 @@ if ($action === 'submit_issue') {
     ]);
 }
 
-jsonRes(['success' => false, 'message' => 'Unknown action requested.'], 400);
+jsonRes(['success' => false, 'message' => 'Unknown action requested.'], 200);

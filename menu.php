@@ -1013,117 +1013,52 @@ body.dark-mode .quick-order-checkout:not(:disabled) {
     color: #ffffff !important;
 }
 
-/* Business Shop Selector Panel */
-.menu-shops-selector-panel {
-    background: #ffffff;
-    border: 1px solid #eaecf0;
-    border-radius: 16px;
-    padding: 16px 20px;
-    margin-bottom: 20px;
-    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+/* Business Shop Showcase Directory Cards */
+.menu-shop-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease !important;
 }
-.menu-shops-header {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+.menu-shop-card:hover {
+    transform: translateY(-3px) !important;
+    border-color: #b3261e !important;
+    box-shadow: 0 10px 24px rgba(16, 24, 40, 0.08) !important;
 }
-.menu-shops-title {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+.menu-shop-card:hover img {
+    transform: scale(1.04) !important;
 }
-.menu-shops-title i {
-    width: 34px;
-    height: 34px;
-    border-radius: 10px;
-    background: #fff1f0;
-    color: #b3261e;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.95rem;
-    flex-shrink: 0;
+.storefront-change-shop-btn {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    padding: 5px 12px !important;
+    background: #fff1f0 !important;
+    border: 1px solid #fee4e2 !important;
+    border-radius: 999px !important;
+    color: #b3261e !important;
+    font-weight: 700 !important;
+    font-size: 0.8rem !important;
+    text-decoration: none !important;
+    transition: all 0.15s ease !important;
 }
-.menu-shops-title h3 {
-    margin: 0;
-    font-family: 'Outfit', sans-serif;
-    font-size: 1.05rem;
-    font-weight: 800;
-    color: #101828;
+.storefront-change-shop-btn:hover {
+    background: #b3261e !important;
+    color: #ffffff !important;
+    border-color: #b3261e !important;
+    text-decoration: none !important;
 }
-.menu-shops-title p {
-    margin: 0;
-    font-size: 0.78rem;
-    color: #667085;
-}
-.menu-shops-pills {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
-}
-.menu-shop-pill {
-    background: #ffffff;
-    border: 1.5px solid #d0d5dd;
-    color: #344054;
-    font-size: 0.82rem;
-    font-weight: 700;
-    padding: 7px 14px;
-    border-radius: 10px;
-    text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    transition: all 0.15s ease;
-}
-.menu-shop-pill:hover {
-    border-color: #b3261e;
-    color: #b3261e;
-    background: #fff1f0;
-    text-decoration: none;
-}
-.menu-shop-pill.active {
-    background: #b3261e;
-    border-color: #b3261e;
-    color: #ffffff;
-    box-shadow: 0 2px 6px rgba(179, 38, 30, 0.2);
-    text-decoration: none;
-}
-.menu-shop-pill .shop-pill-tag {
-    font-size: 0.7rem;
-    font-weight: 600;
-    padding: 2px 7px;
-    border-radius: 999px;
-    background: #f2f4f7;
-    color: #475467;
-}
-.menu-shop-pill.active .shop-pill-tag {
-    background: rgba(255, 255, 255, 0.25);
-    color: #ffffff;
-}
-body.dark-mode .menu-shops-selector-panel {
+body.dark-mode .menu-shop-card {
     background: #1e293b !important;
     border-color: #334155 !important;
 }
-body.dark-mode .menu-shops-title h3 {
-    color: #f8fafc !important;
-}
-body.dark-mode .menu-shops-title p {
-    color: #94a3b8 !important;
-}
-body.dark-mode .menu-shop-pill {
-    background: #0f172a !important;
-    border-color: #334155 !important;
-    color: #cbd5e1 !important;
-}
-body.dark-mode .menu-shop-pill:hover {
+body.dark-mode .menu-shop-card:hover {
     border-color: #ef4444 !important;
-    color: #ffffff !important;
-    background: #334155 !important;
 }
-body.dark-mode .menu-shop-pill.active {
-    background: #b3261e !important;
-    border-color: #b3261e !important;
+body.dark-mode .storefront-change-shop-btn {
+    background: #334155 !important;
+    border-color: #475467 !important;
+    color: #ef4444 !important;
+}
+body.dark-mode .storefront-change-shop-btn:hover {
+    background: #ef4444 !important;
     color: #ffffff !important;
 }
 </style>
@@ -1333,7 +1268,7 @@ body.dark-mode .menu-shop-pill.active {
                 <div class="storefront-meta-row storefront-meta-row-secondary">
                     <?php if ($has_selected_store): ?>
                         <a href="javascript:void(0);" id="openStorefrontReviewsBtn"><i class="fas fa-star" style="color:#f59e0b;"></i> <?php echo htmlspecialchars($store_rating_label); ?> <span style="text-decoration:underline; font-weight:700; margin-left:4px;">See reviews</span></a>
-                        <a href="menu.php" style="color:#b3261e; font-weight:700;"><i class="fas fa-arrows-rotate"></i> Change Shop</a>
+                        <a href="menu.php" class="storefront-change-shop-btn"><i class="fas fa-arrows-rotate"></i> Change Shop</a>
                         <a href="locations.php"><i class="fas fa-circle-info"></i> More info</a>
                     <?php else: ?>
                         <a href="#shopsDirectory"><i class="fas fa-store"></i> Choose a Shop Below</a>
@@ -1348,36 +1283,9 @@ body.dark-mode .menu-shop-pill.active {
 <!-- Menu Section -->
 <section class="menu-section" id="menu">
     <div class="container">
-        <!-- Business Shop Quick Selector Bar -->
-        <?php if (!empty($all_menu_shops)): ?>
-        <div class="menu-shops-selector-panel" id="shopsDirectory">
-            <div class="menu-shops-header">
-                <div class="menu-shops-title">
-                    <i class="fas fa-store"></i>
-                    <div>
-                        <h3>Browse by Business Shop</h3>
-                        <p>Select a business shop to view only their menu items and live availability.</p>
-                    </div>
-                </div>
-                <div class="menu-shops-pills">
-                    <a href="menu.php" class="menu-shop-pill <?php echo (!$has_selected_store) ? 'active' : ''; ?>">
-                        <i class="fas fa-layer-group"></i> All Shops
-                    </a>
-                    <?php foreach ($all_menu_shops as $shop_item): ?>
-                        <a href="<?php echo htmlspecialchars($shop_item['link']); ?>" class="menu-shop-pill <?php echo !empty($shop_item['is_active_selection']) ? 'active' : ''; ?>">
-                            <i class="<?php echo $shop_item['category'] === 'branch' ? 'fas fa-location-dot' : 'fas fa-shop'; ?>"></i>
-                            <?php echo htmlspecialchars($shop_item['name']); ?>
-                            <span class="shop-pill-tag"><?php echo htmlspecialchars($shop_item['city']); ?></span>
-                        </a>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-        </div>
-        <?php endif; ?>
-
         <?php if (!$has_selected_store): ?>
             <!-- All Business Shops Directory Showcase Grid -->
-            <div class="menu-shops-showcase-section" style="margin-bottom: 40px;">
+            <div class="menu-shops-showcase-section" id="shopsDirectory" style="margin-bottom: 40px;">
                 <div style="background: #ffffff; border: 1px solid #eaecf0; border-radius: 20px; padding: 32px 24px; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);">
                     <div style="text-align: center; max-width: 680px; margin: 0 auto 28px;">
                         <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.78rem; font-weight: 800; color: #b3261e; background: #fff1f0; border: 1px solid #fee4e2; padding: 4px 12px; border-radius: 999px; margin-bottom: 10px;">
@@ -1438,8 +1346,8 @@ body.dark-mode .menu-shop-pill.active {
                                 <p style="margin: 0; font-size: 0.78rem; color: #667085;">Special discounts available only when ordering from <?php echo htmlspecialchars($store_display_name); ?>.</p>
                             </div>
                         </div>
-                        <span style="font-size: 0.76rem; font-weight: 700; color: #027a48; background: #ecfdf3; border: 1px solid #abefc6; padding: 4px 10px; border-radius: 999px;">
-                            <i class="fas fa-badge-check"></i> <?php echo count($store_deals); ?> Store Offer<?php echo count($store_deals) > 1 ? 's' : ''; ?> Available
+                        <span style="font-size: 0.76rem; font-weight: 700; color: #027a48; background: #ecfdf3; border: 1px solid #abefc6; padding: 4px 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 5px;">
+                            <i class="fas fa-circle-check"></i> <?php echo count($store_deals); ?> Store Offer<?php echo count($store_deals) > 1 ? 's' : ''; ?> Available
                         </span>
                     </div>
                     <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px;">

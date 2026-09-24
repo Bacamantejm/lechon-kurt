@@ -87,10 +87,13 @@ if ($coords !== null) {
 
     if (!empty($quote['success'])) {
         $_SESSION['current_delivery_quote'] = $quote;
+        $resolved_store_id = (int)($quote['nearest_store_id'] ?? 1);
+        $_SESSION['pickup_location'] = $resolved_store_id;
+        $response['pickup_location'] = $resolved_store_id;
         $response['delivery_fee'] = (float)($quote['fee'] ?? 0);
         $response['delivery_details'] = (string)($quote['delivery_details'] ?? 'Delivery fee calculated from the nearest store.');
         $response['distance_km'] = (float)($quote['distance_km'] ?? 0);
-        $response['nearest_store_id'] = (int)($quote['nearest_store_id'] ?? 0);
+        $response['nearest_store_id'] = $resolved_store_id;
         $response['nearest_store_name'] = (string)($quote['nearest_store_name'] ?? '');
         $response['nearest_store_address'] = (string)($quote['nearest_store_address'] ?? '');
         $response['estimated_delivery_text'] = (string)($quote['estimated_delivery_text'] ?? '');

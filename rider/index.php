@@ -111,7 +111,7 @@ if ($init_avail_res) {
 
                 <!-- 3-State Duty Switch (Section 2) -->
                 <div class="duty-switch-container">
-                    <button type="button" class="duty-switch-btn offline <?php echo $rider['duty_status'] === 'offline' ? 'active' : ''; ?>" onclick="setDutyStatus('offline')">
+                    <button type="button" class="duty-switch-btn offline <?php echo $rider['duty_status'] === 'offline' ? 'active' : ''; ?> <?php echo $active_delivery ? 'opacity-50' : ''; ?>" <?php echo $active_delivery ? 'title="Cannot switch offline while active delivery is in progress"' : ''; ?> onclick="setDutyStatus('offline')">
                         <i class="fas fa-power-off"></i> Offline
                     </button>
                     <button type="button" class="duty-switch-btn online <?php echo $rider['duty_status'] === 'online' ? 'active' : ''; ?>" onclick="setDutyStatus('online')">
@@ -481,6 +481,18 @@ function updateRiderPositionOnMap(lat, lng) {
 }
 
 function setDutyStatus(targetStatus) {
+    <?php if ($active_delivery): ?>
+    if (targetStatus === 'offline') {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Active Mission in Progress',
+            text: 'Cannot switch to offline while Order #<?php echo htmlspecialchars($active_delivery['order_number']); ?> is in progress. Please complete or update your current delivery first.',
+            confirmButtonColor: '#b3261e'
+        });
+        return;
+    }
+    <?php endif; ?>
+
     const formData = new FormData();
     formData.append('action', 'toggle_status');
     formData.append('status', targetStatus);
@@ -512,7 +524,12 @@ function setDutyStatus(targetStatus) {
                 stopRequestPolling();
             }
         } else {
-            Swal.fire('Error', data.message || 'Failed to update duty status', 'error');
+            Swal.fire({
+                icon: 'warning',
+                title: 'Notice',
+                text: data.message || 'Failed to update duty status',
+                confirmButtonColor: '#b3261e'
+            });
         }
     })
     .catch(err => {
@@ -747,10 +764,12 @@ function acceptCurrentRequest() {
     .then(r => r.json())
     .then(data => {
         if (data.success) {
+            if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
             if (requestModal) requestModal.hide();
             window.location.href = data.redirect || 'active_delivery.php';
         } else {
             Swal.fire('Order Unavailable', data.message || 'Unable to accept this delivery.', 'warning');
+            if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
             if (requestModal) requestModal.hide();
             currentRequestData = null;
         }
@@ -765,12 +784,14 @@ function acceptCurrentRequest() {
 function declineCurrentRequest(isAutoTimeout = false) {
     if (activeCountdownTimer) clearInterval(activeCountdownTimer);
     if (!currentRequestData) {
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
         if (requestModal) requestModal.hide();
         return;
     }
 
     const orderId = currentRequestData.order_id;
     currentRequestData = null;
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     if (requestModal) requestModal.hide();
 
     const formData = new FormData();
@@ -796,6 +817,15 @@ function declineCurrentRequest(isAutoTimeout = false) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    const reqModalEl = document.getElementById('deliveryRequestModal');
+    if (reqModalEl) {
+        reqModalEl.addEventListener('hide.bs.modal', () => {
+            if (document.activeElement && reqModalEl.contains(document.activeElement)) {
+                document.activeElement.blur();
+            }
+        });
+    }
+
     initHomeMap();
     broadcastRiderLocation(updateRiderPositionOnMap);
 

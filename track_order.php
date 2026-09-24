@@ -1579,9 +1579,20 @@ include 'includes/header.php';
                             <div class="fp-order-item-row">
                                 <div class="fp-item-left">
                                     <?php 
-                                    $img_src = !empty($item['product_image']) ? 'uploads/products/' . htmlspecialchars($item['product_image']) : 'assets/images/promo_lechon.jpg';
+                                    $raw_img = trim((string)($item['product_image'] ?? ''));
+                                    if ($raw_img === '') {
+                                        $img_src = 'assets/images/promo_lechon.jpg';
+                                    } elseif (strpos($raw_img, 'http://') === 0 || strpos($raw_img, 'https://') === 0 || strpos($raw_img, 'assets/') === 0) {
+                                        $img_src = $raw_img;
+                                    } elseif (strpos($raw_img, 'uploads/products/') === 0) {
+                                        $img_src = $raw_img;
+                                    } elseif (file_exists('uploads/products/' . basename($raw_img))) {
+                                        $img_src = 'uploads/products/' . basename($raw_img);
+                                    } else {
+                                        $img_src = 'uploads/products/' . ltrim($raw_img, '/');
+                                    }
                                     ?>
-                                    <img src="<?php echo $img_src; ?>" class="fp-item-thumb" alt="<?php echo htmlspecialchars($item['product_name']); ?>" onerror="this.onerror=null;this.src='assets/images/promo_lechon.jpg';">
+                                    <img src="<?php echo htmlspecialchars($img_src); ?>" class="fp-item-thumb" alt="<?php echo htmlspecialchars($item['product_name']); ?>" onerror="this.onerror=null;this.src='assets/images/promo_lechon.jpg';">
                                     <div>
                                         <div class="fp-item-name"><?php echo htmlspecialchars($item['product_name']); ?></div>
                                         <div class="fp-item-sub">
@@ -1638,6 +1649,16 @@ include 'includes/header.php';
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
 <script>
+    function escapeHtml(str) {
+        if (str === null || str === undefined) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
     const isPickupOrder = <?php echo json_encode($is_pickup); ?>;
     const orderId = <?php echo (int)$order_id; ?>;
 

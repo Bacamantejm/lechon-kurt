@@ -17,6 +17,21 @@ $csrf_token = generateCSRFToken();
 $current_user_id = (int)($_SESSION['user_id'] ?? 0);
 $is_partner_scoped_admin = isApprovedFranchiseSellerAccount($conn, $current_user_id);
 $seller_scope_id = $is_partner_scoped_admin ? getFranchiseSellerScopeOwnerId($conn, $current_user_id) : null;
+$partner_order_scope_sql = '';
+$partner_logistics_scope_sql = '';
+$partner_preorder_scope_sql = '';
+$partner_product_scope_sql = '';
+if ($seller_scope_id !== null) {
+    $partner_product_scope_sql = getFranchiseSellerScopeConditionSql($conn, 'p_scope.seller_id', (int)$seller_scope_id);
+    $partner_order_scope_sql = " AND " . getFranchiseScopedOrderExistsSql($conn, (int)$seller_scope_id, 'o.id');
+    $partner_logistics_scope_sql = " AND " . getFranchiseScopedOrderExistsSql($conn, (int)$seller_scope_id, 'lt.order_id');
+    $partner_preorder_scope_sql = " AND EXISTS (
+        SELECT 1
+        FROM products p_scope
+        WHERE p_scope.id = po.product_id
+          AND {$partner_product_scope_sql}
+    )";
+}
 $driver_scope_sql = hrEmployeeScopeSql($conn, 'e', 'user_id');
 $driver_role_sql = hrLogisticsEmployeeSqlCondition('e', 'd', $conn);
 
@@ -50,6 +65,7 @@ if ($current_driver_id > 0) {
         WHERE lt.driver_id = ? 
           AND o.status NOT IN ('cancelled', 'completed')
           AND lt.current_status IN ('assigned', 'arrived_at_restaurant', 'picked_up', 'on_the_way', 'arriving')
+          {$partner_order_scope_sql}
         ORDER BY lt.updated_at DESC
         LIMIT 1
     ");
@@ -76,6 +92,7 @@ if (!$active_mission) {
         JOIN orders o ON lt.order_id = o.id AND o.delivery_option = 'delivery'
         WHERE o.status NOT IN ('cancelled', 'completed')
           AND lt.current_status IN ('assigned', 'arrived_at_restaurant', 'picked_up', 'on_the_way', 'arriving')
+          {$partner_order_scope_sql}
         ORDER BY lt.updated_at DESC
         LIMIT 1
     ");
@@ -104,11 +121,15 @@ if (!function_exists('calculateRiderRouteDistanceKm')) {
 
 $stores_by_id = [];
 $default_store = null;
-$store_res = mysqli_query($conn, "SELECT store_id, store_name, address, city, latitude, longitude, is_active FROM store_locations WHERE is_active = 1 ORDER BY store_id ASC");
+$store_res = mysqli_query($conn, "SELECT store_id, store_name, address, city, latitude, longitude, is_active, owner_user_id FROM store_locations WHERE is_active = 1 ORDER BY store_id ASC");
 if ($store_res) {
     while ($s_row = mysqli_fetch_assoc($store_res)) {
         $stores_by_id[(int)$s_row['store_id']] = $s_row;
-        if (!$default_store) $default_store = $s_row;
+        if ($seller_scope_id !== null && (int)($s_row['owner_user_id'] ?? 0) === (int)$seller_scope_id) {
+            $default_store = $s_row;
+        } elseif (!$default_store) {
+            $default_store = $s_row;
+        }
     }
 }
 
@@ -129,6 +150,7 @@ $avail_res = mysqli_query($conn, "
     WHERE o.delivery_option = 'delivery'
       AND o.status NOT IN ('cancelled', 'completed', 'delivered')
       AND (lt.current_status IS NULL OR lt.current_status = 'pending' OR lt.driver_id IS NULL OR lt.driver_id = 0)
+      {$partner_order_scope_sql}
     ORDER BY o.created_at DESC
     LIMIT 24
 ");
@@ -150,6 +172,7 @@ if ($current_driver_id > 0) {
           AND o.status NOT IN ('cancelled', 'completed', 'delivered')
           AND lt.driver_id = ?
           AND lt.current_status IN ('assigned', 'arrived_at_restaurant', 'picked_up', 'on_the_way', 'arriving')
+          {$partner_order_scope_sql}
         ORDER BY lt.updated_at DESC
     ");
     if ($my_act_stmt) {
@@ -171,6 +194,7 @@ if ($current_driver_id > 0) {
         WHERE o.delivery_option = 'delivery'
           AND o.status NOT IN ('cancelled', 'completed', 'delivered')
           AND lt.current_status IN ('assigned', 'arrived_at_restaurant', 'picked_up', 'on_the_way', 'arriving')
+          {$partner_order_scope_sql}
         ORDER BY lt.updated_at DESC
         LIMIT 18
     ");
@@ -191,6 +215,7 @@ $canc_res = mysqli_query($conn, "
     LEFT JOIN logistics_tracking lt ON o.id = lt.order_id
     WHERE o.delivery_option = 'delivery'
       AND (o.status = 'cancelled' OR lt.current_status IN ('cancelled', 'failed'))
+      {$partner_order_scope_sql}
     ORDER BY o.updated_at DESC
     LIMIT 20
 ");
@@ -204,19 +229,6 @@ $error = '';
 $success = '';
 $allowed_delivery_statuses = ['pending', 'assigned', 'picked_up', 'on_the_way', 'arriving', 'delivered', 'failed', 'cancelled'];
 $allowed_preorder_statuses = ['pending', 'confirmed', 'in_preparation', 'ready_for_pickup', 'completed', 'cancelled'];
-$partner_logistics_scope_sql = '';
-$partner_preorder_scope_sql = '';
-$partner_product_scope_sql = '';
-if ($seller_scope_id !== null) {
-    $partner_product_scope_sql = getFranchiseSellerScopeConditionSql($conn, 'p_scope.seller_id', (int)$seller_scope_id);
-    $partner_logistics_scope_sql = " AND " . getFranchiseScopedOrderExistsSql($conn, (int)$seller_scope_id, 'lt.order_id');
-    $partner_preorder_scope_sql = " AND EXISTS (
-        SELECT 1
-        FROM products p_scope
-        WHERE p_scope.id = po.product_id
-          AND {$partner_product_scope_sql}
-    )";
-}
 
 // --- NEW: Fetch available drivers ---
 $available_drivers_query = "
@@ -288,6 +300,7 @@ $admin_cod_res = mysqli_query($conn, "
     JOIN orders o ON cc.order_id = o.id
     JOIN riders r ON cc.rider_id = r.id
     JOIN users u ON r.user_id = u.id
+    WHERE 1=1 {$partner_order_scope_sql}
     ORDER BY cc.collected_at DESC
     LIMIT 30
 ");
@@ -297,12 +310,14 @@ if ($admin_cod_res) {
 
 // Fetch Rider Support Tickets for Admin
 $admin_tickets = [];
+$admin_t_scope_sql = $seller_scope_id !== null ? " WHERE (t.order_id IS NULL OR " . getFranchiseScopedOrderExistsSql($conn, (int)$seller_scope_id, 't.order_id') . ")" : "";
 $admin_t_res = mysqli_query($conn, "
     SELECT t.*, r.rider_code, u.full_name AS rider_name, o.order_number
     FROM rider_support_tickets t
     JOIN riders r ON t.rider_id = r.id
     JOIN users u ON r.user_id = u.id
     LEFT JOIN orders o ON t.order_id = o.id
+    {$admin_t_scope_sql}
     ORDER BY FIELD(t.status, 'open', 'in_progress', 'resolved', 'closed'), t.created_at DESC
     LIMIT 30
 ");

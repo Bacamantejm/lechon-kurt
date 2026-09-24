@@ -60,8 +60,10 @@ $cust_lng = !empty($active_delivery['customer_longitude']) ? (float)$active_deli
 $step_index = 0;
 if ($current_status === 'assigned') {
     $step_index = 1; // Going to Restaurant
+} elseif ($current_status === 'arrived_at_restaurant') {
+    $step_index = 2; // Arrived at Restaurant / Awaiting Handover
 } elseif ($current_status === 'picked_up') {
-    $step_index = 4; // Going to Customer
+    $step_index = 3; // Food Handover / Picked Up
 } elseif ($current_status === 'on_the_way') {
     $step_index = 4; // Going to Customer
 } elseif ($current_status === 'arriving') {
@@ -690,7 +692,22 @@ function advanceStep(stepName, onSuccess) {
         .then(data => {
             if (data.success && typeof onSuccess === 'function') {
                 onSuccess(data);
+            } else if (!data.success) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Action Failed',
+                    text: data.message || 'Could not update delivery progress.',
+                    confirmButtonColor: '#b3261e'
+                });
             }
+        })
+        .catch(err => {
+            Swal.fire({
+                icon: 'error',
+                title: 'Network Error',
+                text: 'Could not connect to server. Please try again.',
+                confirmButtonColor: '#b3261e'
+            });
         });
 }
 

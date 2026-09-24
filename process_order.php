@@ -242,7 +242,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $longitude = $coords ? (float)($coords['lng'] ?? $coords['longitude'] ?? 0) : null;
 
         $delivery_location = isset($_POST['delivery_location']) ? trim((string)$_POST['delivery_location']) : 'metro_manila';
-        $pickup_location = null;
+        $pickup_location = !empty($_POST['pickup_location']) ? intval($_POST['pickup_location']) : (!empty($_SESSION['pickup_location']) ? intval($_SESSION['pickup_location']) : null);
         
         // Validate delivery address
         if (empty($delivery_address)) {
@@ -347,32 +347,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // Infer shop owner ID if not set from cart scope
-    if ($checkout_seller_owner_id <= 0) {
-        if ($delivery_option === 'delivery' && !empty($delivery_quote['nearest_store_id'])) {
-            $nStoreId = (int)$delivery_quote['nearest_store_id'];
-            $pickup_location = $nStoreId;
-            $sStmt = mysqli_prepare($conn, "SELECT owner_user_id FROM store_locations WHERE store_id = ? LIMIT 1");
-            if ($sStmt) {
-                mysqli_stmt_bind_param($sStmt, "i", $nStoreId);
-                mysqli_stmt_execute($sStmt);
-                $sRes = mysqli_stmt_get_result($sStmt);
-                if ($sRow = mysqli_fetch_assoc($sRes)) {
-                    $checkout_seller_owner_id = (int)($sRow['owner_user_id'] ?? 0);
+    // Determine and validate fulfillment branch and shop owner ID
+    if ($delivery_option === 'delivery') {
+        if (!empty($delivery_quote['nearest_store_id'])) {
+            $pickup_location = (int)$delivery_quote['nearest_store_id'];
+        } elseif (empty($pickup_location)) {
+            $pickup_location = 1;
+        }
+    } else {
+        if (empty($pickup_location)) {
+            $pickup_location = 1;
+        }
+    }
+
+    if ($checkout_seller_owner_id <= 1 && !empty($pickup_location)) {
+        $sStmt = mysqli_prepare($conn, "SELECT owner_user_id FROM store_locations WHERE store_id = ? LIMIT 1");
+        if ($sStmt) {
+            mysqli_stmt_bind_param($sStmt, "i", $pickup_location);
+            mysqli_stmt_execute($sStmt);
+            $sRes = mysqli_stmt_get_result($sStmt);
+            if ($sRow = mysqli_fetch_assoc($sRes)) {
+                $branch_owner = (int)($sRow['owner_user_id'] ?? 0);
+                if ($branch_owner > 0) {
+                    $checkout_seller_owner_id = $branch_owner;
                 }
-                mysqli_stmt_close($sStmt);
             }
-        } elseif ($delivery_option === 'pickup' && !empty($pickup_location)) {
-            $sStmt = mysqli_prepare($conn, "SELECT owner_user_id FROM store_locations WHERE store_id = ? LIMIT 1");
-            if ($sStmt) {
-                mysqli_stmt_bind_param($sStmt, "i", $pickup_location);
-                mysqli_stmt_execute($sStmt);
-                $sRes = mysqli_stmt_get_result($sStmt);
-                if ($sRow = mysqli_fetch_assoc($sRes)) {
-                    $checkout_seller_owner_id = (int)($sRow['owner_user_id'] ?? 0);
-                }
-                mysqli_stmt_close($sStmt);
+            mysqli_stmt_close($sStmt);
+        }
+    } elseif ($checkout_seller_owner_id > 1 && empty($pickup_location)) {
+        $pStmt = mysqli_prepare($conn, "SELECT store_id FROM store_locations WHERE owner_user_id = ? LIMIT 1");
+        if ($pStmt) {
+            mysqli_stmt_bind_param($pStmt, "i", $checkout_seller_owner_id);
+            mysqli_stmt_execute($pStmt);
+            $pRes = mysqli_stmt_get_result($pStmt);
+            if ($pRow = mysqli_fetch_assoc($pRes)) {
+                $pickup_location = (int)$pRow['store_id'];
             }
+            mysqli_stmt_close($pStmt);
         }
     }
 
