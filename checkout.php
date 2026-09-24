@@ -974,16 +974,77 @@ $remaining = $total - $downpayment;
                             <?php endif; ?>
                         </div>
                         
-                        <!-- Payment Type Selection -->
-                        <div class="payment-type-section">
-                            <h4>Payment Option</h4>
+                        <!-- Mode of Payment Selection -->
+                        <div class="payment-method-selection-section" style="margin-bottom: 24px;">
+                            <h4 style="font-family:'Outfit',sans-serif; font-size:1.1rem; font-weight:800; color:#101828; margin-bottom:14px; display:flex; align-items:center; gap:8px;">
+                                <i class="fas fa-wallet" style="color:#b3261e;"></i> Mode of Payment
+                            </h4>
+                            <div class="custom-payment-methods-grid" style="display: flex; flex-direction: column; gap: 12px;">
+                                <!-- Option 1: Cash on Delivery / Cash on Pickup -->
+                                <label class="custom-payment-method-card is-selected" id="paymentMethodCardCod" style="display:flex; align-items:flex-start; gap:14px; padding:16px 18px; border:2px solid #b3261e; background:#fffbfa; border-radius:14px; cursor:pointer; transition:all 0.2s ease; position:relative;">
+                                    <input type="radio" name="payment_method" value="cod" checked style="accent-color:#b3261e; width:18px; height:18px; margin-top:3px; cursor:pointer;">
+                                    <div class="pm-icon-wrap" style="width:42px; height:42px; border-radius:10px; background:#ecfdf3; color:#027a48; border:1px solid #abefc6; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0;">
+                                        <i class="fas fa-money-bill-wave"></i>
+                                    </div>
+                                    <div style="flex:1;">
+                                        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px;">
+                                            <span class="pm-title" id="codMethodTitle" style="font-size:15px; font-weight:800; color:#101828;">Cash on Delivery (COD)</span>
+                                            <span class="pm-badge" id="codMethodBadge" style="font-size:11px; font-weight:700; background:#ecfdf3; color:#027a48; border:1px solid #abefc6; padding:2px 8px; border-radius:999px;">
+                                                <i class="fas fa-motorcycle"></i> Pay to Rider
+                                            </span>
+                                        </div>
+                                        <p class="pm-desc" id="codMethodDesc" style="margin:4px 0 0; font-size:12.5px; color:#475467; line-height:1.4;">
+                                            Pay with exact cash directly to the delivery rider upon food arrival at your doorstep. No advance online card needed.
+                                        </p>
+                                    </div>
+                                </label>
+
+                                <!-- Option 2: Online Payment via PayMongo -->
+                                <label class="custom-payment-method-card" id="paymentMethodCardPaymongo" style="display:flex; align-items:flex-start; gap:14px; padding:16px 18px; border:2px solid #eaecf0; background:#ffffff; border-radius:14px; cursor:pointer; transition:all 0.2s ease; position:relative;">
+                                    <input type="radio" name="payment_method" value="paymongo" style="accent-color:#b3261e; width:18px; height:18px; margin-top:3px; cursor:pointer;">
+                                    <div class="pm-icon-wrap" style="width:42px; height:42px; border-radius:10px; background:#eff8ff; color:#175cd3; border:1px solid #b2ddff; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0;">
+                                        <i class="fas fa-credit-card"></i>
+                                    </div>
+                                    <div style="flex:1;">
+                                        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px;">
+                                            <span class="pm-title" style="font-size:15px; font-weight:800; color:#101828;">Online Payment (GCash / Maya / Cards)</span>
+                                            <span class="pm-badge" style="font-size:11px; font-weight:700; background:#eff8ff; color:#175cd3; border:1px solid #b2ddff; padding:2px 8px; border-radius:999px;">
+                                                <i class="fas fa-bolt"></i> Instant Payment
+                                            </span>
+                                        </div>
+                                        <p class="pm-desc" style="margin:4px 0 0; font-size:12.5px; color:#475467; line-height:1.4;">
+                                            Fast and secure online checkout via PayMongo. Pay using GCash, Maya, or Credit/Debit card.
+                                        </p>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- COD Cash Guidance Box (Visible when COD is selected) -->
+                        <div id="codPaymentGuidance" style="background:#fffaeb; border:1px solid #fedf89; border-radius:12px; padding:14px 16px; margin-bottom:24px;">
+                            <div style="display:flex; gap:12px; align-items:flex-start;">
+                                <div style="color:#b54708; font-size:18px; line-height:1; margin-top:2px;">
+                                    <i class="fas fa-hand-holding-dollar"></i>
+                                </div>
+                                <div style="flex:1;">
+                                    <strong style="color:#b54708; font-size:13.5px; display:block; margin-bottom:3px;">Cash Handover Reminder</strong>
+                                    <p id="codGuidanceText" style="margin:0; font-size:12.5px; color:#7a2e0e; line-height:1.45;">
+                                        Please prepare exact cash of <strong id="codCashReminderAmount">PHP <?php echo number_format($total, 2); ?></strong> for the delivery rider upon food arrival. Your order will be confirmed immediately without waiting for bank clearance.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Online Payment Type Selection (Visible only when Online Payment is selected) -->
+                        <div id="onlinePaymentTypeSection" class="payment-type-section" style="display:none; margin-bottom:24px;">
+                            <h4 style="font-family:'Outfit',sans-serif; font-size:1.1rem; font-weight:800; color:#101828; margin-bottom:12px;">Payment Option</h4>
                             <div class="payment-type-options">
                                 <label class="payment-type-option">
                                     <input type="radio" name="payment_type" value="full" checked>
                                     <div class="option-content">
                                         <span class="option-title">Full Payment</span>
                                         <span class="option-amount">PHP <?php echo number_format($total, 2); ?></span>
-                                        <small>Pay the complete amount now</small>
+                                        <small>Pay the complete amount online now</small>
                                     </div>
                                 </label>
                                 <label class="payment-type-option">
@@ -991,23 +1052,24 @@ $remaining = $total - $downpayment;
                                     <div class="option-content">
                                         <span class="option-title">30% Downpayment</span>
                                         <span class="option-amount">PHP <?php echo number_format($downpayment, 2); ?></span>
-                                        <small>Pay 30% now, balance on delivery (PHP <?php echo number_format($remaining, 2); ?>)</small>
+                                        <small>Pay 30% online now, remaining balance on delivery (PHP <?php echo number_format($remaining, 2); ?>)</small>
                                     </div>
                                 </label>
                             </div>
                         </div>
                         
-                        <!-- Payment Info Section -->
-                        <div class="payment-info-section">
-                            <h4>Payment Information</h4>
-                            <div class="payment-info-box">
-                                <p><strong>Amount to Pay:</strong></p>
-                                <p class="payment-amount" id="paymentAmount">PHP <?php echo number_format($total, 2); ?></p>
-                                <p class="payment-note"><i class="fas fa-info-circle"></i> You will be redirected to PayMongo to complete the payment securely.</p>
+                        <!-- Payment Summary Box -->
+                        <div class="payment-info-section" style="margin-bottom:24px;">
+                            <div class="payment-info-box" style="background:#ffffff; border:1px solid #eaecf0; border-radius:12px; padding:16px 18px; box-shadow:0 1px 3px rgba(16,24,40,0.04);">
+                                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                                    <span style="font-size:13px; font-weight:700; color:#344054;" id="paymentAmountLabel">Amount to Pay on Delivery:</span>
+                                    <span class="payment-amount" id="paymentAmount" style="font-size:1.35rem; font-weight:800; color:#b3261e;">PHP <?php echo number_format($total, 2); ?></span>
+                                </div>
+                                <p class="payment-note" id="paymentNoteText" style="margin:8px 0 0; font-size:12px; color:#475467; line-height:1.4;">
+                                    <i class="fas fa-check-circle" style="color:#027a48; margin-right:4px;"></i> No advance online payment needed. Hand cash directly to the delivery rider upon arrival.
+                                </p>
                             </div>
                         </div>
-                        
-                        <input type="hidden" name="payment_method" value="paymongo">
                         
                         <div class="terms-agreement">
                             <label class="checkbox-label">
@@ -1026,11 +1088,11 @@ $remaining = $total - $downpayment;
                                 <i class="fas fa-arrow-left"></i> Back
                             </button>
                             <button type="submit" class="btn-primary" id="submitOrder" <?php echo $checkout_tenant_blocked ? 'disabled aria-disabled="true"' : ''; ?> style="background: #b3261e; border: none; padding: 12px 24px; font-weight: 700; border-radius: 8px; color: #fff; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
-                                <i class="fas fa-lock"></i> Proceed to Payment
+                                <i class="fas fa-check-circle"></i> Place Order (Cash on Delivery)
                             </button>
                         </div>
-                        <p class="checkout-final-note">
-                            <i class="fas fa-shield-alt"></i> Your payment details are securely handled via PayMongo.
+                        <p class="checkout-final-note" id="checkoutFinalNote">
+                            <i class="fas fa-shield-alt"></i> Authentic lechon prepared fresh from our kitchen. Pay in cash upon delivery.
                         </p>
                     </div>
 
@@ -3156,6 +3218,9 @@ async function switchCheckoutFulfillmentMode(mode) {
     const normalizedMode = (String(mode || '').toLowerCase() === 'delivery') ? 'delivery' : 'pickup';
     const isDelivery = (normalizedMode === 'delivery');
     activeCheckoutDeliveryOption = normalizedMode;
+    if (typeof updatePaymentUI === 'function') {
+        updatePaymentUI();
+    }
 
     // 1. Toggle Button UI Classes
     ['modePickupBtn', 'stickyModePickupBtn'].forEach(id => {
@@ -3251,6 +3316,9 @@ async function switchCheckoutFulfillmentMode(mode) {
                 recalculateOrderTotals();
             }
         }
+    }
+    if (typeof updatePaymentUI === 'function') {
+        updatePaymentUI();
     }
 }
 
@@ -3675,6 +3743,9 @@ function recalculateOrderTotals() {
     if (checkedPayment) {
         checkedPayment.dispatchEvent(new Event('change'));
     }
+    if (typeof updatePaymentUI === 'function') {
+        updatePaymentUI();
+    }
 
     return {
         subtotal,
@@ -4003,6 +4074,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (stepNum === 2) {
             setTimeout(() => {
+                if (window.deliveryOverviewMap && typeof window.deliveryOverviewMap.invalidateSize === 'function') {
+                    window.deliveryOverviewMap.invalidateSize();
+                }
                 if (typeof window.refreshDeliveryOverviewMap === 'function') {
                     window.refreshDeliveryOverviewMap();
                 }
@@ -4010,8 +4084,14 @@ document.addEventListener('DOMContentLoaded', function() {
             setTimeout(() => {
                 if (window.deliveryOverviewMap && typeof window.deliveryOverviewMap.invalidateSize === 'function') {
                     window.deliveryOverviewMap.invalidateSize();
+                    if (window.deliveryOverviewRouteLine && window.deliveryOverviewRouteLine.getLatLngs().length > 1) {
+                        const bounds = L.latLngBounds(window.deliveryOverviewRouteLine.getLatLngs());
+                        if (bounds.isValid()) {
+                            window.deliveryOverviewMap.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+                        }
+                    }
                 }
-            }, 250);
+            }, 260);
         }
     }
 
@@ -4518,7 +4598,7 @@ const applySavedAddressToForm = async (savedAddress) => {
 
     syncDeliveryAddressField();
     if (typeof window.refreshDeliveryOverviewMap === 'function') {
-        window.refreshDeliveryOverviewMap();
+        window.refreshDeliveryOverviewMap((!Number.isNaN(lat) && !Number.isNaN(lng) && lat !== 0 && lng !== 0) ? { customer_lat: lat, customer_lng: lng } : null);
     }
     return true;
 };
@@ -5422,32 +5502,128 @@ function initializePage() {
     }
 }
 
-// Handle payment type selection
-document.querySelectorAll('input[name="payment_type"]').forEach(radio => {
-    radio.addEventListener('change', function() {
-        const totalAmount = parseFloat(document.getElementById('total_amount').value);
-        const downpaymentAmount = parseFloat(document.getElementById('downpayment_amount').value);
-        
-        let selectedAmount;
-        if (this.value === 'downpayment') {
-            selectedAmount = downpaymentAmount;
-        } else {
-            selectedAmount = totalAmount;
+// Handle payment mode and payment type selection
+function updatePaymentUI() {
+    const methodRadio = document.querySelector('input[name="payment_method"]:checked');
+    const selectedMethod = methodRadio ? methodRadio.value : 'cod';
+    const isPickup = (activeCheckoutDeliveryOption === 'pickup');
+
+    const totalInput = document.getElementById('total_amount');
+    const downpaymentInput = document.getElementById('downpayment_amount');
+    const totalAmount = parseFloat(totalInput?.value || '0') || 0;
+    const downpaymentAmount = parseFloat(downpaymentInput?.value || '0') || 0;
+
+    const codCard = document.getElementById('paymentMethodCardCod');
+    const paymongoCard = document.getElementById('paymentMethodCardPaymongo');
+    const codGuidance = document.getElementById('codPaymentGuidance');
+    const onlineTypeSection = document.getElementById('onlinePaymentTypeSection');
+    const amountLabel = document.getElementById('paymentAmountLabel');
+    const amountDisplay = document.getElementById('paymentAmount');
+    const noteText = document.getElementById('paymentNoteText');
+    const submitBtn = document.getElementById('submitOrder');
+    const codCashReminderAmount = document.getElementById('codCashReminderAmount');
+    const codTitle = document.getElementById('codMethodTitle');
+    const codBadge = document.getElementById('codMethodBadge');
+    const codDesc = document.getElementById('codMethodDesc');
+    const codGuidanceText = document.getElementById('codGuidanceText');
+
+    // Dynamic Delivery vs Pickup Labels
+    if (codTitle) codTitle.textContent = isPickup ? 'Cash on Pickup (Pay at Counter)' : 'Cash on Delivery (COD)';
+    if (codBadge) codBadge.innerHTML = isPickup ? '<i class="fas fa-store"></i> Pay at Store' : '<i class="fas fa-motorcycle"></i> Pay to Rider';
+    if (codDesc) {
+        codDesc.textContent = isPickup 
+            ? 'Pay with cash directly at the branch counter when claiming your fresh lechon. No advance online card needed.'
+            : 'Pay with exact cash directly to the delivery rider upon food arrival at your doorstep. No advance online card needed.';
+    }
+    if (codGuidanceText) {
+        codGuidanceText.innerHTML = isPickup
+            ? `Please prepare exact cash of <strong>PHP ${totalAmount.toFixed(2)}</strong> to hand to the store cashier upon pickup. Your order will be confirmed immediately.`
+            : `Please prepare exact cash of <strong>PHP ${totalAmount.toFixed(2)}</strong> for the delivery rider upon food arrival. Your order will be confirmed immediately without waiting for bank clearance.`;
+    }
+    if (codCashReminderAmount) codCashReminderAmount.textContent = (typeof moneyFormatter !== 'undefined' ? moneyFormatter.format(totalAmount) : `PHP ${totalAmount.toFixed(2)}`);
+
+    if (selectedMethod === 'cod') {
+        if (codCard) {
+            codCard.classList.add('is-selected');
+            codCard.style.borderColor = '#b3261e';
+            codCard.style.background = '#fffbfa';
         }
-        
-        // Update payment amount display
-        const paymentAmountDisplay = document.getElementById('paymentAmount');
-        const formattedAmount = new Intl.NumberFormat('en-PH', {
-            style: 'currency',
-            currency: 'PHP'
-        }).format(selectedAmount);
-        paymentAmountDisplay.textContent = formattedAmount;
-        
-        // Update submit button text
-        const submitBtn = document.getElementById('submitOrder');
-        submitBtn.innerHTML = `<i class="fas fa-lock"></i> Pay ${formattedAmount}`;
-    });
+        if (paymongoCard) {
+            paymongoCard.classList.remove('is-selected');
+            paymongoCard.style.borderColor = '#eaecf0';
+            paymongoCard.style.background = '#ffffff';
+        }
+
+        if (codGuidance) codGuidance.style.display = 'block';
+        if (onlineTypeSection) onlineTypeSection.style.display = 'none';
+
+        // For COD, the amount to pay on delivery is the FULL total
+        if (amountLabel) amountLabel.textContent = isPickup ? 'Amount to Pay at Pickup Counter:' : 'Amount to Pay on Delivery:';
+        if (amountDisplay) amountDisplay.textContent = (typeof moneyFormatter !== 'undefined' ? moneyFormatter.format(totalAmount) : `PHP ${totalAmount.toFixed(2)}`);
+        if (noteText) {
+            noteText.innerHTML = isPickup
+                ? '<i class="fas fa-check-circle" style="color: #027a48; margin-right: 4px;"></i> Pay in cash at the store counter when picking up your food. No online card required.'
+                : '<i class="fas fa-check-circle" style="color: #027a48; margin-right: 4px;"></i> No advance online payment needed. Hand cash directly to the delivery rider upon arrival.';
+        }
+        if (submitBtn) {
+            submitBtn.innerHTML = isPickup
+                ? '<i class="fas fa-check-circle"></i> Place Order (Cash on Pickup)'
+                : '<i class="fas fa-check-circle"></i> Place Order (Cash on Delivery)';
+        }
+        const finalNoteEl = document.getElementById('checkoutFinalNote');
+        if (finalNoteEl) {
+            finalNoteEl.innerHTML = isPickup
+                ? '<i class="fas fa-shield-alt"></i> Authentic lechon prepared fresh from our kitchen. Pay in cash at the counter.'
+                : '<i class="fas fa-shield-alt"></i> Authentic lechon prepared fresh from our kitchen. Pay in cash upon doorstep delivery.';
+        }
+    } else {
+        if (codCard) {
+            codCard.classList.remove('is-selected');
+            codCard.style.borderColor = '#eaecf0';
+            codCard.style.background = '#ffffff';
+        }
+        if (paymongoCard) {
+            paymongoCard.classList.add('is-selected');
+            paymongoCard.style.borderColor = '#b3261e';
+            paymongoCard.style.background = '#fffbfa';
+        }
+
+        if (codGuidance) codGuidance.style.display = 'none';
+        if (onlineTypeSection) onlineTypeSection.style.display = 'block';
+
+        const paymentTypeRadio = document.querySelector('input[name="payment_type"]:checked');
+        const paymentType = paymentTypeRadio ? paymentTypeRadio.value : 'full';
+        const selectedAmount = (paymentType === 'downpayment') ? downpaymentAmount : totalAmount;
+        const formattedAmount = (typeof moneyFormatter !== 'undefined' ? moneyFormatter.format(selectedAmount) : `PHP ${selectedAmount.toFixed(2)}`);
+
+        if (amountLabel) {
+            amountLabel.textContent = (paymentType === 'downpayment') 
+                ? 'Amount to Pay Online Now (30% Downpayment):' 
+                : 'Amount to Pay Online Now (Full Payment):';
+        }
+        if (amountDisplay) amountDisplay.textContent = formattedAmount;
+        if (noteText) {
+            noteText.innerHTML = '<i class="fas fa-lock" style="color: #175cd3; margin-right: 4px;"></i> You will be redirected to PayMongo to complete payment securely via GCash, Maya, or Card.';
+        }
+        if (submitBtn) {
+            submitBtn.innerHTML = `<i class="fas fa-lock"></i> Proceed to Online Payment (${formattedAmount})`;
+        }
+        const finalNoteEl = document.getElementById('checkoutFinalNote');
+        if (finalNoteEl) {
+            finalNoteEl.innerHTML = '<i class="fas fa-shield-alt"></i> Your payment details are securely handled via PayMongo.';
+        }
+    }
+}
+
+// Bind event listeners for payment method & payment type selection
+document.querySelectorAll('input[name="payment_method"]').forEach(radio => {
+    radio.addEventListener('change', updatePaymentUI);
 });
+document.querySelectorAll('input[name="payment_type"]').forEach(radio => {
+    radio.addEventListener('change', updatePaymentUI);
+});
+window.updatePaymentUI = updatePaymentUI;
+updatePaymentUI();
 
 // Bind event listeners for voucher controls
 const voucherInputEl = document.getElementById('voucherCodeInput');
@@ -5662,65 +5838,121 @@ document.getElementById('checkoutForm').addEventListener('submit', function(e) {
         return;
     }
     
-    // Get payment type and amounts safely
+    // Get payment method, payment type and amounts safely
+    const paymentMethodRadio = document.querySelector('input[name="payment_method"]:checked');
+    const paymentMethod = paymentMethodRadio ? paymentMethodRadio.value : 'cod';
+    const isPickup = (selectedDeliveryOption === 'pickup');
+
     const paymentTypeRadio = document.querySelector('input[name="payment_type"]:checked');
     const paymentType = paymentTypeRadio ? paymentTypeRadio.value : 'full';
     const totalAmount = parseFloat(document.getElementById('total_amount')?.value || '0') || 0;
     const downpaymentAmount = parseFloat(document.getElementById('downpayment_amount')?.value || '0') || 0;
-    
-    // Determine amount to pay based on payment type
-    let amountToPay = paymentType === 'downpayment' ? downpaymentAmount : totalAmount;
-    
-    // Format currency
-    const formattedAmount = new Intl.NumberFormat('en-PH', {
-        style: 'currency',
-        currency: 'PHP'
-    }).format(amountToPay);
-    
-    // Build confirmation message
-    let confirmationHtml = `
-        <div style="text-align: left;">
-            <p><strong>Payment Type:</strong> ${paymentType === 'downpayment' ? '30% Downpayment' : 'Full Payment'}</p>
-            <p><strong>Amount to Pay:</strong></p>
-            <p style="font-size: 1.5rem; color: #c62828; font-weight: bold; margin: 15px 0;">${formattedAmount}</p>
-    `;
-    
-    if (paymentType === 'downpayment') {
-        const remainingAmount = totalAmount - downpaymentAmount;
-        const formattedRemaining = new Intl.NumberFormat('en-PH', {
-            style: 'currency',
-            currency: 'PHP'
-        }).format(remainingAmount);
-        confirmationHtml += `<p><strong>Remaining Balance:</strong> ${formattedRemaining} (due on delivery)</p>`;
+
+    let modalTitle = 'Confirm Order';
+    let confirmationHtml = '';
+    let confirmBtnText = 'Yes, Place Order';
+    let loadingTitle = 'Processing...';
+    let loadingText = 'Please wait while we prepare your order';
+
+    if (paymentMethod === 'cod') {
+        const formattedTotal = (typeof moneyFormatter !== 'undefined' ? moneyFormatter.format(totalAmount) : `PHP ${totalAmount.toFixed(2)}`);
+        modalTitle = isPickup ? 'Confirm Cash on Pickup' : 'Confirm Cash on Delivery';
+        confirmBtnText = isPickup ? '<i class="fas fa-check-circle"></i> Place Pickup Order' : '<i class="fas fa-check-circle"></i> Place COD Order';
+        loadingTitle = 'Placing Order...';
+        loadingText = 'Please wait while we confirm your cash order';
+
+        confirmationHtml = `
+            <div style="text-align: left; font-size: 14px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #eaecf0;">
+                    <span style="color:#667085; font-weight:600;">Payment Mode:</span>
+                    <span style="font-weight:700; color:#101828; display:inline-flex; align-items:center; gap:5px;">
+                        <i class="${isPickup ? 'fas fa-store' : 'fas fa-motorcycle'}" style="color:#b3261e;"></i>
+                        ${isPickup ? 'Cash on Pickup' : 'Cash on Delivery (COD)'}
+                    </span>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
+                    <span style="color:#667085; font-weight:600;">Fulfillment:</span>
+                    <span style="font-weight:700; color:#101828;">${isPickup ? 'Store Pickup' : 'Home Delivery'}</span>
+                </div>
+                <div style="background:#fffbfa; border:1px solid #fee4e2; border-radius:10px; padding:14px; margin-bottom:14px; text-align:center;">
+                    <span style="font-size:12px; font-weight:700; color:#475467; text-transform:uppercase; letter-spacing:0.5px; display:block; margin-bottom:4px;">
+                        ${isPickup ? 'Cash to Pay at Store Counter' : 'Total Cash to Hand to Rider'}
+                    </span>
+                    <span style="font-size:1.75rem; font-weight:800; color:#b3261e; display:block;">${formattedTotal}</span>
+                </div>
+                <div style="background:#fffaeb; border:1px solid #fedf89; border-radius:8px; padding:10px 12px; font-size:12.5px; color:#b54708; line-height:1.45;">
+                    <i class="fas fa-circle-info" style="margin-right:4px;"></i>
+                    <strong>No advance payment required.</strong> ${isPickup ? 'Your order will be prepared immediately. Pay exact cash to the cashier upon claiming.' : 'Your order will be prepared immediately and dispatched to a delivery rider. Please prepare exact cash upon arrival.'}
+                </div>
+            </div>
+        `;
+    } else {
+        const isDownpayment = (paymentType === 'downpayment');
+        const amountToPay = isDownpayment ? downpaymentAmount : totalAmount;
+        const formattedAmount = (typeof moneyFormatter !== 'undefined' ? moneyFormatter.format(amountToPay) : `PHP ${amountToPay.toFixed(2)}`);
+        modalTitle = 'Confirm Order & Pay Online';
+        confirmBtnText = '<i class="fas fa-lock"></i> Proceed to Online Payment';
+        loadingTitle = 'Connecting to Payment...';
+        loadingText = 'Redirecting to PayMongo secure payment page';
+
+        confirmationHtml = `
+            <div style="text-align: left; font-size: 14px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #eaecf0;">
+                    <span style="color:#667085; font-weight:600;">Payment Mode:</span>
+                    <span style="font-weight:700; color:#101828;">Online Payment (PayMongo)</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
+                    <span style="color:#667085; font-weight:600;">Payment Option:</span>
+                    <span style="font-weight:700; color:#101828;">${isDownpayment ? '30% Downpayment' : 'Full Payment'}</span>
+                </div>
+                <div style="background:#f8f9fa; border:1px solid #eaecf0; border-radius:10px; padding:14px; margin-bottom:14px; text-align:center;">
+                    <span style="font-size:12px; font-weight:700; color:#475467; text-transform:uppercase; letter-spacing:0.5px; display:block; margin-bottom:4px;">
+                        Amount to Pay Online Now
+                    </span>
+                    <span style="font-size:1.75rem; font-weight:800; color:#b3261e; display:block;">${formattedAmount}</span>
+                </div>
+        `;
+
+        if (isDownpayment) {
+            const remainingAmount = totalAmount - downpaymentAmount;
+            const formattedRemaining = (typeof moneyFormatter !== 'undefined' ? moneyFormatter.format(remainingAmount) : `PHP ${remainingAmount.toFixed(2)}`);
+            confirmationHtml += `
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px; padding: 8px 12px; background: #fffbfa; border-radius: 6px; border: 1px dashed #fee4e2;">
+                    <span style="color:#667085; font-weight:600;">Remaining Balance:</span>
+                    <span style="font-weight:700; color:#b3261e;">${formattedRemaining} <small style="color:#667085;">(due upon arrival)</small></span>
+                </div>
+            `;
+        }
+
+        confirmationHtml += `
+                <div style="background:#eff8ff; border:1px solid #b2ddff; border-radius:8px; padding:10px 12px; font-size:12.5px; color:#175cd3; line-height:1.45;">
+                    <i class="fas fa-lock" style="margin-right:4px;"></i>
+                    You will be redirected to PayMongo to complete payment securely via GCash, Maya, or Card.
+                </div>
+            </div>
+        `;
     }
-    
-    confirmationHtml += `
-            <hr>
-            <p><small><i class="fas fa-info-circle"></i> You will be redirected to PayMongo to complete the payment securely.</small></p>
-        </div>
-    `;
-    
+
     Swal.fire({
-        title: 'Confirm Order',
+        title: modalTitle,
         html: confirmationHtml,
         icon: 'question',
         showCancelButton: true,
-        confirmButtonColor: '#c62828',
+        confirmButtonColor: '#b3261e',
         cancelButtonColor: '#6c757d',
-        confirmButtonText: 'Yes, Proceed to Payment',
+        confirmButtonText: confirmBtnText,
         cancelButtonText: 'Review Order'
     }).then(async (result) => {
         if (result.isConfirmed) {
-            // Show loading
             Swal.fire({
-                title: 'Processing...',
-                text: 'Please wait while we prepare your order',
+                title: loadingTitle,
+                text: loadingText,
                 allowOutsideClick: false,
                 didOpen: () => {
                     Swal.showLoading();
                 }
             });
-            
+
             // Submit checkout without refreshing the page
             const formElement = document.getElementById('checkoutForm');
             await submitCheckoutAjax(formElement);
@@ -5837,8 +6069,8 @@ let deliveryOverviewStoreMarker = null;
 let deliveryOverviewCustomerMarker = null;
 let deliveryOverviewRouteLine = null;
 let deliveryOverviewRouteCasing = null;
-let deliveryOverviewRouteDash = null;
 let lastOverviewRouteKey = '';
+let isFetchingCheckoutRoute = false;
 
 function createOverviewPinIcon(type, iconClass) {
     const isStore = type === 'store';
@@ -5951,6 +6183,15 @@ function refreshDeliveryOverviewMap(quoteData = null) {
         setTimeout(() => {
             if (deliveryOverviewMap) deliveryOverviewMap.invalidateSize();
         }, 120);
+        if (window.ResizeObserver && mapCanvas && !mapCanvas._hasResizeObserver) {
+            mapCanvas._hasResizeObserver = true;
+            const ro = new ResizeObserver(() => {
+                if (deliveryOverviewMap) {
+                    deliveryOverviewMap.invalidateSize();
+                }
+            });
+            ro.observe(mapCanvas);
+        }
     } catch (e) {}
 
     // 6. Update Map Markers & Route Polyline
@@ -5995,7 +6236,7 @@ function ensureCheckoutRouteLayers() {
     if (!deliveryOverviewRouteCasing) {
         deliveryOverviewRouteCasing = L.polyline([], {
             color: '#ffffff',
-            weight: 7,
+            weight: 8,
             opacity: 0.95,
             lineCap: 'round',
             lineJoin: 'round'
@@ -6004,18 +6245,8 @@ function ensureCheckoutRouteLayers() {
     if (!deliveryOverviewRouteLine) {
         deliveryOverviewRouteLine = L.polyline([], {
             color: '#b3261e',
-            weight: 4.5,
+            weight: 5,
             opacity: 0.95,
-            lineCap: 'round',
-            lineJoin: 'round'
-        }).addTo(deliveryOverviewMap);
-    }
-    if (!deliveryOverviewRouteDash) {
-        deliveryOverviewRouteDash = L.polyline([], {
-            color: '#fee4e2',
-            weight: 2,
-            opacity: 0.85,
-            dashArray: '6, 10',
             lineCap: 'round',
             lineJoin: 'round'
         }).addTo(deliveryOverviewMap);
@@ -6027,51 +6258,59 @@ function setCheckoutRouteCoords(coords) {
     if (!coords || coords.length === 0) return;
     if (deliveryOverviewRouteCasing) deliveryOverviewRouteCasing.setLatLngs(coords);
     if (deliveryOverviewRouteLine) deliveryOverviewRouteLine.setLatLngs(coords);
-    if (deliveryOverviewRouteDash) deliveryOverviewRouteDash.setLatLngs(coords);
 }
 
 function clearCheckoutRouteLayers() {
     if (deliveryOverviewRouteCasing) deliveryOverviewRouteCasing.setLatLngs([]);
     if (deliveryOverviewRouteLine) deliveryOverviewRouteLine.setLatLngs([]);
-    if (deliveryOverviewRouteDash) deliveryOverviewRouteDash.setLatLngs([]);
 }
 
 async function fetchCheckoutStreetRoute(originLat, originLng, destLat, destLng) {
     ensureCheckoutRouteLayers();
     if (!originLat || !originLng || !destLat || !destLng) return;
 
-    // Instant direct fallback so user never sees a blank route while loading
     const cur = deliveryOverviewRouteLine ? deliveryOverviewRouteLine.getLatLngs() : [];
+    const key = `${Number(originLat).toFixed(4)}_${Number(originLng).toFixed(4)}_${Number(destLat).toFixed(4)}_${Number(destLng).toFixed(4)}`;
+
+    // Skip redundant fetch if detailed turn-by-turn road coordinates are already rendered
+    if (lastOverviewRouteKey === key && cur && cur.length > 2) {
+        return;
+    }
+
+    if (isFetchingCheckoutRoute) return;
+    isFetchingCheckoutRoute = true;
+
+    // Temporary direct fallback while fetching so pins are connected and bounds framed
     if (!cur || cur.length === 0) {
         setCheckoutRouteCoords([[originLat, originLng], [destLat, destLng]]);
         try {
             const b = L.latLngBounds([[originLat, originLng], [destLat, destLng]]);
             if (b.isValid() && deliveryOverviewMap) {
-                deliveryOverviewMap.fitBounds(b, { padding: [45, 45], maxZoom: 16 });
+                deliveryOverviewMap.fitBounds(b, { padding: [40, 40], maxZoom: 16 });
             }
         } catch (e) {}
     }
 
-    const key = `${Math.round(originLat * 1000)}_${Math.round(originLng * 1000)}_${Math.round(destLat * 1000)}_${Math.round(destLng * 1000)}`;
-    if (lastOverviewRouteKey === key && cur && cur.length > 2) {
-        return;
-    }
-    lastOverviewRouteKey = key;
+    // Determine robust base path for the API proxy
+    const basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
+    const apiUrl = `${basePath}api/get_directions.php?origin_lat=${originLat}&origin_lng=${originLng}&dest_lat=${destLat}&dest_lng=${destLng}`;
 
     // 1. Fetch precise turn-by-turn road geometry from our local proxy (Streets & Highways)
     try {
-        const apiUrl = `api/get_directions.php?origin_lat=${originLat}&origin_lng=${originLng}&dest_lat=${destLat}&dest_lng=${destLng}`;
         const res = await fetch(apiUrl);
         if (res.ok) {
             const data = await res.json();
-            if (data.success && Array.isArray(data.coordinates) && data.coordinates.length > 0) {
+            if (data.success && Array.isArray(data.coordinates) && data.coordinates.length > 1) {
                 setCheckoutRouteCoords(data.coordinates);
+                lastOverviewRouteKey = key;
                 if (deliveryOverviewMap) {
+                    deliveryOverviewMap.invalidateSize();
                     const bounds = L.latLngBounds(data.coordinates);
                     if (bounds.isValid()) {
-                        deliveryOverviewMap.fitBounds(bounds, { padding: [45, 45], maxZoom: 16 });
+                        deliveryOverviewMap.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
                     }
                 }
+                isFetchingCheckoutRoute = false;
                 return;
             }
         }
@@ -6085,21 +6324,55 @@ async function fetchCheckoutStreetRoute(originLat, originLng, destLat, destLng) 
         const res2 = await fetch(osrmUrl);
         if (res2.ok) {
             const data2 = await res2.json();
-            if (data2.routes && data2.routes.length > 0) {
+            if (data2.routes && data2.routes.length > 0 && data2.routes[0].geometry) {
                 const latLngs = data2.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
-                setCheckoutRouteCoords(latLngs);
-                if (deliveryOverviewMap) {
-                    const bounds = L.latLngBounds(latLngs);
-                    if (bounds.isValid()) {
-                        deliveryOverviewMap.fitBounds(bounds, { padding: [45, 45], maxZoom: 16 });
+                if (latLngs.length > 1) {
+                    setCheckoutRouteCoords(latLngs);
+                    lastOverviewRouteKey = key;
+                    if (deliveryOverviewMap) {
+                        deliveryOverviewMap.invalidateSize();
+                        const bounds = L.latLngBounds(latLngs);
+                        if (bounds.isValid()) {
+                            deliveryOverviewMap.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+                        }
                     }
+                    isFetchingCheckoutRoute = false;
+                    return;
                 }
-                return;
             }
         }
     } catch (e2) {
         console.debug('OSRM direct notice:', e2);
     }
+
+    // 3. OpenStreetMap DE mirror fallback
+    try {
+        const deUrl = `https://routing.openstreetmap.de/routed-car/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=full&geometries=geojson`;
+        const res3 = await fetch(deUrl);
+        if (res3.ok) {
+            const data3 = await res3.json();
+            if (data3.routes && data3.routes.length > 0 && data3.routes[0].geometry) {
+                const latLngs = data3.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+                if (latLngs.length > 1) {
+                    setCheckoutRouteCoords(latLngs);
+                    lastOverviewRouteKey = key;
+                    if (deliveryOverviewMap) {
+                        deliveryOverviewMap.invalidateSize();
+                        const bounds = L.latLngBounds(latLngs);
+                        if (bounds.isValid()) {
+                            deliveryOverviewMap.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+                        }
+                    }
+                    isFetchingCheckoutRoute = false;
+                    return;
+                }
+            }
+        }
+    } catch (e3) {
+        console.debug('OSM-DE direct notice:', e3);
+    }
+
+    isFetchingCheckoutRoute = false;
 }
 
 window.refreshDeliveryOverviewMap = refreshDeliveryOverviewMap;
@@ -6667,6 +6940,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 } else if (typeof window.calculateDeliveryFee === 'function') {
                     window.calculateDeliveryFee(lat, lng);
                 }
+                const refreshOverviewFn = window.refreshDeliveryOverviewMap || (typeof refreshDeliveryOverviewMap === 'function' ? refreshDeliveryOverviewMap : null);
+                if (refreshOverviewFn) {
+                    refreshOverviewFn({ customer_lat: lat, customer_lng: lng });
+                }
             }
         })().catch(err => console.warn('Coord fee error:', err));
 
@@ -6951,6 +7228,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 calculateDeliveryFee(lat, lng);
             } else if (typeof window.calculateDeliveryFee === 'function') {
                 window.calculateDeliveryFee(lat, lng);
+            }
+            const refreshOverviewFn = window.refreshDeliveryOverviewMap || (typeof refreshDeliveryOverviewMap === 'function' ? refreshDeliveryOverviewMap : null);
+            if (refreshOverviewFn) {
+                refreshOverviewFn({ customer_lat: lat, customer_lng: lng });
             }
         }
 

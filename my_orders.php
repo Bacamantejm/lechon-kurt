@@ -691,7 +691,23 @@ unset($order);
                         <!-- Card Bottom: Total Summary & Actions -->
                         <div class="ecom-card-bottom">
                             <div class="summary-line">
-                                <span class="payment-method">Paid via <strong><?php echo ucfirst(str_replace('_', ' ', (string)$order['payment_method'])); ?></strong></span>
+                                <?php
+                                $order_pm = strtolower((string)($order['payment_method'] ?? ''));
+                                $is_order_cod = (stripos($order_pm, 'cod') !== false);
+                                $order_ps = strtolower((string)($order['payment_status'] ?? ''));
+                                $is_order_pickup = (strtolower((string)($order['delivery_option'] ?? '')) === 'pickup');
+
+                                if ($is_order_cod) {
+                                    if ($order_ps === 'paid') {
+                                        $payment_text = $is_order_pickup ? 'Paid in Cash at Store' : 'Paid in Cash to Rider';
+                                    } else {
+                                        $payment_text = $is_order_pickup ? 'Cash on Pickup (Pay at Counter)' : 'Cash on Delivery (Pay to Rider)';
+                                    }
+                                } else {
+                                    $payment_text = 'Paid via ' . ucfirst(str_replace('_', ' ', (string)$order['payment_method']));
+                                }
+                                ?>
+                                <span class="payment-method"><strong><?php echo htmlspecialchars($payment_text); ?></strong></span>
                                 <div class="total-wrap">
                                     <span class="total-label">Order Total (<?php echo $item_count; ?> <?php echo $item_count === 1 ? 'item' : 'items'; ?>):</span>
                                     <span class="total-amount">₱<?php echo number_format($order['total_amount'], 2); ?></span>
@@ -706,18 +722,27 @@ unset($order);
 
                                 <div class="action-buttons-group">
                                     <?php if (in_array(strtolower($order['status']), ['pending', 'confirmed', 'preparing', 'processing'], true) && !empty($order['can_customer_cancel'])): ?>
-                                        <button type="button" class="btn-action-outline btn-cancel" onclick="cancelOrder(<?php echo $order['id']; ?>, <?php echo json_encode((string)$order['cancellation_policy_message']); ?>)">
+                                        <button type="button" 
+                                                class="btn-action-outline btn-cancel" 
+                                                data-order-id="<?php echo (int)$order['id']; ?>"
+                                                data-policy="<?php echo htmlspecialchars((string)($order['cancellation_policy_message'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
+                                                onclick="cancelOrder(<?php echo (int)$order['id']; ?>, this.getAttribute('data-policy') || '')">
                                             Cancel Order
                                         </button>
                                     <?php endif; ?>
 
                                     <?php if (in_array(strtolower($order['status']), ['delivered', 'completed'])): ?>
                                         <?php if (in_array($order['id'], $orders_with_unreviewed_items)): ?>
-                                            <a href="leave_review.php?order_id=<?php echo $order['id']; ?>" class="btn-action-outline btn-review">
+                                            <a href="leave_review.php?order_id=<?php echo (int)$order['id']; ?>" class="btn-action-outline btn-review">
                                                 <i class="fas fa-star"></i> Review
                                             </a>
                                         <?php endif; ?>
-                                        <button type="button" class="btn-action-outline" onclick="requestRefund(<?php echo $order['id']; ?>, <?php echo !empty($order['refund_photo_required']) ? 'true' : 'false'; ?>, <?php echo json_encode((string)$order['refund_terms']); ?>)">
+                                        <button type="button" 
+                                                class="btn-action-outline" 
+                                                data-order-id="<?php echo (int)$order['id']; ?>"
+                                                data-photo-required="<?php echo !empty($order['refund_photo_required']) ? '1' : '0'; ?>"
+                                                data-refund-terms="<?php echo htmlspecialchars((string)($order['refund_terms'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
+                                                onclick="requestRefund(<?php echo (int)$order['id']; ?>, this.getAttribute('data-photo-required') === '1', this.getAttribute('data-refund-terms') || '')">
                                             Request Refund
                                         </button>
                                     <?php endif; ?>
@@ -797,6 +822,22 @@ unset($order);
                                     <div class="info-group">
                                         <span class="label">Address / Location</span>
                                         <span class="val"><?php echo htmlspecialchars($order['delivery_address']); ?></span>
+                                    </div>
+                                    <div class="info-group">
+                                        <span class="label">Payment Details</span>
+                                        <span class="val">
+                                            <?php if ($is_order_cod): ?>
+                                                <span style="color: <?php echo ($order_ps === 'paid') ? '#027a48' : '#b54708'; ?>; font-weight: 700;">
+                                                    <i class="<?php echo ($order_ps === 'paid') ? 'fas fa-check-circle' : 'fas fa-hand-holding-dollar'; ?>"></i>
+                                                    <?php echo $is_order_pickup ? 'Cash on Pickup' : 'Cash on Delivery'; ?>
+                                                    (<?php echo ($order_ps === 'paid') ? 'Paid' : 'Due upon arrival: ₱' . number_format($order['total_amount'], 2); ?>)
+                                                </span>
+                                            <?php else: ?>
+                                                <span style="color: #175cd3; font-weight: 600;">
+                                                    <i class="fas fa-credit-card"></i> PayMongo (<?php echo ucfirst($order_ps ?: 'Paid'); ?>)
+                                                </span>
+                                            <?php endif; ?>
+                                        </span>
                                     </div>
                                     <?php if (!empty($order['special_instructions'])): ?>
                                         <div class="info-group full">

@@ -212,8 +212,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     $delivery_date = mysqli_real_escape_string($conn, $_POST['delivery_date']);
     $delivery_time = mysqli_real_escape_string($conn, $_POST['delivery_time']);
-    $payment_method = mysqli_real_escape_string($conn, $_POST['payment_method']);
-    $payment_type = mysqli_real_escape_string($conn, $_POST['payment_type']);
+    $raw_payment_method = strtolower(trim((string)($_POST['payment_method'] ?? 'paymongo')));
+    $payment_method = in_array($raw_payment_method, ['cod', 'paymongo'], true) ? $raw_payment_method : 'paymongo';
+    $payment_type = mysqli_real_escape_string($conn, $_POST['payment_type'] ?? 'full');
+    if ($payment_method === 'cod') {
+        $payment_type = 'full';
+    }
     $delivery_option = mysqli_real_escape_string($conn, $_POST['delivery_option']);
     $order_notes = isset($_POST['order_notes']) ? mysqli_real_escape_string($conn, $_POST['order_notes']) : '';
     $total_amount = floatval($_POST['total_amount'] ?? 0);
@@ -423,14 +427,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $total_amount = max(0, $subtotal + $vat_amount + $delivery_fee - $voucher_discount);
     
     // Calculate payment amounts
-    if ($payment_type === 'downpayment') {
+    if ($payment_method === 'cod') {
+        $payment_type = 'full';
+        $downpayment_amount = 0.00;
+        $remaining_balance = $total_amount;
+        $payment_status = 'pending';
+        $status = 'confirmed'; // Cash orders are confirmed immediately for kitchen and delivery dispatch
+    } elseif ($payment_type === 'downpayment') {
         $downpayment_amount = $total_amount * 0.30;
         $remaining_balance = $total_amount - $downpayment_amount;
         $payment_status = 'partial';
+        $status = 'pending';
     } else {
         $downpayment_amount = 0;
         $remaining_balance = 0;
         $payment_status = 'pending'; // Will be updated after payment
+        $status = 'pending';
     }
     
     ensureOrdersTableSchema($conn);
@@ -444,8 +456,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     mysqli_begin_transaction($conn);
     
     try {
-        // Set status variable
-        $status = 'pending';
+        // Status variable (retains 'confirmed' for COD, 'pending' for PayMongo)
+        if ($payment_method !== 'cod') {
+            $status = 'pending';
+        }
         
         // Debug: Check what data we have
         error_log("Creating order with data:");
@@ -846,7 +860,159 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         pvClearAppliedVoucherSession();
         unset($_SESSION['pending_welcome_voucher']);
         
-        // All payments go through PayMongo
+        // -------------------------------------------------------------
+        // CASH ON DELIVERY (COD) / CASH ON PICKUP FULFILLMENT
+        // -------------------------------------------------------------
+        if ($payment_method === 'cod') {
+            // 1. Deduct Inventory for confirmed cash order
+            $items_query = "SELECT product_id, quantity FROM order_items WHERE order_id = ?";
+            if ($items_stmt = mysqli_prepare($conn, $items_query)) {
+                mysqli_stmt_bind_param($items_stmt, "i", $order_id);
+                mysqli_stmt_execute($items_stmt);
+                $items_result = mysqli_stmt_get_result($items_stmt);
+                $inventory_date = date('Y-m-d');
+
+                while ($item = mysqli_fetch_assoc($items_result)) {
+                    $string_product_id = $item['product_id'];
+                    $int_product_id = 0;
+
+                    $get_id_query = "SELECT id FROM products WHERE id = ? OR product_id = ? LIMIT 1";
+                    $get_id_stmt = mysqli_prepare($conn, $get_id_query);
+                    if ($get_id_stmt) {
+                        mysqli_stmt_bind_param($get_id_stmt, "ss", $string_product_id, $string_product_id);
+                        mysqli_stmt_execute($get_id_stmt);
+                        $id_result = mysqli_stmt_get_result($get_id_stmt);
+                        if ($id_row = mysqli_fetch_assoc($id_result)) {
+                            $int_product_id = (int)$id_row['id'];
+                        }
+                        mysqli_stmt_close($get_id_stmt);
+                    }
+
+                    if ($int_product_id > 0) {
+                        $check_inv_query = "SELECT id, current_stock FROM inventory WHERE product_id = ? AND inventory_date = ?";
+                        $check_inv_stmt = mysqli_prepare($conn, $check_inv_query);
+                        if ($check_inv_stmt) {
+                            mysqli_stmt_bind_param($check_inv_stmt, "is", $int_product_id, $inventory_date);
+                            mysqli_stmt_execute($check_inv_stmt);
+                            $check_inv_res = mysqli_stmt_get_result($check_inv_stmt);
+                            $inv_data = mysqli_fetch_assoc($check_inv_res);
+                            mysqli_stmt_close($check_inv_stmt);
+
+                            if (!$inv_data) {
+                                $init_inv_sql = "INSERT INTO inventory (product_id, inventory_date, current_stock, min_stock_level, last_updated)
+                                                 SELECT id, ?, stock, 5, NOW() FROM products WHERE id = ?";
+                                $init_inv_stmt = mysqli_prepare($conn, $init_inv_sql);
+                                if ($init_inv_stmt) {
+                                    mysqli_stmt_bind_param($init_inv_stmt, "si", $inventory_date, $int_product_id);
+                                    mysqli_stmt_execute($init_inv_stmt);
+                                    mysqli_stmt_close($init_inv_stmt);
+                                }
+
+                                $check_inv_stmt2 = mysqli_prepare($conn, $check_inv_query);
+                                if ($check_inv_stmt2) {
+                                    mysqli_stmt_bind_param($check_inv_stmt2, "is", $int_product_id, $inventory_date);
+                                    mysqli_stmt_execute($check_inv_stmt2);
+                                    $check_inv_res2 = mysqli_stmt_get_result($check_inv_stmt2);
+                                    $inv_data = mysqli_fetch_assoc($check_inv_res2);
+                                    mysqli_stmt_close($check_inv_stmt2);
+                                }
+                            }
+
+                            if ($inv_data) {
+                                $current_stock = (int)$inv_data['current_stock'];
+                                $quantity = (int)$item['quantity'];
+                                $new_stock = max(0, $current_stock - $quantity);
+
+                                $update_inv_sql = "UPDATE inventory SET current_stock = ?, last_updated = NOW() WHERE id = ?";
+                                $update_inv_stmt = mysqli_prepare($conn, $update_inv_sql);
+                                if ($update_inv_stmt) {
+                                    mysqli_stmt_bind_param($update_inv_stmt, "ii", $new_stock, $inv_data['id']);
+                                    mysqli_stmt_execute($update_inv_stmt);
+                                    mysqli_stmt_close($update_inv_stmt);
+                                }
+
+                                $history_query = "INSERT INTO inventory_history (product_id, adjustment_type, quantity_changed, previous_stock, new_stock, notes, created_at) VALUES (?, 'reduce', ?, ?, ?, ?, NOW())";
+                                $history_stmt = mysqli_prepare($conn, $history_query);
+                                if ($history_stmt) {
+                                    $h_notes = "COD Order #" . $order_number;
+                                    mysqli_stmt_bind_param($history_stmt, "iiiis", $int_product_id, $quantity, $current_stock, $new_stock, $h_notes);
+                                    mysqli_stmt_execute($history_stmt);
+                                    mysqli_stmt_close($history_stmt);
+                                }
+                            }
+                        }
+                    }
+                }
+                mysqli_stmt_close($items_stmt);
+            }
+
+            // 2. Initialize Logistics Tracking for Home Delivery (so rider sees request)
+            if (($delivery_option ?? 'pickup') === 'delivery') {
+                try {
+                    require_once 'logistics_service.php';
+                    $logisticsService = new LogisticsService($conn);
+                    $trackingResult = $logisticsService->createTrackingForOrder(
+                        $order_id, 1, 1,
+                        $order_notes,
+                        $latitude,
+                        $longitude
+                    );
+                    if (!empty($trackingResult['success'])) {
+                        error_log("COD delivery tracking #{$trackingResult['tracking_id']} created for order #{$order_id}");
+                    }
+                } catch (Throwable $e) {
+                    error_log("COD delivery tracking initialization error: " . $e->getMessage());
+                }
+            }
+
+            // 3. Notify Admins and Delivery Riders
+            if (function_exists('getAdminUserIds') && function_exists('createNotification')) {
+                $admin_ids = getAdminUserIds($conn);
+                $is_pickup = ($delivery_option === 'pickup');
+                $notif_title = $is_pickup ? "New Cash on Pickup Order" : "New COD Delivery Order Waiting for Rider";
+                $notif_message = "Order #{$order_number} placed via " . ($is_pickup ? "Cash on Pickup" : "Cash on Delivery") . " (PHP " . number_format($total_amount, 2) . ") is confirmed.";
+                foreach ($admin_ids as $admin_id) {
+                    createNotification($conn, (int)$admin_id, 'new_order', $notif_title, $notif_message, (int)$order_id, 'order');
+                }
+            }
+
+            // 4. Send Order Confirmation Email
+            try {
+                $emailService = new EmailService($conn);
+                $emailService->sendOrderConfirmation($order_id);
+            } catch (Throwable $e) {
+                error_log("COD order confirmation email error: " . $e->getMessage());
+            }
+
+            // 5. Populate Session Order Success Data
+            $_SESSION['order_success'] = [
+                'order_id' => (int)$order_id,
+                'order_number' => $order_number,
+                'amount_paid' => 0.00,
+                'total_amount' => $total_amount,
+                'payment_method' => 'cod',
+                'payment_type' => 'full',
+                'downpayment_amount' => 0.00,
+                'remaining_balance' => $total_amount
+            ];
+
+            // Clear session cart and checkout states
+            unset($_SESSION['cart']);
+            unset($_SESSION['pending_order']);
+            unset($_SESSION['delivery_option']);
+            unset($_SESSION['pickup_location']);
+            unset($_SESSION['delivery_location']);
+
+            // 6. Direct user to order confirmation / success screen
+            checkoutRedirectTo('order_success.php?order_id=' . $order_id, [
+                'order_id' => (int)$order_id,
+                'order_number' => $order_number,
+                'payment_method' => 'cod'
+            ]);
+            exit;
+        }
+
+        // Online Payments via PayMongo
         $payment_amount = ($payment_type === 'downpayment') ? $downpayment_amount : $total_amount;
 
         // Resolve PayMongo API keys from config/env

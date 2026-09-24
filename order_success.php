@@ -1,109 +1,271 @@
 <?php
 session_start();
+require_once 'includes/config.php';
 
-// Check if order success data exists
-if (!isset($_SESSION['order_success'])) {
+$order_id = (int)($_SESSION['order_success']['order_id'] ?? ($_GET['order_id'] ?? 0));
+$user_id = (int)($_SESSION['user_id'] ?? 0);
+
+// Check if order success data or valid order id exists
+if (!isset($_SESSION['order_success']) && $order_id <= 0) {
     header('Location: menu.php');
     exit;
 }
 
+$db_order = null;
+if ($order_id > 0 && isset($conn) && $conn instanceof mysqli) {
+    if ($user_id > 0) {
+        $stmt = mysqli_prepare($conn, "SELECT * FROM orders WHERE id = ? AND user_id = ? LIMIT 1");
+        if ($stmt) {
+            mysqli_stmt_bind_param($stmt, "ii", $order_id, $user_id);
+            mysqli_stmt_execute($stmt);
+            $res = mysqli_stmt_get_result($stmt);
+            $db_order = mysqli_fetch_assoc($res);
+            mysqli_stmt_close($stmt);
+        }
+    } else {
+        $stmt = mysqli_prepare($conn, "SELECT * FROM orders WHERE id = ? LIMIT 1");
+        if ($stmt) {
+            mysqli_stmt_bind_param($stmt, "i", $order_id);
+            mysqli_stmt_execute($stmt);
+            $res = mysqli_stmt_get_result($stmt);
+            $db_order = mysqli_fetch_assoc($res);
+            mysqli_stmt_close($stmt);
+        }
+    }
+}
+
+if (!$db_order && !isset($_SESSION['order_success'])) {
+    header('Location: menu.php');
+    exit;
+}
+
+$order_number = $db_order['order_number'] ?? ($_SESSION['order_success']['order_number'] ?? '');
+$total_amount = (float)($db_order['total_amount'] ?? ($_SESSION['order_success']['total_amount'] ?? 0));
+$amount_paid = (float)($_SESSION['order_success']['amount_paid'] ?? 0);
+$payment_method = strtolower((string)($db_order['payment_method'] ?? ($_SESSION['order_success']['payment_method'] ?? 'paymongo')));
+$payment_type = $_SESSION['order_success']['payment_type'] ?? 'full';
+$payment_status = strtolower((string)($db_order['payment_status'] ?? 'pending'));
+$delivery_option = strtolower((string)($db_order['delivery_option'] ?? 'delivery'));
+$delivery_address = $db_order['delivery_address'] ?? '';
+$customer_name = $db_order['customer_name'] ?? '';
+$customer_phone = $db_order['customer_phone'] ?? '';
+$downpayment_amount = (float)($db_order['downpayment_amount'] ?? ($_SESSION['order_success']['downpayment_amount'] ?? 0));
+$remaining_balance = (float)($db_order['remaining_balance'] ?? ($_SESSION['order_success']['remaining_balance'] ?? 0));
+
+$is_cod = (stripos($payment_method, 'cod') !== false);
+$is_pickup = ($delivery_option === 'pickup');
+
 $page_title = "Order Confirmed | Lechon Delights";
 include 'includes/header.php';
-
-$order_number = $_SESSION['order_success']['order_number'] ?? '';
-$amount_paid = $_SESSION['order_success']['amount_paid'] ?? 0;
-$total_amount = $_SESSION['order_success']['total_amount'] ?? $amount_paid; // Fallback for old sessions
-$payment_method = $_SESSION['order_success']['payment_method'] ?? 'paymongo';
-$payment_type = $_SESSION['order_success']['payment_type'] ?? 'full';
-$downpayment_amount = $_SESSION['order_success']['downpayment_amount'] ?? 0;
-$remaining_balance = $_SESSION['order_success']['remaining_balance'] ?? 0;
-
-// Don't clear order success data yet - keep it for display
 ?>
 
 <section class="success-section">
     <div class="container">
         <div class="success-card">
-            <div class="success-icon">
-                <i class="fas fa-check-circle"></i>
+            <div class="success-icon-badge">
+                <i class="fas fa-check"></i>
             </div>
             
-            <h2>Thank You for Your Order!</h2>
-            <p class="order-number">Order Number: <strong><?php echo htmlspecialchars($order_number); ?></strong></p>
-            
-            <div class="order-details">
-                <p>We have received your order and will begin processing it immediately.</p>
-                <p>You will receive an email confirmation shortly with your order details.</p>
-                
-                <div class="amount-paid">
-                    <h3>Amount Paid: PHP <?php echo number_format($amount_paid, 2); ?></h3>
+            <h1 class="success-title">
+                <?php 
+                if ($is_cod) {
+                    echo $is_pickup ? 'Pickup Order Confirmed!' : 'Cash on Delivery Order Confirmed!';
+                } else {
+                    echo 'Thank You for Your Order!';
+                }
+                ?>
+            </h1>
+
+            <div class="order-number-pill">
+                <span>Order Reference:</span>
+                <strong>#<?php echo htmlspecialchars($order_number); ?></strong>
+            </div>
+
+            <!-- Main Payment Summary Banner -->
+            <?php if ($is_cod): ?>
+                <?php if ($is_pickup): ?>
+                    <div class="payment-highlight-box highlight-pickup">
+                        <span class="highlight-label">Total Cash Due at Pickup Counter</span>
+                        <div class="highlight-amount">PHP <?php echo number_format($total_amount, 2); ?></div>
+                        <p class="highlight-desc">
+                            <i class="fas fa-store"></i> No online payment required. Please prepare exact cash when claiming your fresh lechon at the store counter.
+                        </p>
+                    </div>
+                <?php else: ?>
+                    <div class="payment-highlight-box highlight-cod">
+                        <span class="highlight-label">Total Cash Due upon Doorstep Delivery</span>
+                        <div class="highlight-amount">PHP <?php echo number_format($total_amount, 2); ?></div>
+                        <p class="highlight-desc">
+                            <i class="fas fa-motorcycle"></i> No advance online payment required. Please prepare exact cash to hand directly to your delivery rider upon arrival.
+                        </p>
+                    </div>
+                <?php endif; ?>
+            <?php else: ?>
+                <?php if ($payment_type === 'downpayment' || $payment_status === 'partial'): ?>
+                    <div class="payment-highlight-box highlight-online-downpayment">
+                        <span class="highlight-label">30% Downpayment Paid Online</span>
+                        <div class="highlight-amount">PHP <?php echo number_format($amount_paid ?: $downpayment_amount, 2); ?></div>
+                        <p class="highlight-desc">
+                            <i class="fas fa-check-circle"></i> Downpayment confirmed via PayMongo. Remaining balance of <strong>PHP <?php echo number_format($remaining_balance, 2); ?></strong> is due upon <?php echo $is_pickup ? 'pickup' : 'delivery'; ?>.
+                        </p>
+                    </div>
+                <?php else: ?>
+                    <div class="payment-highlight-box highlight-online-full">
+                        <span class="highlight-label">Amount Paid Online (PayMongo)</span>
+                        <div class="highlight-amount">PHP <?php echo number_format($amount_paid ?: $total_amount, 2); ?></div>
+                        <p class="highlight-desc">
+                            <i class="fas fa-check-circle"></i> Payment completed securely. No additional cash needed upon <?php echo $is_pickup ? 'pickup' : 'delivery'; ?>.
+                        </p>
+                    </div>
+                <?php endif; ?>
+            <?php endif; ?>
+
+            <!-- Order Details Breakdown Grid -->
+            <div class="order-details-grid">
+                <div class="details-item">
+                    <span class="details-label">Fulfillment Mode</span>
+                    <strong class="details-value">
+                        <i class="<?php echo $is_pickup ? 'fas fa-store' : 'fas fa-truck-fast'; ?>" style="color: #b3261e; margin-right: 4px;"></i>
+                        <?php echo $is_pickup ? 'Store Pickup' : 'Home Delivery'; ?>
+                    </strong>
                 </div>
-            </div>
-            
-            <div class="payment-details">
-                <h3>Payment Information</h3>
-                <p><strong>Payment Type:</strong> 
-                    <?php echo $payment_type === 'downpayment' ? '30% Downpayment' : 'Full Payment'; ?>
-                </p>
-                <p><strong>Payment Method:</strong> <?php echo ucfirst($payment_method); ?></p>
-                <p><strong>Payment Status:</strong> 
-                    <?php echo $payment_type === 'downpayment' ? 'Partial (30% Paid)' : 'Fully Paid'; ?>
-                </p>
-                
-                <?php if ($payment_type === 'downpayment'): ?>
-                <div class="balance-info">
-                    <p><strong>Downpayment Paid:</strong> PHP <?php echo number_format($downpayment_amount, 2); ?></p>
-                    <p><strong>Remaining Balance:</strong> PHP <?php echo number_format($remaining_balance, 2); ?></p>
-                    <p class="note"><em>Please settle the remaining balance upon pickup/delivery.</em></p>
+
+                <div class="details-item">
+                    <span class="details-label">Payment Mode</span>
+                    <strong class="details-value">
+                        <?php if ($is_cod): ?>
+                            <i class="<?php echo $is_pickup ? 'fas fa-hand-holding-dollar' : 'fas fa-money-bill-wave'; ?>" style="color: #027a48; margin-right: 4px;"></i>
+                            <?php echo $is_pickup ? 'Cash on Pickup' : 'Cash on Delivery (COD)'; ?>
+                        <?php else: ?>
+                            <i class="fas fa-credit-card" style="color: #175cd3; margin-right: 4px;"></i>
+                            Online Payment (PayMongo)
+                        <?php endif; ?>
+                    </strong>
+                </div>
+
+                <div class="details-item">
+                    <span class="details-label">Payment Status</span>
+                    <div class="details-value">
+                        <?php if ($is_cod): ?>
+                            <span class="status-pill status-warning">
+                                <i class="fas fa-clock"></i> Cash Due upon Arrival
+                            </span>
+                        <?php elseif ($payment_type === 'downpayment' || $payment_status === 'partial'): ?>
+                            <span class="status-pill status-info">
+                                <i class="fas fa-check"></i> Partial (30% Paid)
+                            </span>
+                        <?php else: ?>
+                            <span class="status-pill status-success">
+                                <i class="fas fa-check-circle"></i> Fully Paid
+                            </span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <div class="details-item">
+                    <span class="details-label">Total Order Value</span>
+                    <strong class="details-value" style="color: #b3261e; font-size: 1.15rem;">
+                        PHP <?php echo number_format($total_amount, 2); ?>
+                    </strong>
+                </div>
+
+                <?php if (!$is_pickup && !empty($delivery_address)): ?>
+                <div class="details-item full-width">
+                    <span class="details-label">Delivery Address</span>
+                    <div class="details-value" style="font-weight: 500; color: #344054;">
+                        <i class="fas fa-location-dot" style="color: #b3261e; margin-right: 6px;"></i>
+                        <?php echo htmlspecialchars($delivery_address); ?>
+                    </div>
                 </div>
                 <?php endif; ?>
             </div>
-            
-            <div class="next-steps">
-                <h3>What's Next?</h3>
-                <div class="steps">
-                    <div class="step">
-                        <div class="step-number">1</div>
-                        <div class="step-content">
-                            <h4>Order Processing</h4>
-                            <p>We'll prepare your order and confirm availability</p>
+
+            <!-- Step by Step What Happens Next -->
+            <div class="next-steps-section">
+                <h3 class="section-heading">What Happens Next?</h3>
+                <div class="steps-flow-grid">
+                    <?php if ($is_cod && !$is_pickup): ?>
+                        <div class="flow-card">
+                            <div class="flow-step-num">1</div>
+                            <div class="flow-step-body">
+                                <h4>Order Confirmed</h4>
+                                <p>Our kitchen immediately prepares and roasts your fresh lechon order.</p>
+                            </div>
                         </div>
-                    </div>
-                    
-                    <div class="step">
-                        <div class="step-number">2</div>
-                        <div class="step-content">
-                            <h4>Order Confirmation</h4>
-                            <p>We'll contact you to confirm your order details</p>
+                        <div class="flow-card">
+                            <div class="flow-step-num">2</div>
+                            <div class="flow-step-body">
+                                <h4>Rider Dispatched</h4>
+                                <p>A nearby delivery rider is assigned with turn-by-turn road navigation.</p>
+                            </div>
                         </div>
-                    </div>
-                    
-                    <div class="step">
-                        <div class="step-number">3</div>
-                        <div class="step-content">
-                            <h4>Delivery/Pickup</h4>
-                            <p>Your order will be ready for pickup/delivery as scheduled</p>
+                        <div class="flow-card">
+                            <div class="flow-step-num">3</div>
+                            <div class="flow-step-body">
+                                <h4>Doorstep Cash Payment</h4>
+                                <p>Receive your fresh lechon and hand <strong>PHP <?php echo number_format($total_amount, 2); ?></strong> cash to the rider.</p>
+                            </div>
                         </div>
-                    </div>
+                    <?php elseif ($is_cod && $is_pickup): ?>
+                        <div class="flow-card">
+                            <div class="flow-step-num">1</div>
+                            <div class="flow-step-body">
+                                <h4>Order Confirmed</h4>
+                                <p>Our store kitchen confirms and prepares your order fresh for pickup.</p>
+                            </div>
+                        </div>
+                        <div class="flow-card">
+                            <div class="flow-step-num">2</div>
+                            <div class="flow-step-body">
+                                <h4>Freshly Packed</h4>
+                                <p>Your order is kept hot and sealed ready at the counter.</p>
+                            </div>
+                        </div>
+                        <div class="flow-card">
+                            <div class="flow-step-num">3</div>
+                            <div class="flow-step-body">
+                                <h4>Counter Cash Payment</h4>
+                                <p>Present order #<strong><?php echo htmlspecialchars($order_number); ?></strong> and pay <strong>PHP <?php echo number_format($total_amount, 2); ?></strong> cash at the cashier.</p>
+                            </div>
+                        </div>
+                    <?php else: ?>
+                        <div class="flow-card">
+                            <div class="flow-step-num">1</div>
+                            <div class="flow-step-body">
+                                <h4>Payment Cleared</h4>
+                                <p>Your online payment is securely processed and confirmed.</p>
+                            </div>
+                        </div>
+                        <div class="flow-card">
+                            <div class="flow-step-num">2</div>
+                            <div class="flow-step-body">
+                                <h4>Food Preparation</h4>
+                                <p>Our kitchen cooks and packs your authentic lechon fresh.</p>
+                            </div>
+                        </div>
+                        <div class="flow-card">
+                            <div class="flow-step-num">3</div>
+                            <div class="flow-step-body">
+                                <h4><?php echo $is_pickup ? 'Ready for Pickup' : 'Prompt Delivery'; ?></h4>
+                                <p><?php echo $is_pickup ? 'Head to the branch counter to claim your food.' : 'Enjoy your hot lechon delivered straight to your door.'; ?></p>
+                            </div>
+                        </div>
+                    <?php endif; ?>
                 </div>
             </div>
-            
-            <div class="contact-info">
-                <h3>Need Help?</h3>
-                <p>If you have any questions about your order, please contact us:</p>
-                <ul>
-                    <li><i class="fas fa-phone"></i> (02) 1234-5678</li>
-                    <li><i class="fas fa-envelope"></i> orders@lechondelights.com</li>
-                    <li><i class="fas fa-clock"></i> Mon-Sun: 8:00 AM - 10:00 PM</li>
-                </ul>
-            </div>
-            
-            <div class="success-actions">
-                <a href="my_orders.php" class="btn-primary">
-                    <i class="fas fa-shopping-bag"></i> View My Orders
+
+            <!-- Primary CTAs -->
+            <div class="success-actions-wrap">
+                <?php if (!$is_pickup && $order_id > 0): ?>
+                    <a href="track_order.php?order_id=<?php echo $order_id; ?>" class="btn-success-primary">
+                        <i class="fas fa-location-dot"></i> Track Live Delivery
+                    </a>
+                <?php endif; ?>
+                <a href="my_orders.php" class="<?php echo ($is_pickup || $order_id <= 0) ? 'btn-success-primary' : 'btn-success-secondary'; ?>">
+                    <i class="fas fa-receipt"></i> View My Orders
                 </a>
-                <a href="menu.php" class="btn-secondary">
-                    <i class="fas fa-utensils"></i> Continue Shopping
+                <a href="menu.php" class="btn-success-secondary">
+                    <i class="fas fa-utensils"></i> Order More
                 </a>
             </div>
         </div>
@@ -111,355 +273,402 @@ $remaining_balance = $_SESSION['order_success']['remaining_balance'] ?? 0;
 </section>
 
 <style>
-.success-section {
-    padding: 80px 0;
-    background-color: #f9f9f9;
-}
-
-.success-card {
-    max-width: 800px;
-    margin: 0 auto;
-    background-color: white;
-    padding: 50px;
-    border-radius: 16px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-    text-align: center;
-}
-
-.success-icon {
-    font-size: 5rem;
-    color: #4CAF50;
-    margin-bottom: 30px;
-}
-
-.success-card h2 {
-    color: #333;
-    font-size: 2.2rem;
-    margin-bottom: 20px;
-}
-
-.order-number {
-    font-size: 1.2rem;
-    color: #666;
-    margin-bottom: 40px;
-    padding: 15px;
-    background-color: #f0f7ff;
-    border-radius: 8px;
-}
-
-.order-details {
-    margin-bottom: 40px;
-    padding: 30px;
-    background-color: #f9f9f9;
-    border-radius: 12px;
-}
-
-.order-details p {
-    color: #555;
-    margin-bottom: 15px;
-    font-size: 1.1rem;
-    line-height: 1.6;
-}
-
-.amount-paid {
-    margin-top: 30px;
-    padding: 20px;
-    background: linear-gradient(135deg, #4CAF50, #45a049);
-    border-radius: 12px;
-    color: white;
-}
-
-.amount-paid h3 {
-    margin: 0;
-    font-size: 1.8rem;
-}
-
-.next-steps {
-    margin-bottom: 40px;
-    text-align: left;
-}
-
-.next-steps h3 {
-    color: #333;
-    margin-bottom: 25px;
-    font-size: 1.5rem;
-    text-align: center;
-}
-
-.steps {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 25px;
-}
-
-.step {
-    display: flex;
-    gap: 20px;
-    padding: 25px;
-    background-color: white;
-    border-radius: 12px;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.05);
-    border: 2px solid #e0e0e0;
-}
-
-.step-number {
-    width: 50px;
-    height: 50px;
-    background: linear-gradient(135deg, #c62828, #e53935);
-    color: white;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.3rem;
-    font-weight: 700;
-    flex-shrink: 0;
-}
-
-.step-content h4 {
-    color: #333;
-    margin-bottom: 10px;
-    font-size: 1.2rem;
-}
-
-.step-content p {
-    color: #666;
-    font-size: 0.95rem;
-    line-height: 1.5;
-}
-
-.contact-info {
-    margin-bottom: 40px;
-    padding: 30px;
-    background-color: #f0f7ff;
-    border-radius: 12px;
-    text-align: left;
-}
-
-.contact-info h3 {
-    color: #1976d2;
-    margin-bottom: 20px;
-    font-size: 1.5rem;
-}
-
-.contact-info p {
-    color: #555;
-    margin-bottom: 20px;
-    font-size: 1.1rem;
-}
-
-.contact-info ul {
-    list-style: none;
-    padding: 0;
-}
-
-.contact-info li {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    margin-bottom: 12px;
-    color: #333;
-    font-size: 1.1rem;
-}
-
-.contact-info i {
-    color: #1976d2;
-    width: 24px;
-    font-size: 1.2rem;
-}
-
-.success-actions {
-    display: flex;
-    gap: 20px;
-    justify-content: center;
-}
-
-.success-actions .btn-primary,
-.success-actions .btn-secondary {
-    padding: 18px 35px;
-    font-size: 1.1rem;
-    font-weight: 600;
-    border-radius: 10px;
-    text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    transition: all 0.3s;
-}
-
-.success-actions .btn-primary {
-    background: linear-gradient(135deg, #c62828, #e53935);
-    color: white;
-    border: none;
-}
-
-.success-actions .btn-primary:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 25px rgba(198, 40, 40, 0.4);
-}
-
-.success-actions .btn-secondary {
-    background-color: #6c757d;
-    color: white;
-    border: none;
-}
-
-.success-actions .btn-secondary:hover {
-    background-color: #5a6268;
-    transform: translateY(-3px);
-}
-
-/* Modern Food Success Refresh */
+/* Clean E-Commerce Design System Tokens */
 :root {
-    --ok-red: #b3261e;
-    --ok-orange: #ef6b2e;
-    --ok-cream: #fff8ef;
-    --ok-ink: #2a211d;
-    --ok-muted: #7c6e65;
-    --ok-border: #efddcc;
+    --brand-primary: #b3261e;
+    --brand-hover: #981b15;
+    --ink-primary: #101828;
+    --ink-secondary: #344054;
+    --ink-muted: #475467;
+    --border-neutral: #eaecf0;
+    --bg-page: #f8f9fa;
+    --card-bg: #ffffff;
 }
 
 body {
-    background:
-        radial-gradient(circle at 0% 0%, rgba(239, 107, 46, 0.12), transparent 34%),
-        radial-gradient(circle at 100% 12%, rgba(179, 38, 30, 0.1), transparent 30%),
-        var(--ok-cream);
-}
-
-.page-header {
-    margin-bottom: 0;
-    padding: 126px 20px 80px;
-    background:
-        linear-gradient(128deg, rgba(16, 10, 8, 0.86), rgba(43, 20, 13, 0.75)),
-        url('images/about-us-bg.jpg') center/cover no-repeat;
-    color: #fff;
-    text-align: center;
-}
-
-.page-header p {
-    color: #f8e7d8;
+    background-color: var(--bg-page) !important;
+    color: var(--ink-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
 .success-section {
-    background: linear-gradient(180deg, #fffaf4 0%, #fff 100%);
-    padding-top: 44px;
+    padding: 48px 16px 140px; /* Safe bottom padding for floating navigation/widgets */
 }
 
 .success-card {
-    border: 1px solid var(--ok-border);
-    border-radius: 22px;
-    box-shadow: 0 18px 36px rgba(74, 32, 20, 0.12);
+    max-width: 760px;
+    margin: 0 auto;
+    background: var(--card-bg);
+    border: 1px solid var(--border-neutral);
+    border-radius: 16px;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+    padding: 44px 36px;
+    text-align: center;
 }
 
-.success-card h2,
-.next-steps h3,
-.payment-details h3 {
-    color: var(--ok-ink);
+.success-icon-badge {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: #ecfdf3;
+    color: #027a48;
+    border: 2px solid #abefc6;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    margin-bottom: 20px;
 }
 
-.order-number,
-.order-details,
-.contact-info,
-.payment-details,
-.step {
-    border: 1px solid var(--ok-border);
-    border-radius: 14px;
+.success-title {
+    font-size: 1.85rem;
+    font-weight: 800;
+    color: var(--ink-primary);
+    margin: 0 0 12px;
+    letter-spacing: -0.02em;
 }
 
-.order-number,
-.order-details,
-.contact-info,
-.payment-details {
-    background: #fff9f1;
+.order-number-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #f2f4f7;
+    border: 1px solid var(--border-neutral);
+    padding: 6px 16px;
+    border-radius: 999px;
+    font-size: 13.5px;
+    color: var(--ink-muted);
+    margin-bottom: 28px;
 }
 
-.order-details p,
-.step-content p,
-.contact-info p,
-.contact-info li {
-    color: var(--ok-muted);
+/* Payment Highlight Banner */
+.payment-highlight-box {
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 28px;
+    text-align: center;
 }
 
-.step-number {
-    background: linear-gradient(135deg, var(--ok-red), var(--ok-orange));
+.highlight-cod {
+    background: #fffbfa;
+    border: 1.5px solid #fee4e2;
 }
 
-.amount-paid {
-    background: linear-gradient(135deg, #1f7a4d, #2e9460);
+.highlight-cod .highlight-label {
+    color: #7a2e0e;
 }
 
-.success-actions .btn-primary {
-    background: linear-gradient(135deg, var(--ok-red), var(--ok-orange));
+.highlight-cod .highlight-amount {
+    color: #b3261e;
 }
 
-.success-actions .btn-secondary {
-    background: #233f32;
+.highlight-pickup {
+    background: #eff8ff;
+    border: 1.5px solid #b2ddff;
 }
 
-@media (max-width: 768px) {
+.highlight-pickup .highlight-label {
+    color: #175cd3;
+}
+
+.highlight-pickup .highlight-amount {
+    color: #175cd3;
+}
+
+.highlight-online-full {
+    background: #ecfdf3;
+    border: 1.5px solid #abefc6;
+}
+
+.highlight-online-full .highlight-label {
+    color: #027a48;
+}
+
+.highlight-online-full .highlight-amount {
+    color: #027a48;
+}
+
+.highlight-online-downpayment {
+    background: #eff8ff;
+    border: 1.5px solid #b2ddff;
+}
+
+.highlight-online-downpayment .highlight-label {
+    color: #175cd3;
+}
+
+.highlight-online-downpayment .highlight-amount {
+    color: #175cd3;
+}
+
+.highlight-label {
+    font-size: 12.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: block;
+    margin-bottom: 6px;
+}
+
+.highlight-amount {
+    font-size: 2.25rem;
+    font-weight: 800;
+    line-height: 1.1;
+    margin-bottom: 8px;
+}
+
+.highlight-desc {
+    margin: 0;
+    font-size: 13.5px;
+    color: var(--ink-muted);
+    line-height: 1.45;
+}
+
+/* Order Details Breakdown Grid */
+.order-details-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    background: #fafafa;
+    border: 1px solid var(--border-neutral);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: left;
+    margin-bottom: 32px;
+}
+
+.details-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.details-item.full-width {
+    grid-column: 1 / -1;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-neutral);
+}
+
+.details-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.details-value {
+    font-size: 14.5px;
+    color: var(--ink-primary);
+    font-weight: 700;
+}
+
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    width: fit-content;
+}
+
+.status-warning {
+    background: #fffaeb;
+    color: #b54708;
+    border: 1px solid #fedf89;
+}
+
+.status-success {
+    background: #ecfdf3;
+    color: #027a48;
+    border: 1px solid #abefc6;
+}
+
+.status-info {
+    background: #eff8ff;
+    color: #175cd3;
+    border: 1px solid #b2ddff;
+}
+
+/* Next Steps Flow */
+.next-steps-section {
+    margin-bottom: 36px;
+    text-align: left;
+}
+
+.section-heading {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--ink-primary);
+    margin: 0 0 16px;
+    text-align: center;
+}
+
+.steps-flow-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+}
+
+.flow-card {
+    background: #ffffff;
+    border: 1px solid var(--border-neutral);
+    border-radius: 10px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.flow-step-num {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #b3261e;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 800;
+    flex-shrink: 0;
+}
+
+.flow-step-body h4 {
+    margin: 0 0 4px;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--ink-primary);
+}
+
+.flow-step-body p {
+    margin: 0;
+    font-size: 12px;
+    color: var(--ink-muted);
+    line-height: 1.4;
+}
+
+/* Action Buttons */
+.success-actions-wrap {
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.btn-success-primary,
+.btn-success-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 13px 24px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 700;
+    text-decoration: none;
+    transition: all 0.18s ease;
+    cursor: pointer;
+}
+
+.btn-success-primary {
+    background: var(--brand-primary);
+    color: #ffffff;
+    border: none;
+}
+
+.btn-success-primary:hover {
+    background: var(--brand-hover);
+    color: #ffffff;
+}
+
+.btn-success-secondary {
+    background: #ffffff;
+    color: var(--ink-secondary);
+    border: 1px solid #d0d5dd;
+}
+
+.btn-success-secondary:hover {
+    background: #f8f9fa;
+    color: var(--ink-primary);
+    border-color: #98a2b3;
+}
+
+@media (max-width: 680px) {
     .success-card {
         padding: 30px 20px;
     }
-    
-    .steps {
+
+    .order-details-grid {
         grid-template-columns: 1fr;
     }
-    
-    .success-actions {
+
+    .steps-flow-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .success-actions-wrap {
         flex-direction: column;
     }
-    
-    .success-actions .btn-primary,
-    .success-actions .btn-secondary {
+
+    .btn-success-primary,
+    .btn-success-secondary {
         width: 100%;
-        justify-content: center;
     }
 }
 
-/* ==========================================================================
-   ORDER SUCCESS DARK THEME ENGINE
-   ========================================================================== */
-body.dark-mode .success-section {
-    background: #0f172a !important;
+/* Dark Theme Support */
+body.dark-mode {
+    background-color: #0f172a !important;
 }
 
 body.dark-mode .success-card {
     background: #1e293b !important;
-    border: 1px solid #334155 !important;
-    color: #f8fafc !important;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
-}
-
-body.dark-mode .success-card h2,
-body.dark-mode .next-steps h3,
-body.dark-mode .step-content h4,
-body.dark-mode .contact-info h3 {
+    border-color: #334155 !important;
     color: #f8fafc !important;
 }
 
-body.dark-mode .order-number,
-body.dark-mode .order-details,
-body.dark-mode .contact-info {
-    background: #111827 !important;
-    border: 1px solid #334155 !important;
-    color: #cbd5e1 !important;
+body.dark-mode .success-title,
+body.dark-mode .section-heading,
+body.dark-mode .flow-step-body h4 {
+    color: #f8fafc !important;
 }
 
-body.dark-mode .order-details p,
-body.dark-mode .step-content p,
-body.dark-mode .contact-info p,
-body.dark-mode .contact-info li {
+body.dark-mode .order-number-pill {
+    background: #0f172a !important;
+    border-color: #334155 !important;
     color: #94a3b8 !important;
 }
 
-body.dark-mode .step {
-    background: #111827 !important;
+body.dark-mode .order-number-pill strong {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .order-details-grid {
+    background: #0f172a !important;
     border-color: #334155 !important;
 }
 
-body.dark-mode .success-actions .btn-secondary {
+body.dark-mode .flow-card {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .flow-step-body p,
+body.dark-mode .details-label {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .details-value {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .btn-success-secondary {
     background: #334155 !important;
-    color: #ffffff !important;
+    border-color: #475467 !important;
+    color: #f8fafc !important;
 }
 </style>
 
