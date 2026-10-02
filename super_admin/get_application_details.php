@@ -97,7 +97,7 @@ if (saTableExists($conn, 'franchise_applications')) {
         $latest_attempt = $attempt_rows[0] ?? null;
         if ($latest_attempt && strtolower(trim((string)($latest_attempt['status'] ?? ''))) === 'rejected') {
             $cooldown_anchor = strtotime((string)($latest_attempt['reviewed_at'] ?? $latest_attempt['created_at'] ?? 'now'));
-            $next_reapply_at = date('M d, Y h:i A', strtotime('+3 days', $cooldown_anchor));
+            $next_reapply_at = date('M d, Y h:i:s A', $cooldown_anchor + 30);
         }
     }
 }
@@ -158,7 +158,7 @@ if (saTableExists($conn, 'franchise_applications')) {
         <?php endif; ?>
         <div class="detail-row">
             <span>Operational Rule:</span>
-            <p>Applicants get up to 2 total submissions. Rejected applicants wait 3 days before the final retry. Approved partners enter a 1-month trial and should not re-register.</p>
+            <p>Applicants get up to 2 total submissions. Rejected applicants wait 30 seconds before the final retry. Approved partners enter a 1-month trial and should not re-register.</p>
         </div>
     </div>
     

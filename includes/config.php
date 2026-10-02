@@ -1,17 +1,16 @@
 <?php
-// Optional local credentials file for XAMPP/local development.
-// These should take precedence when running on localhost.
+// Optional deployment credentials file (Justine's configuration / production settings)
+$deployment_credentials_path = __DIR__ . '/deployment_credentials.php';
+if (file_exists($deployment_credentials_path)) {
+    require_once $deployment_credentials_path;
+}
+
+// Optional local credentials file for local development fallbacks.
 $local_credentials_path = __DIR__ . '/local_credentials.php';
 if (file_exists($local_credentials_path)) {
     require_once $local_credentials_path;
 }
 
-// Optional deployment credentials file for production hosting.
-// Only use it as a fallback when local values are not defined.
-$deployment_credentials_path = __DIR__ . '/deployment_credentials.php';
-if (file_exists($deployment_credentials_path)) {
-    require_once $deployment_credentials_path;
-}
 
 if (!function_exists('appConfigValue')) {
     function appConfigValue($key, $default = '') {
@@ -398,18 +397,40 @@ function registerUser($conn, $email, $password, $full_name, $phone = '', $addres
 
     $email = strtolower(trim((string)$email));
     $full_name = preg_replace('/\s+/', ' ', trim((string)$full_name));
+    if (strlen($full_name) > 100) {
+        $full_name = substr($full_name, 0, 100);
+    }
     $phone = trim((string)$phone);
+    if (strlen($phone) > 20) {
+        $phone = substr($phone, 0, 20);
+    }
     $address = preg_replace('/\s+/', ' ', trim((string)$address));
     $account_type = strtolower(trim((string)$account_type));
-    $business_name = $business_name !== null ? preg_replace('/\s+/', ' ', trim((string)$business_name)) : null;
-    $business_type = $business_type !== null ? trim((string)$business_type) : null;
-    $business_registration = $business_registration !== null ? trim((string)$business_registration) : null;
-    $website = $website !== null ? trim((string)$website) : null;
-    $tax_id = $tax_id !== null ? trim((string)$tax_id) : null;
-    $middle_name = $middle_name !== null ? preg_replace('/\s+/', ' ', trim((string)$middle_name)) : '';
-    $nickname = $nickname !== null ? preg_replace('/\s+/', ' ', trim((string)$nickname)) : '';
-    $birth_date = $birth_date !== null ? trim((string)$birth_date) : '';
-    $gender = $gender !== null ? strtolower(trim((string)$gender)) : '';
+    if ($account_type !== 'organization') {
+        $account_type = 'individual';
+        $business_name = null;
+        $business_type = null;
+        $business_registration = null;
+        $website = null;
+        $tax_id = null;
+    } else {
+        $business_name = ($business_name !== null && trim((string)$business_name) !== '') ? substr(preg_replace('/\s+/', ' ', trim((string)$business_name)), 0, 200) : null;
+        $business_type = ($business_type !== null && trim((string)$business_type) !== '') ? substr(trim((string)$business_type), 0, 100) : null;
+        $business_registration = ($business_registration !== null && trim((string)$business_registration) !== '') ? substr(trim((string)$business_registration), 0, 100) : null;
+        $website = ($website !== null && trim((string)$website) !== '') ? substr(trim((string)$website), 0, 200) : null;
+        $tax_id = ($tax_id !== null && trim((string)$tax_id) !== '') ? substr(trim((string)$tax_id), 0, 50) : null;
+    }
+
+    $middle_name = ($middle_name !== null && trim((string)$middle_name) !== '') ? substr(preg_replace('/\s+/', ' ', trim((string)$middle_name)), 0, 80) : null;
+    $nickname = ($nickname !== null && trim((string)$nickname) !== '') ? substr(preg_replace('/\s+/', ' ', trim((string)$nickname)), 0, 80) : null;
+    $gender = ($gender !== null && trim((string)$gender) !== '') ? substr(strtolower(trim((string)$gender)), 0, 30) : null;
+
+    if ($birth_date !== null && trim((string)$birth_date) !== '') {
+        $dob_time = strtotime(trim((string)$birth_date));
+        $birth_date = ($dob_time !== false) ? date('Y-m-d', $dob_time) : null;
+    } else {
+        $birth_date = null;
+    }
 
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         return ['success' => false, 'message' => 'Please provide a valid email address.'];
@@ -568,10 +589,21 @@ function registerUser($conn, $email, $password, $full_name, $phone = '', $addres
         return ['success' => true, 'user_id' => $user_id];
     }
 
-    $sql_state = mysqli_stmt_sqlstate($stmt);
-    $db_error = mysqli_stmt_error($stmt);
+    $sql_state = (string)mysqli_stmt_sqlstate($stmt);
+    $db_error = (string)mysqli_stmt_error($stmt);
+    $errno = (int)mysqli_errno($conn);
     mysqli_stmt_close($stmt);
     error_log('Registration insert failed [' . $sql_state . ']: ' . $db_error);
+
+    if ($sql_state === '23000' || $errno === 1062) {
+        if (stripos($db_error, 'email') !== false) {
+            return ['success' => false, 'message' => 'This email address is already registered. Please log in or use a different email.'];
+        }
+        if (stripos($db_error, 'phone') !== false) {
+            return ['success' => false, 'message' => 'This mobile number is already registered. Please log in or use a different number.'];
+        }
+        return ['success' => false, 'message' => 'An account with these details already exists. Please log in or verify your inputs.'];
+    }
 
     return ['success' => false, 'message' => 'Unable to create your account right now. Please try again later.'];
 }

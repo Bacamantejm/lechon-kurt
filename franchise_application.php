@@ -213,13 +213,14 @@ function getFranchiseWorkflowState($conn, $user_id) {
     if ($latest_status === 'rejected') {
         $reference_time = (string)($state['latest_application']['reviewed_at'] ?? $state['latest_application']['created_at'] ?? '');
         $cooldown_anchor = $reference_time !== '' ? strtotime($reference_time) : time();
-        $next_eligible_timestamp = strtotime('+3 days', $cooldown_anchor);
+        $next_eligible_timestamp = $cooldown_anchor + 30;
         $state['next_eligible_at'] = date('Y-m-d H:i:s', $next_eligible_timestamp);
 
         if (time() < $next_eligible_timestamp) {
             $state['stage'] = 'reapply_cooldown';
             $state['can_submit'] = false;
-            $state['message'] = 'Your last franchise application was rejected. You may submit one final application after the 3-day cooldown period.';
+            $state['cooldown_seconds_remaining'] = max(0, $next_eligible_timestamp - time());
+            $state['message'] = 'Your last franchise application was rejected. You may submit one final application after the 30-second cooldown period.';
             return $state;
         }
 
@@ -234,7 +235,7 @@ function getFranchiseWorkflowState($conn, $user_id) {
         return $state;
     }
 
-    $state['message'] = 'You may submit your franchise application now. You have up to two total attempts, and rejected applications require a 3-day wait before the final retry.';
+    $state['message'] = 'You may submit your franchise application now. You have up to two total attempts, and rejected applications require a 30-second wait before the final retry.';
     return $state;
 }
 
@@ -842,6 +843,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
         'psgc_barangay_code' => getFormInput('psgc_barangay_code'),
         'psgc_barangay_name' => getFormInput('psgc_barangay_name'),
         'psgc_manual_mode' => getFormInput('psgc_manual_mode') === '1' ? '1' : '0',
+        'location_latitude' => getFormInput('location_latitude'),
+        'location_longitude' => getFormInput('location_longitude'),
         'contact_person' => getFormInput('contact_person'),
         'contact_phone' => getFormInput('contact_phone'),
         'contact_email' => getFormInput('contact_email'),
@@ -912,17 +915,24 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
 
     if (!$error_msg) {
         $is_cavite_scope = false;
-        if ($form_data['psgc_manual_mode'] !== '1') {
-            $province_name = strtolower(trim((string)$form_data['psgc_province_name']));
-            $province_code = trim((string)$form_data['psgc_province_code']);
-            $is_cavite_scope = $province_name === 'cavite' || $province_code === '042100000';
-        } else {
-            $manual_location_blob = strtolower(trim((string)($form_data['business_address'] . ' ' . $form_data['business_address_street'])));
-            $is_cavite_scope = strpos($manual_location_blob, 'cavite') !== false;
+        $province_name = strtolower(trim((string)$form_data['psgc_province_name']));
+        $province_code = trim((string)$form_data['psgc_province_code']);
+        $location_blob = strtolower(trim((string)($form_data['business_address'] . ' ' . $form_data['business_address_street'] . ' ' . $form_data['proposed_location'])));
+
+        if ($province_name === 'cavite' || $province_code === '042100000' || strpos($location_blob, 'cavite') !== false) {
+            $is_cavite_scope = true;
+        }
+
+        if ($is_cavite_scope && !empty($form_data['location_latitude']) && !empty($form_data['location_longitude'])) {
+            $lat = (float)$form_data['location_latitude'];
+            $lng = (float)$form_data['location_longitude'];
+            if ($lat < 14.00 || $lat > 14.60 || $lng < 120.55 || $lng > 121.15) {
+                $is_cavite_scope = false;
+            }
         }
 
         if (!$is_cavite_scope) {
-            $error_msg = "Business partner applications are currently limited to Cavite locations only.";
+            $error_msg = "Franchise applications are strictly accepted for Cavite locations only. Your pinned shop location is outside the Cavite service area.";
         }
     }
 
@@ -1210,11 +1220,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
                     'approved_trial_ends_at' => null
                 ];
 
-                $success_msg = "Business application submitted successfully!<br>Your application number is: <strong>" . $application_number . "</strong><br><a href='my_account.php' style='color:#155724;text-decoration:underline;font-weight:600;'>View application status in My Account</a>";
+                $success_msg = "Business application submitted successfully! Application Number: " . $application_number;
                 $swal_alert = [
                     'icon' => 'success',
-                    'title' => 'Application Submitted',
-                    'text' => 'Your application was sent successfully. The system owner has been notified.'
+                    'title' => 'Application Submitted Successfully!',
+                    'html' => 'Your franchise partnership application has been sent for review.<br><br>Application Number:<br><strong style="font-size:1.25rem;color:#b3261e;display:inline-block;margin:6px 0 10px 0;letter-spacing:0.5px;">' . htmlspecialchars($application_number) . '</strong><br><span style="color:#667085;font-size:0.92rem;">The management has been notified and will review your submission.</span>',
+                    'confirmButtonText' => 'View in My Account',
+                    'showCancelButton' => true,
+                    'cancelButtonText' => 'Close',
+                    'redirectUrl' => 'my_account.php'
                 ];
                 $_POST = [];
             }
@@ -1268,39 +1282,13 @@ include 'includes/header.php';
 
 
 
-        <?php if ($success_msg): ?>
-        <div class="alert alert-success" style="background-color: #d4edda; border: 2px solid #28a745; border-radius: 12px; padding: 20px; color: #155724; font-size: 1.05rem; margin-bottom: 24px;">
-            <i class="fas fa-check-circle" style="color: #28a745; margin-right: 10px;"></i> <?php echo $success_msg; ?>
-        </div>
-        <?php endif; ?>
-
-        <?php if ($error_msg): ?>
-        <div class="alert alert-error" style="background-color: #f8d7da; border: 2px solid #dc3545; border-radius: 12px; padding: 20px; color: #721c24; font-size: 1.05rem; margin-bottom: 24px;">
-            <i class="fas fa-exclamation-circle" style="color: #dc3545; margin-right: 10px;"></i> <?php echo $error_msg; ?>
-        </div>
-        <?php endif; ?>
-
-        <div class="application-container">
-            <div class="application-form-container">
-
-                <!-- Workflow status header pill row -->
-                <div class="application-workflow-card">
-                    <div class="workflow-pill-row">
-                        <span class="workflow-pill"><i class="fas fa-layer-group"></i> Total Attempts: <?php echo (int)$franchise_workflow['total_attempts']; ?>/2</span>
-                        <span class="workflow-pill"><i class="fas fa-hourglass-half"></i> Remaining Attempts: <?php echo (int)$franchise_workflow['remaining_attempts']; ?></span>
-                        <?php if (!empty($franchise_workflow['approved_trial_ends_at'])): ?>
-                            <span class="workflow-pill"><i class="fas fa-calendar-check"></i> Trial Ends: <?php echo date('F j, Y', strtotime((string)$franchise_workflow['approved_trial_ends_at'])); ?></span>
-                        <?php elseif (!empty($franchise_workflow['next_eligible_at'])): ?>
-                            <span class="workflow-pill"><i class="fas fa-clock"></i> Reapply On: <?php echo date('F j, Y g:i A', strtotime((string)$franchise_workflow['next_eligible_at'])); ?></span>
-                        <?php endif; ?>
-                    </div>
-                    <p class="workflow-summary"><?php echo htmlspecialchars((string)($franchise_workflow['message'] ?? '')); ?></p>
-                </div>
-
-                <?php if (!$franchise_workflow['can_submit'] && !$success_msg): ?>
+                <?php if (!$franchise_workflow['can_submit']): ?>
                 <div class="alert" style="background:#fff8e1;border:1px solid #ffd54f;color:#8a6d3b;border-radius:12px;padding:20px;margin-bottom:22px;">
                     <i class="fas fa-info-circle" style="margin-right:8px;color:#f57f17;font-size:1.2rem;"></i>
                     <?php echo htmlspecialchars((string)($franchise_workflow['message'] ?? 'Application workflow is currently restricted.')); ?>
+                    <?php if (!empty($franchise_workflow['cooldown_seconds_remaining'])): ?>
+                        <br><span style="display:inline-block;margin-top:6px;font-weight:600;color:#b3261e;">Time remaining: <span id="cooldownTextCountdown"><?php echo (int)$franchise_workflow['cooldown_seconds_remaining']; ?></span> seconds. The page will automatically refresh once the cooldown completes.</span>
+                    <?php endif; ?>
                     <?php if (!empty($latest_application['application_number'])): ?>
                         <br>Latest Application: <strong><?php echo htmlspecialchars((string)$latest_application['application_number']); ?></strong>
                     <?php endif; ?>
@@ -2983,15 +2971,49 @@ document.addEventListener('DOMContentLoaded', function() {
     const serverAlert = <?php echo $swal_alert ? json_encode($swal_alert) : 'null'; ?>;
     const prefillData = <?php echo json_encode($franchise_prefill); ?>;
     
-    if (serverAlert && serverAlert.text) {
+    if (serverAlert && (serverAlert.text || serverAlert.html)) {
         if (typeof Swal !== 'undefined' && Swal && typeof Swal.fire === 'function') {
-            Swal.fire({
+            const swalConfig = {
                 icon: serverAlert.icon || 'info',
                 title: serverAlert.title || 'Notice',
-                text: serverAlert.text,
                 confirmButtonColor: '#b3261e',
-                confirmButtonText: 'OK'
+                confirmButtonText: serverAlert.confirmButtonText || 'OK'
+            };
+            if (serverAlert.html) {
+                swalConfig.html = serverAlert.html;
+            } else {
+                swalConfig.text = serverAlert.text;
+            }
+            if (serverAlert.showCancelButton) {
+                swalConfig.showCancelButton = true;
+                swalConfig.cancelButtonColor = '#667085';
+                swalConfig.cancelButtonText = serverAlert.cancelButtonText || 'Close';
+            }
+            Swal.fire(swalConfig).then(result => {
+                if (result.isConfirmed && serverAlert.redirectUrl) {
+                    window.location.href = serverAlert.redirectUrl;
+                }
             });
+        }
+    }
+
+    // Dynamic Cooldown Timer and Auto-Reload
+    const countdownPill = document.getElementById('reapplyCountdown');
+    const countdownText = document.getElementById('cooldownTextCountdown');
+    if (countdownPill || countdownText) {
+        let remainingSec = parseInt((countdownPill ? countdownPill.textContent : countdownText.textContent) || '0', 10);
+        if (remainingSec > 0) {
+            const timer = setInterval(function() {
+                remainingSec--;
+                if (countdownPill) countdownPill.textContent = Math.max(0, remainingSec);
+                if (countdownText) countdownText.textContent = Math.max(0, remainingSec);
+                if (remainingSec <= 0) {
+                    clearInterval(timer);
+                    window.location.reload();
+                }
+            }, 1000);
+        } else {
+            window.location.reload();
         }
     }
 
@@ -3152,6 +3174,10 @@ document.addEventListener('DOMContentLoaded', function() {
         form.querySelectorAll('input:not([type="file"]):not([type="hidden"]), select, textarea').forEach(field => {
             if (field.name) data[field.name] = field.value;
         });
+        const latField = document.getElementById('locationLatitude');
+        const lngField = document.getElementById('locationLongitude');
+        if (latField && latField.value) data['location_latitude'] = latField.value;
+        if (lngField && lngField.value) data['location_longitude'] = lngField.value;
         localStorage.setItem(DRAFT_KEY, JSON.stringify(data));
     }
 
@@ -3166,6 +3192,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     field.value = data[key];
                 }
             });
+            const latField = document.getElementById('locationLatitude');
+            const lngField = document.getElementById('locationLongitude');
+            if (data['location_latitude'] && latField && !latField.value) {
+                latField.value = data['location_latitude'];
+            }
+            if (data['location_longitude'] && lngField && !lngField.value) {
+                lngField.value = data['location_longitude'];
+            }
         } catch (e) {}
     }
 
@@ -3218,6 +3252,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (step === 3) {
             buildSummaryPreview();
+        } else if (step === 1 && franchiseMap) {
+            setTimeout(() => {
+                if (franchiseMap) franchiseMap.invalidateSize();
+            }, 100);
         }
     }
 
@@ -3241,6 +3279,19 @@ document.addEventListener('DOMContentLoaded', function() {
         if (capInput && parseFloat(capInput.value) < 100000) {
             capInput.style.borderColor = '#dc3545';
             valid = false;
+        }
+
+        const latVal = parseFloat(locationLatitude?.value || '');
+        const lngVal = parseFloat(locationLongitude?.value || '');
+        const mapShell = document.querySelector('.franchise-map-shell');
+        const isPinAccepted = Number.isFinite(latVal) && Number.isFinite(lngVal) && latVal !== 0 && lngVal !== 0 && (typeof isCaviteLocationValid !== 'undefined' ? isCaviteLocationValid : false);
+
+        if (!isPinAccepted) {
+            valid = false;
+            if (mapShell) mapShell.style.border = '2px solid #b3261e';
+            setMapStatus('A shop location pinned inside Cavite is required. Locations outside Cavite cannot be accepted.', false);
+        } else {
+            if (mapShell) mapShell.style.border = '';
         }
 
         return valid;
@@ -3270,6 +3321,22 @@ document.addEventListener('DOMContentLoaded', function() {
     if (btnGoToStep2) {
         btnGoToStep2.addEventListener('click', function() {
             if (!validateStep1()) {
+                const latVal = parseFloat(locationLatitude?.value || '');
+                const lngVal = parseFloat(locationLongitude?.value || '');
+                const isPinAccepted = Number.isFinite(latVal) && Number.isFinite(lngVal) && latVal !== 0 && lngVal !== 0 && (typeof isCaviteLocationValid !== 'undefined' ? isCaviteLocationValid : false);
+
+                if (!isPinAccepted) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Cavite Location Required',
+                        text: 'Your shop location must be pinned inside Cavite province. Pins outside Cavite area are not accepted.',
+                        confirmButtonColor: '#b3261e'
+                    });
+                    const mapShell = document.querySelector('.franchise-map-shell');
+                    if (mapShell) mapShell.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    return;
+                }
+
                 Swal.fire({
                     icon: 'warning',
                     title: 'Incomplete Step 1',
@@ -3396,8 +3463,25 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // On submit success clear draft
-    form.addEventListener('submit', function() {
+    // On submit success clear draft with Cavite location validation
+    form.addEventListener('submit', function(e) {
+        const latVal = parseFloat(locationLatitude?.value || '');
+        const lngVal = parseFloat(locationLongitude?.value || '');
+        const isPinAccepted = Number.isFinite(latVal) && Number.isFinite(lngVal) && (typeof isCaviteLocationValid !== 'undefined' ? isCaviteLocationValid : false);
+
+        if (!isPinAccepted) {
+            e.preventDefault();
+            Swal.fire({
+                icon: 'error',
+                title: 'Cavite Location Required',
+                text: 'Franchise store applications are restricted to Cavite only. Your pinned shop location is outside Cavite or missing.',
+                confirmButtonColor: '#b3261e'
+            });
+            updateStepperUI(1);
+            const mapShell = document.querySelector('.franchise-map-shell');
+            if (mapShell) mapShell.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return false;
+        }
         localStorage.removeItem(DRAFT_KEY);
     });
 
@@ -3418,12 +3502,59 @@ document.addEventListener('DOMContentLoaded', function() {
     const businessStreetInput = document.getElementById('business_address_street');
     const businessAddressInput = document.getElementById('business_address');
     const CAVITE_CENTER = [14.3294, 120.9367];
-    const CAVITE_BOUNDS = window.L && window.L.latLngBounds ? window.L.latLngBounds([14.00, 120.65], [14.75, 121.20]) : null;
+    const CAVITE_BOUNDS = window.L && window.L.latLngBounds ? window.L.latLngBounds([14.05, 120.58], [14.48, 121.05]) : null;
+    const CAVITE_CITIES = [
+        'alfonso', 'amadeo', 'bacoor', 'carmona', 'cavite city', 'dasmarinas', 'dasmariñas',
+        'general emilio aguinaldo', 'bailen', 'general mariano alvarez', 'gma',
+        'general trias', 'gen. trias', 'imus', 'indang', 'kawit', 'magallanes',
+        'maragondon', 'mendez', 'mendez-nunez', 'mendez-nuñez', 'naic', 'noveleta', 'rosario',
+        'silang', 'tagaytay', 'tanza', 'ternate', 'trece martires'
+    ];
+
     let franchiseMap = null;
     let franchiseMarker = null;
+    let lastValidCaviteLatLng = null;
+    let isCaviteLocationValid = false;
 
     function normalizeMapText(value) {
         return String(value || '').replace(/\s+/g, ' ').trim();
+    }
+
+    function isLocationInCavite(data, lat, lng) {
+        const address = data?.address || {};
+        const displayName = (data?.display_name || '').toLowerCase();
+        const province = normalizeMapText(address.province || address.state_district || address.county || '').toLowerCase();
+        const city = normalizeMapText(address.city || address.town || address.municipality || address.city_district || '').toLowerCase();
+        const state = normalizeMapText(address.state || '').toLowerCase();
+
+        // Areas that are definitely not Cavite
+        const nonCaviteAreas = ['metro manila', 'batangas', 'laguna', 'rizal', 'bulacan', 'pampanga', 'bataan', 'quezon province', 'muntinlupa', 'las piñas', 'parañaque', 'pasay', 'taguig', 'makati', 'manila'];
+        for (const area of nonCaviteAreas) {
+            if (province.includes(area) || city.includes(area) || displayName.includes(area)) {
+                if (!province.includes('cavite') && !displayName.includes(', cavite')) {
+                    return false;
+                }
+            }
+        }
+
+        if (province.includes('cavite') || displayName.includes(', cavite') || displayName.endsWith('cavite, philippines')) {
+            return true;
+        }
+
+        for (const cavCity of CAVITE_CITIES) {
+            if (city === cavCity || city.includes(cavCity) || displayName.includes(cavCity + ', cavite')) {
+                return true;
+            }
+        }
+
+        // Bounding box fallback when Nominatim is offline or lacks details
+        if (lat >= 14.05 && lat <= 14.48 && lng >= 120.58 && lng <= 121.05) {
+            if (!province || province.includes('cavite') || province.includes('calabarzon')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     function setMapStatus(message, valid) {
@@ -3453,30 +3584,70 @@ document.addEventListener('DOMContentLoaded', function() {
         const road = normalizeMapText(address.road || address.pedestrian || address.residential || displayName.split(',')[0]);
         const province = normalizeMapText(address.state_district || address.province || 'Cavite');
         const region = normalizeMapText(address.state || 'Calabarzon');
-        const isCavite = /cavite/i.test(displayName + ' ' + province) || (CAVITE_BOUNDS && CAVITE_BOUNDS.contains([lat, lng]));
+        const isCavite = isLocationInCavite(data, lat, lng);
+
+        if (!isCavite) {
+            isCaviteLocationValid = false;
+
+            // Reject the location: clear coordinates and address
+            if (locationLatitude) locationLatitude.value = '';
+            if (locationLongitude) locationLongitude.value = '';
+            if (psgcCityName) psgcCityName.value = '';
+            if (psgcBarangayName) psgcBarangayName.value = '';
+            if (psgcProvinceName) psgcProvinceName.value = '';
+            if (businessStreetInput && businessStreetInput.dataset.pinGenerated === '1') {
+                businessStreetInput.value = '';
+            }
+            if (businessAddressInput) businessAddressInput.value = '';
+
+            // Revert pin back to previous valid Cavite location, or Cavite Center
+            const fallbackLatLng = lastValidCaviteLatLng || L.latLng(CAVITE_CENTER[0], CAVITE_CENTER[1]);
+            if (franchiseMarker) {
+                franchiseMarker.setLatLng(fallbackLatLng);
+            }
+            if (franchiseMap) {
+                franchiseMap.panTo(fallbackLatLng);
+            }
+
+            const detectedLocation = city || province || displayName.split(',')[0] || 'Outside Cavite';
+            setMapStatus('Location rejected: Pinned area (' + detectedLocation + ') is outside Cavite. Please place your pin inside Cavite province.', false);
+
+            if (typeof Swal !== 'undefined' && Swal && typeof Swal.fire === 'function') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Outside Cavite Area',
+                    text: 'The pinned location (' + detectedLocation + ') is outside the Cavite service area. Franchise applications are strictly accepted for Cavite locations only. Your pin has been reverted.',
+                    confirmButtonColor: '#b3261e',
+                    confirmButtonText: 'Select Cavite Location'
+                });
+            }
+
+            saveDraft();
+            return false;
+        }
+
+        // Accepted Cavite location
+        isCaviteLocationValid = true;
+        lastValidCaviteLatLng = L.latLng(lat, lng);
 
         if (locationLatitude) locationLatitude.value = lat.toFixed(7);
         if (locationLongitude) locationLongitude.value = lng.toFixed(7);
         if (psgcManualMode) psgcManualMode.value = '1';
         if (psgcRegionName) psgcRegionName.value = region;
         if (psgcRegionCode) psgcRegionCode.value = '040000000';
-        if (psgcProvinceName) psgcProvinceName.value = isCavite ? 'Cavite' : province;
-        if (psgcProvinceCode) psgcProvinceCode.value = isCavite ? '042100000' : '';
+        if (psgcProvinceName) psgcProvinceName.value = 'Cavite';
+        if (psgcProvinceCode) psgcProvinceCode.value = '042100000';
         if (psgcCityName) psgcCityName.value = city;
         if (psgcBarangayName) psgcBarangayName.value = barangay;
         if (businessStreetInput && (!businessStreetInput.value.trim() || businessStreetInput.dataset.pinGenerated === '1')) {
-            businessStreetInput.value = road || (isCavite ? 'Pinned business location' : 'Pinned location');
+            businessStreetInput.value = road || 'Pinned business location';
             businessStreetInput.dataset.pinGenerated = '1';
         }
         composeBusinessAddress();
 
-        if (isCavite) {
-            setMapStatus((city ? 'Location selected: ' + city + ', Cavite.' : 'Location selected inside Cavite.') + ' Add a building number or landmark above if available.', true);
-        } else {
-            setMapStatus('That pin appears outside Cavite. Move the pin inside the highlighted Cavite service area.', false);
-        }
+        setMapStatus((city ? 'Location accepted: ' + city + ', Cavite.' : 'Location accepted inside Cavite.') + ' Add a building number or landmark above if available.', true);
         saveDraft();
-        return isCavite;
+        return true;
     }
 
     async function reverseGeocodePin(lat, lng) {
@@ -3501,26 +3672,93 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function initFranchiseMap() {
-        if (!franchiseMapElement || !window.L) return;
+        if (!franchiseMapElement) return;
+
+        if (!window.L) {
+            let retries = 0;
+            const checkL = setInterval(() => {
+                retries++;
+                if (window.L) {
+                    clearInterval(checkL);
+                    initFranchiseMap();
+                } else if (retries > 30) {
+                    clearInterval(checkL);
+                    setMapStatus('Map provider failed to load. Please refresh the page.', false);
+                }
+            }, 150);
+            return;
+        }
+
+        if (franchiseMap) {
+            try { franchiseMap.remove(); } catch (e) {}
+            franchiseMap = null;
+        } else if (franchiseMapElement._leaflet_id) {
+            franchiseMapElement._leaflet_id = null;
+        }
+
+        let initialCenter = CAVITE_CENTER;
+        let initialZoom = 11;
+        const savedLat = parseFloat(locationLatitude?.value || '');
+        const savedLng = parseFloat(locationLongitude?.value || '');
+        if (Number.isFinite(savedLat) && Number.isFinite(savedLng) && savedLat !== 0 && savedLng !== 0) {
+            if (isLocationInCavite({}, savedLat, savedLng)) {
+                initialCenter = [savedLat, savedLng];
+                initialZoom = 15;
+                lastValidCaviteLatLng = L.latLng(savedLat, savedLng);
+                isCaviteLocationValid = true;
+            } else {
+                if (locationLatitude) locationLatitude.value = '';
+                if (locationLongitude) locationLongitude.value = '';
+                isCaviteLocationValid = false;
+            }
+        }
+
         const pinIcon = L.divIcon({ className: 'franchise-pin-icon', iconSize: [34, 34], iconAnchor: [17, 34] });
-        franchiseMap = L.map(franchiseMapElement, { center: CAVITE_CENTER, zoom: 11, minZoom: 10, maxZoom: 19 });
+        franchiseMap = L.map(franchiseMapElement, {
+            center: initialCenter,
+            zoom: initialZoom,
+            minZoom: 10,
+            maxZoom: 19,
+            maxBounds: L.latLngBounds([13.70, 120.20], [14.85, 121.40]),
+            maxBoundsViscosity: 0.8
+        });
+
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'
         }).addTo(franchiseMap);
-        franchiseMarker = L.marker(CAVITE_CENTER, { draggable: true, icon: pinIcon }).addTo(franchiseMap);
+
+        // Visual Cavite service area boundary
+        L.rectangle([[14.05, 120.58], [14.48, 121.05]], {
+            color: '#b3261e',
+            weight: 2,
+            opacity: 0.7,
+            fillColor: '#b3261e',
+            fillOpacity: 0.04,
+            dashArray: '6, 6',
+            interactive: false
+        }).addTo(franchiseMap);
+
+        franchiseMarker = L.marker(initialCenter, { draggable: true, icon: pinIcon }).addTo(franchiseMap);
         franchiseMap.on('click', event => moveFranchisePin(event.latlng, true));
         franchiseMarker.on('dragend', () => moveFranchisePin(franchiseMarker.getLatLng(), true));
-        setTimeout(() => franchiseMap.invalidateSize(), 100);
+
+        franchiseMap.invalidateSize();
+        setTimeout(() => { if (franchiseMap) franchiseMap.invalidateSize(); }, 150);
+        setTimeout(() => { if (franchiseMap) franchiseMap.invalidateSize(); }, 500);
     }
 
     if (businessStreetInput) businessStreetInput.addEventListener('input', () => {
         businessStreetInput.dataset.pinGenerated = '0';
         composeBusinessAddress();
     });
+
+    window.addEventListener('resize', () => {
+        if (franchiseMap) franchiseMap.invalidateSize();
+    });
+
     if (franchiseMapElement) {
-        if (window.L) initFranchiseMap();
-        else setMapStatus('Map is still loading. Please refresh if it does not appear.', false);
+        initFranchiseMap();
     }
 });
 </script>

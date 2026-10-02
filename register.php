@@ -112,7 +112,7 @@ if (!function_exists('ensureRegistrationValidIdSchema')) {
         $table_sql = "CREATE TABLE IF NOT EXISTS `user_valid_id_documents` (
             `id` int(11) NOT NULL AUTO_INCREMENT,
             `user_id` int(11) NOT NULL,
-            `document_type` varchar(50) NOT NULL DEFAULT 'valid_id',
+            `document_type` varchar(100) NOT NULL DEFAULT 'valid_id',
             `file_name` varchar(255) NOT NULL,
             `file_path` varchar(500) NOT NULL,
             `uploaded_at` timestamp NOT NULL DEFAULT current_timestamp(),
@@ -129,7 +129,7 @@ if (!function_exists('ensureRegistrationValidIdSchema')) {
         $required_columns = [
             'id' => "ALTER TABLE `user_valid_id_documents` ADD COLUMN `id` INT(11) NOT NULL AUTO_INCREMENT PRIMARY KEY FIRST",
             'user_id' => "ALTER TABLE `user_valid_id_documents` ADD COLUMN `user_id` INT(11) NOT NULL AFTER `id`",
-            'document_type' => "ALTER TABLE `user_valid_id_documents` ADD COLUMN `document_type` VARCHAR(50) NOT NULL DEFAULT 'valid_id' AFTER `user_id`",
+            'document_type' => "ALTER TABLE `user_valid_id_documents` ADD COLUMN `document_type` VARCHAR(100) NOT NULL DEFAULT 'valid_id' AFTER `user_id`",
             'file_name' => "ALTER TABLE `user_valid_id_documents` ADD COLUMN `file_name` VARCHAR(255) NOT NULL AFTER `document_type`",
             'file_path' => "ALTER TABLE `user_valid_id_documents` ADD COLUMN `file_path` VARCHAR(500) NOT NULL AFTER `file_name`",
             'uploaded_at' => "ALTER TABLE `user_valid_id_documents` ADD COLUMN `uploaded_at` TIMESTAMP NOT NULL DEFAULT current_timestamp() AFTER `file_path`",
@@ -151,6 +151,24 @@ if (!function_exists('ensureRegistrationValidIdSchema')) {
 if (!function_exists('validateRegistrationValidIdUpload')) {
     function validateRegistrationValidIdUpload($file)
     {
+        if (is_array($file) && !empty($file['is_temp_cached']) && !empty($file['tmp_name'])) {
+            $abs_path = (string)$file['tmp_name'];
+            if (!file_exists($abs_path) || filesize($abs_path) <= 0) {
+                return ['valid' => false, 'message' => 'Cached valid ID file was invalid or expired. Please upload again.'];
+            }
+            if (filesize($abs_path) > 10 * 1024 * 1024) {
+                return ['valid' => false, 'message' => 'Uploaded ID file is too large (maximum 10MB).'];
+            }
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            $mime_type = finfo_file($finfo, $abs_path);
+            finfo_close($finfo);
+            $allowed_types = ['image/jpeg', 'image/png', 'image/webp'];
+            if (!in_array($mime_type, $allowed_types, true)) {
+                return ['valid' => false, 'message' => 'Please upload a clear JPG, PNG, or WEBP valid ID image.'];
+            }
+            return ['valid' => true, 'mime_type' => $mime_type];
+        }
+
         if (!isset($file) || !is_array($file) || !isset($file['error']) || (int)$file['error'] === UPLOAD_ERR_NO_FILE) {
             return ['valid' => false, 'message' => 'Please upload a valid ID image.'];
         }
@@ -169,12 +187,12 @@ if (!function_exists('validateRegistrationValidIdUpload')) {
         }
 
         $allowed_types = ['image/jpeg', 'image/png', 'image/webp'];
-        $validation = validateFileUpload($file, $allowed_types, 5 * 1024 * 1024);
+        $validation = validateFileUpload($file, $allowed_types, 10 * 1024 * 1024);
         if (empty($validation['valid'])) {
             $errors = $validation['errors'] ?? [];
             $friendly_message = !empty($errors)
                 ? (string)$errors[0]
-                : 'Please upload a clear JPG, PNG, or WEBP valid ID image up to 5MB.';
+                : 'Please upload a clear JPG, PNG, or WEBP valid ID image up to 10MB.';
             return ['valid' => false, 'message' => $friendly_message];
         }
 
@@ -236,8 +254,14 @@ if (!function_exists('saveRegistrationValidIdDocument')) {
         $target_path = $upload_dir . $unique_name;
         $relative_path = 'uploads/user_valid_ids/' . $unique_name;
 
-        if (!move_uploaded_file((string)$uploaded_file['tmp_name'], $target_path)) {
-            return ['success' => false, 'message' => 'Unable to save the uploaded valid ID. Please try again.'];
+        if (!empty($uploaded_file['is_temp_cached']) && !empty($uploaded_file['tmp_name'])) {
+            if (!copy((string)$uploaded_file['tmp_name'], $target_path)) {
+                return ['success' => false, 'message' => 'Unable to save the cached valid ID. Please try again.'];
+            }
+        } else {
+            if (!move_uploaded_file((string)$uploaded_file['tmp_name'], $target_path)) {
+                return ['success' => false, 'message' => 'Unable to save the uploaded valid ID. Please try again.'];
+            }
         }
 
         $id_label_map = [
@@ -252,9 +276,11 @@ if (!function_exists('saveRegistrationValidIdDocument')) {
             'national_id' => 'Philippine National ID (PhilSys)',
             'tin' => 'TIN ID',
             'pag_ibig' => 'Pag-IBIG ID',
-            'philhealth' => 'PhilHealth ID'
+            'philhealth' => 'PhilHealth ID',
+            'senior_citizen' => 'Senior Citizen ID',
+            'ofw' => 'OFW ID'
         ];
-        $document_type_label = ($id_label_map[$valid_id_type] ?? 'Government ID') . ' - ' . $side;
+        $document_type_label = substr(($id_label_map[$valid_id_type] ?? 'Government ID') . ' - ' . $side, 0, 100);
 
         $insert_sql = "INSERT INTO user_valid_id_documents (user_id, document_type, file_name, file_path) VALUES (?, ?, ?, ?)";
         $stmt = mysqli_prepare($conn, $insert_sql);
@@ -320,13 +346,93 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         || (isset($_POST['accept_terms']) && $_POST['accept_terms'] !== '' && $_POST['accept_terms'] !== '0')
         || (isset($_POST['terms']) && $_POST['terms'] !== '' && $_POST['terms'] !== '0');
     $valid_id_type = trim($_POST['valid_id_type'] ?? '');
-    $valid_id_front = $_FILES['valid_id_front'] ?? null;
-    $valid_id_back = $_FILES['valid_id_back'] ?? null;
+    
+    // Setup temporary storage directory for pending ID uploads
+    $temp_id_dir = __DIR__ . '/uploads/temp_valid_ids/';
+    if (!is_dir($temp_id_dir)) {
+        @mkdir($temp_id_dir, 0755, true);
+    }
+
+    // Front ID: If newly uploaded, validate and cache in temp directory and session
+    if (isset($_FILES['valid_id_front']) && is_array($_FILES['valid_id_front']) && (int)($_FILES['valid_id_front']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+        $front_val = validateRegistrationValidIdUpload($_FILES['valid_id_front']);
+        if (!empty($front_val['valid'])) {
+            $ext = ($front_val['mime_type'] === 'image/png') ? 'png' : (($front_val['mime_type'] === 'image/webp') ? 'webp' : 'jpg');
+            $temp_filename = 'temp_front_' . bin2hex(random_bytes(16)) . '.' . $ext;
+            $temp_target = $temp_id_dir . $temp_filename;
+            if (move_uploaded_file($_FILES['valid_id_front']['tmp_name'], $temp_target)) {
+                if (!empty($_SESSION['temp_valid_id_front']['file_path'])) {
+                    @unlink(__DIR__ . '/' . $_SESSION['temp_valid_id_front']['file_path']);
+                }
+                $_SESSION['temp_valid_id_front'] = [
+                    'file_path' => 'uploads/temp_valid_ids/' . $temp_filename,
+                    'name' => $_FILES['valid_id_front']['name'] ?? 'valid_id_front.jpg',
+                    'mime_type' => $front_val['mime_type'],
+                    'uploaded_at' => time()
+                ];
+            }
+        }
+    }
+
+    // Back ID: If newly uploaded, validate and cache in temp directory and session
+    if (isset($_FILES['valid_id_back']) && is_array($_FILES['valid_id_back']) && (int)($_FILES['valid_id_back']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+        $back_val = validateRegistrationValidIdUpload($_FILES['valid_id_back']);
+        if (!empty($back_val['valid'])) {
+            $ext = ($back_val['mime_type'] === 'image/png') ? 'png' : (($back_val['mime_type'] === 'image/webp') ? 'webp' : 'jpg');
+            $temp_filename = 'temp_back_' . bin2hex(random_bytes(16)) . '.' . $ext;
+            $temp_target = $temp_id_dir . $temp_filename;
+            if (move_uploaded_file($_FILES['valid_id_back']['tmp_name'], $temp_target)) {
+                if (!empty($_SESSION['temp_valid_id_back']['file_path'])) {
+                    @unlink(__DIR__ . '/' . $_SESSION['temp_valid_id_back']['file_path']);
+                }
+                $_SESSION['temp_valid_id_back'] = [
+                    'file_path' => 'uploads/temp_valid_ids/' . $temp_filename,
+                    'name' => $_FILES['valid_id_back']['name'] ?? 'valid_id_back.jpg',
+                    'mime_type' => $back_val['mime_type'],
+                    'uploaded_at' => time()
+                ];
+            }
+        }
+    }
+
+    // Resolve Front ID reference (newly uploaded or session cached)
+    if (!empty($_SESSION['temp_valid_id_front']['file_path']) && file_exists(__DIR__ . '/' . $_SESSION['temp_valid_id_front']['file_path'])) {
+        $valid_id_front = [
+            'is_temp_cached' => true,
+            'tmp_name' => __DIR__ . '/' . $_SESSION['temp_valid_id_front']['file_path'],
+            'file_path' => $_SESSION['temp_valid_id_front']['file_path'],
+            'name' => $_SESSION['temp_valid_id_front']['name'],
+            'error' => UPLOAD_ERR_OK,
+            'size' => filesize(__DIR__ . '/' . $_SESSION['temp_valid_id_front']['file_path']),
+            'type' => $_SESSION['temp_valid_id_front']['mime_type']
+        ];
+    } elseif (isset($_FILES['valid_id_front']) && is_array($_FILES['valid_id_front']) && (int)($_FILES['valid_id_front']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+        $valid_id_front = $_FILES['valid_id_front'];
+    } else {
+        $valid_id_front = null;
+    }
+
+    // Resolve Back ID reference (newly uploaded or session cached)
+    if (!empty($_SESSION['temp_valid_id_back']['file_path']) && file_exists(__DIR__ . '/' . $_SESSION['temp_valid_id_back']['file_path'])) {
+        $valid_id_back = [
+            'is_temp_cached' => true,
+            'tmp_name' => __DIR__ . '/' . $_SESSION['temp_valid_id_back']['file_path'],
+            'file_path' => $_SESSION['temp_valid_id_back']['file_path'],
+            'name' => $_SESSION['temp_valid_id_back']['name'],
+            'error' => UPLOAD_ERR_OK,
+            'size' => filesize(__DIR__ . '/' . $_SESSION['temp_valid_id_back']['file_path']),
+            'type' => $_SESSION['temp_valid_id_back']['mime_type']
+        ];
+    } elseif (isset($_FILES['valid_id_back']) && is_array($_FILES['valid_id_back']) && (int)($_FILES['valid_id_back']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+        $valid_id_back = $_FILES['valid_id_back'];
+    } else {
+        $valid_id_back = null;
+    }
     
     // Business partner fields
     $business_name = preg_replace('/\s+/', ' ', trim($_POST['business_name'] ?? ''));
     $business_type = 'restaurant';
-$business_registration = trim($_POST['business_registration'] ?? '');
+    $business_registration = trim($_POST['business_registration'] ?? '');
     $website = null;
     $tax_id = trim($_POST['tax_id'] ?? $_POST['tin_number'] ?? '');
     $street_address = trim($_POST['street_address'] ?? '');
@@ -348,6 +454,7 @@ $business_registration = trim($_POST['business_registration'] ?? '');
         'middle_name' => $middle_name,
         'nickname' => $nickname,
         'birth_date' => $birth_date,
+        'dob' => $birth_date,
         'gender' => $gender,
         'email' => $email,
         'phone' => $phone,
@@ -356,6 +463,7 @@ $business_registration = trim($_POST['business_registration'] ?? '');
         'business_type' => $business_type,
         'business_registration' => $business_registration,
         'tax_id' => $tax_id,
+        'tin_number' => $tax_id,
         'street_address' => $street_address,
         'address' => $address,
         'latitude' => $latitude,
@@ -364,7 +472,7 @@ $business_registration = trim($_POST['business_registration'] ?? '');
         'province_name' => $province_name,
     ];
 
-    // Validation
+    // Validation - Fail-fast while isolating and clearing ONLY the specific invalid field
     if ($error === '') {
         $csrf_token = $_POST['csrf_token'] ?? '';
         if (empty($csrf_token) || empty($_SESSION['registration_csrf_token']) || !hash_equals($_SESSION['registration_csrf_token'], $csrf_token)) {
@@ -373,34 +481,46 @@ $business_registration = trim($_POST['business_registration'] ?? '');
             $error = 'Invalid account type selected.';
         } elseif (!$accept_terms) {
             $error = 'You must accept the Terms of Service and Privacy Policy.';
-        } elseif (empty($first_name) || empty($last_name)) {
+        } elseif (empty($first_name) && empty($last_name)) {
             $error = 'Please enter your first and last name.';
-        } elseif (!preg_match('/^[\p{L}\p{M}\'\-\s]{2,60}$/u', $first_name) || !preg_match('/^[\p{L}\p{M}\'\-\s]{2,60}$/u', $last_name)) {
-            $error = 'Please enter a valid first and last name.';
+            $form_data['first_name'] = '';
+            $form_data['last_name'] = '';
+        } elseif (empty($first_name)) {
+            $error = 'Please enter your first name.';
+            $form_data['first_name'] = '';
+        } elseif (empty($last_name)) {
+            $error = 'Please enter your last name.';
+            $form_data['last_name'] = '';
+        } elseif (!preg_match('/^[\p{L}\p{M}\'\-\s]{2,60}$/u', $first_name)) {
+            $error = 'Please enter a valid first name.';
+            $form_data['first_name'] = '';
+        } elseif (!preg_match('/^[\p{L}\p{M}\'\-\s]{2,60}$/u', $last_name)) {
+            $error = 'Please enter a valid last name.';
+            $form_data['last_name'] = '';
         } elseif (!empty($birth_date) && (
             ($dob_time = strtotime($birth_date)) === false || 
             $dob_time > strtotime('-10 years') || 
             $dob_time < strtotime('-100 years')
         )) {
             $error = 'Please enter a valid date of birth. You must be at least 10 years old to register.';
-        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $error = 'Please enter a valid email address.';
-        } elseif (!preg_match('/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,72}$/', $password)) {
-            $error = 'Password must be 8-72 characters with uppercase, lowercase, number, and symbol.';
-        } elseif (!hash_equals($password, $confirm_password)) {
-            $error = 'Passwords do not match.';
-        } elseif (empty($phone)) {
-            $error = 'Please enter your mobile number.';
+            $form_data['birth_date'] = '';
+            $form_data['dob'] = '';
         } elseif (empty($valid_id_type)) {
             $error = 'Please select your valid ID type.';
-        } elseif (empty($valid_id_front) || !is_array($valid_id_front) || (int)($valid_id_front['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+            $form_data['valid_id_type'] = '';
+        } elseif (empty($valid_id_front)) {
             $error = 'Please upload a photo of the front side of your valid ID.';
-        } elseif (empty($valid_id_back) || !is_array($valid_id_back) || (int)($valid_id_back['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        } elseif (empty($valid_id_back)) {
             $error = 'Please upload a photo of the back side of your valid ID.';
         } elseif ($account_type === 'organization' && empty($business_name)) {
             $error = 'Please enter your restaurant name.';
+            $form_data['business_name'] = '';
         } elseif (strlen($address) < 6) {
             $error = 'Please enter your complete home address in Cavite.';
+            $form_data['address'] = '';
+            $form_data['street_address'] = '';
+            $form_data['latitude'] = '';
+            $form_data['longitude'] = '';
         } else {
             // Validate that the location is inside Cavite
             $is_cavite = false;
@@ -439,13 +559,38 @@ $business_registration = trim($_POST['business_registration'] ?? '');
 
             if (!$is_cavite) {
                 $error = 'Service Area Restriction: Registration is exclusively available for addresses inside Cavite province. Please pin or enter a location within Cavite.';
+                $form_data['address'] = '';
+                $form_data['street_address'] = '';
+                $form_data['latitude'] = '';
+                $form_data['longitude'] = '';
             } else {
                 $front_validation = validateRegistrationValidIdUpload($valid_id_front);
                 $back_validation = validateRegistrationValidIdUpload($valid_id_back);
                 if (empty($front_validation['valid'])) {
-                    $error = 'Front of ID: ' . (string)($front_validation['message'] ?? 'Please upload a clear JPG, PNG, or WEBP image up to 5MB.');
+                    $error = 'Front of ID: ' . (string)($front_validation['message'] ?? 'Please upload a clear JPG, PNG, or WEBP image up to 10MB.');
+                    if (!empty($_SESSION['temp_valid_id_front']['file_path'])) {
+                        @unlink(__DIR__ . '/' . $_SESSION['temp_valid_id_front']['file_path']);
+                        unset($_SESSION['temp_valid_id_front']);
+                    }
                 } elseif (empty($back_validation['valid'])) {
-                    $error = 'Back of ID: ' . (string)($back_validation['message'] ?? 'Please upload a clear JPG, PNG, or WEBP image up to 5MB.');
+                    $error = 'Back of ID: ' . (string)($back_validation['message'] ?? 'Please upload a clear JPG, PNG, or WEBP image up to 10MB.');
+                    if (!empty($_SESSION['temp_valid_id_back']['file_path'])) {
+                        @unlink(__DIR__ . '/' . $_SESSION['temp_valid_id_back']['file_path']);
+                        unset($_SESSION['temp_valid_id_back']);
+                    }
+                } elseif (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    $error = 'Please enter a valid email address.';
+                    $form_data['email'] = '';
+                } elseif (empty($phone)) {
+                    $error = 'Please enter your mobile phone number.';
+                    $form_data['phone'] = '';
+                } elseif (!preg_match('/^(09|\+?639)\d{9}$/', preg_replace('/[^\d+]/', '', $phone))) {
+                    $error = 'Please enter a valid Philippine mobile number (e.g., 09123456789).';
+                    $form_data['phone'] = '';
+                } elseif (!preg_match('/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,72}$/', $password)) {
+                    $error = 'Password must be 8-72 characters with uppercase, lowercase, number, and symbol.';
+                } elseif (!hash_equals($password, $confirm_password)) {
+                    $error = 'Passwords do not match.';
                 }
             }
         }
@@ -459,6 +604,14 @@ $business_registration = trim($_POST['business_registration'] ?? '');
         $address = preg_replace('/\s+/', ' ', $address);
         if (strlen($address) > 255) {
             $address = substr($address, 0, 255);
+        }
+
+        $clean_birth_date = null;
+        if (!empty($birth_date)) {
+            $dob_time = strtotime($birth_date);
+            if ($dob_time !== false) {
+                $clean_birth_date = date('Y-m-d', $dob_time);
+            }
         }
 
         $result = registerUser(
@@ -475,7 +628,7 @@ $business_registration = trim($_POST['business_registration'] ?? '');
             $website,
             $tax_id,
             $middle_name,
-            $birth_date,
+            $clean_birth_date,
             $gender,
             $nickname
         );
@@ -517,6 +670,16 @@ $business_registration = trim($_POST['business_registration'] ?? '');
         }
 
         if (!empty($result['success']) && $error === '') {
+            // Clean up temporary valid ID uploads from disk and session
+            if (!empty($_SESSION['temp_valid_id_front']['file_path'])) {
+                @unlink(__DIR__ . '/' . $_SESSION['temp_valid_id_front']['file_path']);
+                unset($_SESSION['temp_valid_id_front']);
+            }
+            if (!empty($_SESSION['temp_valid_id_back']['file_path'])) {
+                @unlink(__DIR__ . '/' . $_SESSION['temp_valid_id_back']['file_path']);
+                unset($_SESSION['temp_valid_id_back']);
+            }
+
             $email_verification = issueUserEmailVerification(
                 $conn,
                 (int)$result['user_id'],
@@ -547,16 +710,25 @@ $business_registration = trim($_POST['business_registration'] ?? '');
 
         if ($error === '' && empty($result['success'])) {
             $error = $result['message'] ?? 'Unable to create your account right now.';
+            if (stripos($error, 'email') !== false) {
+                $form_data['email'] = '';
+            }
+            if (stripos($error, 'phone') !== false || stripos($error, 'mobile') !== false) {
+                $form_data['phone'] = '';
+            }
         }
     }
 
     if ($error !== '') {
-        $_SESSION['registration_security']['attempts'] = (int)($_SESSION['registration_security']['attempts'] ?? 0) + 1;
-        if ($_SESSION['registration_security']['attempts'] >= $max_attempts) {
-            $_SESSION['registration_security']['blocked_until'] = $now + $lock_seconds;
-            $_SESSION['registration_security']['attempts'] = 0;
-            $_SESSION['registration_security']['window_started_at'] = $now;
-            $error = 'Too many registration attempts. Please try again in 15 minutes.';
+        $is_system_error = !empty($result) && empty($result['success']) && (strpos($error, 'Unable to create') !== false || strpos($error, 'try again later') !== false);
+        if (!$is_system_error) {
+            $_SESSION['registration_security']['attempts'] = (int)($_SESSION['registration_security']['attempts'] ?? 0) + 1;
+            if ($_SESSION['registration_security']['attempts'] >= $max_attempts) {
+                $_SESSION['registration_security']['blocked_until'] = $now + $lock_seconds;
+                $_SESSION['registration_security']['attempts'] = 0;
+                $_SESSION['registration_security']['window_started_at'] = $now;
+                $error = 'Too many registration attempts. Please try again in 15 minutes.';
+            }
         }
     }
 }
@@ -2311,6 +2483,16 @@ body.dark-mode .leaflet-container {
                             </select>
                         </div>
 
+                        <?php
+                        $has_cached_front = !empty($_SESSION['temp_valid_id_front']['file_path']) && file_exists(__DIR__ . '/' . $_SESSION['temp_valid_id_front']['file_path']);
+                        $cached_front_src = $has_cached_front ? htmlspecialchars($_SESSION['temp_valid_id_front']['file_path']) : '#';
+
+                        $has_cached_back = !empty($_SESSION['temp_valid_id_back']['file_path']) && file_exists(__DIR__ . '/' . $_SESSION['temp_valid_id_back']['file_path']);
+                        $cached_back_src = $has_cached_back ? htmlspecialchars($_SESSION['temp_valid_id_back']['file_path']) : '#';
+                        ?>
+                        <input type="hidden" id="hasCachedFrontId" value="<?php echo $has_cached_front ? '1' : '0'; ?>">
+                        <input type="hidden" id="hasCachedBackId" value="<?php echo $has_cached_back ? '1' : '0'; ?>">
+
                         <!-- ID Upload Controls Container -->
                         <div style="display: flex; flex-direction: column; gap: 20px;">
                             <!-- Front Side Upload -->
@@ -2319,7 +2501,9 @@ body.dark-mode .leaflet-container {
                                     <label style="margin: 0; font-weight: 700; color: #1e293b; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
                                         <i class="fas fa-id-card-clip" style="color: #b3261e;"></i> <span id="frontDocLabel">Front Side of Valid ID</span> *
                                     </label>
-                                    <span class="badge" id="frontStatusBadge" style="background: #f1f5f9; color: #64748b; font-size: 0.75rem; padding: 4px 8px; border-radius: 6px;">Pending</span>
+                                    <span class="badge" id="frontStatusBadge" style="<?php echo $has_cached_front ? 'background: #ecfdf3; color: #027a48; border: 1px solid #abefc6;' : 'background: #f1f5f9; color: #64748b;'; ?> font-size: 0.75rem; padding: 4px 8px; border-radius: 6px;">
+                                        <?php echo $has_cached_front ? '<i class="fas fa-check-circle me-1"></i> Attached &amp; Saved' : 'Pending'; ?>
+                                    </span>
                                 </div>
                                 <div style="display: flex; gap: 12px; margin-bottom: 12px;">
                                     <button type="button" class="btn trigger-camera-btn" data-target="front" style="flex: 1; height: 42px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; color: #334155; font-weight: 600; font-size: 0.88rem; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;">
@@ -2330,8 +2514,8 @@ body.dark-mode .leaflet-container {
                                     </button>
                                 </div>
                                 <input type="file" id="validIdFront" name="valid_id_front" accept="image/*" style="display: none;">
-                                <div id="previewContainerFront" style="display: none; position: relative; border-radius: 8px; overflow: hidden; max-height: 180px; background: #000; border: 1px solid #cbd5e1;">
-                                    <img id="imagePreviewFront" src="#" alt="Front Preview" style="width: 100%; height: 180px; object-fit: contain; display: block;">
+                                <div id="previewContainerFront" style="<?php echo $has_cached_front ? 'display: block;' : 'display: none;'; ?> position: relative; border-radius: 8px; overflow: hidden; max-height: 180px; background: #000; border: 1px solid #cbd5e1;">
+                                    <img id="imagePreviewFront" src="<?php echo $cached_front_src; ?>" alt="Front Preview" style="width: 100%; height: 180px; object-fit: contain; display: block;">
                                     <button type="button" class="remove-preview-btn" data-target="front" style="position: absolute; top: 8px; right: 8px; background: rgba(15, 23, 42, 0.75); color: #fff; border: none; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 0.8rem; backdrop-filter: blur(4px);"><i class="fas fa-times"></i></button>
                                 </div>
                             </div>
@@ -2342,7 +2526,9 @@ body.dark-mode .leaflet-container {
                                     <label style="margin: 0; font-weight: 700; color: #1e293b; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
                                         <i class="fas fa-id-card" style="color: #b3261e;"></i> <span id="backDocLabel">Back Side of Valid ID</span> *
                                     </label>
-                                    <span class="badge" id="backStatusBadge" style="background: #f1f5f9; color: #64748b; font-size: 0.75rem; padding: 4px 8px; border-radius: 6px;">Pending</span>
+                                    <span class="badge" id="backStatusBadge" style="<?php echo $has_cached_back ? 'background: #ecfdf3; color: #027a48; border: 1px solid #abefc6;' : 'background: #f1f5f9; color: #64748b;'; ?> font-size: 0.75rem; padding: 4px 8px; border-radius: 6px;">
+                                        <?php echo $has_cached_back ? '<i class="fas fa-check-circle me-1"></i> Attached &amp; Saved' : 'Pending'; ?>
+                                    </span>
                                 </div>
                                 <div style="display: flex; gap: 12px; margin-bottom: 12px;">
                                     <button type="button" class="btn trigger-camera-btn" data-target="back" style="flex: 1; height: 42px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; color: #334155; font-weight: 600; font-size: 0.88rem; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;">
@@ -2353,8 +2539,8 @@ body.dark-mode .leaflet-container {
                                     </button>
                                 </div>
                                 <input type="file" id="validIdBack" name="valid_id_back" accept="image/*" style="display: none;">
-                                <div id="previewContainerBack" style="display: none; position: relative; border-radius: 8px; overflow: hidden; max-height: 180px; background: #000; border: 1px solid #cbd5e1;">
-                                    <img id="imagePreviewBack" src="#" alt="Back Preview" style="width: 100%; height: 180px; object-fit: contain; display: block;">
+                                <div id="previewContainerBack" style="<?php echo $has_cached_back ? 'display: block;' : 'display: none;'; ?> position: relative; border-radius: 8px; overflow: hidden; max-height: 180px; background: #000; border: 1px solid #cbd5e1;">
+                                    <img id="imagePreviewBack" src="<?php echo $cached_back_src; ?>" alt="Back Preview" style="width: 100%; height: 180px; object-fit: contain; display: block;">
                                     <button type="button" class="remove-preview-btn" data-target="back" style="position: absolute; top: 8px; right: 8px; background: rgba(15, 23, 42, 0.75); color: #fff; border: none; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 0.8rem; backdrop-filter: blur(4px);"><i class="fas fa-times"></i></button>
                                 </div>
                             </div>
@@ -2626,19 +2812,33 @@ document.addEventListener('DOMContentLoaded', function() {
     const formSteps = document.querySelectorAll('.form-step');
     const accountTypeCards = document.querySelectorAll('.account-type-card');
     const accountTypeInput = document.getElementById('accountType');
-    if (accountTypeInput) {
+    let accountType = accountTypeInput && accountTypeInput.value ? accountTypeInput.value.toLowerCase() : 'individual';
+    if (accountTypeInput && !accountTypeInput.value) {
         accountTypeInput.value = 'individual';
     }
     const organizationFields = document.getElementById('organizationFields');
     const step3Title = document.getElementById('step3Title');
     const step3Subtitle = document.getElementById('step3Subtitle');
     const step3NavLabel = document.getElementById('step3NavLabel');
-    let accountType = 'individual';
 
     let regMap = null;
     let regMarker = null;
     let isAddressInCavite = false;
     let addressDebounceTimer = null;
+
+    function highlightErrorField(el) {
+        if (!el) return;
+        el.style.borderColor = '#b3261e';
+        el.style.boxShadow = '0 0 0 3px rgba(179, 38, 30, 0.15)';
+        const removeHighlight = () => {
+            el.style.borderColor = '';
+            el.style.boxShadow = '';
+            el.removeEventListener('input', removeHighlight);
+            el.removeEventListener('change', removeHighlight);
+        };
+        el.addEventListener('input', removeHighlight);
+        el.addEventListener('change', removeHighlight);
+    }
 
     // Sliding Auth Panel Controller
     const authSplitLayout = document.getElementById('authSplitLayout');
@@ -3022,6 +3222,14 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // Check initial preloaded address from server form_data
+    const initialAddress = (homeAddressInput?.value || regAddress?.value || '').trim();
+    const initialLat = parseFloat(regLatitude?.value || '');
+    const initialLng = parseFloat(regLongitude?.value || '');
+    if (initialAddress && checkIsLocationInCavite(initialLat, initialLng, initialAddress, null)) {
+        updateCaviteStatusUI(true, 'Verified Cavite address: ' + (regCityName?.value || 'Cavite'));
+    }
+
     async function reverseGeocodeLocation(lat, lng) {
         const latNum = parseFloat(lat);
         const lngNum = parseFloat(lng);
@@ -3336,17 +3544,56 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function validateStep1() {
-        const firstName = ((document.getElementById('firstName') || {}).value || '').trim();
-        const lastName = ((document.getElementById('lastName') || {}).value || '').trim();
+        const firstNameInput = document.getElementById('firstName');
+        const lastNameInput = document.getElementById('lastName');
+        const firstName = ((firstNameInput || {}).value || '').trim();
+        const lastName = ((lastNameInput || {}).value || '').trim();
         const dobInput = document.getElementById('dob');
 
-        if (!firstName || !lastName) {
-            showError('Missing Information', 'Please enter your First Name and Last Name.');
+        if (!firstName && !lastName) {
+            showError('Missing Name', 'Please enter your First Name and Last Name.');
+            if (firstNameInput) {
+                firstNameInput.focus();
+                highlightErrorField(firstNameInput);
+            }
             return false;
         }
 
-        if (!isValidName(firstName) || !isValidName(lastName)) {
-            showError('Invalid Name', 'Please use valid characters (letters, spaces, dots, hyphens) for your name.');
+        if (!firstName) {
+            showError('First Name Required', 'Please enter your First Name.');
+            if (firstNameInput) {
+                firstNameInput.focus();
+                highlightErrorField(firstNameInput);
+            }
+            return false;
+        }
+
+        if (!lastName) {
+            showError('Last Name Required', 'Please enter your Last Name.');
+            if (lastNameInput) {
+                lastNameInput.focus();
+                highlightErrorField(lastNameInput);
+            }
+            return false;
+        }
+
+        if (!isValidName(firstName)) {
+            showError('Invalid First Name', 'Please use valid characters (letters, spaces, dots, hyphens) for your first name.');
+            if (firstNameInput) {
+                firstNameInput.value = '';
+                firstNameInput.focus();
+                highlightErrorField(firstNameInput);
+            }
+            return false;
+        }
+
+        if (!isValidName(lastName)) {
+            showError('Invalid Last Name', 'Please use valid characters (letters, spaces, dots, hyphens) for your last name.');
+            if (lastNameInput) {
+                lastNameInput.value = '';
+                lastNameInput.focus();
+                highlightErrorField(lastNameInput);
+            }
             return false;
         }
 
@@ -3358,6 +3605,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
             if (isNaN(birthDate.getTime()) || birthDate > minAgeDate || birthDate < maxAgeDate) {
                 showError('Invalid Date of Birth', 'You must be at least 10 years old to register.');
+                dobInput.value = '';
+                dobInput.focus();
+                highlightErrorField(dobInput);
                 return false;
             }
         }
@@ -3535,26 +3785,32 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     function validateStep2() {
-        const firstName = ((document.getElementById('firstName') || {}).value || '').trim();
-        const lastName = ((document.getElementById('lastName') || {}).value || '').trim();
-        const validIdType = ((document.getElementById('validIdType') || {}).value || '').trim();
+        const validIdTypeInput = document.getElementById('validIdType');
+        const validIdType = ((validIdTypeInput || {}).value || '').trim();
         const validIdFrontInput = document.getElementById('validIdFront');
         const validIdBackInput = document.getElementById('validIdBack');
         
         const validIdFrontFile = validIdFrontInput && validIdFrontInput.files ? validIdFrontInput.files[0] : null;
         const validIdBackFile = validIdBackInput && validIdBackInput.files ? validIdBackInput.files[0] : null;
 
+        const hasFrontCached = (document.getElementById('hasCachedFrontId')?.value === '1') || <?php echo $has_cached_front ? 'true' : 'false'; ?>;
+        const hasBackCached = (document.getElementById('hasCachedBackId')?.value === '1') || <?php echo $has_cached_back ? 'true' : 'false'; ?>;
+
         if (!validIdType) {
             showError('Valid ID Type Required', 'Please select what kind of ID you will upload.');
+            if (validIdTypeInput) {
+                validIdTypeInput.focus();
+                highlightErrorField(validIdTypeInput);
+            }
             return false;
         }
 
-        if (!validIdFrontFile) {
+        if (!validIdFrontFile && !hasFrontCached) {
             showError('Front ID Photo Required', 'Please upload or capture a photo of the front side of your ID.');
             return false;
         }
 
-        if (!validIdBackFile) {
+        if (!validIdBackFile && !hasBackCached) {
             showError('Back ID Photo Required', 'Please upload or capture a photo of the back side of your ID.');
             return false;
         }
@@ -3562,6 +3818,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Validate formats
         const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
         const validateFile = (file, label) => {
+            if (!file) return true;
             const hasType = allowedTypes.includes(file.type || '');
             const hasExt = /\.(jpg|jpeg|png|webp)$/.test(String(file.name || '').toLowerCase());
             if (!hasType && !hasExt) {
@@ -3575,20 +3832,28 @@ document.addEventListener('DOMContentLoaded', function() {
             return true;
         };
 
-        if (!validateFile(validIdFrontFile, 'Front of ID') || !validateFile(validIdBackFile, 'Back of ID')) {
+        if (validIdFrontFile && !validateFile(validIdFrontFile, 'Front of ID')) {
+            return false;
+        }
+        if (validIdBackFile && !validateFile(validIdBackFile, 'Back of ID')) {
             return false;
         }
 
-        // Temporarily bypass automated online ID checking
         idVerified = true;
         return true;
     }
 
     function validateStep3() {
         if (accountType === 'organization') {
-            const businessName = ((document.getElementById('businessName') || {}).value || '').trim();
+            const businessNameInput = document.getElementById('businessName');
+            const businessName = ((businessNameInput || {}).value || '').trim();
             if (!businessName) {
                 showError('Restaurant Name Required', 'Please enter your restaurant name.');
+                if (businessNameInput) {
+                    businessNameInput.value = '';
+                    businessNameInput.focus();
+                    highlightErrorField(businessNameInput);
+                }
                 return false;
             }
         }
@@ -3596,11 +3861,21 @@ document.addEventListener('DOMContentLoaded', function() {
         const addressVal = (homeAddressInput ? homeAddressInput.value : (regAddress ? regAddress.value : '')).trim();
         if (!addressVal || addressVal.length < 6) {
             showError('Address Required', 'Please enter your home address or pin your location on the map.');
+            if (homeAddressInput) {
+                homeAddressInput.focus();
+                highlightErrorField(homeAddressInput);
+            }
             return false;
         }
 
         if (!isAddressInCavite) {
             showError('Location Outside Cavite', 'We currently only accept registrations within the Cavite area. Please select a location inside Cavite on the map.');
+            if (homeAddressInput) {
+                homeAddressInput.value = '';
+                if (regAddress) regAddress.value = '';
+                homeAddressInput.focus();
+                highlightErrorField(homeAddressInput);
+            }
             return false;
         }
 
@@ -3608,47 +3883,91 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function validateStep4() {
-        const email = ((document.getElementById('email') || {}).value || '').trim();
-        const phone = ((document.getElementById('phone') || {}).value || '').trim();
+        const emailInput = document.getElementById('email');
+        const phoneInput = document.getElementById('phone');
         const passwordInput = document.getElementById('password');
         const confirmPasswordInput = document.getElementById('confirmPassword');
         const termsInput = document.getElementById('terms') || document.querySelector('input[name="accept_terms"]') || document.querySelector('input[name="terms"]');
         const termsGroup = document.getElementById('termsGroup');
+        const email = ((emailInput || {}).value || '').trim();
+        const phone = ((phoneInput || {}).value || '').trim();
         const password = passwordInput ? passwordInput.value : '';
         const confirmPassword = confirmPasswordInput ? confirmPasswordInput.value : '';
 
         if (!email) {
             showError('Email Required', 'Please enter your email address.');
+            if (emailInput) {
+                emailInput.focus();
+                highlightErrorField(emailInput);
+            }
             return false;
         }
 
         if (!isValidEmail(email)) {
             showError('Invalid Email', 'Please enter a valid email address.');
+            if (emailInput) {
+                emailInput.value = '';
+                emailInput.focus();
+                highlightErrorField(emailInput);
+            }
             return false;
         }
 
         if (!phone) {
             showError('Phone Required', 'Please enter your mobile phone number.');
+            if (phoneInput) {
+                phoneInput.focus();
+                highlightErrorField(phoneInput);
+            }
             return false;
         }
 
         if (!isValidPhone(phone)) {
             showError('Invalid Phone', 'Please enter a valid Philippine mobile number (e.g., 09123456789).');
+            if (phoneInput) {
+                phoneInput.value = '';
+                phoneInput.focus();
+                highlightErrorField(phoneInput);
+            }
             return false;
         }
 
-        if (!password || !confirmPassword) {
-            showError('Password Required', 'Please enter and confirm your password.');
+        if (!password) {
+            showError('Password Required', 'Please enter your password.');
+            if (passwordInput) {
+                passwordInput.focus();
+                highlightErrorField(passwordInput);
+            }
+            return false;
+        }
+
+        if (!confirmPassword) {
+            showError('Confirm Password Required', 'Please confirm your password.');
+            if (confirmPasswordInput) {
+                confirmPasswordInput.focus();
+                highlightErrorField(confirmPasswordInput);
+            }
             return false;
         }
 
         if (!isStrongPassword(password)) {
             showError('Weak Password', 'Use 8+ characters with uppercase, lowercase, number, and symbol.');
+            if (passwordInput) {
+                passwordInput.value = '';
+                if (confirmPasswordInput) confirmPasswordInput.value = '';
+                passwordInput.focus();
+                highlightErrorField(passwordInput);
+            }
             return false;
         }
 
         if (password !== confirmPassword) {
-            showError('Passwords Mismatch', 'Passwords do not match. Please try again.');
+            showError('Passwords Mismatch', 'Passwords do not match. Please re-enter your password confirmation.');
+            if (confirmPasswordInput) {
+                confirmPasswordInput.value = '';
+                confirmPasswordInput.focus();
+                highlightErrorField(confirmPasswordInput);
+            }
             return false;
         }
 
@@ -4151,15 +4470,54 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (serverRegistrationError) {
         let targetStep = 1;
+        let targetElementId = '';
         const loweredError = serverRegistrationError.toLowerCase();
-        if (/(name|birth|dob|age)/.test(loweredError)) {
+
+        if (/(first name)/i.test(loweredError)) {
             targetStep = 1;
-        } else if (/(email|mobile|phone|valid id|government id|front|back)/.test(loweredError)) {
+            targetElementId = 'firstName';
+        } else if (/(last name)/i.test(loweredError)) {
+            targetStep = 1;
+            targetElementId = 'lastName';
+        } else if (/(birth|dob|age)/i.test(loweredError)) {
+            targetStep = 1;
+            targetElementId = 'dob';
+        } else if (/(name)/i.test(loweredError)) {
+            targetStep = 1;
+            targetElementId = 'firstName';
+        } else if (/(valid id|government id|id type)/i.test(loweredError)) {
             targetStep = 2;
-        } else if (/(business|partner|address|cavite|delivery|restaurant)/.test(loweredError)) {
+            targetElementId = 'validIdType';
+        } else if (/(front)/i.test(loweredError)) {
+            targetStep = 2;
+            targetElementId = 'validIdFront';
+        } else if (/(back)/i.test(loweredError)) {
+            targetStep = 2;
+            targetElementId = 'validIdBack';
+        } else if (/(business|restaurant)/i.test(loweredError)) {
+            targetStep = 2;
+            targetElementId = 'businessName';
+        } else if (/(tin|tax)/i.test(loweredError)) {
+            targetStep = 2;
+            targetElementId = 'tinNumber';
+        } else if (/(address|cavite|delivery|street|location|outside)/i.test(loweredError)) {
             targetStep = 3;
-        } else if (/(password|terms|token|security)/.test(loweredError)) {
+            targetElementId = 'homeAddressInput';
+        } else if (/(email)/i.test(loweredError)) {
             targetStep = 4;
+            targetElementId = 'email';
+        } else if (/(phone|mobile)/i.test(loweredError)) {
+            targetStep = 4;
+            targetElementId = 'phone';
+        } else if (/(confirm|match)/i.test(loweredError)) {
+            targetStep = 4;
+            targetElementId = 'confirmPassword';
+        } else if (/(password)/i.test(loweredError)) {
+            targetStep = 4;
+            targetElementId = 'password';
+        } else if (/(terms)/i.test(loweredError)) {
+            targetStep = 4;
+            targetElementId = 'terms';
         }
 
         if (targetStep !== currentStep) {
@@ -4168,12 +4526,22 @@ document.addEventListener('DOMContentLoaded', function() {
             updateProgressBar();
         }
 
+        setTimeout(function() {
+            if (targetElementId) {
+                const targetEl = document.getElementById(targetElementId);
+                if (targetEl) {
+                    targetEl.focus();
+                    highlightErrorField(targetEl);
+                }
+            }
+        }, 200);
+
         if (window.showPopupAlert) {
             window.showPopupAlert(serverRegistrationError, 'error', 5000);
         } else if (typeof Swal !== 'undefined') {
             Swal.fire({
                 icon: 'error',
-                title: 'Registration failed',
+                title: 'Registration Notice',
                 text: serverRegistrationError,
                 confirmButtonColor: '#b3261e'
             });

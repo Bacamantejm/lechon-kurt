@@ -50,7 +50,7 @@ class EmailService {
 
         if ($force_local_setting && !in_array(strtolower($smtp_host), ['localhost', '127.0.0.1'], true)) {
             $smtp_host = 'localhost';
-            $smtp_port = 25;
+            $smtp_port = 1025;
             $smtp_username = '';
             $smtp_password = '';
             $smtp_secure_mode = '';
@@ -61,12 +61,18 @@ class EmailService {
 
         if ($force_local_setting && !$is_local_host) {
             $smtp_host = 'localhost';
-            $smtp_port = 25;
+            $smtp_port = 1025;
             $smtp_username = '';
             $smtp_password = '';
             $smtp_secure_mode = '';
             $is_local_host = true;
         }
+
+        // On localhost / local development, default port 25 to Laragon Mailpit port 1025
+        if ($is_local_host && ($smtp_port === 25 || $smtp_port <= 0)) {
+            $smtp_port = 1025;
+        }
+
 
         if ($has_real_smtp_credentials && !$force_local_setting) {
             $this->mail->isSMTP();
@@ -154,7 +160,34 @@ class EmailService {
             $this->recordFailure("Primary mailer failed for {$safe_email}: " . $e->getMessage(), $e);
         }
 
-        // 2. Fallback attempt: PHPMailer isMail() transport
+        // 2. Fallback attempt: Local Mailpit relay on 127.0.0.1:1025 (Laragon local mailer)
+        try {
+            $this->resetMessage();
+            $this->mail->isSMTP();
+            $this->mail->Host = '127.0.0.1';
+            $this->mail->SMTPAuth = false;
+            $this->mail->SMTPSecure = '';
+            $this->mail->Port = 1025;
+            $this->mail->SMTPAutoTLS = false;
+            $this->mail->Timeout = 3;
+            if ($recipient_name !== '') {
+                $this->mail->addAddress($safe_email, $recipient_name);
+            } else {
+                $this->mail->addAddress($safe_email);
+            }
+            $this->mail->Subject = $safe_subject;
+            $this->mail->Body    = $html;
+            $this->mail->AltBody = $alt_body !== '' ? $alt_body : strip_tags($html);
+
+            if ($this->mail->send()) {
+                error_log("Email to {$safe_email} sent successfully via local Mailpit fallback (port 1025).");
+                return true;
+            }
+        } catch (Throwable $e_mp) {
+            $this->recordFailure("Mailpit fallback failed for {$safe_email}: " . $e_mp->getMessage(), $e_mp);
+        }
+
+        // 3. Fallback attempt: PHPMailer isMail() transport
         try {
             $this->resetMessage();
             $this->mail->isMail();
@@ -1460,7 +1493,7 @@ class EmailService {
                     ";
                 }
                 $content .= "
-                    <p>If eligible, you may submit a revised application after completing the 3-day evaluation cooldown period.</p>
+                    <p>If eligible, you may submit a revised application after completing the 30-second evaluation cooldown period.</p>
                     <p style='margin-top:24px;'>Best regards,<br><strong>Lechon Delights Franchise Evaluation Board</strong></p>
                 ";
             }

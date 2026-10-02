@@ -352,18 +352,18 @@ if ($seller_scope_id !== null) {
             justify-content: space-between;
             align-items: stretch;
             gap: 16px;
-            border-radius: 14px;
+            border-radius: 12px;
             padding: 16px 18px;
             margin-bottom: 4px;
-            border: 1px solid #f0d3d9;
-            background: linear-gradient(135deg, #fff5f8 0%, #fff 100%);
-            box-shadow: 0 8px 24px rgba(194, 24, 91, 0.08);
+            border: 1px solid #fee4e2;
+            background: #ffffff;
+            box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
         }
 
         .franchise-priority-card.all-clear {
-            border-color: #c9ead7;
-            background: linear-gradient(135deg, #f2fff7 0%, #fff 100%);
-            box-shadow: 0 8px 24px rgba(20, 128, 61, 0.08);
+            border-color: #abefc6;
+            background: #ffffff;
+            box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
         }
 
         .franchise-priority-main {
@@ -377,19 +377,20 @@ if ($seller_scope_id !== null) {
         .franchise-priority-icon {
             width: 42px;
             height: 42px;
-            border-radius: 12px;
+            border-radius: 10px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            background: #c2185b;
-            color: #fff;
+            background: #fff1f0;
+            color: #b3261e;
             flex: 0 0 auto;
-            box-shadow: 0 8px 16px rgba(194, 24, 91, 0.28);
+            border: 1px solid #fee4e2;
         }
 
         .franchise-priority-card.all-clear .franchise-priority-icon {
-            background: #15803d;
-            box-shadow: 0 8px 16px rgba(21, 128, 61, 0.25);
+            background: #ecfdf3;
+            color: #027a48;
+            border-color: #abefc6;
         }
 
         .franchise-priority-title {
@@ -756,99 +757,99 @@ if ($seller_scope_id !== null) {
                      
                     <!-- Order Management -->
                     <div class="stat-card fade-in-up">
-                        <div class="stat-icon" style="background-color: #e3f2fd;">
-                            <i class="fas fa-shopping-cart" style="color: #1976d2;"></i>
+                        <div class="stat-icon blue">
+                            <i class="fas fa-shopping-cart"></i>
                         </div>
                         <div class="stat-content">
                             <h3 data-count="<?php echo $today_stats['count'] ?? 0; ?>">0</h3>
                             <p>Orders Today</p>
                         </div>
-                        <a href="orders.php" class="stat-value" style="color: #1976d2;">Manage</a>
+                        <a href="orders.php" class="stat-value">Manage</a>
                     </div>
                     
                     <!-- Financial Overview -->
                     <div class="stat-card fade-in-up">
-                        <div class="stat-icon" style="background-color: #e8f5e9;">
-                            <i class="fas fa-coins" style="color: #388e3c;"></i>
+                        <div class="stat-icon green">
+                            <i class="fas fa-coins"></i>
                         </div>
                         <div class="stat-content">
                             <h3 data-count="<?php echo $monthly_revenue; ?>" data-format-currency="true">₱0.00</h3>
                             <p>Revenue (Month)</p>
                         </div>
-                        <a href="finance.php" class="stat-value" style="color: #388e3c;">View</a>
+                        <a href="finance.php" class="stat-value">View</a>
                     </div>
                     
                     <!-- Expenses -->
                     <div class="stat-card fade-in-up">
-                        <div class="stat-icon" style="background-color: #ffebee;">
-                            <i class="fas fa-file-invoice-dollar" style="color: #d32f2f;"></i>
+                        <div class="stat-icon red">
+                            <i class="fas fa-file-invoice-dollar"></i>
                         </div>
                         <div class="stat-content">
                             <h3 data-count="<?php echo $monthly_expenses; ?>" data-format-currency="true">₱0.00</h3>
                             <p>Expenses (Month)</p>
                         </div>
-                        <a href="expenses.php" class="stat-value" style="color: #d32f2f;">Manage</a>
+                        <a href="expenses.php" class="stat-value">Manage</a>
                     </div>
                     
                     <!-- Delivery Overview -->
                     <div class="stat-card fade-in-up">
-                        <div class="stat-icon" style="background-color: #e0f7fa;">
-                            <i class="fas fa-truck" style="color: #006064;"></i>
+                        <div class="stat-icon cyan">
+                            <i class="fas fa-truck"></i>
                         </div>
                         <div class="stat-content">
                             <h3 data-count="<?php echo $logistics_stats['count'] ?? 0; ?>">0</h3>
                             <p>Active Deliveries</p>
                         </div>
-                        <a href="logistics.php" class="stat-value" style="color: #006064;">Track</a>
+                        <a href="logistics.php" class="stat-value">Track</a>
                     </div>
                     
                     <!-- Preorder Management -->
                     <div class="stat-card fade-in-up">
-                        <div class="stat-icon" style="background-color: #fff8e1;">
-                            <i class="fas fa-calendar-check" style="color: #ff6f00;"></i>
+                        <div class="stat-icon orange">
+                            <i class="fas fa-calendar-check"></i>
                         </div>
                         <div class="stat-content">
                             <h3 data-count="<?php echo $preorder_stats['count'] ?? 0; ?>">0</h3>
                             <p>Pending Pre-orders</p>
                         </div>
-                        <a href="preorders.php" class="stat-value" style="color: #ff6f00;">Review</a>
+                        <a href="preorders.php" class="stat-value">Review</a>
                     </div>
 
                     <!-- Inventory Management -->
                     <div class="stat-card fade-in-up">
-                        <div class="stat-icon" style="background-color: #fff3e0;">
-                            <i class="fas fa-boxes" style="color: #e65100;"></i>
+                        <div class="stat-icon orange-red">
+                            <i class="fas fa-boxes"></i>
                         </div>
                         <div class="stat-content">
                             <h3 data-count="<?php echo $inventory_stats['count'] ?? 0; ?>">0</h3>
                             <p>Low Stock Items</p>
                         </div>
-                        <a href="inventory.php" class="stat-value" style="color: #e65100;">Check</a>
+                        <a href="inventory.php" class="stat-value">Check</a>
                     </div>
 
                     <!-- Product Management -->
                     <div class="stat-card fade-in-up">
-                        <div class="stat-icon" style="background-color: #f3e5f5;">
-                            <i class="fas fa-box-open" style="color: #7b1fa2;"></i>
+                        <div class="stat-icon purple">
+                            <i class="fas fa-box-open"></i>
                         </div>
                         <div class="stat-content">
                             <h3 data-count="<?php echo $products_stats['count'] ?? 0; ?>">0</h3>
                             <p>Active Products</p>
                         </div>
-                        <a href="products.php" class="stat-value" style="color: #7b1fa2;">Edit</a>
+                        <a href="products.php" class="stat-value">Edit</a>
                     </div>
 
                     <?php if ($is_super_admin_user): ?>
                         <!-- Business Applications -->
                         <div class="stat-card fade-in-up">
-                            <div class="stat-icon" style="background-color: #fce4ec;">
-                                <i class="fas fa-file-contract" style="color: #c2185b;"></i>
+                            <div class="stat-icon pink">
+                                <i class="fas fa-file-contract"></i>
                             </div>
                             <div class="stat-content">
                                 <h3 data-count="<?php echo $franchise_stats['count'] ?? 0; ?>">0</h3>
                                 <p>Franchise Applications</p>
                             </div>
-                            <a href="../super_admin/franchise_applications.php" class="stat-value" style="color: #c2185b;">Process</a>
+                            <a href="../super_admin/franchise_applications.php" class="stat-value">Process</a>
                         </div>
                     <?php endif; ?>
                 </div>

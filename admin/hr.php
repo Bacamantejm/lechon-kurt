@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 session_start();
 include 'auth.php';
 include '../includes/config.php';
@@ -147,7 +147,7 @@ $dashboard_kpis = [
         'subtitle' => 'Current active workforce',
         'url' => 'employees.php?status=active',
         'icon' => 'fas fa-users',
-        'gradient' => 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+        'theme' => 'kpi-blue'
     ],
     [
         'title' => 'Present Today',
@@ -155,7 +155,7 @@ $dashboard_kpis = [
         'subtitle' => 'On-time + late attendance',
         'url' => 'attendance.php?date_from=' . date('Y-m-d') . '&date_to=' . date('Y-m-d'),
         'icon' => 'fas fa-user-check',
-        'gradient' => 'linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)'
+        'theme' => 'kpi-green'
     ],
     [
         'title' => 'Late Today',
@@ -163,7 +163,7 @@ $dashboard_kpis = [
         'subtitle' => $late_rate . '% of active employees',
         'url' => 'attendance.php?date_from=' . date('Y-m-d') . '&date_to=' . date('Y-m-d'),
         'icon' => 'fas fa-user-clock',
-        'gradient' => 'linear-gradient(135deg, #f59e0b 0%, #f97316 100%)'
+        'theme' => 'kpi-amber'
     ],
     [
         'title' => 'Absent Today',
@@ -171,7 +171,7 @@ $dashboard_kpis = [
         'subtitle' => $absent_rate . '% absentee rate',
         'url' => 'attendance.php?date_from=' . date('Y-m-d') . '&date_to=' . date('Y-m-d'),
         'icon' => 'fas fa-user-times',
-        'gradient' => 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'
+        'theme' => 'kpi-red'
     ],
     [
         'title' => 'Pending Leave Requests',
@@ -179,7 +179,7 @@ $dashboard_kpis = [
         'subtitle' => 'Awaiting HR action',
         'url' => 'leave_requests.php',
         'icon' => 'fas fa-calendar-times',
-        'gradient' => 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)'
+        'theme' => 'kpi-purple'
     ],
     [
         'title' => 'Pending Payroll',
@@ -187,7 +187,7 @@ $dashboard_kpis = [
         'subtitle' => 'Pending finance handoff',
         'url' => 'payroll.php',
         'icon' => 'fas fa-money-bill-wave',
-        'gradient' => 'linear-gradient(135deg, #43e97b 0%, #10b981 100%)'
+        'theme' => 'kpi-rose'
     ]
 ];
 
@@ -309,8 +309,9 @@ $hr_modules = [
         'icon' => 'fas fa-id-badge',
         'metric' => $emp_count,
         'metric_label' => 'Active Employees',
-        'chip' => 'Core',
-        'gradient' => 'linear-gradient(135deg, #2563eb, #1d4ed8)'
+        'chip' => 'Core Team',
+        'category' => 'staff',
+        'theme' => 'blue'
     ],
     [
         'title' => 'Departments',
@@ -320,7 +321,8 @@ $hr_modules = [
         'metric' => $department_count,
         'metric_label' => 'Departments',
         'chip' => 'Structure',
-        'gradient' => 'linear-gradient(135deg, #0f766e, #0d9488)'
+        'category' => 'staff',
+        'theme' => 'blue'
     ],
     [
         'title' => 'Attendance',
@@ -330,7 +332,8 @@ $hr_modules = [
         'metric' => $attendance_review_count,
         'metric_label' => 'Pending HR Review',
         'chip' => 'Daily Ops',
-        'gradient' => 'linear-gradient(135deg, #ea580c, #f97316)'
+        'category' => 'daily',
+        'theme' => 'green'
     ],
     [
         'title' => 'Schedules',
@@ -340,7 +343,8 @@ $hr_modules = [
         'metric' => $schedule_today_count,
         'metric_label' => "Today's Schedules",
         'chip' => 'Planning',
-        'gradient' => 'linear-gradient(135deg, #9333ea, #a855f7)'
+        'category' => 'daily',
+        'theme' => 'amber'
     ],
     [
         'title' => 'Leave Requests',
@@ -350,7 +354,8 @@ $hr_modules = [
         'metric' => $leave_count,
         'metric_label' => 'Pending Requests',
         'chip' => 'Approvals',
-        'gradient' => 'linear-gradient(135deg, #0891b2, #06b6d4)'
+        'category' => 'daily',
+        'theme' => 'amber'
     ],
     [
         'title' => 'Leave Balance',
@@ -360,7 +365,8 @@ $hr_modules = [
         'metric' => $leave_balance_profiles_count,
         'metric_label' => 'Profiles Updated',
         'chip' => 'Compliance',
-        'gradient' => 'linear-gradient(135deg, #6366f1, #818cf8)'
+        'category' => 'daily',
+        'theme' => 'amber'
     ],
     [
         'title' => 'Payroll',
@@ -370,7 +376,8 @@ $hr_modules = [
         'metric' => $payroll_count,
         'metric_label' => 'Pending Payroll',
         'chip' => 'Compensation',
-        'gradient' => 'linear-gradient(135deg, #16a34a, #22c55e)'
+        'category' => 'payroll',
+        'theme' => 'red'
     ],
     [
         'title' => 'Deductions',
@@ -380,7 +387,8 @@ $hr_modules = [
         'metric' => $active_deductions_count,
         'metric_label' => 'Active Deductions',
         'chip' => 'Compensation',
-        'gradient' => 'linear-gradient(135deg, #be123c, #e11d48)'
+        'category' => 'payroll',
+        'theme' => 'red'
     ],
     [
         'title' => 'Payslip Generation',
@@ -390,7 +398,8 @@ $hr_modules = [
         'metric' => $payslip_draft_count,
         'metric_label' => 'Draft/Generated',
         'chip' => 'Payroll',
-        'gradient' => 'linear-gradient(135deg, #7c3aed, #8b5cf6)'
+        'category' => 'payroll',
+        'theme' => 'red'
     ],
     [
         'title' => 'Performance',
@@ -400,7 +409,8 @@ $hr_modules = [
         'metric' => $performance_submitted_count,
         'metric_label' => 'Submitted Reviews',
         'chip' => 'People Dev',
-        'gradient' => 'linear-gradient(135deg, #0d9488, #14b8a6)'
+        'category' => 'talent',
+        'theme' => 'purple'
     ],
     [
         'title' => 'Recruitment',
@@ -410,7 +420,8 @@ $hr_modules = [
         'metric' => $open_positions_count,
         'metric_label' => 'Open Positions',
         'chip' => 'Hiring',
-        'gradient' => 'linear-gradient(135deg, #1d4ed8, #3b82f6)'
+        'category' => 'talent',
+        'theme' => 'purple'
     ],
     [
         'title' => 'Candidates',
@@ -420,7 +431,8 @@ $hr_modules = [
         'metric' => $new_candidates_count,
         'metric_label' => 'New Candidates',
         'chip' => 'Hiring',
-        'gradient' => 'linear-gradient(135deg, #4f46e5, #6366f1)'
+        'category' => 'talent',
+        'theme' => 'purple'
     ],
     [
         'title' => 'Turnover',
@@ -430,7 +442,8 @@ $hr_modules = [
         'metric' => $turnover_pending_count,
         'metric_label' => 'Pending Clearance',
         'chip' => 'Lifecycle',
-        'gradient' => 'linear-gradient(135deg, #b45309, #d97706)'
+        'category' => 'staff',
+        'theme' => 'blue'
     ],
     [
         'title' => 'HR Reports',
@@ -440,7 +453,8 @@ $hr_modules = [
         'metric' => $attendance_month_records,
         'metric_label' => 'Attendance Rows This Month',
         'chip' => 'Analytics',
-        'gradient' => 'linear-gradient(135deg, #334155, #475569)'
+        'category' => 'talent',
+        'theme' => 'indigo'
     ],
     [
         'title' => 'HR DB Checker',
@@ -450,7 +464,8 @@ $hr_modules = [
         'metric' => 1,
         'metric_label' => 'Readiness Tool',
         'chip' => 'Setup',
-        'gradient' => 'linear-gradient(135deg, #1f2937, #374151)'
+        'category' => 'talent',
+        'theme' => 'slate'
     ]
 ];
 
@@ -576,60 +591,261 @@ if ($attendance_trend_result) {
         .theme-toggler { background: none; border: none; color: #666; font-size: 1.2rem; cursor: pointer; margin: 0; padding: 5px; transition: color 0.3s; }
         body.dark-mode .theme-toggler { color: #ffc107; }
         .stat-card-link { text-decoration: none; color: inherit; }
-        .snapshot-banner { background: linear-gradient(135deg, #fff7ed 0%, #ffffff 100%); border: 1px solid #fed7aa; border-radius: 12px; padding: 16px 18px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
-        .snapshot-banner h2 { font-size: 1.1rem; margin: 0; color: #9a3412; }
-        .snapshot-banner p { margin: 0; font-size: 0.9rem; color: #9a3412; }
-        .stats-dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
-        .stats-dashboard-grid .stat-card { min-height: 128px; }
-        .stats-dashboard-grid .stat-content p { font-size: 0.82rem; line-height: 1.3; }
-        .section-header.compact { margin-bottom: 14px; align-items: flex-end; }
-        .module-header-note { color: #64748b; font-size: 0.87rem; font-weight: 500; }
+        
+        /* Welcome & Orientation Guide */
+        .welcome-guide-banner {
+            background: #ffffff;
+            border: 1px solid #eaecf0;
+            border-radius: 14px;
+            padding: 20px 24px;
+            margin-bottom: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+        }
+        .welcome-guide-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #b3261e;
+            background: #fff1f0;
+            padding: 4px 10px;
+            border-radius: 999px;
+            margin-bottom: 8px;
+            border: 1px solid #fee4e2;
+        }
+        .welcome-guide-banner h2 { font-size: 1.25rem; font-weight: 700; margin: 0 0 4px 0; color: #101828; }
+        .welcome-guide-banner p { margin: 0 0 12px 0; font-size: 0.88rem; color: #475467; max-width: 650px; line-height: 1.45; }
+        .welcome-status-pill {
+            background: #f8fafc;
+            border: 1px solid #eaecf0;
+            color: #344054;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 6px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* KPI Cards with Friendly Accents */
+        .stats-dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .stats-dashboard-grid .stat-card {
+            min-height: 110px;
+            padding: 16px 18px;
+            border-radius: 12px;
+            border: 1px solid #eaecf0;
+            background: #ffffff;
+            box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            transition: all 0.2s ease;
+        }
+        .stats-dashboard-grid .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(16, 24, 40, 0.06);
+            border-color: #d0d5dd;
+        }
+        .stats-dashboard-grid .stat-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            flex-shrink: 0;
+            box-shadow: none !important;
+            transition: all 0.2s ease;
+        }
+        .kpi-blue .stat-icon { background: #eff8ff !important; color: #175cd3 !important; border: 1px solid #b2ddff !important; }
+        .kpi-green .stat-icon { background: #ecfdf3 !important; color: #027a48 !important; border: 1px solid #abefc6 !important; }
+        .kpi-amber .stat-icon { background: #fffaeb !important; color: #b54708 !important; border: 1px solid #fedf89 !important; }
+        .kpi-red .stat-icon { background: #fff1f0 !important; color: #b3261e !important; border: 1px solid #fee4e2 !important; }
+        .kpi-purple .stat-icon { background: #f9f5ff !important; color: #6941c6 !important; border: 1px solid #e9d7fe !important; }
+        .kpi-rose .stat-icon { background: #fff1f2 !important; color: #e11d48 !important; border: 1px solid #fecdd3 !important; }
+
+        .stats-dashboard-grid .stat-content { flex: 1; min-width: 0; }
+        .stats-dashboard-grid .stat-content h3 { font-size: 22px; font-weight: 700; color: #101828; margin: 0; line-height: 1.25; }
+        .stats-dashboard-grid .stat-content p { font-size: 13px; font-weight: 600; color: #344054; margin: 2px 0 0 0; }
+        .stats-dashboard-grid .stat-content small { font-size: 11.5px; color: #667085; }
+
+        /* Filter Pills Bar */
+        .section-header.compact { margin-bottom: 12px; }
         .module-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-        .module-search-input { width: 250px; border: 1px solid #cbd5e1; border-radius: 10px; padding: 10px 12px; background: #fff; color: #0f172a; font-size: 0.88rem; }
-        .module-search-input:focus { outline: none; border-color: #94a3b8; box-shadow: 0 0 0 4px rgba(148, 163, 184, 0.15); }
-        .module-hub-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 28px; }
-        .module-hub-card { position: relative; display: flex; flex-direction: column; gap: 10px; border: 1px solid #e2e8f0; border-radius: 14px; background: #ffffff; padding: 16px; text-decoration: none; color: inherit; box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06); transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease; min-height: 208px; overflow: hidden; }
-        .module-hub-card::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 3px; background: linear-gradient(90deg, #e2e8f0, #cbd5e1); transition: opacity 0.2s ease; opacity: 0.8; }
-        .module-hub-card:hover { transform: translateY(-5px); box-shadow: 0 12px 26px rgba(15, 23, 42, 0.12); border-color: #cbd5e1; }
-        .module-hub-card:hover::before { opacity: 1; }
+        .module-search-input { width: 240px; border: 1px solid #d0d5dd; border-radius: 8px; padding: 8px 12px; background: #fff; color: #101828; font-size: 0.88rem; }
+        .module-search-input:focus { outline: none; border-color: #b3261e; box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.1); }
+        
+        .module-filter-bar {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+        .btn-filter-pill {
+            padding: 6px 14px;
+            border-radius: 999px;
+            font-size: 12.5px;
+            font-weight: 600;
+            border: 1px solid #eaecf0;
+            background: #ffffff;
+            color: #475467;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-filter-pill:hover {
+            background: #f8fafc;
+            border-color: #d0d5dd;
+            color: #101828;
+        }
+        .btn-filter-pill.active {
+            background: #b3261e;
+            border-color: #b3261e;
+            color: #ffffff;
+            box-shadow: 0 1px 3px rgba(179, 38, 30, 0.2);
+        }
+
+        /* Friendly & Elegant Module Cards */
+        .module-hub-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; margin-bottom: 28px; }
+        .module-hub-card {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            border: 1px solid #eaecf0;
+            border-radius: 14px;
+            background: #ffffff;
+            padding: 18px 20px;
+            text-decoration: none;
+            color: inherit;
+            box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+            transition: all 0.2s ease;
+            min-height: 205px;
+            overflow: hidden;
+        }
+        .module-hub-card::before { display: none !important; }
+        .module-hub-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px -3px rgba(16, 24, 40, 0.08);
+            border-color: #d0d5dd;
+        }
         .module-hub-card.unavailable { border-style: dashed; opacity: 0.75; }
-        .module-hub-card.unavailable .module-link-text { color: #b45309; }
-        .module-hub-card.unavailable:hover { transform: translateY(-2px); }
+        .module-hub-card.unavailable .module-link-text { color: #b54708; }
         .module-hub-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-        .module-icon-wrap { width: 44px; height: 44px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; color: #ffffff; font-size: 18px; flex-shrink: 0; box-shadow: 0 8px 14px rgba(0, 0, 0, 0.16); }
-        .module-chip { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px; border: 1px solid #e2e8f0; background: #f8fafc; color: #64748b; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
-        .module-hub-card h4 { margin: 0; font-size: 1rem; font-weight: 800; color: #0f172a; }
-        .module-hub-card p { margin: 0; color: #64748b; font-size: 0.84rem; line-height: 1.45; }
-        .module-meta { margin-top: auto; display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
-        .module-meta strong { font-size: 1.2rem; font-weight: 800; color: #0f172a; }
-        .module-meta span { font-size: 0.72rem; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; text-align: right; }
-        .module-link-text { font-size: 0.8rem; color: #c62828; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; }
+        
+        .module-icon-wrap {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            flex-shrink: 0;
+            box-shadow: none !important;
+            transition: all 0.2s ease;
+        }
+
+        /* Module Theme Accents */
+        .module-theme-blue .module-icon-wrap { background: #eff8ff !important; color: #175cd3 !important; border: 1px solid #b2ddff !important; }
+        .module-theme-blue .module-chip { background: #eff8ff; color: #175cd3; border: 1px solid #b2ddff; }
+        .module-theme-blue:hover { border-color: #b2ddff; }
+
+        .module-theme-green .module-icon-wrap { background: #ecfdf3 !important; color: #027a48 !important; border: 1px solid #abefc6 !important; }
+        .module-theme-green .module-chip { background: #ecfdf3; color: #027a48; border: 1px solid #abefc6; }
+        .module-theme-green:hover { border-color: #abefc6; }
+
+        .module-theme-amber .module-icon-wrap { background: #fffaeb !important; color: #b54708 !important; border: 1px solid #fedf89 !important; }
+        .module-theme-amber .module-chip { background: #fffaeb; color: #b54708; border: 1px solid #fedf89; }
+        .module-theme-amber:hover { border-color: #fedf89; }
+
+        .module-theme-red .module-icon-wrap { background: #fff1f0 !important; color: #b3261e !important; border: 1px solid #fee4e2 !important; }
+        .module-theme-red .module-chip { background: #fff1f0; color: #b3261e; border: 1px solid #fee4e2; }
+        .module-theme-red:hover { border-color: #fee4e2; }
+
+        .module-theme-purple .module-icon-wrap { background: #f9f5ff !important; color: #6941c6 !important; border: 1px solid #e9d7fe !important; }
+        .module-theme-purple .module-chip { background: #f9f5ff; color: #6941c6; border: 1px solid #e9d7fe; }
+        .module-theme-purple:hover { border-color: #e9d7fe; }
+
+        .module-theme-indigo .module-icon-wrap { background: #eef4ff !important; color: #3538cd !important; border: 1px solid #c7d7fe !important; }
+        .module-theme-indigo .module-chip { background: #eef4ff; color: #3538cd; border: 1px solid #c7d7fe; }
+        .module-theme-indigo:hover { border-color: #c7d7fe; }
+
+        .module-theme-slate .module-icon-wrap { background: #f8fafc !important; color: #475467 !important; border: 1px solid #eaecf0 !important; }
+        .module-theme-slate .module-chip { background: #f8fafc; color: #475467; border: 1px solid #eaecf0; }
+        .module-theme-slate:hover { border-color: #d0d5dd; }
+
+        .module-chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 9px;
+            border-radius: 999px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .module-hub-card h4 { margin: 2px 0 0 0; font-size: 1.02rem; font-weight: 700; color: #101828; }
+        .module-hub-card p { margin: 0; color: #475467; font-size: 0.83rem; line-height: 1.45; }
+        
+        .module-meta {
+            margin-top: auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 8px;
+            padding-top: 10px;
+            border-top: 1px solid #f2f4f7;
+        }
+        .module-meta strong { font-size: 1.25rem; font-weight: 800; color: #101828; font-variant-numeric: tabular-nums; }
+        .module-meta span { font-size: 0.73rem; color: #667085; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; text-align: right; }
+        .module-link-text { font-size: 0.82rem; color: #b3261e; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; transition: transform 0.15s ease; }
+        .module-hub-card:hover .module-link-text { transform: translateX(3px); }
         body.dark-mode .module-hub-card h4, body.dark-mode .module-meta strong, body.dark-mode .module-link-text { color: var(--text-color-dark) !important; }
         body.dark-mode .module-hub-card p, body.dark-mode .module-meta span, body.dark-mode .module-header-note, body.dark-mode .module-chip { color: #b0b0b0 !important; }
         body.dark-mode .module-search-input { background: #1f2937; color: #e2e8f0; border-color: #475569; }
         .decision-board {
-            border: 1px solid #e2e8f0;
-            border-radius: 14px;
-            background: linear-gradient(140deg, #fff7ed 0%, #ffffff 40%, #f8fafc 100%);
-            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+            border: 1px solid #eaecf0;
+            border-radius: 12px;
+            background: #ffffff;
+            box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
         }
         .decision-board .card-header {
-            border-bottom: 1px solid #e2e8f0;
-            background: transparent !important;
+            border-bottom: 1px solid #eaecf0;
+            background: #ffffff !important;
             padding: 16px 18px;
+        }
+        .decision-board .card-header h5 {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #101828;
         }
         .decision-health-chip {
             border-radius: 999px;
-            padding: 6px 10px;
+            padding: 4px 10px;
             font-size: 0.72rem;
-            font-weight: 700;
-            letter-spacing: 0.03em;
+            font-weight: 600;
+            letter-spacing: 0.02em;
             text-transform: uppercase;
             border: 1px solid transparent;
         }
-        .decision-health-chip.low-risk { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
-        .decision-health-chip.medium-risk { background: #fffbeb; color: #b45309; border-color: #fde68a; }
-        .decision-health-chip.high-risk { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+        .decision-health-chip.low-risk { background: #ecfdf3; color: #027a48; border-color: #abefc6; }
+        .decision-health-chip.medium-risk { background: #fffaeb; color: #b54708; border-color: #fedf89; }
+        .decision-health-chip.high-risk { background: #fff1f0; color: #b3261e; border-color: #fee4e2; }
         .decision-summary {
             display: grid;
             grid-template-columns: minmax(120px, 140px) 1fr;
@@ -638,24 +854,24 @@ if ($attendance_trend_result) {
             padding: 4px 0 2px;
         }
         .decision-score {
-            width: 116px;
-            height: 116px;
+            width: 108px;
+            height: 108px;
             border-radius: 50%;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            border: 8px solid #e2e8f0;
+            border: 6px solid #eaecf0;
             background: #fff;
-            box-shadow: inset 0 0 0 1px #f1f5f9;
+            box-shadow: none;
             margin: 0 auto;
         }
-        .decision-score span { font-size: 1.9rem; line-height: 1; font-weight: 800; color: #0f172a; }
-        .decision-score small { font-size: 0.72rem; color: #64748b; font-weight: 700; }
-        .decision-score.low-risk { border-color: #86efac; }
-        .decision-score.medium-risk { border-color: #fcd34d; }
-        .decision-score.high-risk { border-color: #fca5a5; }
-        .decision-progress { height: 8px; border-radius: 999px; background: #e2e8f0; overflow: hidden; }
+        .decision-score span { font-size: 1.8rem; line-height: 1; font-weight: 700; color: #101828; }
+        .decision-score small { font-size: 0.72rem; color: #667085; font-weight: 600; }
+        .decision-score.low-risk { border-color: #abefc6; }
+        .decision-score.medium-risk { border-color: #fedf89; }
+        .decision-score.high-risk { border-color: #fee4e2; }
+        .decision-progress { height: 6px; border-radius: 999px; background: #eaecf0; overflow: hidden; }
         .decision-progress .progress-bar { border-radius: 999px; }
         .decision-list {
             display: flex;
@@ -666,15 +882,14 @@ if ($attendance_trend_result) {
             padding-right: 4px;
         }
         .decision-item {
-            border: 1px solid #e2e8f0;
-            border-left: 4px solid #cbd5e1;
-            border-radius: 10px;
+            border: 1px solid #eaecf0;
+            border-radius: 8px;
             background: #ffffff;
-            padding: 11px 12px;
+            padding: 12px 14px;
         }
-        .decision-item.high { border-left-color: #dc2626; }
-        .decision-item.medium { border-left-color: #d97706; }
-        .decision-item.low { border-left-color: #0d9488; }
+        .decision-item.high { border-color: #fee4e2; background: #fffcfb; }
+        .decision-item.medium { border-color: #fedf89; background: #fffefa; }
+        .decision-item.low { border-color: #eaecf0; background: #ffffff; }
         .decision-item .top-line {
             display: flex;
             justify-content: space-between;
@@ -686,25 +901,25 @@ if ($attendance_trend_result) {
             font-size: 0.68rem;
             font-weight: 700;
             text-transform: uppercase;
-            padding: 4px 8px;
+            padding: 3px 8px;
             border-radius: 999px;
             border: 1px solid transparent;
         }
-        .priority-badge.high { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
-        .priority-badge.medium { background: #fffbeb; color: #b45309; border-color: #fde68a; }
-        .priority-badge.low { background: #ecfeff; color: #0f766e; border-color: #99f6e4; }
-        .decision-item h6 { margin: 0 0 5px 0; font-size: 0.92rem; font-weight: 700; color: #0f172a; }
-        .decision-item p { margin: 0 0 4px 0; font-size: 0.82rem; color: #475569; line-height: 1.35; }
-        .decision-item small { color: #64748b; font-size: 0.76rem; }
-        .decision-item a { color: #c62828; font-size: 0.76rem; font-weight: 700; text-decoration: none; }
+        .priority-badge.high { background: #fff1f0; color: #b3261e; border-color: #fee4e2; }
+        .priority-badge.medium { background: #fffaeb; color: #b54708; border-color: #fedf89; }
+        .priority-badge.low { background: #eff8ff; color: #175cd3; border-color: #b2ddff; }
+        .decision-item h6 { margin: 0 0 4px 0; font-size: 0.9rem; font-weight: 700; color: #101828; }
+        .decision-item p { margin: 0 0 4px 0; font-size: 0.82rem; color: #475467; line-height: 1.35; }
+        .decision-item small { color: #667085; font-size: 0.76rem; }
+        .decision-item a { color: #b3261e; font-size: 0.76rem; font-weight: 600; text-decoration: none; }
         .decision-item a:hover { text-decoration: underline; }
         body.dark-mode .decision-board {
-            background: linear-gradient(140deg, #2d2d2d 0%, #2a2f39 100%);
+            background: #1e2430;
             border-color: var(--border-color-dark);
         }
         body.dark-mode .decision-item,
         body.dark-mode .decision-score {
-            background: #2f3642;
+            background: #252d3a;
             border-color: var(--border-color-dark);
             box-shadow: none;
         }
@@ -746,22 +961,30 @@ if ($attendance_trend_result) {
             </div>
 
             <div class="admin-main">
-                <div class="snapshot-banner">
+                <div class="welcome-guide-banner">
                     <div>
-                        <h2>Daily Workforce Snapshot</h2>
-                        <p>Presence: <?php echo $presence_rate; ?>% | Coverage: <?php echo $coverage_rate; ?>%</p>
+                        <div class="welcome-guide-badge"><i class="fas fa-compass"></i> HR Operations Hub</div>
+                        <h2>Good day, <?php echo htmlspecialchars($admin_info['full_name']); ?>!</h2>
+                        <p>Welcome to your Human Resources workspace. Monitor workforce attendance, approve leave requests, and manage payroll with ease. Choose a category below to quickly find what you need.</p>
+                        <div class="d-flex flex-wrap gap-2">
+                            <span class="welcome-status-pill"><i class="fas fa-user-check text-success"></i> Presence: <strong><?php echo $presence_rate; ?>%</strong></span>
+                            <span class="welcome-status-pill"><i class="fas fa-shield-alt text-primary"></i> Coverage: <strong><?php echo $coverage_rate; ?>%</strong></span>
+                            <span class="welcome-status-pill"><i class="fas fa-clipboard-check text-warning"></i> Pending Reviews: <strong><?php echo $attendance_review_count; ?></strong></span>
+                            <span class="welcome-status-pill"><i class="fas fa-plane-departure text-info"></i> Upcoming Leaves: <strong><?php echo $upcoming_leave_count; ?></strong></span>
+                        </div>
                     </div>
-                    <div class="d-flex flex-wrap gap-2">
-                        <span class="badge bg-light text-dark border">Pending Attendance Review: <?php echo $attendance_review_count; ?></span>
-                        <span class="badge bg-light text-dark border">Upcoming Leaves (7d): <?php echo $upcoming_leave_count; ?></span>
+                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                        <a href="employees.php" class="btn btn-sm btn-outline-secondary" style="border-radius: 8px; font-weight: 600; padding: 7px 14px; background: #fff;"><i class="fas fa-users me-1"></i> Staff Directory</a>
+                        <a href="attendance.php" class="btn btn-sm btn-outline-secondary" style="border-radius: 8px; font-weight: 600; padding: 7px 14px; background: #fff;"><i class="fas fa-calendar-check me-1"></i> Today's Logs</a>
+                        <a href="payroll.php" class="btn btn-sm text-white" style="border-radius: 8px; font-weight: 600; padding: 7px 14px; background: #b3261e;"><i class="fas fa-file-invoice-dollar me-1"></i> Run Payroll</a>
                     </div>
                 </div>
 
                 <div class="stats-dashboard-grid">
                     <?php foreach ($dashboard_kpis as $kpi): ?>
-                        <a href="<?php echo htmlspecialchars($kpi['url']); ?>" class="stat-card-link">
+                        <a href="<?php echo htmlspecialchars($kpi['url']); ?>" class="stat-card-link <?php echo htmlspecialchars($kpi['theme'] ?? 'kpi-blue'); ?>">
                             <div class="stat-card">
-                                <div class="stat-icon" style="background: <?php echo htmlspecialchars($kpi['gradient']); ?>;">
+                                <div class="stat-icon">
                                     <i class="<?php echo htmlspecialchars($kpi['icon']); ?>"></i>
                                 </div>
                                 <div class="stat-content">
@@ -775,17 +998,40 @@ if ($attendance_trend_result) {
                 </div>
 
                 <div class="section-header compact">
-                    <h2>HR Module Center</h2>
+                    <div>
+                        <h2>HR Module Hub</h2>
+                        <span class="module-header-note">Browse HR workflows by category or search by module name.</span>
+                    </div>
                     <div class="module-tools">
-                        <span class="module-header-note">All HR modules are accessible here for faster navigation.</span>
-                        <input type="text" id="moduleSearchInput" class="module-search-input" placeholder="Search module...">
+                        <input type="text" id="moduleSearchInput" class="module-search-input" placeholder="Search modules...">
                     </div>
                 </div>
+
+                <div class="module-filter-bar" id="moduleFilterBar">
+                    <button type="button" class="btn-filter-pill active" data-filter="all">
+                        <i class="fas fa-th-large"></i> All Modules (<?php echo count($hr_modules); ?>)
+                    </button>
+                    <button type="button" class="btn-filter-pill" data-filter="staff">
+                        <i class="fas fa-user-friends"></i> Staff & Teams
+                    </button>
+                    <button type="button" class="btn-filter-pill" data-filter="daily">
+                        <i class="fas fa-calendar-day"></i> Attendance & Leaves
+                    </button>
+                    <button type="button" class="btn-filter-pill" data-filter="payroll">
+                        <i class="fas fa-receipt"></i> Payroll & Pay
+                    </button>
+                    <button type="button" class="btn-filter-pill" data-filter="talent">
+                        <i class="fas fa-user-tie"></i> Hiring & Growth
+                    </button>
+                </div>
+
                 <div class="module-hub-grid">
                     <?php foreach ($hr_modules as $module): ?>
-                        <a href="<?php echo htmlspecialchars($module['url']); ?>" class="module-hub-card <?php echo !$module['available'] ? 'unavailable' : ''; ?>">
+                        <a href="<?php echo htmlspecialchars($module['url']); ?>" 
+                           class="module-hub-card module-theme-<?php echo htmlspecialchars($module['theme'] ?? 'slate'); ?> <?php echo !$module['available'] ? 'unavailable' : ''; ?>"
+                           data-category="<?php echo htmlspecialchars($module['category'] ?? 'all'); ?>">
                             <div class="module-hub-top">
-                                <span class="module-icon-wrap" style="background: <?php echo htmlspecialchars($module['gradient']); ?>;">
+                                <span class="module-icon-wrap">
                                     <i class="<?php echo htmlspecialchars($module['icon']); ?>"></i>
                                 </span>
                                 <span class="module-chip"><?php echo htmlspecialchars($module['chip']); ?></span>
@@ -994,17 +1240,35 @@ if ($attendance_trend_result) {
         }
 
         const moduleSearchInput = document.getElementById('moduleSearchInput');
-        if (moduleSearchInput) {
-            moduleSearchInput.addEventListener('input', () => {
-                const query = moduleSearchInput.value.trim().toLowerCase();
-                document.querySelectorAll('.module-hub-card').forEach((card) => {
-                    const title = card.querySelector('h4')?.textContent?.toLowerCase() || '';
-                    const description = card.querySelector('p')?.textContent?.toLowerCase() || '';
-                    const show = !query || title.includes(query) || description.includes(query);
-                    card.style.display = show ? '' : 'none';
-                });
+        const filterPills = document.querySelectorAll('.btn-filter-pill');
+        let currentModuleFilter = 'all';
+
+        function filterHrModules() {
+            const query = (moduleSearchInput ? moduleSearchInput.value : '').trim().toLowerCase();
+            document.querySelectorAll('.module-hub-card').forEach((card) => {
+                const category = card.getAttribute('data-category') || 'all';
+                const matchesCategory = (currentModuleFilter === 'all' || category === currentModuleFilter);
+
+                const title = card.querySelector('h4')?.textContent?.toLowerCase() || '';
+                const description = card.querySelector('p')?.textContent?.toLowerCase() || '';
+                const matchesSearch = !query || title.includes(query) || description.includes(query);
+
+                card.style.display = (matchesCategory && matchesSearch) ? '' : 'none';
             });
         }
+
+        if (moduleSearchInput) {
+            moduleSearchInput.addEventListener('input', filterHrModules);
+        }
+
+        filterPills.forEach((pill) => {
+            pill.addEventListener('click', () => {
+                filterPills.forEach(p => p.classList.remove('active'));
+                pill.classList.add('active');
+                currentModuleFilter = pill.getAttribute('data-filter') || 'all';
+                filterHrModules();
+            });
+        });
 
         renderAttendanceChart();
     </script>

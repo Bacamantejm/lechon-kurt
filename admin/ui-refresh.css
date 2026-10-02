@@ -2,41 +2,43 @@
 
 .admin-polish {
     --ui-card-bg: #ffffff;
-    --ui-card-border: #eceff3;
-    --ui-soft-bg: #f8f9fb;
-    --ui-heading: #1e2430;
-    --ui-muted: #6b7280;
-    --ui-accent: #c62828;
-    --ui-accent-soft: #fdecec;
-    --ui-shadow: 0 12px 28px rgba(22, 28, 45, 0.08);
-    --ui-shadow-soft: 0 6px 18px rgba(22, 28, 45, 0.06);
-    font-family: 'Poppins', 'Inter', sans-serif;
+    --ui-card-border: #eaecf0;
+    --ui-soft-bg: #f8fafc;
+    --ui-heading: #101828;
+    --ui-muted: #475467;
+    --ui-accent: #b3261e;
+    --ui-accent-soft: #fff1f0;
+    --ui-shadow: 0 4px 6px -2px rgba(16, 24, 40, 0.05), 0 10px 15px -3px rgba(16, 24, 40, 0.08);
+    --ui-shadow-soft: 0 1px 3px 0 rgba(16, 24, 40, 0.06), 0 1px 2px -1px rgba(16, 24, 40, 0.04);
+    font-family: 'Inter', sans-serif;
 }
 
 .admin-polish .admin-main {
     padding: 24px;
-    background:
-        radial-gradient(circle at 100% 0%, rgba(198, 40, 40, 0.07) 0, rgba(198, 40, 40, 0) 45%),
-        radial-gradient(circle at 0% 100%, rgba(15, 23, 42, 0.05) 0, rgba(15, 23, 42, 0) 45%);
+    background: #f8f9fa;
 }
 
 .admin-polish .admin-topbar {
-    padding: 12px 24px;
-    border-bottom: 1px solid #e8edf3;
+    padding: 0 24px;
+    height: 64px;
+    min-height: 64px;
+    border-bottom: 1px solid var(--ui-card-border);
+    background: #ffffff;
 }
 
 .admin-polish .topbar-content {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 16px;
     width: 100%;
 }
 
 .admin-polish .topbar-content h1 {
     flex: 1;
     margin: 0;
-    font-size: clamp(1.2rem, 1.1vw + 0.9rem, 1.75rem);
-    letter-spacing: 0.2px;
+    font-size: 1.15rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
     color: var(--ui-heading);
 }
 
@@ -44,21 +46,25 @@
     margin-left: auto;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
 }
 
 .admin-polish .admin-profile {
-    padding: 8px 14px;
-    border-radius: 999px;
-    border: 1px solid #e5e9ef;
-    background: #fff;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.04);
+    padding: 0;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    box-shadow: none;
 }
 
 .admin-polish .date-display {
-    font-size: 0.88rem;
+    font-size: 12px;
     color: var(--ui-muted);
     font-weight: 500;
+    background: #f8fafc;
+    border: 1px solid var(--ui-card-border);
+    border-radius: 6px;
+    padding: 6px 10px;
 }
 
 .admin-polish .section-header {
@@ -66,17 +72,18 @@
     align-items: center;
     justify-content: space-between;
     gap: 14px;
-    padding: 16px 18px;
+    padding: 14px 18px;
     background: var(--ui-card-bg);
     border: 1px solid var(--ui-card-border);
-    border-radius: 16px;
+    border-radius: 12px;
     box-shadow: var(--ui-shadow-soft);
     margin-bottom: 16px;
 }
 
 .admin-polish .section-header h2 {
     margin: 0;
-    font-size: 1.1rem;
+    font-size: 1.05rem;
+    font-weight: 700;
     color: var(--ui-heading);
 }
 
@@ -89,10 +96,18 @@
 
 .admin-polish .filter-form .form-control,
 .admin-polish .filter-form .form-select {
-    min-height: 42px;
-    border-radius: 10px;
-    border: 1px solid #dde3ea;
+    min-height: 40px;
+    border-radius: 8px;
+    border: 1px solid #d0d5dd;
     background: #fff;
+    font-size: 13.5px;
+    padding: 8px 12px;
+}
+
+.admin-polish .filter-form .form-control:focus,
+.admin-polish .filter-form .form-select:focus {
+    border-color: var(--ui-accent);
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.1);
 }
 
 .admin-polish .stats-grid,
@@ -102,27 +117,32 @@
 }
 
 .admin-polish .stat-card {
-    border-radius: 16px;
+    border-radius: 12px;
     border: 1px solid var(--ui-card-border);
-    background: linear-gradient(180deg, #fff, #fcfcfd);
+    background: #ffffff;
     box-shadow: var(--ui-shadow-soft);
+    padding: 18px 20px;
 }
 
 .admin-polish .stat-card:hover {
     transform: translateY(-2px);
     box-shadow: var(--ui-shadow);
+    border-color: #d0d5dd;
 }
 
 .admin-polish .stat-content h3 {
     color: #101828;
+    font-size: 24px;
+    font-weight: 700;
 }
 
 .admin-polish .stat-content p {
     color: var(--ui-muted);
+    font-size: 13px;
 }
 
 .admin-polish .table-responsive {
-    border-radius: 16px;
+    border-radius: 12px;
     border: 1px solid var(--ui-card-border);
     background: #fff;
     box-shadow: var(--ui-shadow-soft);

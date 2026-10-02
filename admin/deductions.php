@@ -211,38 +211,46 @@ $deductions = $has_deductions_table ? mysqli_query($conn, $deductions_sql) : fal
                     </div>
                 </div>
 
-                <div class="card hr-filter-panel mb-4">
-                    <div class="card-body d-flex flex-wrap gap-2 justify-content-between align-items-center">
+                <div class="friendly-guide-box">
+                    <div class="guide-left">
+                        <div class="guide-icon-pill">
+                            <i class="fas fa-lightbulb"></i>
+                        </div>
                         <div>
-                            <strong>Tip:</strong> Keep active deductions updated so payroll drafts remain accurate.
+                            <div class="guide-title">How Deductions Work in Payroll</div>
+                            <p class="guide-desc">Active recurring deductions (cash advances, equipment loans, or taxes) automatically deduct per payroll cycle until completed or deactivated.</p>
                         </div>
-                        <div class="d-flex flex-wrap gap-2">
-                            <a href="payslip_generation.php" class="btn btn-secondary btn-sm"><i class="fas fa-file-invoice-dollar"></i> Payslips</a>
-                            <a href="hr_reports.php?type=payroll" class="btn btn-secondary btn-sm"><i class="fas fa-chart-bar"></i> Payroll Reports</a>
-                        </div>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                        <a href="payslip_generation.php" class="btn btn-outline-secondary btn-sm"><i class="fas fa-file-invoice-dollar me-1"></i> Payslips</a>
+                        <a href="hr_reports.php?type=payroll" class="btn btn-outline-secondary btn-sm"><i class="fas fa-chart-bar me-1"></i> Payroll Reports</a>
                     </div>
                 </div>
 
                 <!-- Summary Section -->
                 <div class="card mb-4">
-                    <div class="card-header">
-                        <i class="fas fa-chart-pie"></i> Deduction Summary Per Employee
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div><i class="fas fa-chart-pie me-2"></i> Deduction Summary Per Employee</div>
                     </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="admin-table">
-                                <thead>
-                                    <tr>
-                                        <th>Employee</th>
-                                        <th>Active Deductions</th>
-                                        <th>Total / Payroll</th>
-                                        <th>Completed Deductions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php if (!$has_deductions_table): ?>
-                                        <tr><td colspan="4" class="text-center text-muted">`employee_deductions` table is missing.</td></tr>
-                                    <?php elseif ($summary_result && mysqli_num_rows($summary_result) > 0): ?>
+                    <div class="card-body p-0">
+                        <?php if (!$has_deductions_table): ?>
+                            <div class="table-empty-card">
+                                <div class="table-empty-icon"><i class="fas fa-database"></i></div>
+                                <h5>Database Setup Required</h5>
+                                <p>The `employee_deductions` table is not installed in the database yet.</p>
+                            </div>
+                        <?php elseif ($summary_result && mysqli_num_rows($summary_result) > 0): ?>
+                            <div class="table-responsive">
+                                <table class="admin-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Employee</th>
+                                            <th>Active Deductions</th>
+                                            <th>Total / Payroll</th>
+                                            <th>Completed Deductions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
                                         <?php while($summary = mysqli_fetch_assoc($summary_result)): ?>
                                             <tr>
                                                 <td><a href="?employee_id=<?php echo $summary['employee_id']; ?>"><?php echo htmlspecialchars($summary['first_name'] . ' ' . $summary['last_name']); ?></a></td>
@@ -251,65 +259,84 @@ $deductions = $has_deductions_table ? mysqli_query($conn, $deductions_sql) : fal
                                                 <td><?php echo (int)$summary['completed_deductions_count']; ?></td>
                                             </tr>
                                         <?php endwhile; ?>
-                                    <?php else: ?>
-                                        <tr><td colspan="4" class="text-center text-muted">No deduction summaries available.</td></tr>
-                                    <?php endif; ?>
-                                </tbody>
-                            </table>
-                        </div>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php else: ?>
+                            <div class="table-empty-card">
+                                <div class="table-empty-icon"><i class="fas fa-calculator"></i></div>
+                                <h5>No Deduction Summaries Yet</h5>
+                                <p>Once deduction entries are added to employees, a real-time summary of per-payroll subtotals will appear here.</p>
+                            </div>
+                        <?php endif; ?>
                     </div>
                 </div>
 
                 <div class="section-header">
                     <h2><?php echo $employee_filter_id > 0 ? 'Filtered Deduction List' : 'All Deductions'; ?></h2>
                     <?php if ($employee_filter_id > 0): ?>
-                        <a href="deductions.php" class="btn btn-secondary"><i class="fas fa-times"></i> Clear Filter</a>
+                        <a href="deductions.php" class="btn btn-secondary"><i class="fas fa-times me-1"></i> Clear Filter</a>
                     <?php endif; ?>
                 </div>
 
-                <div class="table-responsive">
-                    <table class="admin-table">
-                        <thead>
-                            <tr>
-                                <th>Employee</th>
-                                <th>Description</th>
-                                <th>Amount/Payroll</th>
-                                <th>Period</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php if (!$has_deductions_table): ?>
-                                <tr><td colspan="6" class="text-center text-muted">`employee_deductions` table is missing.</td></tr>
-                            <?php elseif ($deductions && mysqli_num_rows($deductions) > 0): ?>
-                                <?php while($row = mysqli_fetch_assoc($deductions)): ?>
-                                    <?php $row_status = in_array($row['status'], ['active', 'inactive', 'completed'], true) ? $row['status'] : 'inactive'; ?>
-                                    <tr>
-                                        <td><?php echo htmlspecialchars($row['first_name'] . ' ' . $row['last_name']); ?></td>
-                                        <td>
-                                            <strong><?php echo htmlspecialchars($row['description']); ?></strong><br>
-                                            <small class="text-muted"><?php echo ucfirst(str_replace('_', ' ', $row['deduction_type'])); ?></small>
-                                        </td>
-                                        <td>&#8369;<?php echo number_format((float)$row['amount_per_payroll'], 2); ?></td>
-                                        <td><?php echo date('M d, Y', strtotime($row['start_date'])); ?> - <?php echo $row['end_date'] ? date('M d, Y', strtotime($row['end_date'])) : 'Ongoing'; ?></td>
-                                        <td><span class="status-badge badge-<?php echo $row_status; ?>"><?php echo ucfirst($row_status); ?></span></td>
-                                        <td>
-                                            <button class="btn-icon" onclick='editDeduction(<?php echo json_encode($row); ?>)'><i class="fas fa-edit"></i></button>
-                                            <form method="POST" style="display:inline;" data-sw-confirm="1" data-sw-confirm-title="Delete deduction?" data-sw-confirm-text="This deduction record will be permanently removed." data-sw-confirm-confirm-text="Yes, delete">
-                                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
-                                                <input type="hidden" name="action" value="delete_deduction">
-                                                <input type="hidden" name="deduction_id" value="<?php echo $row['id']; ?>">
-                                                <button type="submit" class="btn-icon btn-icon-danger"><i class="fas fa-trash"></i></button>
-                                            </form>
-                                        </td>
-                                    </tr>
-                                <?php endwhile; ?>
-                            <?php else: ?>
-                                <tr><td colspan="6" class="text-center text-muted">No deductions found.</td></tr>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
+                <div class="card">
+                    <div class="card-body p-0">
+                        <?php if (!$has_deductions_table): ?>
+                            <div class="table-empty-card">
+                                <div class="table-empty-icon"><i class="fas fa-database"></i></div>
+                                <h5>Database Setup Required</h5>
+                                <p>`employee_deductions` table is missing.</p>
+                            </div>
+                        <?php elseif ($deductions && mysqli_num_rows($deductions) > 0): ?>
+                            <div class="table-responsive">
+                                <table class="admin-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Employee</th>
+                                            <th>Description</th>
+                                            <th>Amount/Payroll</th>
+                                            <th>Period</th>
+                                            <th>Status</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php while($row = mysqli_fetch_assoc($deductions)): ?>
+                                            <?php $row_status = in_array($row['status'], ['active', 'inactive', 'completed'], true) ? $row['status'] : 'inactive'; ?>
+                                            <tr>
+                                                <td><?php echo htmlspecialchars($row['first_name'] . ' ' . $row['last_name']); ?></td>
+                                                <td>
+                                                    <strong><?php echo htmlspecialchars($row['description']); ?></strong><br>
+                                                    <small class="text-muted"><?php echo ucfirst(str_replace('_', ' ', $row['deduction_type'])); ?></small>
+                                                </td>
+                                                <td>&#8369;<?php echo number_format((float)$row['amount_per_payroll'], 2); ?></td>
+                                                <td><?php echo date('M d, Y', strtotime($row['start_date'])); ?> - <?php echo $row['end_date'] ? date('M d, Y', strtotime($row['end_date'])) : 'Ongoing'; ?></td>
+                                                <td><span class="status-badge badge-<?php echo $row_status; ?>"><?php echo ucfirst($row_status); ?></span></td>
+                                                <td>
+                                                    <button class="btn-icon" onclick='editDeduction(<?php echo json_encode($row); ?>)'><i class="fas fa-edit"></i></button>
+                                                    <form method="POST" style="display:inline;" data-sw-confirm="1" data-sw-confirm-title="Delete deduction?" data-sw-confirm-text="This deduction record will be permanently removed." data-sw-confirm-confirm-text="Yes, delete">
+                                                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+                                                        <input type="hidden" name="action" value="delete_deduction">
+                                                        <input type="hidden" name="deduction_id" value="<?php echo $row['id']; ?>">
+                                                        <button type="submit" class="btn-icon btn-icon-danger"><i class="fas fa-trash"></i></button>
+                                                    </form>
+                                                </td>
+                                            </tr>
+                                        <?php endwhile; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php else: ?>
+                            <div class="table-empty-card">
+                                <div class="table-empty-icon"><i class="fas fa-receipt"></i></div>
+                                <h5>No Deductions Found</h5>
+                                <p>There are currently no deduction items recorded for your team. You can create loans, advances, or other adjustments anytime.</p>
+                                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#deductionModal" onclick="resetForm()">
+                                    <i class="fas fa-plus me-1"></i> Add First Deduction
+                                </button>
+                            </div>
+                        <?php endif; ?>
+                    </div>
                 </div>
             </div>
         </div>

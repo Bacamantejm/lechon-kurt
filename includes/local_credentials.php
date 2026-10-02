@@ -91,14 +91,13 @@ if (!defined('PHILSYS_BEARER_TOKEN')) {
 }
 
 // SMTP settings for local development.
-// For localhost testing, use a local SMTP relay or mail catcher rather than
-// external Gmail credentials.
+// For localhost testing in Laragon, use Mailpit on port 1025.
 if (!defined('SMTP_HOST')) {
     define('SMTP_HOST', 'localhost');
 }
 
 if (!defined('SMTP_PORT')) {
-    define('SMTP_PORT', '25');
+    define('SMTP_PORT', '1025');
 }
 
 if (!defined('SMTP_USERNAME')) {
