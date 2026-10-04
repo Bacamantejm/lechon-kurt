@@ -122,20 +122,74 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_action'])) {
             throw new RuntimeException('Application not found.');
         }
 
-        $update_query = "UPDATE franchise_applications
-                         SET status = ?, admin_notes = ?, admin_id = ?, reviewed_at = NOW()
-                         WHERE id = ?";
-        $stmt = mysqli_prepare($conn, $update_query);
-        if (!$stmt) {
-            throw new RuntimeException('Unable to prepare application status update.');
+        $flagged_docs = isset($_POST['flagged_docs']) && is_array($_POST['flagged_docs']) ? $_POST['flagged_docs'] : [];
+        $doc_remarks = isset($_POST['doc_remarks']) && is_array($_POST['doc_remarks']) ? $_POST['doc_remarks'] : [];
+
+        $incomplete_map = [];
+        if ($new_status === 'incomplete') {
+            foreach ($flagged_docs as $f_doc) {
+                $f_doc = trim((string)$f_doc);
+                if ($f_doc !== '') {
+                    $incomplete_map[$f_doc] = trim((string)($doc_remarks[$f_doc] ?? ''));
+                }
+            }
         }
-        mysqli_stmt_bind_param($stmt, "ssii", $new_status, $notes, $current_admin_id, $app_id);
+        $incomplete_json = !empty($incomplete_map) ? json_encode($incomplete_map, JSON_UNESCAPED_UNICODE) : null;
+
+        $has_inc_col = saColumnExists($conn, 'franchise_applications', 'incomplete_documents');
+        if ($has_inc_col) {
+            $update_query = "UPDATE franchise_applications
+                             SET status = ?, admin_notes = ?, incomplete_documents = ?, admin_id = ?, reviewed_at = NOW()
+                             WHERE id = ?";
+            $stmt = mysqli_prepare($conn, $update_query);
+            if (!$stmt) {
+                throw new RuntimeException('Unable to prepare application status update.');
+            }
+            mysqli_stmt_bind_param($stmt, "sssii", $new_status, $notes, $incomplete_json, $current_admin_id, $app_id);
+        } else {
+            $update_query = "UPDATE franchise_applications
+                             SET status = ?, admin_notes = ?, admin_id = ?, reviewed_at = NOW()
+                             WHERE id = ?";
+            $stmt = mysqli_prepare($conn, $update_query);
+            if (!$stmt) {
+                throw new RuntimeException('Unable to prepare application status update.');
+            }
+            mysqli_stmt_bind_param($stmt, "ssii", $new_status, $notes, $current_admin_id, $app_id);
+        }
+
         if (!mysqli_stmt_execute($stmt)) {
             $msg = trim((string)mysqli_stmt_error($stmt));
             mysqli_stmt_close($stmt);
             throw new RuntimeException($msg !== '' ? $msg : 'Failed to update application status.');
         }
         mysqli_stmt_close($stmt);
+
+        // Update document statuses in franchise_documents
+        if (saTableExists($conn, 'franchise_documents')) {
+            if ($new_status === 'incomplete') {
+                $reset_stmt = mysqli_prepare($conn, "UPDATE franchise_documents SET status = 'approved', admin_remarks = NULL WHERE application_id = ?");
+                if ($reset_stmt) {
+                    mysqli_stmt_bind_param($reset_stmt, "i", $app_id);
+                    mysqli_stmt_execute($reset_stmt);
+                    mysqli_stmt_close($reset_stmt);
+                }
+                foreach ($incomplete_map as $f_type => $f_reason) {
+                    $doc_stmt = mysqli_prepare($conn, "UPDATE franchise_documents SET status = 'incomplete', admin_remarks = ? WHERE application_id = ? AND document_type = ?");
+                    if ($doc_stmt) {
+                        mysqli_stmt_bind_param($doc_stmt, "sis", $f_reason, $app_id, $f_type);
+                        mysqli_stmt_execute($doc_stmt);
+                        mysqli_stmt_close($doc_stmt);
+                    }
+                }
+            } elseif ($new_status === 'approved') {
+                $all_ok_stmt = mysqli_prepare($conn, "UPDATE franchise_documents SET status = 'approved', admin_remarks = NULL WHERE application_id = ?");
+                if ($all_ok_stmt) {
+                    mysqli_stmt_bind_param($all_ok_stmt, "i", $app_id);
+                    mysqli_stmt_execute($all_ok_stmt);
+                    mysqli_stmt_close($all_ok_stmt);
+                }
+            }
+        }
 
         if ($new_status === 'approved') {
             $approved_business_type = trim((string)($app_data['business_type'] ?? ''));
@@ -203,14 +257,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_action'])) {
             'franchise_application'
         );
 
-        sendFranchiseNotification($conn, $app_data, $new_status, $notes);
+        sendFranchiseNotification($conn, $app_data, $new_status, $notes, $incomplete_map);
 
         if ($new_status === 'approved' && is_array($store_result)) {
             $store_note = !empty($store_result['created']) ? 'A new store location was created.' : 'Existing store location was updated.';
             $trial_note = $trial_started ? ' A 1-month trial subscription was also activated.' : ' Trial subscription setup was skipped because an active billing profile already exists.';
             saSetFlash('success', "Application approved successfully. {$store_note} Business partner now has admin access with store-scoped product management.{$trial_note}");
         } elseif ($new_status === 'incomplete') {
-            saSetFlash('warning', 'Application marked as Incomplete Requirements. Notification email sent to applicant.');
+            $doc_count = count($incomplete_map);
+            $count_msg = $doc_count > 0 ? " ({$doc_count} document" . ($doc_count > 1 ? 's' : '') . " flagged for re-upload)" : "";
+            saSetFlash('warning', "Application marked as Incomplete Requirements{$count_msg}. Notification email sent to applicant.");
         } else {
             saSetFlash('success', 'Application status updated successfully. Notification email sent to applicant.');
         }
@@ -224,13 +280,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_action'])) {
     exit;
 }
 
-function sendFranchiseNotification($conn, $app_data, $status, $admin_notes) {
+function sendFranchiseNotification($conn, $app_data, $status, $admin_notes, $incomplete_documents = []) {
     try {
         require_once dirname(__DIR__) . '/email_service.php';
         $recipient_email = trim((string)($app_data['email'] ?? $app_data['contact_email'] ?? ''));
         if ($recipient_email !== '') {
             $mailer = new EmailService($conn);
-            $mailer->sendFranchiseStatusEmail($recipient_email, $status, $app_data, $admin_notes);
+            $mailer->sendFranchiseStatusEmail($recipient_email, $status, $app_data, $admin_notes, $incomplete_documents);
         }
     } catch (Throwable $e) {
         error_log("Failed to send franchise status email notification: " . $e->getMessage());
@@ -515,9 +571,23 @@ $extra_scripts = <<<'HTML'
     }
 
     function handleIncomplete(applicationNumber) {
+        const checkedBoxes = Array.from(document.querySelectorAll('#appForm input[name="flagged_docs[]"]:checked'));
+        const flaggedNames = checkedBoxes.map(cb => cb.getAttribute('data-doc-name') || cb.value);
+        
+        let docListHtml = '';
+        if (flaggedNames.length > 0) {
+            docListHtml = '<div style="background:#fff8ef;border:1px solid #fedf89;border-radius:8px;padding:10px 14px;margin:12px 0;text-align:left;color:#b54708;font-size:13px;">' +
+                          '<strong>Flagged for Re-upload (' + flaggedNames.length + ' item' + (flaggedNames.length > 1 ? 's' : '') + '):</strong><ul style="margin:4px 0 0;padding-left:18px;">' +
+                          flaggedNames.map(name => '<li>' + name + '</li>').join('') +
+                          '</ul></div>' +
+                          '<p style="font-size:12px;color:#667085;margin-bottom:0;">The applicant will only need to re-upload the flagged document(s). All approved files and application information will be preserved.</p>';
+        } else {
+            docListHtml = '<p style="font-size:13px;color:#b54708;margin-top:10px;"><em>Note: No specific documents were checked. The applicant will receive your feedback notes to revise their submission.</em></p>';
+        }
+
         Swal.fire({
             title: 'Mark Incomplete Requirements',
-            html: 'Are you sure you want to mark application <strong>' + applicationNumber + '</strong> as <strong>INCOMPLETE REQUIREMENTS</strong>?<br><br>An email notification with admin notes will be sent to the applicant asking for completed documents.',
+            html: 'Are you sure you want to mark application <strong>' + applicationNumber + '</strong> as <strong>INCOMPLETE REQUIREMENTS</strong>?' + docListHtml,
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#f59e0b',

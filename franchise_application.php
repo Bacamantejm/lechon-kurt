@@ -146,7 +146,8 @@ function getFranchiseWorkflowState($conn, $user_id) {
         'total_attempts' => 0,
         'next_eligible_at' => null,
         'latest_application' => null,
-        'approved_trial_ends_at' => null
+        'approved_trial_ends_at' => null,
+        'incomplete_documents' => []
     ];
 
     if ($user_id <= 0) {
@@ -167,8 +168,11 @@ function getFranchiseWorkflowState($conn, $user_id) {
         }
     }
 
+    $has_inc_col = franchiseColumnExists($conn, 'franchise_applications', 'incomplete_documents');
+    $cols = "id, application_number, status, created_at, reviewed_at, admin_notes" . ($has_inc_col ? ", incomplete_documents" : "");
+
     $apps = [];
-    $query = "SELECT id, application_number, status, created_at, reviewed_at, admin_notes
+    $query = "SELECT {$cols}
               FROM franchise_applications
               WHERE user_id = ?
               ORDER BY created_at DESC, id DESC";
@@ -183,7 +187,15 @@ function getFranchiseWorkflowState($conn, $user_id) {
         mysqli_stmt_close($stmt);
     }
 
-    $state['total_attempts'] = count($apps);
+    $final_attempts = 0;
+    foreach ($apps as $app_row) {
+        $st = strtolower(trim((string)($app_row['status'] ?? '')));
+        if ($st === 'rejected' || $st === 'approved') {
+            $final_attempts++;
+        }
+    }
+
+    $state['total_attempts'] = $final_attempts;
     $state['remaining_attempts'] = max(0, 2 - $state['total_attempts']);
     $state['latest_application'] = $apps[0] ?? null;
     $latest_status = strtolower(trim((string)($state['latest_application']['status'] ?? '')));
@@ -203,6 +215,18 @@ function getFranchiseWorkflowState($conn, $user_id) {
         return $state;
     }
 
+    if ($latest_status === 'incomplete') {
+        $state['stage'] = 'incomplete_requirements';
+        $state['can_submit'] = true;
+        $raw_inc = $state['latest_application']['incomplete_documents'] ?? '';
+        $state['incomplete_documents'] = !empty($raw_inc) ? json_decode((string)$raw_inc, true) : [];
+        if (!is_array($state['incomplete_documents'])) {
+            $state['incomplete_documents'] = [];
+        }
+        $state['message'] = 'Action Required: Your business application requires document revisions or additional requirements. Please re-upload the flagged document(s) below.';
+        return $state;
+    }
+
     if ($state['total_attempts'] >= 2) {
         $state['stage'] = 'max_attempts_reached';
         $state['can_submit'] = false;
@@ -213,14 +237,13 @@ function getFranchiseWorkflowState($conn, $user_id) {
     if ($latest_status === 'rejected') {
         $reference_time = (string)($state['latest_application']['reviewed_at'] ?? $state['latest_application']['created_at'] ?? '');
         $cooldown_anchor = $reference_time !== '' ? strtotime($reference_time) : time();
-        $next_eligible_timestamp = $cooldown_anchor + 30;
+        $next_eligible_timestamp = strtotime('+3 days', $cooldown_anchor);
         $state['next_eligible_at'] = date('Y-m-d H:i:s', $next_eligible_timestamp);
 
         if (time() < $next_eligible_timestamp) {
             $state['stage'] = 'reapply_cooldown';
             $state['can_submit'] = false;
-            $state['cooldown_seconds_remaining'] = max(0, $next_eligible_timestamp - time());
-            $state['message'] = 'Your last franchise application was rejected. You may submit one final application after the 30-second cooldown period.';
+            $state['message'] = 'Your last franchise application was rejected. You may submit one final application after the 3-day cooldown period.';
             return $state;
         }
 
@@ -235,13 +258,29 @@ function getFranchiseWorkflowState($conn, $user_id) {
         return $state;
     }
 
-    $state['message'] = 'You may submit your franchise application now. You have up to two total attempts, and rejected applications require a 30-second wait before the final retry.';
+    $state['message'] = 'You may submit your franchise application now. You have up to two total attempts, and rejected applications require a 3-day wait before the final retry.';
     return $state;
 }
 
 $franchise_workflow = getFranchiseWorkflowState($conn, $user_id);
 $latest_application = $franchise_workflow['latest_application'];
 $has_pending_application = $franchise_workflow['stage'] === 'pending_review';
+$is_incomplete_resubmission = ($franchise_workflow['stage'] === 'incomplete_requirements' && !empty($latest_application['id']));
+
+$existing_uploaded_docs = [];
+if (!empty($latest_application['id']) && tableExists($conn, 'franchise_documents')) {
+    $d_stmt = mysqli_prepare($conn, "SELECT * FROM franchise_documents WHERE application_id = ?");
+    if ($d_stmt) {
+        $l_id = (int)$latest_application['id'];
+        mysqli_stmt_bind_param($d_stmt, "i", $l_id);
+        mysqli_stmt_execute($d_stmt);
+        $d_res = mysqli_stmt_get_result($d_stmt);
+        while ($d_res && ($d_row = mysqli_fetch_assoc($d_res))) {
+            $existing_uploaded_docs[$d_row['document_type']] = $d_row;
+        }
+        mysqli_stmt_close($d_stmt);
+    }
+}
 
 function getFormInput($key, $default = '') {
     return trim((string)($_POST[$key] ?? $default));
@@ -784,7 +823,7 @@ function getFranchiseReviewerIds($conn) {
     return array_keys($reviewer_ids);
 }
 
-function notifyAdminsOfFranchiseSubmission($conn, $application_id, $application_number, $business_name, $contact_person) {
+function notifyAdminsOfFranchiseSubmission($conn, $application_id, $application_number, $business_name, $contact_person, $action_type = 'submitted') {
     try {
         $reviewer_ids = getFranchiseReviewerIds($conn);
     } catch (Throwable $e) {
@@ -797,8 +836,10 @@ function notifyAdminsOfFranchiseSubmission($conn, $application_id, $application_
         return;
     }
 
-    $title = "New Franchise Application";
-    $message = $business_name . " submitted application " . $application_number . " (" . $contact_person . ").";
+    $title = ($action_type === 'resubmitted') ? "Franchise Application Revisions Submitted" : "New Franchise Application";
+    $message = ($action_type === 'resubmitted')
+        ? "{$business_name} resubmitted revised requirements for {$application_number} ({$contact_person})."
+        : "{$business_name} submitted application {$application_number} ({$contact_person}).";
 
     foreach ($reviewer_ids as $reviewer_id) {
         $ok = createNotification(
@@ -843,8 +884,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
         'psgc_barangay_code' => getFormInput('psgc_barangay_code'),
         'psgc_barangay_name' => getFormInput('psgc_barangay_name'),
         'psgc_manual_mode' => getFormInput('psgc_manual_mode') === '1' ? '1' : '0',
-        'location_latitude' => getFormInput('location_latitude'),
-        'location_longitude' => getFormInput('location_longitude'),
         'contact_person' => getFormInput('contact_person'),
         'contact_phone' => getFormInput('contact_phone'),
         'contact_email' => getFormInput('contact_email'),
@@ -915,24 +954,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
 
     if (!$error_msg) {
         $is_cavite_scope = false;
-        $province_name = strtolower(trim((string)$form_data['psgc_province_name']));
-        $province_code = trim((string)$form_data['psgc_province_code']);
-        $location_blob = strtolower(trim((string)($form_data['business_address'] . ' ' . $form_data['business_address_street'] . ' ' . $form_data['proposed_location'])));
-
-        if ($province_name === 'cavite' || $province_code === '042100000' || strpos($location_blob, 'cavite') !== false) {
-            $is_cavite_scope = true;
-        }
-
-        if ($is_cavite_scope && !empty($form_data['location_latitude']) && !empty($form_data['location_longitude'])) {
-            $lat = (float)$form_data['location_latitude'];
-            $lng = (float)$form_data['location_longitude'];
-            if ($lat < 14.00 || $lat > 14.60 || $lng < 120.55 || $lng > 121.15) {
-                $is_cavite_scope = false;
-            }
+        if ($form_data['psgc_manual_mode'] !== '1') {
+            $province_name = strtolower(trim((string)$form_data['psgc_province_name']));
+            $province_code = trim((string)$form_data['psgc_province_code']);
+            $is_cavite_scope = $province_name === 'cavite' || $province_code === '042100000';
+        } else {
+            $manual_location_blob = strtolower(trim((string)($form_data['business_address'] . ' ' . $form_data['business_address_street'])));
+            $is_cavite_scope = strpos($manual_location_blob, 'cavite') !== false;
         }
 
         if (!$is_cavite_scope) {
-            $error_msg = "Franchise applications are strictly accepted for Cavite locations only. Your pinned shop location is outside the Cavite service area.";
+            $error_msg = "Business partner applications are currently limited to Cavite locations only.";
         }
     }
 
@@ -1009,6 +1041,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
             $franchise_workflow = getFranchiseWorkflowState($conn, $user_id);
             $latest_application = $franchise_workflow['latest_application'];
             $has_pending_application = $franchise_workflow['stage'] === 'pending_review';
+            $is_incomplete_resubmission = ($franchise_workflow['stage'] === 'incomplete_requirements' && !empty($latest_application['id']));
+
             if (!$franchise_workflow['can_submit']) {
                 if ($franchise_workflow['stage'] === 'reapply_cooldown' && !empty($franchise_workflow['next_eligible_at'])) {
                     $error_msg = $franchise_workflow['message'] . ' You can apply again on ' . date('F j, Y g:i A', strtotime((string)$franchise_workflow['next_eligible_at'])) . '.';
@@ -1019,7 +1053,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
                 }
             }
 
-            if (!$error_msg) {
+            if (!$error_msg && !$is_incomplete_resubmission) {
                 $submission_stage = 'duplicate application check';
                 $check_query = "SELECT id FROM franchise_applications WHERE user_id = ? AND status = 'pending'";
                 $stmt = mysqli_prepare($conn, $check_query);
@@ -1047,109 +1081,197 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
             }
 
             if (!$error_msg) {
-                $submission_stage = 'application number generation';
-                $application_number = generateUniqueFranchiseApplicationNumber($conn, $user_id);
-
                 $submission_stage = 'transaction start';
                 if (!mysqli_begin_transaction($conn)) {
                     throw new RuntimeException('Unable to start application transaction.');
                 }
                 $transaction_started = true;
-
-                $submission_stage = 'application insert';
-                if ($franchise_psgc_columns_ready) {
-                    $insert_query = "INSERT INTO franchise_applications (
-                        application_number, user_id, business_name, business_type,
-                        tin_number, dti_sec_number, bir_registration_number, mayors_permit,
-                        business_address, proposed_location,
-                        region_name, region_code, province_name, province_code,
-                        city_name, city_code, barangay_name, barangay_code,
-                        contact_person, contact_phone, contact_email, capital_investment,
-                        business_experience, marketing_plan, status, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())";
-                } else {
-                    $insert_query = "INSERT INTO franchise_applications (
-                        application_number, user_id, business_name, business_type,
-                        tin_number, dti_sec_number, bir_registration_number, mayors_permit,
-                        business_address, proposed_location, contact_person,
-                        contact_phone, contact_email, capital_investment,
-                        business_experience, marketing_plan, status, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())";
-                }
-
-                $stmt = mysqli_prepare($conn, $insert_query);
-                if (!$stmt) {
-                    throw new RuntimeException("Unable to prepare franchise application insert query.");
-                }
-
                 $capital_investment = (float)$form_data['capital_investment'];
-                if ($franchise_psgc_columns_ready) {
-                    $insert_params = [
-                        $application_number,
-                        $user_id,
-                        $form_data['business_name'],
-                        $form_data['business_type'],
-                        $form_data['tin_number'],
-                        $form_data['dti_sec_number'],
-                        $form_data['bir_registration_number'],
-                        $form_data['mayors_permit'],
-                        $form_data['business_address'],
-                        $form_data['proposed_location'],
-                        $form_data['psgc_region_name'],
-                        $form_data['psgc_region_code'],
-                        $form_data['psgc_province_name'],
-                        $form_data['psgc_province_code'],
-                        $form_data['psgc_city_name'],
-                        $form_data['psgc_city_code'],
-                        $form_data['psgc_barangay_name'],
-                        $form_data['psgc_barangay_code'],
-                        $form_data['contact_person'],
-                        $form_data['contact_phone'],
-                        $form_data['contact_email'],
-                        $capital_investment,
-                        $form_data['business_experience'],
-                        $form_data['marketing_plan']
-                    ];
-                    $insert_types = 'si' . str_repeat('s', 19) . 'dss';
+
+                if ($is_incomplete_resubmission) {
+                    $submission_stage = 'application update (incomplete resubmission)';
+                    $application_id = (int)$latest_application['id'];
+                    $application_number = (string)$latest_application['application_number'];
+
+                    if ($franchise_psgc_columns_ready) {
+                        $update_query = "UPDATE franchise_applications SET
+                            business_name = ?, business_type = ?,
+                            tin_number = ?, dti_sec_number = ?, bir_registration_number = ?, mayors_permit = NULLIF(?, ''),
+                            business_address = ?, proposed_location = ?,
+                            region_name = ?, region_code = ?, province_name = ?, province_code = ?,
+                            city_name = ?, city_code = ?, barangay_name = ?, barangay_code = ?,
+                            contact_person = ?, contact_phone = ?, contact_email = ?, capital_investment = ?,
+                            business_experience = ?, marketing_plan = ?, status = 'pending', incomplete_documents = NULL, resubmitted_at = NOW()
+                            WHERE id = ? AND user_id = ?";
+                        $update_params = [
+                            $form_data['business_name'],
+                            $form_data['business_type'],
+                            $form_data['tin_number'],
+                            $form_data['dti_sec_number'],
+                            $form_data['bir_registration_number'],
+                            $form_data['mayors_permit'],
+                            $form_data['business_address'],
+                            $form_data['proposed_location'],
+                            $form_data['psgc_region_name'],
+                            $form_data['psgc_region_code'],
+                            $form_data['psgc_province_name'],
+                            $form_data['psgc_province_code'],
+                            $form_data['psgc_city_name'],
+                            $form_data['psgc_city_code'],
+                            $form_data['psgc_barangay_name'],
+                            $form_data['psgc_barangay_code'],
+                            $form_data['contact_person'],
+                            $form_data['contact_phone'],
+                            $form_data['contact_email'],
+                            $capital_investment,
+                            $form_data['business_experience'],
+                            $form_data['marketing_plan'],
+                            $application_id,
+                            $user_id
+                        ];
+                        $update_types = str_repeat('s', 19) . 'dssii';
+                    } else {
+                        $update_query = "UPDATE franchise_applications SET
+                            business_name = ?, business_type = ?,
+                            tin_number = ?, dti_sec_number = ?, bir_registration_number = ?, mayors_permit = NULLIF(?, ''),
+                            business_address = ?, proposed_location = ?, contact_person = ?,
+                            contact_phone = ?, contact_email = ?, capital_investment = ?,
+                            business_experience = ?, marketing_plan = ?, status = 'pending', incomplete_documents = NULL, resubmitted_at = NOW()
+                            WHERE id = ? AND user_id = ?";
+                        $update_params = [
+                            $form_data['business_name'],
+                            $form_data['business_type'],
+                            $form_data['tin_number'],
+                            $form_data['dti_sec_number'],
+                            $form_data['bir_registration_number'],
+                            $form_data['mayors_permit'],
+                            $form_data['business_address'],
+                            $form_data['proposed_location'],
+                            $form_data['contact_person'],
+                            $form_data['contact_phone'],
+                            $form_data['contact_email'],
+                            $capital_investment,
+                            $form_data['business_experience'],
+                            $form_data['marketing_plan'],
+                            $application_id,
+                            $user_id
+                        ];
+                        $update_types = str_repeat('s', 11) . 'dssii';
+                    }
+
+                    $stmt = mysqli_prepare($conn, $update_query);
+                    if (!$stmt) {
+                        throw new RuntimeException("Unable to prepare application update query.");
+                    }
+                    if (!franchiseBindParams($stmt, $update_types, $update_params)) {
+                        $bind_error = trim((string)mysqli_stmt_error($stmt));
+                        mysqli_stmt_close($stmt);
+                        throw new RuntimeException($bind_error !== '' ? $bind_error : 'Unable to bind application update parameters.');
+                    }
+                    if (!mysqli_stmt_execute($stmt)) {
+                        $update_error = trim((string)mysqli_stmt_error($stmt));
+                        mysqli_stmt_close($stmt);
+                        throw new RuntimeException($update_error !== '' ? $update_error : 'Unable to update application record.');
+                    }
+                    mysqli_stmt_close($stmt);
+
+                    // For incomplete resubmission, only the flagged documents are strictly mandatory to re-upload
+                    $incomplete_keys = !empty($franchise_workflow['incomplete_documents']) ? array_keys($franchise_workflow['incomplete_documents']) : [];
+                    $required_docs_for_upload = $incomplete_keys;
                 } else {
-                    $insert_params = [
-                        $application_number,
-                        $user_id,
-                        $form_data['business_name'],
-                        $form_data['business_type'],
-                        $form_data['tin_number'],
-                        $form_data['dti_sec_number'],
-                        $form_data['bir_registration_number'],
-                        $form_data['mayors_permit'],
-                        $form_data['business_address'],
-                        $form_data['proposed_location'],
-                        $form_data['contact_person'],
-                        $form_data['contact_phone'],
-                        $form_data['contact_email'],
-                        $capital_investment,
-                        $form_data['business_experience'],
-                        $form_data['marketing_plan']
-                    ];
-                    $insert_types = 'si' . str_repeat('s', 11) . 'dss';
-                }
+                    $submission_stage = 'application number generation';
+                    $application_number = generateUniqueFranchiseApplicationNumber($conn, $user_id);
 
-                if (!franchiseBindParams($stmt, $insert_types, $insert_params)) {
-                    $bind_error = trim((string)mysqli_stmt_error($stmt));
-                    mysqli_stmt_close($stmt);
-                    throw new RuntimeException($bind_error !== '' ? $bind_error : 'Unable to bind franchise application insert parameters.');
-                }
+                    $submission_stage = 'application insert';
+                    if ($franchise_psgc_columns_ready) {
+                        $insert_query = "INSERT INTO franchise_applications (
+                            application_number, user_id, business_name, business_type,
+                            tin_number, dti_sec_number, bir_registration_number, mayors_permit,
+                            business_address, proposed_location,
+                            region_name, region_code, province_name, province_code,
+                            city_name, city_code, barangay_name, barangay_code,
+                            contact_person, contact_phone, contact_email, capital_investment,
+                            business_experience, marketing_plan, status, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())";
+                        $insert_params = [
+                            $application_number,
+                            $user_id,
+                            $form_data['business_name'],
+                            $form_data['business_type'],
+                            $form_data['tin_number'],
+                            $form_data['dti_sec_number'],
+                            $form_data['bir_registration_number'],
+                            $form_data['mayors_permit'],
+                            $form_data['business_address'],
+                            $form_data['proposed_location'],
+                            $form_data['psgc_region_name'],
+                            $form_data['psgc_region_code'],
+                            $form_data['psgc_province_name'],
+                            $form_data['psgc_province_code'],
+                            $form_data['psgc_city_name'],
+                            $form_data['psgc_city_code'],
+                            $form_data['psgc_barangay_name'],
+                            $form_data['psgc_barangay_code'],
+                            $form_data['contact_person'],
+                            $form_data['contact_phone'],
+                            $form_data['contact_email'],
+                            $capital_investment,
+                            $form_data['business_experience'],
+                            $form_data['marketing_plan']
+                        ];
+                        $insert_types = 'si' . str_repeat('s', 19) . 'dss';
+                    } else {
+                        $insert_query = "INSERT INTO franchise_applications (
+                            application_number, user_id, business_name, business_type,
+                            tin_number, dti_sec_number, bir_registration_number, mayors_permit,
+                            business_address, proposed_location, contact_person,
+                            contact_phone, contact_email, capital_investment,
+                            business_experience, marketing_plan, status, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())";
+                        $insert_params = [
+                            $application_number,
+                            $user_id,
+                            $form_data['business_name'],
+                            $form_data['business_type'],
+                            $form_data['tin_number'],
+                            $form_data['dti_sec_number'],
+                            $form_data['bir_registration_number'],
+                            $form_data['mayors_permit'],
+                            $form_data['business_address'],
+                            $form_data['proposed_location'],
+                            $form_data['contact_person'],
+                            $form_data['contact_phone'],
+                            $form_data['contact_email'],
+                            $capital_investment,
+                            $form_data['business_experience'],
+                            $form_data['marketing_plan']
+                        ];
+                        $insert_types = 'si' . str_repeat('s', 11) . 'dss';
+                    }
 
-                if (!mysqli_stmt_execute($stmt)) {
-                    $insert_error = trim((string)mysqli_stmt_error($stmt));
+                    $stmt = mysqli_prepare($conn, $insert_query);
+                    if (!$stmt) {
+                        throw new RuntimeException("Unable to prepare franchise application insert query.");
+                    }
+                    if (!franchiseBindParams($stmt, $insert_types, $insert_params)) {
+                        $bind_error = trim((string)mysqli_stmt_error($stmt));
+                        mysqli_stmt_close($stmt);
+                        throw new RuntimeException($bind_error !== '' ? $bind_error : 'Unable to bind franchise application insert parameters.');
+                    }
+                    if (!mysqli_stmt_execute($stmt)) {
+                        $insert_error = trim((string)mysqli_stmt_error($stmt));
+                        mysqli_stmt_close($stmt);
+                        throw new RuntimeException($insert_error !== '' ? $insert_error : 'Unable to save franchise application.');
+                    }
+                    $application_id = mysqli_insert_id($conn);
+                    if ($application_id <= 0) {
+                        mysqli_stmt_close($stmt);
+                        throw new RuntimeException('Application was not saved correctly. Please try again.');
+                    }
                     mysqli_stmt_close($stmt);
-                    throw new RuntimeException($insert_error !== '' ? $insert_error : 'Unable to save franchise application.');
+
+                    $required_docs_for_upload = ['business_logo', 'dti_doc', 'bir_doc', 'valid_id', 'address_proof'];
                 }
-                $application_id = mysqli_insert_id($conn);
-                if ($application_id <= 0) {
-                    mysqli_stmt_close($stmt);
-                    throw new RuntimeException('Application was not saved correctly. Please try again.');
-                }
-                mysqli_stmt_close($stmt);
 
                 $submission_stage = 'document upload';
                 $upload_result = handleFileUploads(
@@ -1160,7 +1282,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
                         'contact_person' => (string)$form_data['contact_person'],
                         'contact_email' => (string)$form_data['contact_email'],
                         'business_name' => (string)$form_data['business_name']
-                    ]
+                    ],
+                    $required_docs_for_upload
                 );
                 if (!$upload_result['success']) {
                     $upload_error = trim((string)($upload_result['message'] ?? ''));
@@ -1179,7 +1302,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
                         $application_id,
                         $application_number,
                         $form_data['business_name'],
-                        $form_data['contact_person']
+                        $form_data['contact_person'],
+                        $is_incomplete_resubmission ? 'resubmitted' : 'submitted'
                     );
                 } catch (Throwable $notification_error) {
                     error_log("Franchise notification failed after submit {$application_id}: " . $notification_error->getMessage());
@@ -1208,7 +1332,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
                     'status' => 'pending',
                     'created_at' => date('Y-m-d H:i:s')
                 ];
-                $new_total_attempts = max(1, (int)($franchise_workflow['total_attempts'] ?? 0) + 1);
+                $new_total_attempts = $is_incomplete_resubmission
+                    ? (int)($franchise_workflow['total_attempts'] ?? 0)
+                    : max(1, (int)($franchise_workflow['total_attempts'] ?? 0) + 1);
                 $franchise_workflow = [
                     'stage' => 'pending_review',
                     'can_submit' => false,
@@ -1220,16 +1346,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
                     'approved_trial_ends_at' => null
                 ];
 
-                $success_msg = "Business application submitted successfully! Application Number: " . $application_number;
-                $swal_alert = [
-                    'icon' => 'success',
-                    'title' => 'Application Submitted Successfully!',
-                    'html' => 'Your franchise partnership application has been sent for review.<br><br>Application Number:<br><strong style="font-size:1.25rem;color:#b3261e;display:inline-block;margin:6px 0 10px 0;letter-spacing:0.5px;">' . htmlspecialchars($application_number) . '</strong><br><span style="color:#667085;font-size:0.92rem;">The management has been notified and will review your submission.</span>',
-                    'confirmButtonText' => 'View in My Account',
-                    'showCancelButton' => true,
-                    'cancelButtonText' => 'Close',
-                    'redirectUrl' => 'my_account.php'
-                ];
+                if ($is_incomplete_resubmission) {
+                    $success_msg = "Application revisions submitted successfully!<br>Your application number is: <strong>" . $application_number . "</strong><br>Your revised documents are now pending Super Admin review.<br><a href='my_account.php' style='color:#155724;text-decoration:underline;font-weight:600;'>View application status in My Account</a>";
+                    $swal_alert = [
+                        'icon' => 'success',
+                        'title' => 'Revisions Submitted',
+                        'text' => 'Your revised requirements were uploaded successfully and sent for review.'
+                    ];
+                } else {
+                    $success_msg = "Business application submitted successfully!<br>Your application number is: <strong>" . $application_number . "</strong><br><a href='my_account.php' style='color:#155724;text-decoration:underline;font-weight:600;'>View application status in My Account</a>";
+                    $swal_alert = [
+                        'icon' => 'success',
+                        'title' => 'Application Submitted',
+                        'text' => 'Your application was sent successfully. The system owner has been notified.'
+                    ];
+                }
                 $_POST = [];
             }
         }
@@ -1272,6 +1403,82 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
     }
 }
 
+function renderFranchiseDocumentCard($name, $label, $sublabel, $is_core_default_required, $existing_docs, $incomplete_docs, $is_incomplete_resubmission, $is_logo = false) {
+    $is_flagged = isset($incomplete_docs[$name]);
+    $existing = $existing_docs[$name] ?? null;
+    $has_existing = (!empty($existing['file_path']) && file_exists($existing['file_path']));
+
+    $is_required = false;
+    if ($is_incomplete_resubmission) {
+        $is_required = $is_flagged;
+    } else {
+        $is_required = $is_core_default_required;
+    }
+
+    $card_class = "document-item";
+    $card_style = "";
+    if ($is_flagged) {
+        $card_class .= " required-highlight doc-flagged";
+        $card_style = "border: 2px solid #b3261e; background: #fff8ef;";
+    } elseif ($has_existing) {
+        $card_class .= " doc-retained";
+        $card_style = "border: 1px solid #abefc6; background: #f6fef9;";
+    } elseif ($is_required) {
+        $card_class .= " required-highlight";
+    }
+
+    $accept = $is_logo ? "image/png,image/jpeg,image/jpg,.pdf" : ".pdf,.jpg,.jpeg,.png";
+    ?>
+    <div class="<?php echo $card_class; ?>" style="<?php echo $card_style; ?>">
+        <label class="document-label" style="display:block;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:6px;">
+                <span style="font-weight:700; color:<?php echo $is_flagged ? '#b3261e' : '#101828'; ?>; font-size:0.92rem;">
+                    <?php if ($is_logo): ?><i class="fas fa-store" style="color:#ef6b2e;margin-right:4px;"></i><?php endif; ?>
+                    <?php echo htmlspecialchars($label); ?> <?php echo $is_required ? '<span style="color:#b3261e;">*</span>' : ''; ?>
+                </span>
+                <?php if ($is_flagged): ?>
+                    <span class="badge" style="background:#fff1f0;color:#b3261e;border:1px solid #fee4e2;font-size:0.75rem;font-weight:700;padding:2px 8px;border-radius:4px;white-space:nowrap;">
+                        <i class="fas fa-triangle-exclamation"></i> Re-upload Required
+                    </span>
+                <?php elseif ($has_existing): ?>
+                    <span class="badge" style="background:#ecfdf3;color:#027a48;border:1px solid #abefc6;font-size:0.75rem;font-weight:600;padding:2px 8px;border-radius:4px;white-space:nowrap;">
+                        <i class="fas fa-check-circle"></i> Retained & Verified
+                    </span>
+                <?php endif; ?>
+            </div>
+
+            <?php if ($is_flagged): ?>
+                <div style="margin: 6px 0 10px 0; padding: 8px 12px; background: #fff1f0; border: 1px solid #fee4e2; border-radius: 6px; font-size: 0.83rem; color: #981b15;">
+                    <div style="font-weight:700;margin-bottom:2px;"><i class="fas fa-circle-exclamation"></i> Admin Feedback:</div>
+                    <div><?php echo htmlspecialchars($incomplete_docs[$name]['reason'] ?? 'Please provide a clearer or updated document.'); ?></div>
+                    <?php if ($has_existing): ?>
+                        <div style="margin-top: 6px;">
+                            <a href="<?php echo htmlspecialchars($existing['file_path']); ?>" target="_blank" style="color:#b3261e;text-decoration:underline;font-weight:600;font-size:0.8rem;"><i class="fas fa-eye"></i> View Current Uploaded File</a>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            <?php elseif ($has_existing): ?>
+                <div style="margin: 4px 0 8px 0; font-size: 0.82rem; color: #027a48; background: #eefbf3; padding: 6px 10px; border-radius: 6px; border: 1px solid #d0f4de;">
+                    <i class="fas fa-file-circle-check"></i> On record: <strong><?php echo htmlspecialchars($existing['file_name']); ?></strong>
+                    <a href="<?php echo htmlspecialchars($existing['file_path']); ?>" target="_blank" style="color:#027a48;text-decoration:underline;margin-left:8px;font-weight:600;"><i class="fas fa-eye"></i> View File</a>
+                </div>
+            <?php endif; ?>
+
+            <input type="file" name="<?php echo $name; ?>" id="<?php echo $name; ?>_input" accept="<?php echo $accept; ?>" <?php echo $is_required ? 'required' : ''; ?>>
+            <small style="color:<?php echo $has_existing && !$is_flagged ? '#475467' : '#7b6d64'; ?>; display:block; margin-top:4px;">
+                <?php echo $has_existing && !$is_flagged ? 'Optional: Select a new file only if you wish to replace your current verified document.' : htmlspecialchars($sublabel); ?>
+            </small>
+
+            <?php if ($is_logo): ?>
+                <div id="logoPreviewContainer" style="margin-top:8px;display:none;text-align:center;">
+                    <img id="logoPreviewImg" src="" alt="Store Logo Preview" style="max-height:80px;max-width:100%;border-radius:8px;border:1px solid #efddcd;box-shadow:0 4px 10px rgba(0,0,0,0.06);">
+                </div>
+            <?php endif; ?>
+        </label>
+    </div>
+    <?php
+}
+
 $current_page = 'franchise_application';
 $page_title = "Business Application | Lechon Delights";
 include 'includes/header.php';
@@ -1280,15 +1487,72 @@ include 'includes/header.php';
 <div class="franchise-application-page">
     <div class="container">
 
+        <?php if ($success_msg): ?>
+        <div class="alert alert-success" style="background-color: #d4edda; border: 2px solid #28a745; border-radius: 12px; padding: 20px; color: #155724; font-size: 1.05rem; margin-bottom: 24px;">
+            <i class="fas fa-check-circle" style="color: #28a745; margin-right: 10px;"></i> <?php echo $success_msg; ?>
+        </div>
+        <?php endif; ?>
 
+        <?php if ($error_msg): ?>
+        <div class="alert alert-error" style="background-color: #f8d7da; border: 2px solid #dc3545; border-radius: 12px; padding: 20px; color: #721c24; font-size: 1.05rem; margin-bottom: 24px;">
+            <i class="fas fa-exclamation-circle" style="color: #dc3545; margin-right: 10px;"></i> <?php echo $error_msg; ?>
+        </div>
+        <?php endif; ?>
 
-                <?php if (!$franchise_workflow['can_submit']): ?>
+        <div class="application-container">
+            <div class="application-form-container">
+
+                <!-- Workflow status header pill row -->
+                <div class="application-workflow-card">
+                    <div class="workflow-pill-row">
+                        <span class="workflow-pill"><i class="fas fa-layer-group"></i> Total Attempts: <?php echo (int)$franchise_workflow['total_attempts']; ?>/2</span>
+                        <span class="workflow-pill"><i class="fas fa-hourglass-half"></i> Remaining Attempts: <?php echo (int)$franchise_workflow['remaining_attempts']; ?></span>
+                        <?php if (!empty($franchise_workflow['approved_trial_ends_at'])): ?>
+                            <span class="workflow-pill"><i class="fas fa-calendar-check"></i> Trial Ends: <?php echo date('F j, Y', strtotime((string)$franchise_workflow['approved_trial_ends_at'])); ?></span>
+                        <?php elseif (!empty($franchise_workflow['next_eligible_at'])): ?>
+                            <span class="workflow-pill"><i class="fas fa-clock"></i> Reapply On: <?php echo date('F j, Y g:i A', strtotime((string)$franchise_workflow['next_eligible_at'])); ?></span>
+                        <?php endif; ?>
+                    </div>
+                    <p class="workflow-summary"><?php echo htmlspecialchars((string)($franchise_workflow['message'] ?? '')); ?></p>
+                </div>
+
+                <?php if ($is_incomplete_resubmission): ?>
+                <!-- INCOMPLETE REQUIREMENTS NOTICE BANNER -->
+                <div style="background: #ffffff; border: 1px solid #fee4e2; border-radius: 12px; padding: 20px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);">
+                    <div style="display: flex; align-items: flex-start; gap: 14px;">
+                        <div style="width: 42px; height: 42px; border-radius: 50%; background: #fff1f0; color: #b3261e; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0;">
+                            <i class="fas fa-file-circle-exclamation"></i>
+                        </div>
+                        <div style="flex: 1;">
+                            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 4px;">
+                                <h3 style="margin: 0; font-size: 1.15rem; color: #101828; font-weight: 700;">Action Required: Resubmit Flagged Requirements</h3>
+                                <span style="background: #fff1f0; color: #b3261e; border: 1px solid #fee4e2; font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 999px;">Incomplete Application #<?php echo htmlspecialchars((string)$latest_application['application_number']); ?></span>
+                            </div>
+                            <p style="margin: 0 0 12px 0; color: #475467; font-size: 0.92rem; line-height: 1.5;">
+                                The Super Admin reviewed your application and flagged specific document(s) (e.g. blurry image or expired certification). <strong>You do not need to fill out all requirements again.</strong> Your saved business info and approved documents remain intact. Please re-upload only the flagged documents below.
+                            </p>
+                            <?php if (!empty($franchise_workflow['incomplete_documents'])): ?>
+                            <div style="background: #fff8ef; border: 1px solid #efddcd; border-radius: 8px; padding: 12px 16px;">
+                                <strong style="color: #981b15; font-size: 0.88rem; display: block; margin-bottom: 6px;"><i class="fas fa-list-check"></i> Documents Requiring Re-upload:</strong>
+                                <ul style="margin: 0; padding-left: 20px; font-size: 0.85rem; color: #344054;">
+                                    <?php foreach ($franchise_workflow['incomplete_documents'] as $doc_k => $doc_info): ?>
+                                        <li style="margin-bottom: 4px;">
+                                            <strong><?php echo htmlspecialchars($doc_info['label'] ?? $doc_k); ?>:</strong>
+                                            <span style="color: #b3261e; font-weight: 600;"><?php echo htmlspecialchars($doc_info['reason'] ?? 'Document invalid or blurry.'); ?></span>
+                                        </li>
+                                    <?php endforeach; ?>
+                                </ul>
+                            </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+                <?php endif; ?>
+
+                <?php if (!$franchise_workflow['can_submit'] && !$success_msg): ?>
                 <div class="alert" style="background:#fff8e1;border:1px solid #ffd54f;color:#8a6d3b;border-radius:12px;padding:20px;margin-bottom:22px;">
                     <i class="fas fa-info-circle" style="margin-right:8px;color:#f57f17;font-size:1.2rem;"></i>
                     <?php echo htmlspecialchars((string)($franchise_workflow['message'] ?? 'Application workflow is currently restricted.')); ?>
-                    <?php if (!empty($franchise_workflow['cooldown_seconds_remaining'])): ?>
-                        <br><span style="display:inline-block;margin-top:6px;font-weight:600;color:#b3261e;">Time remaining: <span id="cooldownTextCountdown"><?php echo (int)$franchise_workflow['cooldown_seconds_remaining']; ?></span> seconds. The page will automatically refresh once the cooldown completes.</span>
-                    <?php endif; ?>
                     <?php if (!empty($latest_application['application_number'])): ?>
                         <br>Latest Application: <strong><?php echo htmlspecialchars((string)$latest_application['application_number']); ?></strong>
                     <?php endif; ?>
@@ -1463,58 +1727,34 @@ include 'includes/header.php';
                     <!-- ========================================== -->
                     <div class="wizard-pane" id="wizardStep2">
                         <div class="form-section">
-                            <h3><i class="fas fa-file-upload"></i> Essential Documents (5 Required Files)</h3>
-                            <p class="section-description">Drag and drop or click to upload your core business documents. Accepted formats: PDF, JPG, PNG (Max size: <?php echo htmlspecialchars($max_document_size_label); ?>).</p>
-                            
-                            <div id="docRequirementStatus" class="doc-requirement-status info">Waiting for required documents upload...</div>
+                            <?php if ($is_incomplete_resubmission): ?>
+                                <h3><i class="fas fa-file-shield"></i> Document Requirements Review & Revision</h3>
+                                <p class="section-description">Please re-upload the flagged document(s) below. Verified documents from your previous submission have been retained.</p>
+                            <?php else: ?>
+                                <h3><i class="fas fa-file-upload"></i> Essential Documents (5 Required Files)</h3>
+                                <p class="section-description">Drag and drop or click to upload your core business documents. Accepted formats: PDF, JPG, PNG (Max size: <?php echo htmlspecialchars($max_document_size_label); ?>).</p>
+                            <?php endif; ?>
+
+                            <div id="docRequirementStatus" class="doc-requirement-status info">
+                                <?php if ($is_incomplete_resubmission): ?>
+                                    <i class="fas fa-info-circle"></i> Ready to submit revisions for flagged documents.
+                                <?php else: ?>
+                                    Waiting for required documents upload...
+                                <?php endif; ?>
+                            </div>
 
                             <div class="documents-grid">
-                                <div class="document-item required-highlight logo-featured-item" style="border: 2px solid #b3261e; background: #fff8ef;">
-                                    <label class="document-label">
-                                        <span style="color:#b3261e;font-weight:800;font-size:0.95rem;display:flex;align-items:center;gap:6px;">
-                                            <i class="fas fa-store" style="color:#ef6b2e;"></i> Store Business Logo *
-                                        </span>
-                                        <input type="file" name="business_logo" id="business_logo_input" accept="image/png,image/jpeg,image/jpg,.pdf" required>
-                                        <small style="color:#7b6d64;font-weight:600;">Official store logo image (PNG/JPG/PDF)</small>
-                                        <div id="logoPreviewContainer" style="margin-top:8px;display:none;text-align:center;">
-                                            <img id="logoPreviewImg" src="" alt="Store Logo Preview" style="max-height:80px;max-width:100%;border-radius:8px;border:1px solid #efddcd;box-shadow:0 4px 10px rgba(0,0,0,0.06);">
-                                        </div>
-                                    </label>
-                                </div>
-
-                                <div class="document-item required-highlight">
-                                    <label class="document-label">
-                                        <span>DTI / SEC Certificate *</span>
-                                        <input type="file" name="dti_doc" accept=".pdf,.jpg,.jpeg,.png" required>
-                                        <small>Business registration cert</small>
-                                    </label>
-                                </div>
-
-                                <div class="document-item required-highlight">
-                                    <label class="document-label">
-                                        <span>BIR Registration (Form 2303) *</span>
-                                        <input type="file" name="bir_doc" accept=".pdf,.jpg,.jpeg,.png" required>
-                                        <small>Tax registration certificate</small>
-                                    </label>
-                                </div>
-
-                                <div class="document-item required-highlight">
-                                    <label class="document-label">
-                                        <span>Valid ID of Owner *</span>
-                                        <input type="file" name="valid_id" accept=".pdf,.jpg,.jpeg,.png" required>
-                                        <small>Driver's License, Passport, PhilID</small>
-                                    </label>
-                                </div>
-
-                                <div class="document-item required-highlight">
-                                    <label class="document-label">
-                                        <span>Proof of Address *</span>
-                                        <input type="file" name="address_proof" accept=".pdf,.jpg,.jpeg,.png" required>
-                                        <small>Utility bill or barangay clearance</small>
-                                    </label>
-                                </div>
+                                <?php
+                                $inc_map = $franchise_workflow['incomplete_documents'] ?? [];
+                                renderFranchiseDocumentCard('business_logo', 'Store Business Logo', 'Official store logo image (PNG/JPG/PDF)', true, $existing_uploaded_docs, $inc_map, $is_incomplete_resubmission, true);
+                                renderFranchiseDocumentCard('dti_doc', 'DTI / SEC Certificate', 'Business registration cert', true, $existing_uploaded_docs, $inc_map, $is_incomplete_resubmission);
+                                renderFranchiseDocumentCard('bir_doc', 'BIR Registration (Form 2303)', 'Tax registration certificate', true, $existing_uploaded_docs, $inc_map, $is_incomplete_resubmission);
+                                renderFranchiseDocumentCard('valid_id', 'Valid ID of Owner', "Driver's License, Passport, PhilID", true, $existing_uploaded_docs, $inc_map, $is_incomplete_resubmission);
+                                renderFranchiseDocumentCard('address_proof', 'Proof of Address', 'Utility bill or barangay clearance', true, $existing_uploaded_docs, $inc_map, $is_incomplete_resubmission);
+                                ?>
                             </div>
                         </div>
+
                         <!-- Expandable Optional Compliance Files -->
                         <div class="form-section">
                             <div class="accordion-header" id="toggleOptionalDocs">
@@ -1527,97 +1767,21 @@ include 'includes/header.php';
 
                             <div class="accordion-body" id="optionalDocsBody">
                                 <div class="documents-grid" style="margin-top:16px;">
-                                    <div class="document-item">
-                                        <label class="document-label">
-                                            <span>Mayor's Permit</span>
-                                            <input type="file" name="mayor_doc" accept=".pdf,.jpg,.jpeg,.png">
-                                            <small>LGU Business Permit</small>
-                                        </label>
-                                    </div>
-                                    <div class="document-item">
-                                        <label class="document-label">
-                                            <span>Barangay Clearance</span>
-                                            <input type="file" name="barangay_clearance" accept=".pdf,.jpg,.jpeg,.png">
-                                            <small>Barangay Hall clearance</small>
-                                        </label>
-                                    </div>
-                                    <div class="document-item">
-                                        <label class="document-label">
-                                            <span>Lease Contract / Title</span>
-                                            <input type="file" name="lease_or_title" accept=".pdf,.jpg,.jpeg,.png">
-                                            <small>Proof of store occupancy</small>
-                                        </label>
-                                    </div>
-                                    <div class="document-item">
-                                        <label class="document-label">
-                                            <span>Certificate of Occupancy</span>
-                                            <input type="file" name="occupancy_certificate" accept=".pdf,.jpg,.jpeg,.png">
-                                            <small>Occupancy permit</small>
-                                        </label>
-                                    </div>
-                                    <div class="document-item">
-                                        <label class="document-label">
-                                            <span>Fire Safety Certificate</span>
-                                            <input type="file" name="fire_safety_certificate" accept=".pdf,.jpg,.jpeg,.png">
-                                            <small>BFP Fire Inspection</small>
-                                        </label>
-                                    </div>
-                                    <div class="document-item">
-                                        <label class="document-label">
-                                            <span>Community Tax (Cedula)</span>
-                                            <input type="file" name="community_tax_certificate" accept=".pdf,.jpg,.jpeg,.png">
-                                            <small>Cedula file</small>
-                                        </label>
-                                    </div>
-                                    <div class="document-item">
-                                        <label class="document-label">
-                                            <span>Sanitary Permit</span>
-                                            <input type="file" name="sanitary_permit" accept=".pdf,.jpg,.jpeg,.png">
-                                            <small>Food sanitation clearance</small>
-                                        </label>
-                                    </div>
-                                    <div class="document-item">
-                                        <label class="document-label">
-                                            <span>Bank Account Proof</span>
-                                            <input type="file" name="bank_proof" accept=".pdf,.jpg,.jpeg,.png">
-                                            <small>Bank statement / cert</small>
-                                        </label>
-                                    </div>
-                                    <div class="document-item">
-                                        <label class="document-label">
-                                            <span>BIR Form 1901/1903</span>
-                                            <input type="file" name="bir_form" accept=".pdf,.jpg,.jpeg,.png">
-                                            <small>Application for registration</small>
-                                        </label>
-                                    </div>
-                                    <div class="document-item">
-                                        <label class="document-label">
-                                            <span>SSS Registration</span>
-                                            <input type="file" name="sss_registration" accept=".pdf,.jpg,.jpeg,.png">
-                                            <small>Employer SSS record</small>
-                                        </label>
-                                    </div>
-                                    <div class="document-item">
-                                        <label class="document-label">
-                                            <span>PhilHealth Registration</span>
-                                            <input type="file" name="philhealth_registration" accept=".pdf,.jpg,.jpeg,.png">
-                                            <small>Employer PhilHealth record</small>
-                                        </label>
-                                    </div>
-                                    <div class="document-item">
-                                        <label class="document-label">
-                                            <span>Pag-IBIG Registration</span>
-                                            <input type="file" name="pagibig_registration" accept=".pdf,.jpg,.jpeg,.png">
-                                            <small>Employer Pag-IBIG record</small>
-                                        </label>
-                                    </div>
-                                    <div class="document-item">
-                                        <label class="document-label">
-                                            <span>Industry License (FDA/BSP)</span>
-                                            <input type="file" name="industry_permit" accept=".pdf,.jpg,.jpeg,.png">
-                                            <small>Sector-specific licenses</small>
-                                        </label>
-                                    </div>
+                                    <?php
+                                    renderFranchiseDocumentCard('mayor_doc', "Mayor's Permit", 'LGU Business Permit', false, $existing_uploaded_docs, $inc_map, $is_incomplete_resubmission);
+                                    renderFranchiseDocumentCard('barangay_clearance', 'Barangay Clearance', 'Barangay Hall clearance', false, $existing_uploaded_docs, $inc_map, $is_incomplete_resubmission);
+                                    renderFranchiseDocumentCard('lease_or_title', 'Lease Contract / Title', 'Proof of store occupancy', false, $existing_uploaded_docs, $inc_map, $is_incomplete_resubmission);
+                                    renderFranchiseDocumentCard('occupancy_certificate', 'Certificate of Occupancy', 'Occupancy permit', false, $existing_uploaded_docs, $inc_map, $is_incomplete_resubmission);
+                                    renderFranchiseDocumentCard('fire_safety_certificate', 'Fire Safety Certificate', 'BFP Fire Inspection', false, $existing_uploaded_docs, $inc_map, $is_incomplete_resubmission);
+                                    renderFranchiseDocumentCard('community_tax_certificate', 'Community Tax (Cedula)', 'Cedula file', false, $existing_uploaded_docs, $inc_map, $is_incomplete_resubmission);
+                                    renderFranchiseDocumentCard('sanitary_permit', 'Sanitary Permit', 'Food sanitation clearance', false, $existing_uploaded_docs, $inc_map, $is_incomplete_resubmission);
+                                    renderFranchiseDocumentCard('bank_proof', 'Bank Account Proof', 'Bank statement / cert', false, $existing_uploaded_docs, $inc_map, $is_incomplete_resubmission);
+                                    renderFranchiseDocumentCard('bir_form', 'BIR Form 1901/1903', 'Application for registration', false, $existing_uploaded_docs, $inc_map, $is_incomplete_resubmission);
+                                    renderFranchiseDocumentCard('sss_registration', 'SSS Registration', 'Employer SSS record', false, $existing_uploaded_docs, $inc_map, $is_incomplete_resubmission);
+                                    renderFranchiseDocumentCard('philhealth_registration', 'PhilHealth Registration', 'Employer PhilHealth record', false, $existing_uploaded_docs, $inc_map, $is_incomplete_resubmission);
+                                    renderFranchiseDocumentCard('pagibig_registration', 'Pag-IBIG Registration', 'Employer Pag-IBIG record', false, $existing_uploaded_docs, $inc_map, $is_incomplete_resubmission);
+                                    renderFranchiseDocumentCard('industry_permit', 'Industry License (FDA/BSP)', 'Sector-specific licenses', false, $existing_uploaded_docs, $inc_map, $is_incomplete_resubmission);
+                                    ?>
                                 </div>
                             </div>
                         </div>
@@ -1698,7 +1862,7 @@ include 'includes/header.php';
                                 <i class="fas fa-arrow-left"></i> Previous: Documents
                             </button>
                             <button type="submit" name="submit_application" class="btn-primary btn-large" id="btnFinalSubmit">
-                                <i class="fas fa-paper-plane"></i> Submit Application
+                                <i class="fas fa-paper-plane"></i> <?php echo $is_incomplete_resubmission ? 'Submit Revisions' : 'Submit Application'; ?>
                             </button>
                         </div>
                     </div>
@@ -2971,49 +3135,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const serverAlert = <?php echo $swal_alert ? json_encode($swal_alert) : 'null'; ?>;
     const prefillData = <?php echo json_encode($franchise_prefill); ?>;
     
-    if (serverAlert && (serverAlert.text || serverAlert.html)) {
+    if (serverAlert && serverAlert.text) {
         if (typeof Swal !== 'undefined' && Swal && typeof Swal.fire === 'function') {
-            const swalConfig = {
+            Swal.fire({
                 icon: serverAlert.icon || 'info',
                 title: serverAlert.title || 'Notice',
+                text: serverAlert.text,
                 confirmButtonColor: '#b3261e',
-                confirmButtonText: serverAlert.confirmButtonText || 'OK'
-            };
-            if (serverAlert.html) {
-                swalConfig.html = serverAlert.html;
-            } else {
-                swalConfig.text = serverAlert.text;
-            }
-            if (serverAlert.showCancelButton) {
-                swalConfig.showCancelButton = true;
-                swalConfig.cancelButtonColor = '#667085';
-                swalConfig.cancelButtonText = serverAlert.cancelButtonText || 'Close';
-            }
-            Swal.fire(swalConfig).then(result => {
-                if (result.isConfirmed && serverAlert.redirectUrl) {
-                    window.location.href = serverAlert.redirectUrl;
-                }
+                confirmButtonText: 'OK'
             });
-        }
-    }
-
-    // Dynamic Cooldown Timer and Auto-Reload
-    const countdownPill = document.getElementById('reapplyCountdown');
-    const countdownText = document.getElementById('cooldownTextCountdown');
-    if (countdownPill || countdownText) {
-        let remainingSec = parseInt((countdownPill ? countdownPill.textContent : countdownText.textContent) || '0', 10);
-        if (remainingSec > 0) {
-            const timer = setInterval(function() {
-                remainingSec--;
-                if (countdownPill) countdownPill.textContent = Math.max(0, remainingSec);
-                if (countdownText) countdownText.textContent = Math.max(0, remainingSec);
-                if (remainingSec <= 0) {
-                    clearInterval(timer);
-                    window.location.reload();
-                }
-            }, 1000);
-        } else {
-            window.location.reload();
         }
     }
 
@@ -3174,10 +3304,6 @@ document.addEventListener('DOMContentLoaded', function() {
         form.querySelectorAll('input:not([type="file"]):not([type="hidden"]), select, textarea').forEach(field => {
             if (field.name) data[field.name] = field.value;
         });
-        const latField = document.getElementById('locationLatitude');
-        const lngField = document.getElementById('locationLongitude');
-        if (latField && latField.value) data['location_latitude'] = latField.value;
-        if (lngField && lngField.value) data['location_longitude'] = lngField.value;
         localStorage.setItem(DRAFT_KEY, JSON.stringify(data));
     }
 
@@ -3192,14 +3318,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     field.value = data[key];
                 }
             });
-            const latField = document.getElementById('locationLatitude');
-            const lngField = document.getElementById('locationLongitude');
-            if (data['location_latitude'] && latField && !latField.value) {
-                latField.value = data['location_latitude'];
-            }
-            if (data['location_longitude'] && lngField && !lngField.value) {
-                lngField.value = data['location_longitude'];
-            }
         } catch (e) {}
     }
 
@@ -3252,10 +3370,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (step === 3) {
             buildSummaryPreview();
-        } else if (step === 1 && franchiseMap) {
-            setTimeout(() => {
-                if (franchiseMap) franchiseMap.invalidateSize();
-            }, 100);
         }
     }
 
@@ -3279,19 +3393,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (capInput && parseFloat(capInput.value) < 100000) {
             capInput.style.borderColor = '#dc3545';
             valid = false;
-        }
-
-        const latVal = parseFloat(locationLatitude?.value || '');
-        const lngVal = parseFloat(locationLongitude?.value || '');
-        const mapShell = document.querySelector('.franchise-map-shell');
-        const isPinAccepted = Number.isFinite(latVal) && Number.isFinite(lngVal) && latVal !== 0 && lngVal !== 0 && (typeof isCaviteLocationValid !== 'undefined' ? isCaviteLocationValid : false);
-
-        if (!isPinAccepted) {
-            valid = false;
-            if (mapShell) mapShell.style.border = '2px solid #b3261e';
-            setMapStatus('A shop location pinned inside Cavite is required. Locations outside Cavite cannot be accepted.', false);
-        } else {
-            if (mapShell) mapShell.style.border = '';
         }
 
         return valid;
@@ -3321,22 +3422,6 @@ document.addEventListener('DOMContentLoaded', function() {
     if (btnGoToStep2) {
         btnGoToStep2.addEventListener('click', function() {
             if (!validateStep1()) {
-                const latVal = parseFloat(locationLatitude?.value || '');
-                const lngVal = parseFloat(locationLongitude?.value || '');
-                const isPinAccepted = Number.isFinite(latVal) && Number.isFinite(lngVal) && latVal !== 0 && lngVal !== 0 && (typeof isCaviteLocationValid !== 'undefined' ? isCaviteLocationValid : false);
-
-                if (!isPinAccepted) {
-                    Swal.fire({
-                        icon: 'warning',
-                        title: 'Cavite Location Required',
-                        text: 'Your shop location must be pinned inside Cavite province. Pins outside Cavite area are not accepted.',
-                        confirmButtonColor: '#b3261e'
-                    });
-                    const mapShell = document.querySelector('.franchise-map-shell');
-                    if (mapShell) mapShell.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    return;
-                }
-
                 Swal.fire({
                     icon: 'warning',
                     title: 'Incomplete Step 1',
@@ -3360,8 +3445,8 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!validateStep2()) {
                 Swal.fire({
                     icon: 'warning',
-                    title: 'Missing Documents',
-                    text: 'Please upload all 5 essential required documents before reviewing.',
+                    title: 'Missing Required Documents',
+                    text: 'Please upload all required or flagged documents highlighted in red before proceeding.',
                     confirmButtonColor: '#b3261e'
                 });
                 return;
@@ -3419,13 +3504,19 @@ document.addEventListener('DOMContentLoaded', function() {
             if (f.files && f.files.length > 0) fileCount++;
         });
 
+        const retainedCount = <?php echo (int)count(array_filter($existing_uploaded_docs, function($d) use ($inc_map) { return !isset($inc_map[$d['document_type']]); })); ?>;
+        const totalDocsCount = fileCount + retainedCount;
+        const docCountText = retainedCount > 0
+            ? `${totalDocsCount} file(s) verified & attached (${retainedCount} retained, ${fileCount} newly uploaded)`
+            : `${fileCount} file(s) attached`;
+
         document.getElementById('sumBusinessName').textContent = bName;
         document.getElementById('sumBusinessType').textContent = 'Partnership';
         document.getElementById('sumContactPerson').textContent = person;
         document.getElementById('sumContactDetails').textContent = email + ' | ' + phone;
         document.getElementById('sumBusinessAddress').textContent = address;
         document.getElementById('sumCapital').textContent = capital !== '-' ? 'PHP ' + Number(capital).toLocaleString('en-US') : '-';
-        document.getElementById('sumDocCount').textContent = fileCount + ' file(s) attached';
+        document.getElementById('sumDocCount').textContent = docCountText;
     }
 
     // File Selection Feedback & Logo Preview
@@ -3463,25 +3554,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // On submit success clear draft with Cavite location validation
-    form.addEventListener('submit', function(e) {
-        const latVal = parseFloat(locationLatitude?.value || '');
-        const lngVal = parseFloat(locationLongitude?.value || '');
-        const isPinAccepted = Number.isFinite(latVal) && Number.isFinite(lngVal) && (typeof isCaviteLocationValid !== 'undefined' ? isCaviteLocationValid : false);
-
-        if (!isPinAccepted) {
-            e.preventDefault();
-            Swal.fire({
-                icon: 'error',
-                title: 'Cavite Location Required',
-                text: 'Franchise store applications are restricted to Cavite only. Your pinned shop location is outside Cavite or missing.',
-                confirmButtonColor: '#b3261e'
-            });
-            updateStepperUI(1);
-            const mapShell = document.querySelector('.franchise-map-shell');
-            if (mapShell) mapShell.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            return false;
-        }
+    // On submit success clear draft
+    form.addEventListener('submit', function() {
         localStorage.removeItem(DRAFT_KEY);
     });
 
@@ -3502,59 +3576,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const businessStreetInput = document.getElementById('business_address_street');
     const businessAddressInput = document.getElementById('business_address');
     const CAVITE_CENTER = [14.3294, 120.9367];
-    const CAVITE_BOUNDS = window.L && window.L.latLngBounds ? window.L.latLngBounds([14.05, 120.58], [14.48, 121.05]) : null;
-    const CAVITE_CITIES = [
-        'alfonso', 'amadeo', 'bacoor', 'carmona', 'cavite city', 'dasmarinas', 'dasmariñas',
-        'general emilio aguinaldo', 'bailen', 'general mariano alvarez', 'gma',
-        'general trias', 'gen. trias', 'imus', 'indang', 'kawit', 'magallanes',
-        'maragondon', 'mendez', 'mendez-nunez', 'mendez-nuñez', 'naic', 'noveleta', 'rosario',
-        'silang', 'tagaytay', 'tanza', 'ternate', 'trece martires'
-    ];
-
+    const CAVITE_BOUNDS = window.L && window.L.latLngBounds ? window.L.latLngBounds([14.00, 120.65], [14.75, 121.20]) : null;
     let franchiseMap = null;
     let franchiseMarker = null;
-    let lastValidCaviteLatLng = null;
-    let isCaviteLocationValid = false;
 
     function normalizeMapText(value) {
         return String(value || '').replace(/\s+/g, ' ').trim();
-    }
-
-    function isLocationInCavite(data, lat, lng) {
-        const address = data?.address || {};
-        const displayName = (data?.display_name || '').toLowerCase();
-        const province = normalizeMapText(address.province || address.state_district || address.county || '').toLowerCase();
-        const city = normalizeMapText(address.city || address.town || address.municipality || address.city_district || '').toLowerCase();
-        const state = normalizeMapText(address.state || '').toLowerCase();
-
-        // Areas that are definitely not Cavite
-        const nonCaviteAreas = ['metro manila', 'batangas', 'laguna', 'rizal', 'bulacan', 'pampanga', 'bataan', 'quezon province', 'muntinlupa', 'las piñas', 'parañaque', 'pasay', 'taguig', 'makati', 'manila'];
-        for (const area of nonCaviteAreas) {
-            if (province.includes(area) || city.includes(area) || displayName.includes(area)) {
-                if (!province.includes('cavite') && !displayName.includes(', cavite')) {
-                    return false;
-                }
-            }
-        }
-
-        if (province.includes('cavite') || displayName.includes(', cavite') || displayName.endsWith('cavite, philippines')) {
-            return true;
-        }
-
-        for (const cavCity of CAVITE_CITIES) {
-            if (city === cavCity || city.includes(cavCity) || displayName.includes(cavCity + ', cavite')) {
-                return true;
-            }
-        }
-
-        // Bounding box fallback when Nominatim is offline or lacks details
-        if (lat >= 14.05 && lat <= 14.48 && lng >= 120.58 && lng <= 121.05) {
-            if (!province || province.includes('cavite') || province.includes('calabarzon')) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     function setMapStatus(message, valid) {
@@ -3584,70 +3611,30 @@ document.addEventListener('DOMContentLoaded', function() {
         const road = normalizeMapText(address.road || address.pedestrian || address.residential || displayName.split(',')[0]);
         const province = normalizeMapText(address.state_district || address.province || 'Cavite');
         const region = normalizeMapText(address.state || 'Calabarzon');
-        const isCavite = isLocationInCavite(data, lat, lng);
-
-        if (!isCavite) {
-            isCaviteLocationValid = false;
-
-            // Reject the location: clear coordinates and address
-            if (locationLatitude) locationLatitude.value = '';
-            if (locationLongitude) locationLongitude.value = '';
-            if (psgcCityName) psgcCityName.value = '';
-            if (psgcBarangayName) psgcBarangayName.value = '';
-            if (psgcProvinceName) psgcProvinceName.value = '';
-            if (businessStreetInput && businessStreetInput.dataset.pinGenerated === '1') {
-                businessStreetInput.value = '';
-            }
-            if (businessAddressInput) businessAddressInput.value = '';
-
-            // Revert pin back to previous valid Cavite location, or Cavite Center
-            const fallbackLatLng = lastValidCaviteLatLng || L.latLng(CAVITE_CENTER[0], CAVITE_CENTER[1]);
-            if (franchiseMarker) {
-                franchiseMarker.setLatLng(fallbackLatLng);
-            }
-            if (franchiseMap) {
-                franchiseMap.panTo(fallbackLatLng);
-            }
-
-            const detectedLocation = city || province || displayName.split(',')[0] || 'Outside Cavite';
-            setMapStatus('Location rejected: Pinned area (' + detectedLocation + ') is outside Cavite. Please place your pin inside Cavite province.', false);
-
-            if (typeof Swal !== 'undefined' && Swal && typeof Swal.fire === 'function') {
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Outside Cavite Area',
-                    text: 'The pinned location (' + detectedLocation + ') is outside the Cavite service area. Franchise applications are strictly accepted for Cavite locations only. Your pin has been reverted.',
-                    confirmButtonColor: '#b3261e',
-                    confirmButtonText: 'Select Cavite Location'
-                });
-            }
-
-            saveDraft();
-            return false;
-        }
-
-        // Accepted Cavite location
-        isCaviteLocationValid = true;
-        lastValidCaviteLatLng = L.latLng(lat, lng);
+        const isCavite = /cavite/i.test(displayName + ' ' + province) || (CAVITE_BOUNDS && CAVITE_BOUNDS.contains([lat, lng]));
 
         if (locationLatitude) locationLatitude.value = lat.toFixed(7);
         if (locationLongitude) locationLongitude.value = lng.toFixed(7);
         if (psgcManualMode) psgcManualMode.value = '1';
         if (psgcRegionName) psgcRegionName.value = region;
         if (psgcRegionCode) psgcRegionCode.value = '040000000';
-        if (psgcProvinceName) psgcProvinceName.value = 'Cavite';
-        if (psgcProvinceCode) psgcProvinceCode.value = '042100000';
+        if (psgcProvinceName) psgcProvinceName.value = isCavite ? 'Cavite' : province;
+        if (psgcProvinceCode) psgcProvinceCode.value = isCavite ? '042100000' : '';
         if (psgcCityName) psgcCityName.value = city;
         if (psgcBarangayName) psgcBarangayName.value = barangay;
         if (businessStreetInput && (!businessStreetInput.value.trim() || businessStreetInput.dataset.pinGenerated === '1')) {
-            businessStreetInput.value = road || 'Pinned business location';
+            businessStreetInput.value = road || (isCavite ? 'Pinned business location' : 'Pinned location');
             businessStreetInput.dataset.pinGenerated = '1';
         }
         composeBusinessAddress();
 
-        setMapStatus((city ? 'Location accepted: ' + city + ', Cavite.' : 'Location accepted inside Cavite.') + ' Add a building number or landmark above if available.', true);
+        if (isCavite) {
+            setMapStatus((city ? 'Location selected: ' + city + ', Cavite.' : 'Location selected inside Cavite.') + ' Add a building number or landmark above if available.', true);
+        } else {
+            setMapStatus('That pin appears outside Cavite. Move the pin inside the highlighted Cavite service area.', false);
+        }
         saveDraft();
-        return true;
+        return isCavite;
     }
 
     async function reverseGeocodePin(lat, lng) {
@@ -3672,99 +3659,32 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function initFranchiseMap() {
-        if (!franchiseMapElement) return;
-
-        if (!window.L) {
-            let retries = 0;
-            const checkL = setInterval(() => {
-                retries++;
-                if (window.L) {
-                    clearInterval(checkL);
-                    initFranchiseMap();
-                } else if (retries > 30) {
-                    clearInterval(checkL);
-                    setMapStatus('Map provider failed to load. Please refresh the page.', false);
-                }
-            }, 150);
-            return;
-        }
-
-        if (franchiseMap) {
-            try { franchiseMap.remove(); } catch (e) {}
-            franchiseMap = null;
-        } else if (franchiseMapElement._leaflet_id) {
-            franchiseMapElement._leaflet_id = null;
-        }
-
-        let initialCenter = CAVITE_CENTER;
-        let initialZoom = 11;
-        const savedLat = parseFloat(locationLatitude?.value || '');
-        const savedLng = parseFloat(locationLongitude?.value || '');
-        if (Number.isFinite(savedLat) && Number.isFinite(savedLng) && savedLat !== 0 && savedLng !== 0) {
-            if (isLocationInCavite({}, savedLat, savedLng)) {
-                initialCenter = [savedLat, savedLng];
-                initialZoom = 15;
-                lastValidCaviteLatLng = L.latLng(savedLat, savedLng);
-                isCaviteLocationValid = true;
-            } else {
-                if (locationLatitude) locationLatitude.value = '';
-                if (locationLongitude) locationLongitude.value = '';
-                isCaviteLocationValid = false;
-            }
-        }
-
+        if (!franchiseMapElement || !window.L) return;
         const pinIcon = L.divIcon({ className: 'franchise-pin-icon', iconSize: [34, 34], iconAnchor: [17, 34] });
-        franchiseMap = L.map(franchiseMapElement, {
-            center: initialCenter,
-            zoom: initialZoom,
-            minZoom: 10,
-            maxZoom: 19,
-            maxBounds: L.latLngBounds([13.70, 120.20], [14.85, 121.40]),
-            maxBoundsViscosity: 0.8
-        });
-
+        franchiseMap = L.map(franchiseMapElement, { center: CAVITE_CENTER, zoom: 11, minZoom: 10, maxZoom: 19 });
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'
         }).addTo(franchiseMap);
-
-        // Visual Cavite service area boundary
-        L.rectangle([[14.05, 120.58], [14.48, 121.05]], {
-            color: '#b3261e',
-            weight: 2,
-            opacity: 0.7,
-            fillColor: '#b3261e',
-            fillOpacity: 0.04,
-            dashArray: '6, 6',
-            interactive: false
-        }).addTo(franchiseMap);
-
-        franchiseMarker = L.marker(initialCenter, { draggable: true, icon: pinIcon }).addTo(franchiseMap);
+        franchiseMarker = L.marker(CAVITE_CENTER, { draggable: true, icon: pinIcon }).addTo(franchiseMap);
         franchiseMap.on('click', event => moveFranchisePin(event.latlng, true));
         franchiseMarker.on('dragend', () => moveFranchisePin(franchiseMarker.getLatLng(), true));
-
-        franchiseMap.invalidateSize();
-        setTimeout(() => { if (franchiseMap) franchiseMap.invalidateSize(); }, 150);
-        setTimeout(() => { if (franchiseMap) franchiseMap.invalidateSize(); }, 500);
+        setTimeout(() => franchiseMap.invalidateSize(), 100);
     }
 
     if (businessStreetInput) businessStreetInput.addEventListener('input', () => {
         businessStreetInput.dataset.pinGenerated = '0';
         composeBusinessAddress();
     });
-
-    window.addEventListener('resize', () => {
-        if (franchiseMap) franchiseMap.invalidateSize();
-    });
-
     if (franchiseMapElement) {
-        initFranchiseMap();
+        if (window.L) initFranchiseMap();
+        else setMapStatus('Map is still loading. Please refresh if it does not appear.', false);
     }
 });
 </script>
 
 <?php
-function handleFileUploads($conn, $application_id, $max_file_size, array $verification_context = []) {
+function handleFileUploads($conn, $application_id, $max_file_size, array $verification_context = [], ?array $required_doc_types = null) {
     $upload_dir = 'uploads/franchise_documents/';
     $doc_types = [
         'business_logo', 'dti_doc', 'bir_doc', 'mayor_doc', 'barangay_clearance',
@@ -3773,18 +3693,34 @@ function handleFileUploads($conn, $application_id, $max_file_size, array $verifi
         'bank_proof', 'bir_form', 'sss_registration', 'philhealth_registration',
         'pagibig_registration', 'industry_permit'
     ];
-    $required_docs = ['business_logo', 'dti_doc', 'bir_doc', 'valid_id', 'address_proof'];
     $doc_labels = [
-        'business_logo' => 'Business Logo',
-        'dti_doc' => 'DTI/SEC Certificate',
-        'bir_doc' => 'BIR Registration',
-        'valid_id' => 'Valid ID',
-        'address_proof' => 'Proof of Address'
+        'business_logo' => 'Store Business Logo',
+        'dti_doc' => 'DTI / SEC Certificate',
+        'bir_doc' => 'BIR Registration (Form 2303)',
+        'mayor_doc' => "Mayor's Permit",
+        'barangay_clearance' => 'Barangay Clearance',
+        'lease_or_title' => 'Lease Contract / Title',
+        'occupancy_certificate' => 'Certificate of Occupancy',
+        'fire_safety_certificate' => 'Fire Safety Certificate',
+        'community_tax_certificate' => 'Community Tax Certificate',
+        'sanitary_permit' => 'Sanitary Permit',
+        'valid_id' => 'Valid ID of Owner',
+        'address_proof' => 'Proof of Address',
+        'bank_proof' => 'Bank Account Proof',
+        'bir_form' => 'BIR Form 1901/1903',
+        'sss_registration' => 'SSS Registration',
+        'philhealth_registration' => 'PhilHealth Registration',
+        'pagibig_registration' => 'Pag-IBIG Registration',
+        'industry_permit' => 'Industry-Specific Permit'
     ];
     $allowed_extensions = ['pdf', 'jpg', 'jpeg', 'png'];
     $saved_files = [];
 
-    foreach ($required_docs as $required_doc) {
+    // If required_doc_types is explicitly passed (e.g. only flagged incomplete docs), check those.
+    // If null, default 5 essential docs are required.
+    $check_required = is_array($required_doc_types) ? $required_doc_types : ['business_logo', 'dti_doc', 'bir_doc', 'valid_id', 'address_proof'];
+
+    foreach ($check_required as $required_doc) {
         if (!isset($_FILES[$required_doc]) || $_FILES[$required_doc]['error'] === UPLOAD_ERR_NO_FILE) {
             return ['success' => false, 'message' => ($doc_labels[$required_doc] ?? $required_doc) . " is required."];
         }
@@ -3828,17 +3764,55 @@ function handleFileUploads($conn, $application_id, $max_file_size, array $verifi
 
             $saved_files[] = $file_path;
 
-            $query = "INSERT INTO franchise_documents (application_id, document_type, file_name, file_path, uploaded_at) VALUES (?, ?, ?, ?, NOW())";
-            $stmt = mysqli_prepare($conn, $query);
-            if ($stmt) {
-                mysqli_stmt_bind_param($stmt, "isss", $application_id, $doc_type, $file_name, $file_path);
-                mysqli_stmt_execute($stmt);
-                mysqli_stmt_close($stmt);
+            // Check if document already exists for this application to update or insert
+            $existing_doc_id = 0;
+            $old_file_to_del = '';
+            $check_stmt = mysqli_prepare($conn, "SELECT id, file_path FROM franchise_documents WHERE application_id = ? AND document_type = ? LIMIT 1");
+            if ($check_stmt) {
+                mysqli_stmt_bind_param($check_stmt, "is", $application_id, $doc_type);
+                mysqli_stmt_execute($check_stmt);
+                $d_res = mysqli_stmt_get_result($check_stmt);
+                if ($d_res && ($d_row = mysqli_fetch_assoc($d_res))) {
+                    $existing_doc_id = (int)$d_row['id'];
+                    $old_file_to_del = (string)$d_row['file_path'];
+                }
+                mysqli_stmt_close($check_stmt);
+            }
+
+            $has_doc_status = franchiseColumnExists($conn, 'franchise_documents', 'status');
+
+            if ($existing_doc_id > 0) {
+                if ($has_doc_status) {
+                    $query = "UPDATE franchise_documents SET file_name = ?, file_path = ?, status = 'pending', admin_remarks = NULL, uploaded_at = NOW() WHERE id = ?";
+                } else {
+                    $query = "UPDATE franchise_documents SET file_name = ?, file_path = ?, uploaded_at = NOW() WHERE id = ?";
+                }
+                $stmt = mysqli_prepare($conn, $query);
+                if ($stmt) {
+                    mysqli_stmt_bind_param($stmt, "ssi", $file_name, $file_path, $existing_doc_id);
+                    mysqli_stmt_execute($stmt);
+                    mysqli_stmt_close($stmt);
+                }
+                if ($old_file_to_del !== '' && $old_file_to_del !== $file_path && file_exists($old_file_to_del)) {
+                    @unlink($old_file_to_del);
+                }
+            } else {
+                if ($has_doc_status) {
+                    $query = "INSERT INTO franchise_documents (application_id, document_type, file_name, file_path, status, uploaded_at) VALUES (?, ?, ?, ?, 'pending', NOW())";
+                } else {
+                    $query = "INSERT INTO franchise_documents (application_id, document_type, file_name, file_path, uploaded_at) VALUES (?, ?, ?, ?, NOW())";
+                }
+                $stmt = mysqli_prepare($conn, $query);
+                if ($stmt) {
+                    mysqli_stmt_bind_param($stmt, "isss", $application_id, $doc_type, $file_name, $file_path);
+                    mysqli_stmt_execute($stmt);
+                    mysqli_stmt_close($stmt);
+                }
             }
         }
     } catch (Throwable $e) {
         cleanupUploadedFiles($saved_files);
-        return ['success' => false, 'message' => "Failed to save document records."];
+        return ['success' => false, 'message' => "Failed to save document records: " . $e->getMessage()];
     }
 
     return ['success' => true, 'message' => 'Documents uploaded successfully'];
