@@ -227,15 +227,17 @@ if (!window.L) {
 </script>
 <?php
 
-// Get store locations and delivery quote context from session
-$stores = $_SESSION['store_locations'] ?? [];
-if (empty($stores) && isset($conn) && $conn instanceof mysqli) {
+// Always fetch active store locations so newly accepted franchise branches reflect immediately
+if (isset($conn) && $conn instanceof mysqli) {
     $store_query = "SELECT store_id AS id, store_id, owner_user_id, store_name AS name, store_name, address, city, province, phone, opening_hours AS hours, opening_hours, latitude, longitude FROM store_locations WHERE is_active = 1 ORDER BY store_name ASC";
     $store_res = mysqli_query($conn, $store_query);
     if ($store_res) {
         $stores = mysqli_fetch_all($store_res, MYSQLI_ASSOC);
         $_SESSION['store_locations'] = $stores;
     }
+}
+if (empty($stores)) {
+    $stores = $_SESSION['store_locations'] ?? [];
 }
 
 // Auto-align seller store ID for pickup pre-selection if storefront_seller_id is set
@@ -5048,6 +5050,80 @@ window.initializeCheckoutMap = function() {
     marker = L.marker([14.5995, 120.9842], {
         draggable: true
     }).addTo(map);
+
+    let checkoutStoreMarkersLayer = null;
+    function renderStoresOnCheckoutMap(userLat, userLng) {
+        if (!map || typeof L === 'undefined') return;
+        if (!checkoutStoreMarkersLayer) {
+            checkoutStoreMarkersLayer = L.layerGroup().addTo(map);
+        } else {
+            checkoutStoreMarkersLayer.clearLayers();
+        }
+
+        const candidateStores = (typeof getDeliveryCandidateStores === 'function')
+            ? getDeliveryCandidateStores()
+            : (Array.isArray(storesData) ? storesData : []);
+
+        if (!candidateStores || candidateStores.length === 0) return;
+
+        let closestStoreId = null;
+        let minDistance = Infinity;
+
+        if (Number.isFinite(userLat) && Number.isFinite(userLng)) {
+            candidateStores.forEach(s => {
+                const sLat = parseFloat(s.latitude);
+                const sLng = parseFloat(s.longitude);
+                if (Number.isFinite(sLat) && Number.isFinite(sLng)) {
+                    const dist = calculateCoordinatesDistance(userLat, userLng, sLat, sLng);
+                    if (dist < minDistance) {
+                        minDistance = dist;
+                        closestStoreId = s.id || s.store_id;
+                    }
+                }
+            });
+        }
+
+        candidateStores.forEach(s => {
+            const sLat = parseFloat(s.latitude);
+            const sLng = parseFloat(s.longitude);
+            if (!Number.isFinite(sLat) || !Number.isFinite(sLng)) return;
+
+            const isClosest = closestStoreId !== null && ((s.id || s.store_id) === closestStoreId);
+            const distKm = (Number.isFinite(userLat) && Number.isFinite(userLng))
+                ? (calculateCoordinatesDistance(userLat, userLng, sLat, sLng) / 1000).toFixed(1)
+                : null;
+            const storeName = s.name || s.store_name || 'Lechon Store';
+            const storeAddr = s.address || '';
+
+            const storeIcon = L.divIcon({
+                className: 'checkout-store-map-pin',
+                html: `
+                    <div style="background:${isClosest ? '#b3261e' : '#344054'}; color:#ffffff; width:${isClosest ? '34px' : '28px'}; height:${isClosest ? '34px' : '28px'}; border-radius:50%; display:flex; align-items:center; justify-content:center; border:2px solid #ffffff; box-shadow:0 3px 10px rgba(0,0,0,0.3); font-size:${isClosest ? '14px' : '11px'}; cursor:pointer; transition:all 0.2s;" title="${storeName}">
+                        <i class="fas fa-store"></i>
+                    </div>
+                `,
+                iconSize: [isClosest ? 34 : 28, isClosest ? 34 : 28],
+                iconAnchor: [isClosest ? 17 : 14, isClosest ? 34 : 28],
+                popupAnchor: [0, isClosest ? -34 : -28]
+            });
+
+            const sMarker = L.marker([sLat, sLng], { icon: storeIcon, zIndexOffset: isClosest ? 500 : 100 }).addTo(checkoutStoreMarkersLayer);
+            sMarker.bindPopup(`
+                <div style="font-family:'Outfit',sans-serif; padding:4px; min-width:180px;">
+                    <span style="display:inline-block; font-size:10px; font-weight:800; color:${isClosest ? '#b3261e' : '#344054'}; background:${isClosest ? '#fff1f0' : '#f2f4f7'}; padding:2px 6px; border-radius:4px; margin-bottom:4px;">
+                        ${isClosest ? '<i class="fas fa-star"></i> Nearest Branch to You' : 'Partner Branch'}
+                    </span>
+                    <strong style="font-size:13px; color:#101828; display:block; line-height:1.3;">${storeName}</strong>
+                    <div style="font-size:12px; color:#667085; margin:3px 0 6px 0;">${storeAddr}</div>
+                    ${distKm ? `<div style="font-size:12px; font-weight:700; color:#b3261e;"><i class="fas fa-location-arrow"></i> ${distKm} km away from your pin</div>` : ''}
+                </div>
+            `);
+        });
+    }
+    window.renderStoresOnCheckoutMap = renderStoresOnCheckoutMap;
+    
+    // Initial render of store pins around default pin
+    renderStoresOnCheckoutMap(14.5995, 120.9842);
     
     const input = document.getElementById("address_search");
     if (input) {
@@ -5075,6 +5151,7 @@ window.initializeCheckoutMap = function() {
                         
                         updateAddressFromCoordinates(lat, lng);
                         calculateDeliveryFee(lat, lng);
+                        renderStoresOnCheckoutMap(lat, lng);
                     }
                 } catch (err) {
                     console.error('Nominatim search error:', err);
@@ -5089,6 +5166,7 @@ window.initializeCheckoutMap = function() {
             console.error('Unable to sync PSGC fields from marker drag:', error);
         });
         calculateDeliveryFee(position.lat, position.lng);
+        renderStoresOnCheckoutMap(position.lat, position.lng);
     });
     
     map.on("click", (event) => {
@@ -5098,6 +5176,7 @@ window.initializeCheckoutMap = function() {
             console.error('Unable to sync PSGC fields from map click:', error);
         });
         calculateDeliveryFee(coords.lat, coords.lng);
+        renderStoresOnCheckoutMap(coords.lat, coords.lng);
     });
     
     console.log("Leaflet Map initialized successfully");
@@ -5146,6 +5225,9 @@ if (useMyLocationBtn) {
                 console.error('Unable to sync PSGC fields from current location:', error);
             }
             calculateDeliveryFee(pos.lat, pos.lng);
+            if (typeof window.renderStoresOnCheckoutMap === 'function') {
+                window.renderStoresOnCheckoutMap(pos.lat, pos.lng);
+            }
             Swal.close();
         }, (error) => {
             let message = 'Error: The Geolocation service failed.';
@@ -5198,6 +5280,15 @@ if (findNearestStoreBtn) {
                     if (select) {
                         select.value = nearest.id;
                         select.dispatchEvent(new Event('change'));
+                    }
+                    if (typeof map !== 'undefined' && map && typeof marker !== 'undefined' && marker) {
+                        map.setView([userLat, userLng], 15);
+                        marker.setLatLng([userLat, userLng]);
+                        updateAddressFromCoordinates(userLat, userLng);
+                        calculateDeliveryFee(userLat, userLng);
+                        if (typeof window.renderStoresOnCheckoutMap === 'function') {
+                            window.renderStoresOnCheckoutMap(userLat, userLng);
+                        }
                     }
                     Swal.fire('Found!', `Nearest store is ${nearest.name || nearest.store_name} (${(minDist/1000).toFixed(1)}km away)`, 'success');
                 } else {

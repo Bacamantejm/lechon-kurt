@@ -217,6 +217,55 @@ if ($manager_query) {
         $managers[] = $manager;
     }
 }
+
+// System standard department templates for lechon & restaurant operations
+$department_presets = [
+    [
+        'label' => 'Kitchen & Roasting (Cooks, Roasters & Pitmasters)',
+        'dept_name' => 'Kitchen & Roasting',
+        'desc' => 'Specialized culinary and pit team responsible for lechon seasoning, bamboo/stainless spit preparation, charcoal pit temperature monitoring, spit-roasting, crispy skin blister control, and hot carving.'
+    ],
+    [
+        'label' => 'Kitchen & Food Preparation (Prep Cooks & Kitchen Staff)',
+        'dept_name' => 'Kitchen & Food Preparation',
+        'desc' => 'Responsible for signature lechon sauce (sarsa) production, side dish cooking, vegetable and seasoning prep, marinades, and recipe consistency.'
+    ],
+    [
+        'label' => 'Logistics & Delivery (Riders & Drivers)',
+        'dept_name' => 'Logistics & Delivery',
+        'desc' => 'Handles order dispatch, thermal insulated box packaging, GPS route navigation, driver assignments, and punctual door-to-door customer delivery.'
+    ],
+    [
+        'label' => 'Front of House & Cashiering (Service Crew & Cashiers)',
+        'dept_name' => 'Front of House & Cashiering',
+        'desc' => 'Manages POS counter transactions, order taking, dine-in table hospitality, takeout packing, and customer service inquiries.'
+    ],
+    [
+        'label' => 'Inventory & Cold Storage (Warehouse & Stock Custodian)',
+        'dept_name' => 'Inventory & Cold Storage',
+        'desc' => 'Oversees dressed pig meat receiving, freezer and chiller temperature monitoring, charcoal and firewood replenishment, and weekly stock audits.'
+    ],
+    [
+        'label' => 'Quality Control & Food Safety (QA, Hygiene & Sanitation)',
+        'dept_name' => 'Quality Control & Food Safety',
+        'desc' => 'Enforces strict sanitation protocols, meat freshness and storage compliance, pit hygiene, and local health office food safety standards.'
+    ],
+    [
+        'label' => 'Stewarding & Pit Maintenance (Utility & Cleaners)',
+        'dept_name' => 'Stewarding & Pit Maintenance',
+        'desc' => 'Maintains roasting pit cleanliness, ash and coal disposal, cookware dishwashing, grease trap management, and kitchen waste sanitation.'
+    ],
+    [
+        'label' => 'Store Operations & Administration (Store Supervisors)',
+        'dept_name' => 'Store Operations & Administration',
+        'desc' => 'Coordinates store daily opening and closing, employee attendance and shift schedules, sales tally reconciliation, and partner coordination.'
+    ],
+    [
+        'label' => 'Marketing & Catering Sales (Sales & Customer Support)',
+        'dept_name' => 'Marketing & Catering Sales',
+        'desc' => 'Handles bulk event catering bookings, seasonal holiday pre-orders, customer inquiries, promotions, and customer satisfaction feedback.'
+    ]
+];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -337,16 +386,35 @@ if ($manager_query) {
                     <div class="modal-body">
                         <input type="hidden" name="action" value="add_department">
                         <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+                        
                         <div class="form-group mb-3">
-                            <label>Department Name *</label>
-                            <input type="text" name="department_name" class="form-control" required>
+                            <label class="form-label fw-bold"><i class="fas fa-layer-group me-1 text-danger"></i> Department Preset / Role</label>
+                            <select id="addDeptPresetSelect" class="form-select">
+                                <option value="">-- Select department preset (e.g. Cook, Logistics, Cashier) --</option>
+                                <?php foreach ($department_presets as $preset): ?>
+                                    <option value="<?php echo htmlspecialchars($preset['dept_name']); ?>"
+                                            data-name="<?php echo htmlspecialchars($preset['dept_name']); ?>"
+                                            data-desc="<?php echo htmlspecialchars($preset['desc']); ?>">
+                                        <?php echo htmlspecialchars($preset['label']); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                                <option value="__custom__">-- Custom / Other (Enter Manually) --</option>
+                            </select>
+                            <div class="form-text text-muted" style="font-size: 0.8rem;">
+                                Selecting a preset automatically fills the department name and description below.
+                            </div>
+                        </div>
+
+                        <div class="form-group mb-3">
+                            <label class="form-label fw-bold">Department Name *</label>
+                            <input type="text" name="department_name" id="addDepartmentName" class="form-control" placeholder="e.g. Kitchen & Roasting" required>
                         </div>
                         <div class="form-group mb-3">
-                            <label>Description</label>
-                            <textarea name="description" class="form-control" rows="3"></textarea>
+                            <label class="form-label fw-bold">Description</label>
+                            <textarea name="description" id="addDepartmentDescription" class="form-control" rows="3" placeholder="Enter department responsibilities, tasks, and scope..."></textarea>
                         </div>
                         <div class="form-group mb-3">
-                            <label>Manager</label>
+                            <label class="form-label fw-bold">Manager</label>
                             <select name="manager_id" class="form-select">
                                 <option value="">Unassigned</option>
                                 <?php foreach ($managers as $manager): ?>
@@ -377,16 +445,35 @@ if ($manager_query) {
                         <input type="hidden" name="action" value="edit_department">
                         <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
                         <input type="hidden" name="dept_id" id="editDeptId">
+
                         <div class="form-group mb-3">
-                            <label>Department Name *</label>
+                            <label class="form-label fw-bold"><i class="fas fa-layer-group me-1 text-danger"></i> Department Preset / Role <span class="text-muted fw-normal">(Optional)</span></label>
+                            <select id="editDeptPresetSelect" class="form-select">
+                                <option value="">-- Apply a standard preset template --</option>
+                                <?php foreach ($department_presets as $preset): ?>
+                                    <option value="<?php echo htmlspecialchars($preset['dept_name']); ?>"
+                                            data-name="<?php echo htmlspecialchars($preset['dept_name']); ?>"
+                                            data-desc="<?php echo htmlspecialchars($preset['desc']); ?>">
+                                        <?php echo htmlspecialchars($preset['label']); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                                <option value="__custom__">-- Custom / Keep Current --</option>
+                            </select>
+                            <div class="form-text text-muted" style="font-size: 0.8rem;">
+                                Quickly apply standard descriptions and roles to this department.
+                            </div>
+                        </div>
+
+                        <div class="form-group mb-3">
+                            <label class="form-label fw-bold">Department Name *</label>
                             <input type="text" name="department_name" id="editDepartmentName" class="form-control" required>
                         </div>
                         <div class="form-group mb-3">
-                            <label>Description</label>
+                            <label class="form-label fw-bold">Description</label>
                             <textarea name="description" id="editDescription" class="form-control" rows="3"></textarea>
                         </div>
                         <div class="form-group mb-3">
-                            <label>Manager</label>
+                            <label class="form-label fw-bold">Manager</label>
                             <select name="manager_id" id="editManagerId" class="form-select">
                                 <option value="">Unassigned</option>
                                 <?php foreach ($managers as $manager): ?>
@@ -433,11 +520,53 @@ if ($manager_query) {
             });
         <?php unset($_SESSION['error']); endif; ?>
 
+        // Add Modal Preset Selection Handler
+        $('#addDeptPresetSelect').on('change', function() {
+            var selected = $(this).find(':selected');
+            var val = $(this).val();
+            if (val === '__custom__') {
+                $('#addDepartmentName').val('').focus();
+                $('#addDepartmentDescription').val('');
+            } else if (val !== '') {
+                var name = selected.data('name');
+                var desc = selected.data('desc');
+                $('#addDepartmentName').val(name);
+                $('#addDepartmentDescription').val(desc);
+            }
+        });
+
+        // Edit Modal Preset Selection Handler
+        $('#editDeptPresetSelect').on('change', function() {
+            var selected = $(this).find(':selected');
+            var val = $(this).val();
+            if (val === '__custom__') {
+                $('#editDepartmentName').focus();
+            } else if (val !== '') {
+                var name = selected.data('name');
+                var desc = selected.data('desc');
+                $('#editDepartmentName').val(name);
+                $('#editDescription').val(desc);
+            }
+        });
+
+        // Reset Add Modal preset selector when opening
+        $('#addDepartmentModal').on('show.bs.modal', function () {
+            $('#addDeptPresetSelect').val('');
+        });
+
         function editDepartment(id, name, description, managerId) {
             $('#editDeptId').val(id);
             $('#editDepartmentName').val(name);
             $('#editDescription').val(description !== '-' ? description : '');
             $('#editManagerId').val(managerId);
+
+            // Sync preset dropdown if name matches
+            if ($('#editDeptPresetSelect option[value="' + name.replace(/"/g, '\\"') + '"]').length > 0) {
+                $('#editDeptPresetSelect').val(name);
+            } else {
+                $('#editDeptPresetSelect').val('');
+            }
+
             var editModal = new bootstrap.Modal(document.getElementById('editDepartmentModal'));
             editModal.show();
         }

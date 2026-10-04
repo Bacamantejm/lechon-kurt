@@ -966,8 +966,11 @@ function getAdminModuleByPage($page_name) {
         'orders.php' => 'orders',
         'get_order_details.php' => 'orders',
         'reviews.php' => 'orders',
+        'cancellations.php' => 'orders',
+        'refunds.php' => 'orders',
         'preorders.php' => 'preorders',
         'get_preorder_details.php' => 'preorders',
+        'preorder_schedule.php' => 'preorders',
         'logistics.php' => 'logistics',
         'logistics_settings.php' => 'logistics',
         'assign_driver.php' => 'logistics',
@@ -977,6 +980,7 @@ function getAdminModuleByPage($page_name) {
         'ajax_accept_delivery.php' => 'logistics',
         'products.php' => 'products',
         'vouchers.php' => 'products',
+        'seller_vouchers.php' => 'products',
         'inventory.php' => 'inventory',
         'get_inventory_details.php' => 'inventory',
         'get_inventory_history.php' => 'inventory',
@@ -1147,7 +1151,8 @@ function enforcePartnerRoleScopedPageAccess($conn, $user_id, $current_page) {
 
     $partner_scope_owner_id = (int)(getFranchiseSellerScopeOwnerId($conn, $user_id) ?? 0);
     $is_partner_owner_admin = $partner_scope_owner_id > 0 && $partner_scope_owner_id === $user_id;
-    if ($is_partner_owner_admin) {
+    $is_business_owner_role = isset($_SESSION['role_name']) && strtolower(trim($_SESSION['role_name'])) === 'business_owner';
+    if ($is_partner_owner_admin || $is_business_owner_role) {
         return;
     }
 
@@ -1558,17 +1563,23 @@ function checkAdminAccess() {
             'index.php',
             'products.php',
             'vouchers.php',
+            'seller_vouchers.php',
             'orders.php',
             'get_order_details.php',
             'print_order_receipt.php',
             'chat.php',
+            'chat_endpoint.php',
+            'chat_widget.php',
             'cancellations.php',
+            'refunds.php',
             'reviews.php',
             'preorders.php',
             'get_preorder_details.php',
             'print_preorder_receipt.php',
             'ajax_update_preorder.php',
+            'preorder_schedule.php',
             'logistics.php',
+            'logistics_settings.php',
             'assign_driver.php',
             'cancel_delivery.php',
             'update_delivery_status.php',
@@ -1586,6 +1597,8 @@ function checkAdminAccess() {
             'mrp.php',
             'purchase_order.php',
             'get_po_details.php',
+            'materials.php',
+            'bom.php',
             'finance.php',
             'expenses.php',
             'order_policy_settings.php',
@@ -1595,10 +1608,12 @@ function checkAdminAccess() {
             'receipt_settings.php',
             'partner_banking.php',
             'business_account.php',
+            'partner_operations_flow.php',
             'forecasting_dashboard.php',
             'dss_reports.php',
             'statistics.php',
             'events.php',
+            'update_recommendation_status.php',
             'rbac_management.php',
             'hr.php',
             'employees.php',
@@ -1620,10 +1635,12 @@ function checkAdminAccess() {
             'candidates.php',
             'turnover.php',
             'hr_reports.php',
+            'hr_migration_checker.php',
+            'hr_module_common.php',
+            'hr_workspace_nav.php',
             'get_employee_details.php',
             'get_leave_details.php',
             'get_performance_details.php',
-            'get_po_details.php',
             'get_products_for_kiosk.php',
             'create_walkin_order.php',
             'logout.php',
@@ -1631,9 +1648,19 @@ function checkAdminAccess() {
             'billing_invoice_payment_success.php',
             'billing_invoice_payment_cancel.php',
             'billing_invoice_view.php',
-            'billing_invoice_pdf.php'
+            'billing_invoice_pdf.php',
+            'shop_owner_tutorial_modal.php',
+            'tenant_scope_migration.php'
         ];
-        if (!$is_super_admin_session_user && !in_array($current_page, $partner_allowed_pages, true)) {
+
+        $super_admin_pages = getSuperAdminOnlyAdminPages();
+        $is_super_admin_page = in_array($current_page, $super_admin_pages, true) || isCurrentPageSuperAdminOnly();
+
+        // Any non-super-admin store module in admin/ is valid for partner accounts
+        $is_allowed_partner_page = in_array($current_page, $partner_allowed_pages, true) 
+            || (!$is_super_admin_page && strpos($_SERVER['PHP_SELF'] ?? '', '/admin/') !== false);
+
+        if (!$is_super_admin_session_user && (!$is_allowed_partner_page || $is_super_admin_page)) {
             $fallback_redirect = (strpos($_SERVER['PHP_SELF'] ?? '', '/admin/') !== false) ? 'index.php' : 'admin/index.php';
             if (isAjaxRequest()) {
                 http_response_code(403);
@@ -1805,6 +1832,12 @@ function requirePermission($permission_name) {
     if (isset($_SESSION['role_name']) && $_SESSION['role_name'] === 'business_owner') {
         return; // Business owner has full admin dashboard access.
     }
+    if ($conn && $user_id > 0 && function_exists('getFranchiseSellerScopeOwnerId')) {
+        $owner_id = (int)(getFranchiseSellerScopeOwnerId($conn, $user_id) ?? 0);
+        if ($owner_id > 0 && $owner_id === $user_id) {
+            return; // Partner shop owner has full store permissions.
+        }
+    }
 
     if (!is_string($permission_name) || $permission_name === '') {
         denyAdminAccess('Access Denied: Invalid permission requirement.');
@@ -1844,6 +1877,12 @@ function requireAnyPermission(array $permission_names) {
     }
     if (isset($_SESSION['role_name']) && $_SESSION['role_name'] === 'business_owner') {
         return;
+    }
+    if ($conn && $user_id > 0 && function_exists('getFranchiseSellerScopeOwnerId')) {
+        $owner_id = (int)(getFranchiseSellerScopeOwnerId($conn, $user_id) ?? 0);
+        if ($owner_id > 0 && $owner_id === $user_id) {
+            return; // Partner shop owner has full store permissions.
+        }
     }
 
     $session_permissions = getSessionPermissions();

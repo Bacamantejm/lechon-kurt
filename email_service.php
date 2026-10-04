@@ -1372,8 +1372,8 @@ class EmailService {
 
             $applicant_name = htmlspecialchars($app_data['contact_person'] ?? $app_data['full_name'] ?? 'Applicant');
             $app_number = htmlspecialchars($app_data['application_number'] ?? '');
-            $business_name = htmlspecialchars($app_data['business_name'] ?? '');
-            $capital_investment = number_format((float)($app_data['capital_investment'] ?? 0), 2);
+            $raw_capital = (float)($app_data['capital_investment'] ?? 0);
+            $capital_line = ($raw_capital > 0) ? "<p style='margin:0;'><strong>Capital Investment:</strong> PHP " . number_format($raw_capital, 2) . "</p>" : "";
             $business_address = htmlspecialchars($app_data['business_address'] ?? 'Cavite');
 
             $subject = "Franchise Application Received - [{$app_number}]";
@@ -1387,8 +1387,8 @@ class EmailService {
                 <div style='background:#f8f9fa;border:1px solid #eaecf0;border-radius:12px;padding:16px;margin:20px 0;'>
                     <p style='margin:0 0 8px;'><strong>Application Number:</strong> {$app_number}</p>
                     <p style='margin:0 0 8px;'><strong>Business Name:</strong> {$business_name}</p>
-                    <p style='margin:0 0 8px;'><strong>Proposed Location:</strong> {$business_address}</p>
-                    <p style='margin:0;'><strong>Capital Investment:</strong> PHP {$capital_investment}</p>
+                    <p style='margin:0" . ($capital_line !== '' ? " 0 8px;" : ";") . "'><strong>Proposed Location:</strong> {$business_address}</p>
+                    {$capital_line}
                 </div>
                 <p>Our management team is currently reviewing your compliance documents and business profile. You will receive an email update once our review is complete.</p>
                 <p style='margin-top:20px;'>You can check your live application status anytime by logging into your account under <strong>My Account &gt; Franchise Applications</strong>.</p>

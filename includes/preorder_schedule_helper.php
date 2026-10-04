@@ -284,6 +284,9 @@ if (!function_exists('posGetCalendarAvailability')) {
             mysqli_free_result($b_res);
         }
 
+        $custom_slots_data = json_decode((string)($schedule['custom_slots_json'] ?? ''), true);
+        $date_overrides = (is_array($custom_slots_data) && isset($custom_slots_data['dates']) && is_array($custom_slots_data['dates'])) ? $custom_slots_data['dates'] : [];
+
         $max_daily = (int)$schedule['max_orders_per_day'];
         $days_matrix = [];
 
@@ -292,14 +295,28 @@ if (!function_exists('posGetCalendarAvailability')) {
             $day_of_week = (string)date('N', strtotime($date_str)); // 1 (Mon) through 7 (Sun)
             $day_name = date('D', strtotime($date_str));
 
+            $date_override = $date_overrides[$date_str] ?? null;
+            $day_max_daily = (is_array($date_override) && !empty($date_override['max_orders_per_day'])) ? (int)$date_override['max_orders_per_day'] : $max_daily;
+            $has_custom_capacity = (is_array($date_override) && !empty($date_override['max_orders_per_day']));
+
             $is_past = ($date_str < $today_str);
             $is_cutoff = ($date_str < $min_booking_date);
             $is_beyond = ($date_str > $max_booking_date);
             $is_closed_day = !in_array($day_of_week, $operating_days, true);
             $is_blackout = isset($blackout_set[$date_str]);
 
+            // Date override status: 'open' or 'blocked'
+            if (is_array($date_override) && isset($date_override['status'])) {
+                if ($date_override['status'] === 'blocked') {
+                    $is_blackout = true;
+                } elseif ($date_override['status'] === 'open') {
+                    $is_blackout = false;
+                    $is_closed_day = false;
+                }
+            }
+
             $booked_count = $booked_counts_by_date[$date_str] ?? 0;
-            $is_fully_booked = ($booked_count >= $max_daily);
+            $is_fully_booked = ($booked_count >= $day_max_daily);
 
             $available = true;
             $status = 'available';
@@ -309,6 +326,10 @@ if (!function_exists('posGetCalendarAvailability')) {
                 $available = false;
                 $status = 'past';
                 $status_reason = 'Past date';
+            } elseif ($is_blackout) {
+                $available = false;
+                $status = 'blackout';
+                $status_reason = "Store holiday / date blocked";
             } elseif ($is_cutoff) {
                 $available = false;
                 $status = 'lead_time_cutoff';
@@ -321,17 +342,13 @@ if (!function_exists('posGetCalendarAvailability')) {
                 $available = false;
                 $status = 'closed_weekday';
                 $status_reason = "Roasting pit closed on {$day_name}s";
-            } elseif ($is_blackout) {
-                $available = false;
-                $status = 'blackout';
-                $status_reason = "Store holiday / date unavailable";
             } elseif ($is_fully_booked) {
                 $available = false;
                 $status = 'fully_booked';
-                $status_reason = "Roasting batch capacity full ({$booked_count}/{$max_daily})";
+                $status_reason = "Roasting batch capacity full ({$booked_count}/{$day_max_daily})";
             }
 
-            $remaining_capacity = max(0, $max_daily - $booked_count);
+            $remaining_capacity = max(0, $day_max_daily - $booked_count);
 
             $days_matrix[] = [
                 'day' => $d,
@@ -343,7 +360,9 @@ if (!function_exists('posGetCalendarAvailability')) {
                 'status_reason' => $status_reason,
                 'booked_count' => $booked_count,
                 'remaining_capacity' => $remaining_capacity,
-                'max_daily_capacity' => $max_daily
+                'max_daily_capacity' => $day_max_daily,
+                'has_custom_capacity' => $has_custom_capacity,
+                'is_blackout' => $is_blackout
             ];
         }
 
@@ -446,3 +465,150 @@ if (!function_exists('posGetTimeSlotsForDate')) {
         return $resolved_slots;
     }
 }
+
+if (!function_exists('posGetDateSummary')) {
+    function posGetDateSummary(mysqli $conn, int $seller_id, string $target_date): array {
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $target_date)) {
+            return [];
+        }
+
+        $schedule = posGetSellerSchedule($conn, $seller_id);
+        $time_slots = posGetTimeSlotsForDate($conn, $seller_id, $target_date);
+
+        $custom_slots_data = json_decode((string)($schedule['custom_slots_json'] ?? ''), true);
+        $date_overrides = (is_array($custom_slots_data) && isset($custom_slots_data['dates']) && is_array($custom_slots_data['dates'])) ? $custom_slots_data['dates'] : [];
+        $override = $date_overrides[$target_date] ?? null;
+
+        $blackout_raw = array_filter(array_map('trim', explode(',', (string)$schedule['blackout_dates'])));
+        $is_in_blackout_list = in_array($target_date, $blackout_raw, true);
+
+        $is_blocked = $is_in_blackout_list || (($override['status'] ?? '') === 'blocked');
+        if (($override['status'] ?? '') === 'open') {
+            $is_blocked = false;
+        }
+
+        $operating_days = array_filter(array_map('trim', explode(',', (string)$schedule['operating_days'])));
+        if (empty($operating_days)) {
+            $operating_days = ['1', '2', '3', '4', '5', '6', '7'];
+        }
+        $day_of_week = (string)date('N', strtotime($target_date));
+        $is_closed_day = !in_array($day_of_week, $operating_days, true) && (($override['status'] ?? '') !== 'open');
+
+        $default_max_daily = (int)$schedule['max_orders_per_day'];
+        $custom_capacity = (is_array($override) && !empty($override['max_orders_per_day'])) ? (int)$override['max_orders_per_day'] : null;
+        $max_daily = $custom_capacity ?? $default_max_daily;
+
+        // Fetch pre-orders for this date
+        $p_scope_filter = ($seller_id > 0)
+            ? "AND (p.seller_id = {$seller_id} OR po.product_id IN (SELECT id FROM products WHERE seller_id = {$seller_id}))"
+            : "";
+
+        $orders = [];
+        $q_orders = "
+            SELECT 
+                po.id, po.product_name, po.quantity, po.total_price, 
+                po.preferred_pickup_time, po.reservation_status, po.delivery_method,
+                COALESCE(NULLIF(TRIM(u.full_name), ''), 'Customer') AS customer_name,
+                COALESCE(u.phone, '') AS customer_phone
+            FROM pre_orders po
+            LEFT JOIN products p ON po.product_id = p.id
+            LEFT JOIN users u ON po.user_id = u.id
+            WHERE po.preferred_pickup_date = ?
+              AND po.reservation_status NOT IN ('cancelled')
+              {$p_scope_filter}
+            ORDER BY po.preferred_pickup_time ASC, po.id ASC
+        ";
+        $stmt_ord = mysqli_prepare($conn, $q_orders);
+        if ($stmt_ord) {
+            mysqli_stmt_bind_param($stmt_ord, "s", $target_date);
+            mysqli_stmt_execute($stmt_ord);
+            $res = mysqli_stmt_get_result($stmt_ord);
+            while ($row = mysqli_fetch_assoc($res)) {
+                $orders[] = $row;
+            }
+            mysqli_free_result($res);
+            mysqli_stmt_close($stmt_ord);
+        }
+
+        $booked_count = count($orders);
+        $remaining = max(0, $max_daily - $booked_count);
+
+        return [
+            'date' => $target_date,
+            'formatted_date' => date('l, F j, Y', strtotime($target_date)),
+            'day_name' => date('l', strtotime($target_date)),
+            'is_blocked' => $is_blocked,
+            'is_closed_day' => $is_closed_day,
+            'default_max_daily' => $default_max_daily,
+            'custom_capacity' => $custom_capacity,
+            'max_daily_capacity' => $max_daily,
+            'has_custom_capacity' => ($custom_capacity !== null),
+            'booked_count' => $booked_count,
+            'remaining_capacity' => $remaining,
+            'orders' => $orders,
+            'time_slots' => $time_slots
+        ];
+    }
+}
+
+if (!function_exists('posUpdateDateSchedule')) {
+    function posUpdateDateSchedule(mysqli $conn, int $seller_id, string $target_date, array $settings): bool {
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $target_date)) {
+            return false;
+        }
+
+        $schedule = posGetSellerSchedule($conn, $seller_id);
+        $custom_slots_data = json_decode((string)($schedule['custom_slots_json'] ?? ''), true);
+        if (!is_array($custom_slots_data)) {
+            $custom_slots_data = ['dates' => []];
+        }
+        if (!isset($custom_slots_data['dates']) || !is_array($custom_slots_data['dates'])) {
+            $custom_slots_data['dates'] = [];
+        }
+
+        // Manage blackout_dates string
+        $blackout_raw = array_filter(array_map('trim', explode(',', (string)$schedule['blackout_dates'])));
+        $blackout_set = array_flip($blackout_raw);
+
+        $new_status = $settings['status'] ?? null; // 'open', 'blocked', or null
+        if ($new_status === 'blocked') {
+            $blackout_set[$target_date] = true;
+            $custom_slots_data['dates'][$target_date]['status'] = 'blocked';
+        } elseif ($new_status === 'open') {
+            unset($blackout_set[$target_date]);
+            $custom_slots_data['dates'][$target_date]['status'] = 'open';
+        }
+
+        if (array_key_exists('max_orders_per_day', $settings)) {
+            $cap = (int)$settings['max_orders_per_day'];
+            if ($cap > 0) {
+                $custom_slots_data['dates'][$target_date]['max_orders_per_day'] = $cap;
+            } else {
+                unset($custom_slots_data['dates'][$target_date]['max_orders_per_day']);
+            }
+        }
+
+        if (isset($custom_slots_data['dates'][$target_date]) && empty($custom_slots_data['dates'][$target_date])) {
+            unset($custom_slots_data['dates'][$target_date]);
+        }
+
+        $new_blackout_str = implode(', ', array_keys($blackout_set));
+        $new_custom_json = !empty($custom_slots_data['dates']) ? json_encode($custom_slots_data) : '';
+
+        $stmt = mysqli_prepare($conn, "
+            UPDATE shop_preorder_schedules
+            SET blackout_dates = ?, custom_slots_json = ?
+            WHERE seller_id = ?
+        ");
+        if (!$stmt) {
+            return false;
+        }
+
+        mysqli_stmt_bind_param($stmt, "ssi", $new_blackout_str, $new_custom_json, $seller_id);
+        $ok = mysqli_stmt_execute($stmt);
+        mysqli_stmt_close($stmt);
+
+        return (bool)$ok;
+    }
+}
+

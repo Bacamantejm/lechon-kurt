@@ -1784,6 +1784,7 @@
         }
     }
     </style>
+    <?php require_once __DIR__ . '/customer_tutorial_modal.php'; ?>
     <?php require_once __DIR__ . '/popup_alert.php'; ?>
 </body>
 </html>

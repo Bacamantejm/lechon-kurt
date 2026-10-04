@@ -373,6 +373,61 @@ function franchiseExtractStreetAddress($full_address) {
     return $parts[0] ?? $full_address;
 }
 
+function isFranchiseCaviteLocation($province_name = '', $city_name = '', $address_blob = '', $lat = null, $lng = null) {
+    $cavite_lgus = [
+        'bacoor', 'cavite city', 'dasmarinas', 'dasmariñas', 'general trias', 'gen. trias',
+        'imus', 'tagaytay', 'trece martires', 'alfonso', 'amadeo', 'carmona',
+        'general emilio aguinaldo', 'bailen', 'general mariano alvarez', 'gma',
+        'indang', 'kawit', 'magallanes', 'maragondon', 'mendez', 'mendez-nunez',
+        'mendez-nuñez', 'naic', 'noveleta', 'rosario', 'silang', 'tanza', 'ternate'
+    ];
+
+    if ($lat !== null && $lng !== null && $lat !== '' && $lng !== '') {
+        $lat_f = (float)$lat;
+        $lng_f = (float)$lng;
+        if ($lat_f < 14.00 || $lat_f > 14.51 || $lng_f < 120.55 || $lng_f > 121.10) {
+            return false;
+        }
+    }
+
+    $province = strtolower(trim((string)$province_name));
+    $city = strtolower(trim((string)$city_name));
+    $blob = strtolower(trim((string)$address_blob));
+
+    $outside_indicators = [
+        'metro manila', 'batangas', 'laguna', 'quezon province', 'rizal', 'bulacan',
+        'pampanga', 'bataan', 'ncr', 'quezon city', 'taguig', 'makati', 'pasay',
+        'muntinlupa', 'paranaque', 'parañaque', 'las pinas', 'las piñas', 'manila',
+        'calookan', 'marikina', 'pasig', 'san juan', 'mandaluyong', 'valenzuela',
+        'malabon', 'navotas', 'pateros'
+    ];
+
+    foreach ($outside_indicators as $out) {
+        if ($province === $out || $city === $out) {
+            return false;
+        }
+        if (strpos($blob, $out) !== false && $province !== 'cavite') {
+            return false;
+        }
+    }
+
+    if ($province === 'cavite') {
+        return true;
+    }
+
+    if (in_array($city, $cavite_lgus, true)) {
+        return true;
+    }
+
+    foreach ($cavite_lgus as $lgu) {
+        if (strpos($city, $lgu) !== false || strpos($blob, $lgu) !== false) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 function fetchFranchiseApplicantAccountProfile($conn, $user_id) {
     $user_id = (int)$user_id;
     if ($user_id <= 0) {
@@ -439,7 +494,7 @@ function fetchLatestFranchiseApplicationForPrefill($conn, $user_id) {
     $query = "SELECT business_name, business_type, tin_number, dti_sec_number, bir_registration_number, mayors_permit,
                      business_address, region_name, region_code, province_name, province_code, city_name, city_code,
                      barangay_name, barangay_code, contact_person, contact_phone, contact_email, capital_investment,
-                     business_experience, marketing_plan
+                     business_experience, marketing_plan, latitude, longitude
               FROM franchise_applications
               WHERE user_id = ?
               ORDER BY created_at DESC, id DESC
@@ -485,6 +540,8 @@ function buildFranchiseApplicantPrefill($conn, $user_id, array $allowed_business
         'capital_investment' => '',
         'business_experience' => '',
         'marketing_plan' => '',
+        'location_latitude' => '',
+        'location_longitude' => '',
         'psgc_manual_mode' => '0'
     ];
 
@@ -506,7 +563,7 @@ function buildFranchiseApplicantPrefill($conn, $user_id, array $allowed_business
         $prefill['contact_email'] = trim((string)($profile['email'] ?? ''));
 
         $profile_address = trim((string)($profile['address'] ?? ''));
-        if ($profile_address !== '' && !franchiseIsCoordinateOnlyAddress($profile_address)) {
+        if ($profile_address !== '' && !franchiseIsCoordinateOnlyAddress($profile_address) && isFranchiseCaviteLocation('', '', $profile_address)) {
             $prefill['business_address'] = $profile_address;
             $prefill['business_address_street'] = franchiseExtractStreetAddress($profile_address);
         }
@@ -517,18 +574,23 @@ function buildFranchiseApplicantPrefill($conn, $user_id, array $allowed_business
         $fill_if_empty('contact_person', $saved_address['contact_name'] ?? '');
         $fill_if_empty('contact_phone', $saved_address['contact_phone'] ?? '');
 
-        if ($prefill['business_address_street'] === '') {
-            $fill_if_empty('business_address_street', $saved_address['street_address'] ?? '');
-        }
-
         $saved_full_address = trim((string)($saved_address['full_address'] ?? ''));
-        if ($saved_full_address !== '' && !franchiseIsCoordinateOnlyAddress($saved_full_address) && $prefill['business_address'] === '') {
-            $prefill['business_address'] = $saved_full_address;
-        }
+        $saved_prov = trim((string)($saved_address['province_name'] ?? ''));
+        $saved_city = trim((string)($saved_address['city_name'] ?? ''));
 
-        foreach (['region', 'province', 'city', 'barangay'] as $part) {
-            $fill_if_empty('psgc_' . $part . '_code', $saved_address[$part . '_code'] ?? '');
-            $fill_if_empty('psgc_' . $part . '_name', $saved_address[$part . '_name'] ?? '');
+        if (isFranchiseCaviteLocation($saved_prov, $saved_city, $saved_full_address)) {
+            if ($prefill['business_address_street'] === '') {
+                $fill_if_empty('business_address_street', $saved_address['street_address'] ?? '');
+            }
+
+            if ($saved_full_address !== '' && !franchiseIsCoordinateOnlyAddress($saved_full_address) && $prefill['business_address'] === '') {
+                $prefill['business_address'] = $saved_full_address;
+            }
+
+            foreach (['region', 'province', 'city', 'barangay'] as $part) {
+                $fill_if_empty('psgc_' . $part . '_code', $saved_address[$part . '_code'] ?? '');
+                $fill_if_empty('psgc_' . $part . '_name', $saved_address[$part . '_name'] ?? '');
+            }
         }
     }
 
@@ -541,23 +603,35 @@ function buildFranchiseApplicantPrefill($conn, $user_id, array $allowed_business
         $fill_if_empty('dti_sec_number', $latest_application['dti_sec_number'] ?? '');
         $fill_if_empty('bir_registration_number', $latest_application['bir_registration_number'] ?? '');
         $fill_if_empty('mayors_permit', $latest_application['mayors_permit'] ?? '');
-        $fill_if_empty('business_address', $latest_application['business_address'] ?? '');
+
+        $app_address = trim((string)($latest_application['business_address'] ?? ''));
+        $app_prov = trim((string)($latest_application['province_name'] ?? ''));
+        $app_city = trim((string)($latest_application['city_name'] ?? ''));
+
+        if (isFranchiseCaviteLocation($app_prov, $app_city, $app_address)) {
+            $fill_if_empty('business_address', $app_address);
+            foreach (['region', 'province', 'city', 'barangay'] as $part) {
+                $fill_if_empty('psgc_' . $part . '_code', $latest_application[$part . '_code'] ?? '');
+                $fill_if_empty('psgc_' . $part . '_name', $latest_application[$part . '_name'] ?? '');
+            }
+        }
+
         $fill_if_empty('contact_person', $latest_application['contact_person'] ?? '');
         $fill_if_empty('contact_phone', $latest_application['contact_phone'] ?? '');
         $fill_if_empty('contact_email', $latest_application['contact_email'] ?? '');
         $fill_if_empty('business_experience', $latest_application['business_experience'] ?? '');
         $fill_if_empty('marketing_plan', $latest_application['marketing_plan'] ?? '');
 
-        foreach (['region', 'province', 'city', 'barangay'] as $part) {
-            $fill_if_empty('psgc_' . $part . '_code', $latest_application[$part . '_code'] ?? '');
-            $fill_if_empty('psgc_' . $part . '_name', $latest_application[$part . '_name'] ?? '');
-        }
-
         $capital = trim((string)($latest_application['capital_investment'] ?? ''));
         if ($capital !== '' && is_numeric($capital)) {
             $capital = rtrim(rtrim(number_format((float)$capital, 2, '.', ''), '0'), '.');
         }
         $fill_if_empty('capital_investment', $capital);
+
+        if (!empty($latest_application['latitude']) && !empty($latest_application['longitude'])) {
+            $fill_if_empty('location_latitude', $latest_application['latitude']);
+            $fill_if_empty('location_longitude', $latest_application['longitude']);
+        }
     }
 
     if ($prefill['business_address'] !== '' && franchiseIsCoordinateOnlyAddress($prefill['business_address'])) {
@@ -788,6 +862,9 @@ if ($franchise_psgc_columns_ready) {
         }
     }
 }
+$franchise_coords_columns_ready = tableExists($conn, 'franchise_applications')
+    && franchiseColumnExists($conn, 'franchise_applications', 'latitude')
+    && franchiseColumnExists($conn, 'franchise_applications', 'longitude');
 
 function getFranchiseReviewerIds($conn) {
     if (
@@ -884,10 +961,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
         'psgc_barangay_code' => getFormInput('psgc_barangay_code'),
         'psgc_barangay_name' => getFormInput('psgc_barangay_name'),
         'psgc_manual_mode' => getFormInput('psgc_manual_mode') === '1' ? '1' : '0',
+        'location_latitude' => getFormInput('location_latitude'),
+        'location_longitude' => getFormInput('location_longitude'),
         'contact_person' => getFormInput('contact_person'),
         'contact_phone' => getFormInput('contact_phone'),
         'contact_email' => getFormInput('contact_email'),
-        'capital_investment' => str_replace([',', ' '], '', getFormInput('capital_investment')),
+        'capital_investment' => !empty($_POST['capital_investment']) ? str_replace([',', ' '], '', getFormInput('capital_investment')) : '0.00',
         'business_experience' => getFormInput('business_experience'),
         'marketing_plan' => getFormInput('marketing_plan')
     ];
@@ -915,7 +994,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
         'contact_person' => 'Contact person',
         'contact_phone' => 'Contact phone',
         'contact_email' => 'Contact email',
-        'capital_investment' => 'Capital investment',
         'business_experience' => 'Business experience',
         'marketing_plan' => 'Marketing plan'
     ];
@@ -953,18 +1031,23 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
     }
 
     if (!$error_msg) {
-        $is_cavite_scope = false;
-        if ($form_data['psgc_manual_mode'] !== '1') {
-            $province_name = strtolower(trim((string)$form_data['psgc_province_name']));
-            $province_code = trim((string)$form_data['psgc_province_code']);
-            $is_cavite_scope = $province_name === 'cavite' || $province_code === '042100000';
-        } else {
-            $manual_location_blob = strtolower(trim((string)($form_data['business_address'] . ' ' . $form_data['business_address_street'])));
-            $is_cavite_scope = strpos($manual_location_blob, 'cavite') !== false;
-        }
+        $lat = $form_data['location_latitude'];
+        $lng = $form_data['location_longitude'];
+        $province = $form_data['psgc_province_name'];
+        $city = $form_data['psgc_city_name'];
+        $address_blob = $form_data['business_address'] . ' ' . $form_data['business_address_street'];
 
-        if (!$is_cavite_scope) {
-            $error_msg = "Business partner applications are currently limited to Cavite locations only.";
+        $has_valid_coords = (
+            !empty($lat) && !empty($lng) &&
+            is_numeric($lat) && is_numeric($lng) &&
+            (float)$lat >= 14.00 && (float)$lat <= 14.51 &&
+            (float)$lng >= 120.55 && (float)$lng <= 121.10
+        );
+
+        $is_cavite = isFranchiseCaviteLocation($province, $city, $address_blob, $lat, $lng);
+
+        if (!$has_valid_coords || !$is_cavite) {
+            $error_msg = "Business partner applications are strictly limited to Cavite locations only. Your selected business address is outside our Cavite coverage area and cannot be accepted.";
         }
     }
 
@@ -978,10 +1061,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
 
     if (!$error_msg && !preg_match('/^[0-9+\-\s()]{7,20}$/', $form_data['contact_phone'])) {
         $error_msg = "Please enter a valid contact phone number.";
-    }
-
-    if (!$error_msg && (!is_numeric($form_data['capital_investment']) || (float)$form_data['capital_investment'] < 100000)) {
-        $error_msg = "Capital investment must be at least PHP 100,000.";
     }
 
     if (!$error_msg) {
@@ -1101,7 +1180,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
                             region_name = ?, region_code = ?, province_name = ?, province_code = ?,
                             city_name = ?, city_code = ?, barangay_name = ?, barangay_code = ?,
                             contact_person = ?, contact_phone = ?, contact_email = ?, capital_investment = ?,
-                            business_experience = ?, marketing_plan = ?, status = 'pending', incomplete_documents = NULL, resubmitted_at = NOW()
+                            business_experience = ?, marketing_plan = ?,
+                            latitude = NULLIF(?, ''), longitude = NULLIF(?, ''),
+                            status = 'pending', incomplete_documents = NULL, resubmitted_at = NOW()
                             WHERE id = ? AND user_id = ?";
                         $update_params = [
                             $form_data['business_name'],
@@ -1126,10 +1207,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
                             $capital_investment,
                             $form_data['business_experience'],
                             $form_data['marketing_plan'],
+                            $form_data['location_latitude'],
+                            $form_data['location_longitude'],
                             $application_id,
                             $user_id
                         ];
-                        $update_types = str_repeat('s', 19) . 'dssii';
+                        $update_types = str_repeat('s', 19) . 'dssssii';
                     } else {
                         $update_query = "UPDATE franchise_applications SET
                             business_name = ?, business_type = ?,
@@ -1191,8 +1274,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
                             region_name, region_code, province_name, province_code,
                             city_name, city_code, barangay_name, barangay_code,
                             contact_person, contact_phone, contact_email, capital_investment,
-                            business_experience, marketing_plan, status, created_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())";
+                            business_experience, marketing_plan, latitude, longitude, status, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), 'pending', NOW())";
                         $insert_params = [
                             $application_number,
                             $user_id,
@@ -1217,9 +1300,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
                             $form_data['contact_email'],
                             $capital_investment,
                             $form_data['business_experience'],
-                            $form_data['marketing_plan']
+                            $form_data['marketing_plan'],
+                            $form_data['location_latitude'],
+                            $form_data['location_longitude']
                         ];
-                        $insert_types = 'si' . str_repeat('s', 19) . 'dss';
+                        $insert_types = 'si' . str_repeat('s', 19) . 'dssss';
                     } else {
                         $insert_query = "INSERT INTO franchise_applications (
                             application_number, user_id, business_name, business_type,
@@ -1637,12 +1722,17 @@ include 'includes/header.php';
                             <input type="hidden" name="psgc_barangay_name" id="psgcBarangayName" value="<?php echo oldFormValue('psgc_barangay_name', $franchise_prefill['psgc_barangay_name'] ?? ''); ?>">
                             <input type="hidden" name="psgc_barangay_code" id="psgcBarangayCode" value="<?php echo oldFormValue('psgc_barangay_code', $franchise_prefill['psgc_barangay_code'] ?? ''); ?>">
                             <input type="hidden" name="psgc_manual_mode" id="psgcManualMode" value="1">
-                            <input type="hidden" name="location_latitude" id="locationLatitude" value="">
-                            <input type="hidden" name="location_longitude" id="locationLongitude" value="">
+                            <input type="hidden" name="location_latitude" id="locationLatitude" value="<?php echo htmlspecialchars((string)oldFormValue('location_latitude', $franchise_prefill['location_latitude'] ?? '')); ?>">
+                            <input type="hidden" name="location_longitude" id="locationLongitude" value="<?php echo htmlspecialchars((string)oldFormValue('location_longitude', $franchise_prefill['location_longitude'] ?? '')); ?>">
 
                             <div class="form-row">
-                                <div class="form-group">
-                                    <label for="business_address_street">Street Address / Landmark *</label>
+                                <div class="form-group" style="width: 100%;">
+                                    <div class="franchise-address-header-row">
+                                        <label for="business_address_street" style="margin-bottom:0; font-weight:700;">Street Address / Landmark *</label>
+                                        <button type="button" class="franchise-locate-inline-btn" id="streetLocateMeBtn" onclick="handleFranchiseLocateMe(this)" title="Detect my current location">
+                                            <i class="fas fa-location-crosshairs"></i> <span>Locate Me</span>
+                                        </button>
+                                    </div>
                                     <textarea id="business_address_street" name="business_address_street" rows="2" required
                                             placeholder="Select a pin first, then add a house/building number or landmark"><?php echo oldFormValue('business_address_street', $franchise_prefill['business_address_street'] ?? ''); ?></textarea>
                                 </div>
@@ -1650,6 +1740,9 @@ include 'includes/header.php';
 
                             <div class="franchise-map-shell">
                                 <div id="franchiseLocationMap" class="franchise-location-map" role="application" aria-label="Cavite business location map"></div>
+                                <button type="button" class="franchise-locate-map-btn" id="mapFloatingLocateBtn" onclick="handleFranchiseLocateMe(this)" title="Detect my current GPS location">
+                                    <i class="fas fa-location-crosshairs"></i> <span>Locate Me</span>
+                                </button>
                                 <div class="franchise-map-status" id="franchiseMapStatus"><i class="fas fa-hand-pointer"></i> Click anywhere in Cavite or drag the pin to choose your location.</div>
                             </div>
 
@@ -1662,9 +1755,9 @@ include 'includes/header.php';
                             </div>
                         </div>
 
-                        <!-- Contact & Investment -->
+                        <!-- Contact Information -->
                         <div class="form-section">
-                            <h3><span class="step-tag">Contact & Investment</span></h3>
+                            <h3><span class="step-tag">Contact Information</span></h3>
 
                             <div class="form-row">
                                 <div class="form-group">
@@ -1680,25 +1773,10 @@ include 'includes/header.php';
                                 </div>
                             </div>
 
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="contact_email">Contact Email *</label>
-                                    <input type="email" id="contact_email" name="contact_email" required
-                                        value="<?php echo oldFormValue('contact_email', $franchise_prefill['contact_email'] ?? ($_SESSION['email'] ?? '')); ?>">
-                                </div>
-                                <div class="form-group">
-                                    <label for="capital_investment">Capital Investment (PHP) *</label>
-                                    <input type="number" id="capital_investment" name="capital_investment" required
-                                        value="<?php echo oldFormValue('capital_investment', $franchise_prefill['capital_investment'] ?? ''); ?>"
-                                        min="100000" step="10000" placeholder="500000">
-                                    <div class="quick-chip-row" style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">
-                                        <button type="button" class="chip-btn" data-capital="100000">₱100K</button>
-                                        <button type="button" class="chip-btn" data-capital="250000">₱250K</button>
-                                        <button type="button" class="chip-btn" data-capital="500000">₱500K</button>
-                                        <button type="button" class="chip-btn" data-capital="1000000">₱1M</button>
-                                    </div>
-                                    <small class="form-text">Minimum investment: PHP 100,000</small>
-                                </div>
+                            <div class="form-group">
+                                <label for="contact_email">Contact Email *</label>
+                                <input type="email" id="contact_email" name="contact_email" required
+                                    value="<?php echo oldFormValue('contact_email', $franchise_prefill['contact_email'] ?? ($_SESSION['email'] ?? '')); ?>">
                             </div>
 
                             <div class="form-group">
@@ -1826,11 +1904,7 @@ include 'includes/header.php';
                                         <small>Business Location</small>
                                         <strong id="sumBusinessAddress">-</strong>
                                     </div>
-                                    <div class="summary-item">
-                                        <small>Capital Investment</small>
-                                        <strong id="sumCapital">-</strong>
-                                    </div>
-                                    <div class="summary-item">
+                                    <div class="summary-item full-width">
                                         <small>Attached Documents</small>
                                         <strong id="sumDocCount">0 files attached</strong>
                                     </div>
@@ -2630,12 +2704,88 @@ include 'includes/header.php';
     font-size: 0.84rem;
 }
 
+.franchise-address-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.franchise-locate-inline-btn {
+    background: #ffffff;
+    border: 1px solid #d0d5dd;
+    color: #b3261e;
+    font-size: 0.82rem;
+    font-weight: 700;
+    padding: 6px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    transition: all 0.2s ease;
+}
+
+.franchise-locate-inline-btn:hover {
+    background: #fff1f0;
+    border-color: #fee4e2;
+    color: #981b15;
+}
+
 .franchise-map-shell {
     margin: 4px 0 18px;
     overflow: hidden;
     border: 1px solid var(--food-border);
     border-radius: 14px;
     background: #fffdfb;
+    position: relative;
+}
+
+.franchise-locate-map-btn {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    z-index: 500;
+    background: #ffffff;
+    border: 1px solid #d0d5dd;
+    color: #b3261e;
+    font-size: 0.82rem;
+    font-weight: 700;
+    padding: 8px 14px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(16, 24, 40, 0.14);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    transition: all 0.2s ease;
+}
+
+.franchise-locate-map-btn:hover {
+    background: #b3261e;
+    color: #ffffff;
+    border-color: #b3261e;
+    box-shadow: 0 4px 16px rgba(179, 38, 30, 0.28);
+}
+
+.franchise-locate-map-btn:disabled,
+.franchise-locate-inline-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+body.dark-mode .franchise-locate-inline-btn,
+body.dark-mode .franchise-locate-map-btn {
+    background: #1e293b;
+    border-color: #334155;
+    color: #f87171;
+}
+
+body.dark-mode .franchise-locate-map-btn:hover {
+    background: #b3261e;
+    color: #ffffff;
 }
 
 .franchise-location-map {
@@ -3149,19 +3299,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (!form) return;
 
-    // Quick Capital Chip Selection Automation
-    document.querySelectorAll('.chip-btn').forEach(chip => {
-        chip.addEventListener('click', function() {
-            const capVal = this.dataset.capital;
-            const capInput = document.getElementById('capital_investment');
-            if (capInput && capVal) {
-                capInput.value = capVal;
-                capInput.style.borderColor = '#15803d';
-                saveDraft();
-            }
-        });
-    });
-
     // Auto TIN Masking
     const tinInput = document.getElementById('tin_number');
     if (tinInput) {
@@ -3249,7 +3386,6 @@ document.addEventListener('DOMContentLoaded', function() {
             setIfPresent('contact_phone', 'contact_phone');
             setIfPresent('contact_email', 'contact_email');
             setIfPresent('business_address_street', 'business_address_street');
-            setIfPresent('capital_investment', 'capital_investment');
 
             composeBusinessAddress();
             saveDraft();
@@ -3389,12 +3525,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 
-        const capInput = document.getElementById('capital_investment');
-        if (capInput && parseFloat(capInput.value) < 100000) {
-            capInput.style.borderColor = '#dc3545';
-            valid = false;
-        }
-
         return valid;
     }
 
@@ -3497,7 +3627,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const email = getVal('contact_email');
         const phone = getVal('contact_phone');
         const address = getVal('business_address');
-        const capital = getVal('capital_investment');
 
         let fileCount = 0;
         form.querySelectorAll('input[type="file"]').forEach(f => {
@@ -3515,7 +3644,6 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('sumContactPerson').textContent = person;
         document.getElementById('sumContactDetails').textContent = email + ' | ' + phone;
         document.getElementById('sumBusinessAddress').textContent = address;
-        document.getElementById('sumCapital').textContent = capital !== '-' ? 'PHP ' + Number(capital).toLocaleString('en-US') : '-';
         document.getElementById('sumDocCount').textContent = docCountText;
     }
 
@@ -3554,11 +3682,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // On submit success clear draft
-    form.addEventListener('submit', function() {
-        localStorage.removeItem(DRAFT_KEY);
-    });
-
     // Leaflet Cavite pin picker
     const franchiseMapElement = document.getElementById('franchiseLocationMap');
     const franchiseMapStatus = document.getElementById('franchiseMapStatus');
@@ -3576,9 +3699,47 @@ document.addEventListener('DOMContentLoaded', function() {
     const businessStreetInput = document.getElementById('business_address_street');
     const businessAddressInput = document.getElementById('business_address');
     const CAVITE_CENTER = [14.3294, 120.9367];
-    const CAVITE_BOUNDS = window.L && window.L.latLngBounds ? window.L.latLngBounds([14.00, 120.65], [14.75, 121.20]) : null;
+    const CAVITE_BOUNDS = window.L && window.L.latLngBounds ? window.L.latLngBounds([14.00, 120.55], [14.50, 121.08]) : null;
+    const CAVITE_LGUS = [
+        'bacoor', 'cavite city', 'dasmarinas', 'dasmariñas', 'general trias', 'gen. trias',
+        'imus', 'tagaytay', 'trece martires', 'alfonso', 'amadeo', 'carmona',
+        'general emilio aguinaldo', 'bailen', 'general mariano alvarez', 'gma',
+        'indang', 'kawit', 'magallanes', 'maragondon', 'mendez', 'mendez-nunez',
+        'mendez-nuñez', 'naic', 'noveleta', 'rosario', 'silang', 'tanza', 'ternate'
+    ];
     let franchiseMap = null;
     let franchiseMarker = null;
+
+    // Strict client-side validation on form submit
+    form.addEventListener('submit', function(e) {
+        const isCaviteVal = businessAddressInput?.dataset?.isCavite;
+        const latVal = parseFloat(locationLatitude?.value);
+        const lngVal = parseFloat(locationLongitude?.value);
+        const provVal = (psgcProvinceName?.value || '').toLowerCase().trim();
+
+        const hasValidCoords = Number.isFinite(latVal) && Number.isFinite(lngVal) && (latVal >= 14.00 && latVal <= 14.51 && lngVal >= 120.55 && lngVal <= 121.10);
+        const hasCaviteProvince = provVal === 'cavite';
+
+        if (isCaviteVal !== '1' || !hasValidCoords || !hasCaviteProvince) {
+            e.preventDefault();
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Cavite Location Required',
+                    text: 'Business partner applications are strictly accepted for Cavite locations only. Your selected address or pin is outside Cavite. Please choose a valid Cavite location on the map.',
+                    confirmButtonColor: '#b3261e'
+                });
+            } else {
+                alert('Business partner applications are strictly accepted for Cavite locations only. Please choose a valid Cavite location on the map.');
+            }
+            if (franchiseMapElement) {
+                franchiseMapElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            return false;
+        }
+
+        localStorage.removeItem(DRAFT_KEY);
+    });
 
     function normalizeMapText(value) {
         return String(value || '').replace(/\s+/g, ' ').trim();
@@ -3603,6 +3764,42 @@ document.addEventListener('DOMContentLoaded', function() {
         businessAddressInput.value = parts.join(', ');
     }
 
+    function isLocationInsideCavite(data, lat, lng) {
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+
+        // Strict Cavite GPS Coordinate Bounds (Lat 14.00 - 14.51, Lng 120.55 - 121.10)
+        if (lat < 14.00 || lat > 14.51 || lng < 120.55 || lng > 121.10) {
+            return false;
+        }
+
+        const address = data?.address || {};
+        const displayName = normalizeMapText(data?.display_name).toLowerCase();
+        const city = normalizeMapText(address.city || address.town || address.municipality || address.city_district).toLowerCase();
+        const province = normalizeMapText(address.state_district || address.province || '').toLowerCase();
+        const state = normalizeMapText(address.state || '').toLowerCase();
+
+        // Reject explicit outside provinces and regions
+        const outsideProvinces = [
+            'metro manila', 'batangas', 'laguna', 'quezon province', 'rizal',
+            'bulacan', 'pampanga', 'bataan', 'ncr', 'quezon city', 'taguig',
+            'makati', 'pasay', 'muntinlupa', 'paranaque', 'parañaque', 'las pinas',
+            'las piñas', 'manila', 'calookan', 'marikina', 'pasig', 'san juan', 'mandaluyong'
+        ];
+        for (const out of outsideProvinces) {
+            if (province === out || (state === out && !displayName.includes('cavite'))) {
+                return false;
+            }
+            if (displayName.includes(out) && !displayName.includes('cavite')) {
+                return false;
+            }
+        }
+
+        const hasCaviteProvince = province.includes('cavite') || displayName.includes('cavite');
+        const hasCaviteCity = CAVITE_LGUS.some(lgu => city.includes(lgu) || displayName.includes(lgu));
+
+        return hasCaviteProvince || hasCaviteCity;
+    }
+
     function applyReverseGeocode(data, lat, lng) {
         const address = data?.address || {};
         const displayName = normalizeMapText(data?.display_name);
@@ -3611,29 +3808,51 @@ document.addEventListener('DOMContentLoaded', function() {
         const road = normalizeMapText(address.road || address.pedestrian || address.residential || displayName.split(',')[0]);
         const province = normalizeMapText(address.state_district || address.province || 'Cavite');
         const region = normalizeMapText(address.state || 'Calabarzon');
-        const isCavite = /cavite/i.test(displayName + ' ' + province) || (CAVITE_BOUNDS && CAVITE_BOUNDS.contains([lat, lng]));
-
-        if (locationLatitude) locationLatitude.value = lat.toFixed(7);
-        if (locationLongitude) locationLongitude.value = lng.toFixed(7);
-        if (psgcManualMode) psgcManualMode.value = '1';
-        if (psgcRegionName) psgcRegionName.value = region;
-        if (psgcRegionCode) psgcRegionCode.value = '040000000';
-        if (psgcProvinceName) psgcProvinceName.value = isCavite ? 'Cavite' : province;
-        if (psgcProvinceCode) psgcProvinceCode.value = isCavite ? '042100000' : '';
-        if (psgcCityName) psgcCityName.value = city;
-        if (psgcBarangayName) psgcBarangayName.value = barangay;
-        if (businessStreetInput && (!businessStreetInput.value.trim() || businessStreetInput.dataset.pinGenerated === '1')) {
-            businessStreetInput.value = road || (isCavite ? 'Pinned business location' : 'Pinned location');
-            businessStreetInput.dataset.pinGenerated = '1';
-        }
-        composeBusinessAddress();
+        const isCavite = isLocationInsideCavite(data, lat, lng);
 
         if (isCavite) {
-            setMapStatus((city ? 'Location selected: ' + city + ', Cavite.' : 'Location selected inside Cavite.') + ' Add a building number or landmark above if available.', true);
+            if (locationLatitude) locationLatitude.value = lat.toFixed(7);
+            if (locationLongitude) locationLongitude.value = lng.toFixed(7);
+            if (psgcManualMode) psgcManualMode.value = '1';
+            if (psgcRegionName) psgcRegionName.value = region || 'Calabarzon';
+            if (psgcRegionCode) psgcRegionCode.value = '040000000';
+            if (psgcProvinceName) psgcProvinceName.value = 'Cavite';
+            if (psgcProvinceCode) psgcProvinceCode.value = '042100000';
+            if (psgcCityName) psgcCityName.value = city;
+            if (psgcBarangayName) psgcBarangayName.value = barangay;
+            if (businessStreetInput && (!businessStreetInput.value.trim() || businessStreetInput.dataset.pinGenerated === '1')) {
+                businessStreetInput.value = road || 'Pinned business location';
+                businessStreetInput.dataset.pinGenerated = '1';
+            }
+            composeBusinessAddress();
+            if (businessAddressInput) businessAddressInput.dataset.isCavite = '1';
+
+            setMapStatus((city ? 'Location verified: ' + city + ', Cavite.' : 'Location verified inside Cavite.') + ' Add a building number or landmark above if available.', true);
+            saveDraft();
         } else {
-            setMapStatus('That pin appears outside Cavite. Move the pin inside the highlighted Cavite service area.', false);
+            // Reject outside locations immediately: wipe all location values so it cannot be submitted
+            if (locationLatitude) locationLatitude.value = '';
+            if (locationLongitude) locationLongitude.value = '';
+            if (psgcProvinceName) psgcProvinceName.value = '';
+            if (psgcProvinceCode) psgcProvinceCode.value = '';
+            if (psgcCityName) psgcCityName.value = '';
+            if (psgcBarangayName) psgcBarangayName.value = '';
+            if (businessAddressInput) {
+                businessAddressInput.value = '';
+                businessAddressInput.dataset.isCavite = '0';
+            }
+
+            setMapStatus('Location rejected: Pinned area is outside Cavite. Applications are strictly accepted for Cavite locations only.', false);
+
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Location Outside Cavite',
+                    text: 'Business partner applications are currently limited to Cavite locations only. Your selected address or pin (' + (city || province || 'Outside Cavite') + ') is outside our service area and cannot be accepted. Please place your pin inside Cavite.',
+                    confirmButtonColor: '#b3261e'
+                });
+            }
         }
-        saveDraft();
         return isCavite;
     }
 
@@ -3660,17 +3879,107 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function initFranchiseMap() {
         if (!franchiseMapElement || !window.L) return;
+        const preLat = parseFloat(locationLatitude?.value);
+        const preLng = parseFloat(locationLongitude?.value);
+        const hasPreCoords = Number.isFinite(preLat) && Number.isFinite(preLng) && preLat !== 0 && preLng !== 0;
+
+        let initialCenter = CAVITE_CENTER;
+        let zoomLevel = 11;
+        if (hasPreCoords && preLat >= 14.00 && preLat <= 14.50 && preLng >= 120.55 && preLng <= 121.08) {
+            initialCenter = [preLat, preLng];
+            zoomLevel = 15;
+            if (businessAddressInput) businessAddressInput.dataset.isCavite = '1';
+        } else {
+            if (locationLatitude) locationLatitude.value = '';
+            if (locationLongitude) locationLongitude.value = '';
+            if (businessAddressInput) businessAddressInput.dataset.isCavite = '0';
+        }
+
         const pinIcon = L.divIcon({ className: 'franchise-pin-icon', iconSize: [34, 34], iconAnchor: [17, 34] });
-        franchiseMap = L.map(franchiseMapElement, { center: CAVITE_CENTER, zoom: 11, minZoom: 10, maxZoom: 19 });
+        franchiseMap = L.map(franchiseMapElement, { center: initialCenter, zoom: zoomLevel, minZoom: 10, maxZoom: 19 });
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'
         }).addTo(franchiseMap);
-        franchiseMarker = L.marker(CAVITE_CENTER, { draggable: true, icon: pinIcon }).addTo(franchiseMap);
+
+        // Visual Cavite boundary guide rectangle
+        L.rectangle([[14.00, 120.55], [14.50, 121.08]], {
+            color: '#b3261e',
+            weight: 2,
+            dashArray: '5, 5',
+            fillColor: '#b3261e',
+            fillOpacity: 0.04,
+            interactive: false
+        }).addTo(franchiseMap);
+
+        franchiseMarker = L.marker(initialCenter, { draggable: true, icon: pinIcon }).addTo(franchiseMap);
         franchiseMap.on('click', event => moveFranchisePin(event.latlng, true));
         franchiseMarker.on('dragend', () => moveFranchisePin(franchiseMarker.getLatLng(), true));
         setTimeout(() => franchiseMap.invalidateSize(), 100);
     }
+
+    window.handleFranchiseLocateMe = function(triggerBtn) {
+        if (!navigator.geolocation) {
+            const unsupportedMsg = 'Your browser does not support geolocation. Please click your business location directly on the map.';
+            setMapStatus(unsupportedMsg, false);
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Geolocation Unsupported',
+                    text: unsupportedMsg,
+                    confirmButtonColor: '#b3261e'
+                });
+            }
+            return;
+        }
+
+        const locateBtns = document.querySelectorAll('#mapFloatingLocateBtn, #streetLocateMeBtn, .franchise-locate-map-btn, .franchise-locate-inline-btn');
+        locateBtns.forEach(btn => {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Locating...</span>';
+        });
+        setMapStatus('Detecting your GPS location...', null);
+
+        const restoreBtns = () => {
+            locateBtns.forEach(btn => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-location-crosshairs"></i> <span>Locate Me</span>';
+            });
+        };
+
+        navigator.geolocation.getCurrentPosition(
+            function(position) {
+                restoreBtns();
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+                const latlng = (window.L && window.L.latLng) ? L.latLng(lat, lng) : { lat: lat, lng: lng };
+
+                if (franchiseMap) {
+                    franchiseMap.setView([lat, lng], 16);
+                }
+                moveFranchisePin(latlng, true);
+            },
+            function(error) {
+                restoreBtns();
+                let errMsg = 'Unable to determine your location. Please click directly on the map.';
+                if (error.code === 1) {
+                    errMsg = 'Location permission was denied. Please allow location permissions in your browser or click on the map.';
+                } else if (error.code === 3) {
+                    errMsg = 'Location request timed out. Please try again or click directly on the map.';
+                }
+                setMapStatus(errMsg, false);
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: (error.code === 1 ? 'info' : 'warning'),
+                        title: (error.code === 1 ? 'Permission Needed' : 'Location Not Found'),
+                        text: errMsg,
+                        confirmButtonColor: '#b3261e'
+                    });
+                }
+            },
+            { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+        );
+    };
 
     if (businessStreetInput) businessStreetInput.addEventListener('input', () => {
         businessStreetInput.dataset.pinGenerated = '0';
@@ -3826,6 +4135,8 @@ function cleanupUploadedFiles($file_paths) {
     }
 }
 
-mysqli_close($conn);
 include 'includes/footer.php';
+if (isset($conn) && $conn instanceof mysqli) {
+    @mysqli_close($conn);
+}
 ?>

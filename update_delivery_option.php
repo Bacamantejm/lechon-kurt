@@ -20,9 +20,8 @@ if (!in_array($delivery_option, ['pickup', 'delivery'], true)) {
 
 $_SESSION['delivery_option'] = $delivery_option;
 $_SESSION['delivery_option_explicit'] = true;
-$stores = !empty($_SESSION['store_locations'])
-    ? $_SESSION['store_locations']
-    : dpFetchActiveStoresFromDb($conn);
+$stores = dpFetchActiveStoresFromDb($conn);
+$_SESSION['store_locations'] = $stores;
 
 $preferred_owner_user_id = (int)($_SESSION['storefront_seller_id'] ?? 0);
 if ($preferred_owner_user_id <= 0 && !empty($_SESSION['cart']) && function_exists('pvGetCheckoutTenantScope')) {

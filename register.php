@@ -334,6 +334,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $first_name = preg_replace('/\s+/', ' ', trim($_POST['first_name'] ?? ''));
     $last_name = preg_replace('/\s+/', ' ', trim($_POST['last_name'] ?? ''));
     $middle_name = preg_replace('/\s+/', ' ', trim($_POST['middle_name'] ?? ''));
+    $suffix = preg_replace('/\s+/', ' ', trim($_POST['suffix'] ?? ''));
     $nickname = preg_replace('/\s+/', ' ', trim($_POST['nickname'] ?? ''));
     $birth_date = trim($_POST['birth_date'] ?? $_POST['dob'] ?? '');
     $gender = strtolower(trim($_POST['gender'] ?? ''));
@@ -440,10 +441,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $latitude = trim($_POST['latitude'] ?? '');
     $longitude = trim($_POST['longitude'] ?? '');
     $city_name = trim($_POST['city_name'] ?? '');
-    $province_name = trim($_POST['province_name'] ?? 'Cavite');
+    $province_name = trim($_POST['province_name'] ?? '');
 
     if ($address === '' && $street_address !== '') {
-        $address = $street_address . ', Cavite';
+        $address = $street_address . ($city_name !== '' ? ', ' . $city_name : '') . ($province_name !== '' ? ', ' . $province_name : '');
     }
 
     // Store form data for repopulation
@@ -452,6 +453,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         'first_name' => $first_name,
         'last_name' => $last_name,
         'middle_name' => $middle_name,
+        'suffix' => $suffix,
         'nickname' => $nickname,
         'birth_date' => $birth_date,
         'dob' => $birth_date,
@@ -516,55 +518,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $error = 'Please enter your restaurant name.';
             $form_data['business_name'] = '';
         } elseif (strlen($address) < 6) {
-            $error = 'Please enter your complete home address in Cavite.';
+            $error = 'Please enter your complete address.';
             $form_data['address'] = '';
             $form_data['street_address'] = '';
             $form_data['latitude'] = '';
             $form_data['longitude'] = '';
         } else {
-            // Validate that the location is inside Cavite
-            $is_cavite = false;
-            if ($latitude !== '' && $longitude !== '' && is_numeric($latitude) && is_numeric($longitude)) {
-                $lat_num = (float)$latitude;
-                $lng_num = (float)$longitude;
-                // Cavite coordinates boundary check
-                if ($lat_num >= 14.00 && $lat_num <= 14.55 && $lng_num >= 120.55 && $lng_num <= 121.15) {
-                    $is_cavite = true;
-                }
-            }
-
-            // Keyword check for Cavite cities / municipalities
-            $cavite_keywords = [
-                'cavite', 'dasmariñas', 'dasmarinas', 'imus', 'bacoor', 'general trias', 'gen. trias',
-                'tagaytay', 'cavite city', 'trece martires', 'silang', 'kawit', 'tanza', 'alfonso',
-                'amadeo', 'carmona', 'gma', 'general mariano alvarez', 'indang', 'magallanes',
-                'maragondon', 'mendez', 'naic', 'noveleta', 'rosario', 'ternate', 'bailen', 'aguinaldo'
-            ];
-            $addr_lower = strtolower($address);
-            foreach ($cavite_keywords as $kw) {
-                if (strpos($addr_lower, $kw) !== false) {
-                    $is_cavite = true;
-                    break;
-                }
-            }
-
-            // Explicit rejection of outside areas (e.g. NCR/Manila, Laguna, Batangas)
-            $outside_keywords = ['las piñas', 'las pinas', 'parañaque', 'paranaque', 'muntinlupa', 'metro manila', 'ncr', 'batangas', 'laguna', 'quezon city', 'pasay'];
-            foreach ($outside_keywords as $out_kw) {
-                if (strpos($addr_lower, $out_kw) !== false && strpos($addr_lower, 'cavite') === false) {
-                    $is_cavite = false;
-                    break;
-                }
-            }
-
-            if (!$is_cavite) {
-                $error = 'Service Area Restriction: Registration is exclusively available for addresses inside Cavite province. Please pin or enter a location within Cavite.';
-                $form_data['address'] = '';
-                $form_data['street_address'] = '';
-                $form_data['latitude'] = '';
-                $form_data['longitude'] = '';
-            } else {
-                $front_validation = validateRegistrationValidIdUpload($valid_id_front);
+            $front_validation = validateRegistrationValidIdUpload($valid_id_front);
                 $back_validation = validateRegistrationValidIdUpload($valid_id_back);
                 if (empty($front_validation['valid'])) {
                     $error = 'Front of ID: ' . (string)($front_validation['message'] ?? 'Please upload a clear JPG, PNG, or WEBP image up to 10MB.');
@@ -592,7 +552,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 } elseif (!hash_equals($password, $confirm_password)) {
                     $error = 'Passwords do not match.';
                 }
-            }
         }
     }
 
@@ -600,7 +559,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $phone_cleaned = normalizePhilippineMobile($phone);
         $business_registration = preg_replace('/[^A-Za-z0-9\- ]/', '', $business_registration);
         $tax_id = preg_replace('/[^A-Za-z0-9\- ]/', '', $tax_id);
-        $full_name = trim($first_name . ' ' . $last_name);
+        $full_name = trim($first_name . ' ' . $last_name . ($suffix !== '' ? ' ' . $suffix : ''));
         $address = preg_replace('/\s+/', ' ', $address);
         if (strlen($address) > 255) {
             $address = substr($address, 0, 255);
@@ -630,7 +589,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $middle_name,
             $clean_birth_date,
             $gender,
-            $nickname
+            $nickname,
+            $suffix
         );
 
 
@@ -659,8 +619,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     'contact_name' => $full_name,
                     'contact_phone' => $phone_cleaned,
                     'street_address' => $street_address ?: $address,
-                    'city_name' => $city_name ?: 'Cavite',
-                    'province_name' => 'Cavite',
+                    'city_name' => $city_name ?: 'Unknown City',
+                    'province_name' => $province_name ?: 'Cavite',
                     'full_address' => $address,
                     'latitude' => $latitude,
                     'longitude' => $longitude,
@@ -2434,6 +2394,22 @@ body.dark-mode .leaflet-container {
                                     value="<?php echo htmlspecialchars($form_data['middle_name'] ?? ''); ?>"
                                     autocomplete="additional-name">
                             </div>
+                            <div class="form-group">
+                                <label for="suffix">Suffix</label>
+                                <input type="text" id="suffix" name="suffix" class="form-control"
+                                    placeholder="Optional (e.g. Jr., Sr., III)"
+                                    value="<?php echo htmlspecialchars($form_data['suffix'] ?? ''); ?>"
+                                    autocomplete="honorific-suffix"
+                                    list="suffixList">
+                                <datalist id="suffixList">
+                                    <option value="Jr.">
+                                    <option value="Sr.">
+                                    <option value="II">
+                                    <option value="III">
+                                    <option value="IV">
+                                    <option value="V">
+                                </datalist>
+                            </div>
                         </div>
 
                         <div class="form-row">
@@ -2578,24 +2554,24 @@ body.dark-mode .leaflet-container {
                         </div>
                     </div>
                     
-                    <!-- Step 3: Address Information (Cavite-only with Leaflet Interactive Map) -->
+                    <!-- Step 3: Address Information (With Leaflet Interactive Map) -->
                     <div class="form-step" id="step3Form">
                         <h2 style="color: #333; margin-bottom: 8px; font-size: 1.5rem;" id="step3Title">Enter Home Address</h2>
-                        <p style="color: #666; font-size: 0.95rem; margin-bottom: 20px;" id="step3Subtitle">Please provide your home address. Registrations are strictly limited to the Cavite area.</p>
+                        <p style="color: #666; font-size: 0.95rem; margin-bottom: 20px;" id="step3Subtitle">Enter your home address or pin your location on the map.</p>
 
                         <!-- Single Home Address Input -->
                         <div class="form-group mb-3">
-                            <label for="homeAddressInput" style="font-weight: 700; color: #1e293b;">Home Address (Cavite Only) *</label>
+                            <label for="homeAddressInput" style="font-weight: 700; color: #1e293b;">Home Address *</label>
                             <div style="position: relative;">
                                 <input type="text" id="homeAddressInput" class="form-control" required
-                                    placeholder="House/Unit No., Street, Barangay, City/Municipality, Cavite"
+                                    placeholder="House/Unit No., Street, Barangay, City/Municipality, Province"
                                     value="<?php echo htmlspecialchars($form_data['address'] ?? ''); ?>"
                                     autocomplete="street-address"
                                     style="padding-right: 40px;">
                                 <i class="fas fa-location-dot" style="position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: #b3261e; font-size: 1.1rem; pointer-events: none;"></i>
                             </div>
                             <small class="text-muted" style="display: block; margin-top: 5px; font-size: 0.82rem;">
-                                Type your home address or click/drag the pin on the map inside Cavite.
+                                Type your home address or click/drag the pin on the map.
                             </small>
                         </div>
 
@@ -2605,12 +2581,12 @@ body.dark-mode .leaflet-container {
                         <input type="hidden" id="regLatitude" name="latitude" value="<?php echo htmlspecialchars($form_data['latitude'] ?? ''); ?>">
                         <input type="hidden" id="regLongitude" name="longitude" value="<?php echo htmlspecialchars($form_data['longitude'] ?? ''); ?>">
                         <input type="hidden" id="regCityName" name="city_name" value="<?php echo htmlspecialchars($form_data['city_name'] ?? ''); ?>">
-                        <input type="hidden" id="regProvinceName" name="province_name" value="<?php echo htmlspecialchars($form_data['province_name'] ?? 'Cavite'); ?>">
+                        <input type="hidden" id="regProvinceName" name="province_name" value="<?php echo htmlspecialchars($form_data['province_name'] ?? ''); ?>">
 
-                        <!-- Cavite Geofence Status Indicator Card -->
+                        <!-- Address Location Status Indicator Card -->
                         <div id="caviteAreaStatusBadge" style="margin-bottom: 15px; padding: 12px 14px; border-radius: 10px; font-size: 0.88rem; display: flex; align-items: center; gap: 10px; background: #fff8f6; border: 1px solid #ffdcd6; color: #8c201a; transition: all 0.3s ease;">
                             <i class="fas fa-map-pin" id="caviteStatusIcon" style="font-size: 1.1rem;"></i>
-                            <span id="caviteStatusText">Please search your address or pin your location in Cavite.</span>
+                            <span id="caviteStatusText">Please search your address or pin your location on the map.</span>
                         </div>
 
                         <!-- Leaflet Interactive Cavite Map -->
@@ -3200,24 +3176,24 @@ document.addEventListener('DOMContentLoaded', function() {
                 caviteStatusIcon.style.color = '#12b76a';
             }
             if (caviteStatusText) {
-                caviteStatusText.textContent = message || 'Location verified: Inside Cavite area.';
+                caviteStatusText.textContent = message || 'Location verified.';
             }
             if (registerMapWrapper) {
                 registerMapWrapper.style.borderColor = '#12b76a';
             }
         } else {
-            caviteStatusBadge.style.background = '#fff1f0';
-            caviteStatusBadge.style.borderColor = '#fee4e2';
-            caviteStatusBadge.style.color = '#b3261e';
+            caviteStatusBadge.style.background = '#fff8f6';
+            caviteStatusBadge.style.borderColor = '#ffdcd6';
+            caviteStatusBadge.style.color = '#8c201a';
             if (caviteStatusIcon) {
-                caviteStatusIcon.className = 'fas fa-ban';
+                caviteStatusIcon.className = 'fas fa-map-pin';
                 caviteStatusIcon.style.color = '#b3261e';
             }
             if (caviteStatusText) {
-                caviteStatusText.textContent = message || 'Outside Service Area: Registration is only available for locations within Cavite province. Please pin your location inside Cavite.';
+                caviteStatusText.textContent = message || 'Please search your address or pin your location on the map.';
             }
             if (registerMapWrapper) {
-                registerMapWrapper.style.borderColor = '#f04438';
+                registerMapWrapper.style.borderColor = '#cbd5e1';
             }
         }
     }
@@ -3226,8 +3202,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const initialAddress = (homeAddressInput?.value || regAddress?.value || '').trim();
     const initialLat = parseFloat(regLatitude?.value || '');
     const initialLng = parseFloat(regLongitude?.value || '');
-    if (initialAddress && checkIsLocationInCavite(initialLat, initialLng, initialAddress, null)) {
-        updateCaviteStatusUI(true, 'Verified Cavite address: ' + (regCityName?.value || 'Cavite'));
+    if (initialAddress) {
+        updateCaviteStatusUI(true, 'Verified address: ' + (regCityName?.value ? regCityName.value + (regProvinceName?.value ? ', ' + regProvinceName.value : '') : initialAddress));
     }
 
     async function reverseGeocodeLocation(lat, lng) {
@@ -3243,7 +3219,6 @@ document.addEventListener('DOMContentLoaded', function() {
             const data = await res.json();
             if (data && data.display_name) {
                 const fullAddr = data.display_name;
-                const inCavite = checkIsLocationInCavite(latNum, lngNum, fullAddr, data.address);
                 
                 if (homeAddressInput) {
                     homeAddressInput.value = fullAddr;
@@ -3254,23 +3229,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (regAddress) regAddress.value = fullAddr;
 
                 const streetPart = (data.address?.road || data.address?.neighbourhood || data.address?.suburb || fullAddr.split(',')[0] || '').trim();
-                const cityPart = (data.address?.city || data.address?.town || data.address?.municipality || 'Cavite').trim();
+                const cityPart = (data.address?.city || data.address?.town || data.address?.municipality || '').trim();
+                const provincePart = (data.address?.province || data.address?.state || data.address?.region || '').trim();
                 if (regStreetAddress) regStreetAddress.value = streetPart;
                 if (regCityName) regCityName.value = cityPart;
+                if (regProvinceName) regProvinceName.value = provincePart;
 
-                if (inCavite) {
-                    updateCaviteStatusUI(true, `Verified: ${cityPart}, Cavite`);
-                } else {
-                    updateCaviteStatusUI(false, `Outside Service Area (${cityPart || 'Non-Cavite'}): Registration only accepts locations within Cavite province.`);
-                }
+                const locLabel = [cityPart, provincePart].filter(Boolean).join(', ') || fullAddr.split(',')[0] || 'Selected Location';
+                updateCaviteStatusUI(true, `Location verified: ${locLabel}`);
             } else {
-                const inCavite = checkIsLocationInCavite(latNum, lngNum, '', null);
-                updateCaviteStatusUI(inCavite, inCavite ? 'Location verified: Inside Cavite coordinates.' : 'Outside Service Area: Coordinates are outside Cavite.');
+                updateCaviteStatusUI(true, `Coordinates: ${latNum.toFixed(4)}, ${lngNum.toFixed(4)}`);
             }
         } catch (e) {
             console.error('Reverse geocode error:', e);
-            const inCavite = checkIsLocationInCavite(latNum, lngNum, '', null);
-            updateCaviteStatusUI(inCavite, inCavite ? 'Location inside Cavite area.' : 'Location outside Cavite.');
+            updateCaviteStatusUI(true, 'Location selected on map.');
         }
     }
 
@@ -3279,8 +3251,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!trimmed) return;
 
         try {
-            // Search prioritizing Cavite Philippines viewbox
-            const searchUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(trimmed + ', Cavite, Philippines')}&limit=1&addressdetails=1`;
+            const queryWithCountry = trimmed.toLowerCase().includes('philippines') ? trimmed : (trimmed + ', Philippines');
+            const searchUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryWithCountry)}&limit=1&addressdetails=1`;
             const res = await fetch(searchUrl);
             const list = await res.json();
             if (Array.isArray(list) && list.length > 0) {
@@ -3297,12 +3269,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (regLongitude) regLongitude.value = String(lng.toFixed(7));
                 if (regAddress) regAddress.value = first.display_name || trimmed;
 
-                const inCavite = checkIsLocationInCavite(lat, lng, first.display_name, first.address);
-                if (inCavite) {
-                    updateCaviteStatusUI(true, `Verified: ${first.address?.city || first.address?.town || first.address?.municipality || 'Cavite'}`);
-                } else {
-                    updateCaviteStatusUI(false, 'Outside Service Area: Address is outside Cavite province.');
-                }
+                const streetPart = (first.address?.road || first.address?.neighbourhood || first.address?.suburb || first.display_name.split(',')[0] || '').trim();
+                const cityPart = (first.address?.city || first.address?.town || first.address?.municipality || '').trim();
+                const provincePart = (first.address?.province || first.address?.state || first.address?.region || '').trim();
+                if (regStreetAddress) regStreetAddress.value = streetPart;
+                if (regCityName) regCityName.value = cityPart;
+                if (regProvinceName) regProvinceName.value = provincePart;
+
+                const locLabel = [cityPart, provincePart].filter(Boolean).join(', ') || 'Selected Location';
+                updateCaviteStatusUI(true, `Location verified: ${locLabel}`);
             } else {
                 updateCaviteStatusUI(false, 'Location not found. Please pin your location directly on the map.');
             }
@@ -3475,10 +3450,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 businessNameInput.required = true;
             }
             if (step3Title) {
-                step3Title.textContent = 'Business Address (Cavite Only)';
+                step3Title.textContent = 'Business Address';
             }
             if (step3Subtitle) {
-                step3Subtitle.textContent = 'Enter your restaurant or business location in Cavite on the map.';
+                step3Subtitle.textContent = 'Enter your restaurant or business location on the map.';
             }
             if (step3NavLabel) {
                 step3NavLabel.textContent = 'Partner Info';
@@ -3489,7 +3464,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 businessNameInput.required = false;
             }
             if (step3Title) {
-                step3Title.textContent = 'Home Address (Cavite Only)';
+                step3Title.textContent = 'Home Address';
             }
             if (step3Subtitle) {
                 step3Subtitle.textContent = 'Enter your home address or pin your location on the map.';
@@ -3862,17 +3837,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!addressVal || addressVal.length < 6) {
             showError('Address Required', 'Please enter your home address or pin your location on the map.');
             if (homeAddressInput) {
-                homeAddressInput.focus();
-                highlightErrorField(homeAddressInput);
-            }
-            return false;
-        }
-
-        if (!isAddressInCavite) {
-            showError('Location Outside Cavite', 'We currently only accept registrations within the Cavite area. Please select a location inside Cavite on the map.');
-            if (homeAddressInput) {
-                homeAddressInput.value = '';
-                if (regAddress) regAddress.value = '';
                 homeAddressInput.focus();
                 highlightErrorField(homeAddressInput);
             }

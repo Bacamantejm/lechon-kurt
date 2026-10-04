@@ -1735,6 +1735,7 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
                     <a href="<?php echo $path_prefix; ?>my_account.php#addresses" class="user-dropdown-item"><i class="fas fa-address-book"></i> Address Book</a>
                     <a href="<?php echo $path_prefix; ?>my_orders.php" class="user-dropdown-item"><i class="fas fa-shopping-bag"></i> My Orders</a>
                     <a href="<?php echo $path_prefix; ?>help_center.php" class="user-dropdown-item"><i class="fas fa-life-ring"></i> Help Center</a>
+                    <a href="javascript:void(0);" onclick="openCustomerTutorial(true)" class="user-dropdown-item"><i class="fas fa-compass"></i> Customer Guide</a>
                     <?php if ($favorites_feature_enabled): ?>
                     <a href="<?php echo $favorites_page_href; ?>" class="user-dropdown-item"><i class="fas fa-heart"></i> My Favorites</a>
                     <?php endif; ?>
@@ -1925,6 +1926,7 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
                     <a href="<?php echo $path_prefix; ?>my_account.php#addresses" class="user-dropdown-item"><i class="fas fa-address-book"></i> Address Book</a>
                     <a href="<?php echo $path_prefix; ?>my_orders.php" class="user-dropdown-item"><i class="fas fa-shopping-bag"></i> My Orders</a>
                     <a href="<?php echo $path_prefix; ?>help_center.php" class="user-dropdown-item"><i class="fas fa-life-ring"></i> Help Center</a>
+                    <a href="javascript:void(0);" onclick="openCustomerTutorial(true)" class="user-dropdown-item"><i class="fas fa-compass"></i> Customer Guide</a>
                     <?php if ($favorites_feature_enabled): ?>
                     <a href="<?php echo $favorites_page_href; ?>" class="user-dropdown-item"><i class="fas fa-heart"></i> My Favorites</a>
                     <?php endif; ?>
@@ -2007,6 +2009,7 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
         <li><a href="<?php echo $favorites_page_href; ?>"><i class="fas fa-heart"></i> My Favorites</a></li>
         <?php endif; ?>
         <li><a href="<?php echo $path_prefix; ?>help_center.php"><i class="fas fa-life-ring"></i> Help Center</a></li>
+        <li><a href="javascript:void(0);" onclick="openCustomerTutorial(true)"><i class="fas fa-compass"></i> Customer Guide</a></li>
         <?php if (!$is_shop_owner_or_partner): ?>
         <li><a href="<?php echo $path_prefix; ?>franchise_application.php"><i class="fas fa-briefcase"></i> Partner with Us</a></li>
         <?php endif; ?>

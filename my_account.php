@@ -1230,6 +1230,9 @@ body.dark-mode .mobile-segment-btn.active {
                 <a href="help_center.php" class="hero-action-btn">
                     <i class="fas fa-headset"></i> Help Center
                 </a>
+                <a href="javascript:void(0);" onclick="openCustomerTutorial(true)" class="hero-action-btn" title="Replay Welcome Tour">
+                    <i class="fas fa-compass" style="color: #b3261e;"></i> Guide Tour
+                </a>
                 <?php endif; ?>
             </div>
         </div>

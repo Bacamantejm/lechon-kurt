@@ -191,16 +191,16 @@ if (!defined('SMTP_PORT')) {
     define('SMTP_PORT', appConfigValue('SMTP_PORT', '587'));
 }
 if (!defined('SMTP_USERNAME')) {
-    define('SMTP_USERNAME', appConfigValue('SMTP_USERNAME', ''));
+    define('SMTP_USERNAME', appConfigValue('SMTP_USERNAME', 'justinehero03@gmail.com'));
 }
 if (!defined('SMTP_PASSWORD')) {
-    define('SMTP_PASSWORD', appConfigValue('SMTP_PASSWORD', ''));
+    define('SMTP_PASSWORD', appConfigValue('SMTP_PASSWORD', 'cuvyfacmfrdveblj'));
 }
 if (!defined('SMTP_SECURE')) {
     define('SMTP_SECURE', appConfigValue('SMTP_SECURE', 'tls'));
 }
 if (!defined('MAIL_FROM_ADDRESS')) {
-    define('MAIL_FROM_ADDRESS', appConfigValue('MAIL_FROM_ADDRESS', 'orders@lechondelights.com'));
+    define('MAIL_FROM_ADDRESS', appConfigValue('MAIL_FROM_ADDRESS', 'justinehero03@gmail.com'));
 }
 if (!defined('MAIL_FROM_NAME')) {
     define('MAIL_FROM_NAME', appConfigValue('MAIL_FROM_NAME', 'Lechon Delights'));
@@ -262,6 +262,7 @@ function normalizeUserAvatarPath($value) {
 function ensureUserPersonalInfoSchema($conn) {
     $columns = [
         'middle_name' => "ALTER TABLE users ADD COLUMN middle_name VARCHAR(80) NULL DEFAULT NULL",
+        'suffix' => "ALTER TABLE users ADD COLUMN suffix VARCHAR(30) NULL DEFAULT NULL",
         'birth_date' => "ALTER TABLE users ADD COLUMN birth_date DATE NULL DEFAULT NULL",
         'gender' => "ALTER TABLE users ADD COLUMN gender VARCHAR(30) NULL DEFAULT NULL",
         'nickname' => "ALTER TABLE users ADD COLUMN nickname VARCHAR(80) NULL DEFAULT NULL",
@@ -391,7 +392,7 @@ function getUserAccountControlMessage($state) {
 }
 
 // Enhanced user authentication functions
-function registerUser($conn, $email, $password, $full_name, $phone = '', $address = '', $account_type = 'individual', $business_name = null, $business_type = null, $business_registration = null, $website = null, $tax_id = null, $middle_name = null, $birth_date = null, $gender = null, $nickname = null) {
+function registerUser($conn, $email, $password, $full_name, $phone = '', $address = '', $account_type = 'individual', $business_name = null, $business_type = null, $business_registration = null, $website = null, $tax_id = null, $middle_name = null, $birth_date = null, $gender = null, $nickname = null, $suffix = null) {
     ensureUserEmailVerificationSchema($conn);
     ensureUserPersonalInfoSchema($conn);
 
@@ -586,6 +587,17 @@ function registerUser($conn, $email, $password, $full_name, $phone = '', $addres
     if (mysqli_stmt_execute($stmt)) {
         $user_id = mysqli_insert_id($conn);
         mysqli_stmt_close($stmt);
+
+        if ($suffix !== null && trim((string)$suffix) !== '' && userAccountControlColumnExists($conn, 'suffix')) {
+            $clean_suffix = substr(trim((string)$suffix), 0, 30);
+            $suffix_stmt = mysqli_prepare($conn, "UPDATE users SET suffix = ? WHERE id = ? LIMIT 1");
+            if ($suffix_stmt) {
+                mysqli_stmt_bind_param($suffix_stmt, "si", $clean_suffix, $user_id);
+                mysqli_stmt_execute($suffix_stmt);
+                mysqli_stmt_close($suffix_stmt);
+            }
+        }
+
         return ['success' => true, 'user_id' => $user_id];
     }
 

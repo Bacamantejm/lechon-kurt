@@ -663,7 +663,12 @@ include 'includes/header.php';
                             <h2>Report an issue</h2>
                             <p>Pick the closest category so we can route your case to the right team faster.</p>
                         </div>
-                        <a class="help-secondary-link" href="customer_chat.php">Open existing support chat</a>
+                        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                            <button type="button" class="help-secondary-link" onclick="openCustomerTutorial(true)" style="background:none; border:none; cursor:pointer; font-size:0.86rem; color:#b3261e; font-weight:700; display:inline-flex; align-items:center; gap:6px; padding:0;">
+                                <i class="fas fa-compass"></i> Platform Guide
+                            </button>
+                            <a class="help-secondary-link" href="customer_chat.php">Open existing support chat</a>
+                        </div>
                     </div>
 
                     <div class="issue-cards" id="issueCards">

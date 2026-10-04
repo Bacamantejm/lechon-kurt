@@ -56,6 +56,7 @@ class SubscriptionAccessService
         'candidates.php' => 'hr_department',
         'turnover.php' => 'hr_department',
         'hr_reports.php' => 'hr_department',
+        'hr_migration_checker.php' => 'hr_department',
         'get_employee_details.php' => 'hr_department',
         'get_leave_details.php' => 'hr_department',
         'get_performance_details.php' => 'hr_department',
@@ -81,6 +82,7 @@ class SubscriptionAccessService
         // AI Demand Forecasting (Pro Only)
         'forecasting_dashboard.php' => 'forecasting',
         'events.php' => 'forecasting',
+        'update_recommendation_status.php' => 'forecasting',
 
         // DSS Decision Support & Deep Analytics (Pro Only)
         'dss_reports.php' => 'dss_reports',

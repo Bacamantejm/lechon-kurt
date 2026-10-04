@@ -568,13 +568,26 @@ body.dark-mode .sidebar-footer .logout-btn {
         <?php endif; ?>
 
         <?php if (!$is_super_admin_user && $is_partner_scoped_admin && is_array($partner_ops_flow)): ?>
+            <?php
+            $pipeline_total_count = 0;
+            foreach (($partner_ops_flow['modules'] ?? []) as $flow_mod) {
+                $pipeline_total_count += (int)($flow_mod['count'] ?? 0);
+            }
+            $is_pipeline_active = false;
+            ?>
             <li class="menu-header">Operations Flow</li>
             <li>
-                <div class="menu-item <?php echo (in_array($current_page, ['orders.php', 'preorders.php', 'logistics.php', 'order_policy_settings.php', 'store_availability.php', 'finance.php', 'inventory.php', 'hr.php', 'payroll.php', 'partner_billing.php', 'subscription_plans.php', 'receipt_settings.php', 'partner_banking.php'], true)) ? 'active' : ''; ?>">
+                <a href="javascript:void(0);" class="menu-item menu-item-with-submenu <?php echo $is_pipeline_active ? 'active' : ''; ?>" title="Toggle Partner Pipeline menu">
                     <i class="fas fa-project-diagram"></i>
                     <span>Partner Pipeline</span>
-                </div>
-                <div class="sidebar-submenu" style="display:block;">
+                    <?php if ($pipeline_total_count > 0): ?>
+                        <span style="margin-left:auto; margin-right:24px; background:#b3261e; color:#fff; border-radius:10px; padding:1px 7px; font-size:11px; font-weight:600;">
+                            <?php echo $pipeline_total_count; ?>
+                        </span>
+                    <?php endif; ?>
+                    <i class="fas fa-chevron-down submenu-arrow"></i>
+                </a>
+                <div class="sidebar-submenu" style="<?php echo $is_pipeline_active ? 'display: block;' : 'display: none;'; ?>">
                     <?php foreach (($partner_ops_flow['modules'] ?? []) as $flow_module): ?>
                         <a href="<?php echo htmlspecialchars((string)$flow_module['url']); ?>" class="submenu-item">
                             <i class="fas fa-arrow-right"></i>
@@ -1200,6 +1213,12 @@ body.dark-mode .sidebar-footer .logout-btn {
             <a href="../employee/dashboard.php" class="logout-btn" style="margin-bottom: 8px; background-color: #1e88e5;">
                 <i class="fas fa-user-clock"></i>
                 <span>Employee Dashboard</span>
+            </a>
+        <?php endif; ?>
+        <?php if ($is_partner_scoped_admin || $is_partner_owner_admin || $is_business_owner_role): ?>
+            <a href="javascript:void(0);" onclick="openShopOwnerTutorial(true)" class="logout-btn" style="margin-bottom: 8px; background: #fff1f0; color: #b3261e; border: 1px solid #fee4e2;" title="Replay Merchant Tour">
+                <i class="fas fa-compass" style="color: #b3261e;"></i>
+                <span>Shop Tour</span>
             </a>
         <?php endif; ?>
         <a href="logout.php" class="logout-btn" id="logoutBtn">
@@ -3588,4 +3607,5 @@ window.addEventListener('click', function(e) {
 });
 </script>
 
+<?php require_once __DIR__ . '/shop_owner_tutorial_modal.php'; ?>
 <?php require_once __DIR__ . '/../includes/popup_alert.php'; ?>
