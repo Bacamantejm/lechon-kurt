@@ -692,6 +692,36 @@ include 'includes/header.php';
             gap: 15px;
         }
     }
+
+    @media (max-width: 576px) {
+        .seller-products-page {
+            padding-bottom: 140px !important;
+        }
+
+        .seller-header-actions {
+            flex-direction: column;
+            width: 100%;
+        }
+
+        .seller-header-actions > * {
+            width: 100% !important;
+            text-align: center;
+            justify-content: center;
+        }
+
+        .products-grid {
+            grid-template-columns: 1fr !important;
+        }
+
+        .product-card .card-actions {
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .product-card .card-actions .btn {
+            width: 100%;
+        }
+    }
 </style>
 
 <div class="seller-products-page">

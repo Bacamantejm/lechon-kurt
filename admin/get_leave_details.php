@@ -33,49 +33,70 @@ if (!$leave) {
 ?>
 
 <div class="leave-details">
-    <div class="leave-header">
-        <h5><?php echo htmlspecialchars($leave['first_name'] . ' ' . $leave['last_name']); ?></h5>
-        <span class="status-badge badge-<?php echo $leave['status']; ?>"><?php echo ucfirst($leave['status']); ?></span>
+    <div class="form-section-card mb-3">
+        <div class="form-section-head">
+            <span class="form-section-title"><i class="fas fa-user"></i> Employee & Status</span>
+            <?php 
+                $st = strtolower($leave['status'] ?? 'pending');
+                $pill_class = $st === 'approved' ? 'form-req-pill' : ($st === 'rejected' ? 'form-req-pill' : 'form-opt-pill');
+            ?>
+            <span class="<?php echo $pill_class; ?>"><?php echo ucfirst($st); ?></span>
+        </div>
+        <div class="d-flex align-items-center gap-3 mb-2">
+            <div style="width: 44px; height: 44px; border-radius: 10px; background: #fff1f0; color: #b3261e; display: flex; align-items: center; justify-content: center; font-size: 20px; border: 1px solid #fee4e2;">
+                <i class="fas fa-user-clock"></i>
+            </div>
+            <div>
+                <h6 class="fw-bold mb-0" style="color: #101828; font-size: 15px;"><?php echo htmlspecialchars($leave['first_name'] . ' ' . $leave['last_name']); ?></h6>
+                <span class="text-muted small">Type: <strong><?php echo ucfirst(str_replace('_', ' ', $leave['leave_type'])); ?></strong></span>
+            </div>
+        </div>
     </div>
     
-    <div class="leave-info">
-        <div class="info-row">
-            <label>Leave Type:</label>
-            <span><?php echo ucfirst(str_replace('_', ' ', $leave['leave_type'])); ?></span>
+    <div class="form-section-card mb-3">
+        <div class="form-section-head">
+            <span class="form-section-title"><i class="fas fa-calendar-alt"></i> Leave Schedule</span>
+            <span class="form-req-pill">Duration</span>
         </div>
-        <div class="info-row">
-            <label>Start Date:</label>
-            <span><?php echo date('M d, Y', strtotime($leave['start_date'])); ?></span>
+        <div class="row g-2 mb-2">
+            <div class="col-4">
+                <div class="p-2 rounded bg-light border text-center">
+                    <span class="d-block text-muted" style="font-size: 11px; font-weight: 600;">START DATE</span>
+                    <strong><?php echo date('M d, Y', strtotime($leave['start_date'])); ?></strong>
+                </div>
+            </div>
+            <div class="col-4">
+                <div class="p-2 rounded bg-light border text-center">
+                    <span class="d-block text-muted" style="font-size: 11px; font-weight: 600;">END DATE</span>
+                    <strong><?php echo date('M d, Y', strtotime($leave['end_date'])); ?></strong>
+                </div>
+            </div>
+            <div class="col-4">
+                <div class="p-2 rounded bg-light border text-center">
+                    <span class="d-block text-muted" style="font-size: 11px; font-weight: 600;">TOTAL DAYS</span>
+                    <strong style="color: #b3261e;"><?php echo (strtotime($leave['end_date']) - strtotime($leave['start_date'])) / (24*60*60) + 1; ?> days</strong>
+                </div>
+            </div>
         </div>
-        <div class="info-row">
-            <label>End Date:</label>
-            <span><?php echo date('M d, Y', strtotime($leave['end_date'])); ?></span>
+        <div class="mt-2">
+            <span class="d-block text-muted small fw-bold">REQUEST REASON</span>
+            <p class="mb-0 text-dark" style="font-size: 13.5px;"><?php echo htmlspecialchars($leave['reason']); ?></p>
         </div>
-        <div class="info-row">
-            <label>Duration:</label>
-            <span><?php echo (strtotime($leave['end_date']) - strtotime($leave['start_date'])) / (24*60*60) + 1; ?> days</span>
+    </div>
+    
+    <?php if ($leave['status'] !== 'pending'): ?>
+    <div class="form-section-card">
+        <div class="form-section-head">
+            <span class="form-section-title"><i class="fas fa-clipboard-check"></i> Review Decision</span>
+            <span class="form-opt-pill">Recorded</span>
         </div>
-        <div class="info-row">
-            <label>Reason:</label>
-            <span><?php echo htmlspecialchars($leave['reason']); ?></span>
-        </div>
-        <?php if ($leave['status'] !== 'pending'): ?>
-        <div class="info-row">
-            <label>Reviewed By:</label>
-            <span><?php echo htmlspecialchars(isset($leave['reviewer_name']) ? $leave['reviewer_name'] : 'N/A'); ?></span>
-        </div>
-        <div class="info-row">
-            <label>Review Date:</label>
-            <span><?php echo $leave['reviewed_at'] ? date('M d, Y', strtotime($leave['reviewed_at'])) : 'N/A'; ?></span>
-        </div>
-        <?php if ($leave['review_notes']): ?>
-        <div class="info-row">
-            <label>Review Notes:</label>
-            <span><?php echo htmlspecialchars($leave['review_notes']); ?></span>
-        </div>
-        <?php endif; ?>
+        <div class="mb-1"><span class="text-muted small">REVIEWED BY:</span> <strong><?php echo htmlspecialchars(isset($leave['reviewer_name']) ? $leave['reviewer_name'] : 'N/A'); ?></strong></div>
+        <div class="mb-2"><span class="text-muted small">DATE:</span> <strong><?php echo $leave['reviewed_at'] ? date('M d, Y', strtotime($leave['reviewed_at'])) : 'N/A'; ?></strong></div>
+        <?php if (!empty($leave['review_notes'])): ?>
+            <div class="p-2 rounded bg-light border small text-dark"><i class="fas fa-comment-dots text-muted me-1"></i> <?php echo htmlspecialchars($leave['review_notes']); ?></div>
         <?php endif; ?>
     </div>
+    <?php endif; ?>
 </div>
 
 <style>

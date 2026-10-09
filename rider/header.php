@@ -430,6 +430,15 @@ if (isset($rider['id'])) {
 
         <div class="d-flex align-items-center gap-2">
             <?php if (!empty($rider)): ?>
+                <?php 
+                    $header_name = !empty($rider['rider_name']) ? $rider['rider_name'] : (!empty($_SESSION['rider_name']) ? $_SESSION['rider_name'] : '');
+                    if ($header_name !== ''):
+                ?>
+                    <span class="d-none d-lg-inline-flex align-items-center gap-1 fw-bold text-dark me-1" style="font-size: 13px;">
+                        <i class="fas fa-user-circle text-muted"></i>
+                        <span><?php echo htmlspecialchars($header_name); ?></span>
+                    </span>
+                <?php endif; ?>
                 <!-- Duty status badge on desktop -->
                 <span class="d-none d-sm-inline-flex align-items-center gap-1 px-2 py-1 rounded-pill" style="font-size:11px; font-weight:700; background: <?php echo $rider['duty_status'] === 'online' ? '#ecfdf3' : ($rider['duty_status'] === 'busy' ? '#fff1f0' : '#f2f4f7'); ?>; color: <?php echo $rider['duty_status'] === 'online' ? '#027a48' : ($rider['duty_status'] === 'busy' ? '#b3261e' : '#475467'); ?>; border: 1px solid <?php echo $rider['duty_status'] === 'online' ? '#abefc6' : ($rider['duty_status'] === 'busy' ? '#fee4e2' : '#d0d5dd'); ?>;">
                     <span class="pulse-dot <?php echo $rider['duty_status']; ?>" style="width:6px; height:6px;"></span>

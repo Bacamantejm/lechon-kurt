@@ -1542,6 +1542,11 @@ function checkAdminAccess() {
     if ($conn) {
         adminEnsureBillingPermissions($conn);
         adminEnsureBusinessOwnerFullPermissions($conn);
+        require_once __DIR__ . '/../includes/rider_helper.php';
+        if (isDeliveryDriverUser($conn, $user_id) && !hasBackofficeAccess($conn, $user_id)) {
+            header("Location: ../rider/index.php");
+            exit();
+        }
     }
     enforceSuperAdminOnlyPageAccess($conn, $user_id);
 

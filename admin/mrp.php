@@ -3128,50 +3128,84 @@ unset($_SESSION['success'], $_SESSION['error']);
     </div>
 
     <!-- PR Modal -->
-    <div class="modal fade" id="prModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
+    <div class="modal fade modern-form-modal" id="prModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content">
                 <form method="POST">
                     <div class="modal-header">
-                        <h5 class="modal-title">Create Purchase Requisition</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        <div class="modal-header-icon">
+                            <i class="fas fa-file-invoice"></i>
+                        </div>
+                        <div>
+                            <h5 class="modal-title">Create Purchase Requisition</h5>
+                            <p class="modal-subtitle">Request raw materials restocking and inventory supply allocations.</p>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
                         <input type="hidden" name="action" value="create_pr">
-                        <div class="mb-3">
-                            <label>Notes / Purpose</label>
-                            <textarea name="notes" class="form-control" rows="2" placeholder="e.g. Weekly restocking for kitchen"></textarea>
-                            <small class="text-muted">Estimated cost is computed from your material cost per unit so finance can review the day budget against actual need.</small>
+
+                        <div class="form-section-card mb-3">
+                            <div class="form-section-head">
+                                <div class="form-section-title">
+                                    <i class="fas fa-sticky-note text-danger"></i>
+                                    Purpose & Financial Overview
+                                </div>
+                                <span class="form-opt-pill">Restock Notes</span>
+                            </div>
+                            <div class="form-group-modern">
+                                <label class="form-label-modern" for="prNotes">Notes / Purpose</label>
+                                <textarea name="notes" id="prNotes" class="form-control" rows="2" placeholder="e.g. Weekly restocking for kitchen or upcoming holiday prep"></textarea>
+                                <small class="text-muted d-block mt-1" style="font-size: 11px;">Estimated cost is computed from your material unit costs so finance can review budget compliance.</small>
+                            </div>
                         </div>
-                        <h6>Items Needed</h6>
-                        <table class="table table-sm" id="prItemsTable">
-                            <thead>
-                                <tr>
-                                    <th>Material</th>
-                                    <th width="150">Quantity</th>
-                                    <th width="50"></th>
-                                </tr>
-                            </thead>
-                            <tbody id="prItemsBody">
-                                <tr>
-                                    <td>
-                                        <select name="material_id[]" class="form-select" required>
-                                            <option value="">-- Select Material --</option>
-                                            <?php foreach($materials_list as $m): ?>
-                                                <option value="<?php echo $m['id']; ?>"><?php echo htmlspecialchars($m['name']) . ' (' . $m['unit'] . ')'; ?></option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    </td>
-                                    <td><input type="number" name="quantity[]" class="form-control" step="0.01" required></td>
-                                    <td><button type="button" class="btn btn-sm btn-danger remove-row"><i class="fas fa-times"></i></button></td>
-                                </tr>
-                            </tbody>
-                        </table>
-                        <button type="button" class="btn btn-sm btn-secondary" id="addPrItemRow"><i class="fas fa-plus"></i> Add Item</button>
+
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <div class="form-section-title">
+                                    <i class="fas fa-boxes text-danger"></i>
+                                    Materials Required
+                                </div>
+                                <span class="form-req-pill">Required</span>
+                            </div>
+
+                            <div class="table-responsive mb-2">
+                                <table class="table table-sm align-middle" id="prItemsTable">
+                                    <thead>
+                                        <tr class="text-muted" style="font-size: 12px; border-bottom: 2px solid #eaecf0;">
+                                            <th>Material</th>
+                                            <th width="160">Quantity</th>
+                                            <th width="50"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="prItemsBody">
+                                        <tr>
+                                            <td>
+                                                <select name="material_id[]" class="form-select" required>
+                                                    <option value="">-- Select Material --</option>
+                                                    <?php foreach($materials_list as $m): ?>
+                                                        <option value="<?php echo $m['id']; ?>"><?php echo htmlspecialchars($m['name']) . ' (' . $m['unit'] . ')'; ?></option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                            </td>
+                                            <td>
+                                                <input type="number" name="quantity[]" class="form-control" step="0.01" min="0.01" placeholder="0.00" required>
+                                            </td>
+                                            <td class="text-center">
+                                                <button type="button" class="btn btn-sm btn-outline-danger remove-row" style="border-radius: 8px;"><i class="fas fa-times"></i></button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="addPrItemRow" style="border-radius: 8px;">
+                                <i class="fas fa-plus me-1"></i> Add Item
+                            </button>
+                        </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                        <button type="submit" class="btn btn-primary">Submit Requisition</button>
+                        <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn-modal-primary">Submit Requisition</button>
                     </div>
                 </form>
             </div>
@@ -3179,103 +3213,245 @@ unset($_SESSION['success'], $_SESSION['error']);
     </div>
 
     <!-- Supplier Modal -->
-    <div class="modal fade" id="supplierModal" tabindex="-1">
-        <div class="modal-dialog">
+    <div class="modal fade modern-form-modal" id="supplierModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content">
                 <form method="POST">
                     <div class="modal-header">
-                        <h5 class="modal-title" id="supplierModalTitle">Add Supplier</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        <div class="modal-header-icon">
+                            <i class="fas fa-truck-loading"></i>
+                        </div>
+                        <div>
+                            <h5 class="modal-title" id="supplierModalTitle">Add Supplier</h5>
+                            <p class="modal-subtitle">Manage vendor contact information, supply terms, and location.</p>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
                         <input type="hidden" name="action" value="save_supplier">
                         <input type="hidden" name="supplier_id" id="supplier_id">
-                        <div class="mb-3"><label>Name</label><input type="text" name="name" id="s_name" class="form-control" required></div>
-                        <div class="mb-3"><label>Contact Person</label><input type="text" name="contact_person" id="s_contact" class="form-control"></div>
-                        <div class="mb-3"><label>Email</label><input type="email" name="email" id="s_email" class="form-control"></div>
-                        <div class="mb-3"><label>Phone</label><input type="text" name="phone" id="s_phone" class="form-control"></div>
-                        <div class="mb-3"><label>Address</label><textarea name="address" id="s_address" class="form-control" rows="2"></textarea></div>
+
+                        <div class="form-section-card mb-3">
+                            <div class="form-section-head">
+                                <div class="form-section-title">
+                                    <i class="fas fa-building text-danger"></i>
+                                    Company & Point of Contact
+                                </div>
+                                <span class="form-req-pill">Required</span>
+                            </div>
+
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern" for="s_name">Supplier / Business Name</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-building form-input-icon"></i>
+                                            <input type="text" name="name" id="s_name" class="form-control" required placeholder="e.g. San Miguel Farm Foods">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern" for="s_contact">Contact Person</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-user form-input-icon"></i>
+                                            <input type="text" name="contact_person" id="s_contact" class="form-control" placeholder="Account manager name">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <div class="form-section-title">
+                                    <i class="fas fa-address-book text-danger"></i>
+                                    Communication & Address
+                                </div>
+                                <span class="form-opt-pill">Contact Info</span>
+                            </div>
+
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern" for="s_email">Email Address</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-envelope form-input-icon"></i>
+                                            <input type="email" name="email" id="s_email" class="form-control" placeholder="orders@supplier.com">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern" for="s_phone">Phone / Mobile</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-phone form-input-icon"></i>
+                                            <input type="text" name="phone" id="s_phone" class="form-control" placeholder="0917-000-0000">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern" for="s_address">Warehouse / Office Address</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-map-marker-alt form-input-icon"></i>
+                                            <input type="text" name="address" id="s_address" class="form-control" placeholder="Unit, Street, City, Province">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                        <button type="submit" class="btn btn-primary">Save Supplier</button>
+                        <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn-modal-primary">Save Supplier</button>
                     </div>
                 </form>
             </div>
         </div>
     </div>
 
-    <div class="modal fade" id="budgetDecisionModal" tabindex="-1">
-        <div class="modal-dialog">
+    <!-- Budget Decision Modal -->
+    <div class="modal fade modern-form-modal" id="budgetDecisionModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <form method="POST" id="budgetDecisionForm">
                     <div class="modal-header">
-                        <h5 class="modal-title" id="budgetDecisionTitle">Finance Budget Review</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        <div class="modal-header-icon">
+                            <i class="fas fa-file-invoice-dollar"></i>
+                        </div>
+                        <div>
+                            <h5 class="modal-title" id="budgetDecisionTitle">Finance Budget Review</h5>
+                            <p class="modal-subtitle">Authorize procurement budget allocation or reject request.</p>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
                         <input type="hidden" name="action" id="budgetDecisionAction" value="approve_budget_request">
                         <input type="hidden" name="budget_request_id" id="budget_request_id">
-                        <div class="mb-2 small text-muted" id="budgetDecisionMeta"></div>
-                        <div class="mb-3">
-                            <label class="form-label">Approved Amount</label>
-                            <input type="number" name="amount_approved" id="amount_approved" class="form-control" step="0.01" min="0">
+
+                        <div class="p-3 rounded mb-3" style="background: #f8f9fa; border: 1px solid #eaecf0;">
+                            <div class="small fw-semibold text-muted" id="budgetDecisionMeta"></div>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Finance Notes</label>
-                            <textarea name="finance_notes" id="finance_notes" class="form-control" rows="3" placeholder="Optional finance explanation or revision note"></textarea>
+
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <div class="form-section-title">
+                                    <i class="fas fa-coins text-danger"></i>
+                                    Decision Terms
+                                </div>
+                                <span class="form-req-pill">Required</span>
+                            </div>
+
+                            <div class="form-group-modern mb-3">
+                                <label class="form-label-modern" for="amount_approved">Approved Amount (₱)</label>
+                                <div class="form-input-wrap">
+                                    <i class="fas fa-peso-sign form-input-icon"></i>
+                                    <input type="number" name="amount_approved" id="amount_approved" class="form-control" step="0.01" min="0">
+                                </div>
+                            </div>
+
+                            <div class="form-group-modern">
+                                <label class="form-label-modern" for="finance_notes">Finance Notes <span class="text-muted fw-normal">(Optional)</span></label>
+                                <textarea name="finance_notes" id="finance_notes" class="form-control" rows="3" placeholder="Optional finance explanation or revision note"></textarea>
+                            </div>
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                        <button type="submit" class="btn btn-primary" id="budgetDecisionSubmit">Save Decision</button>
+                        <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn-modal-primary" id="budgetDecisionSubmit">Save Decision</button>
                     </div>
                 </form>
             </div>
         </div>
     </div>
 
-    <div class="modal fade" id="supplierPaymentModal" tabindex="-1">
-        <div class="modal-dialog">
+    <!-- Supplier Payment Modal -->
+    <div class="modal fade modern-form-modal" id="supplierPaymentModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content">
                 <form method="POST" id="supplierPaymentForm">
                     <div class="modal-header">
-                        <h5 class="modal-title">Record Supplier Payment</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        <div class="modal-header-icon">
+                            <i class="fas fa-money-check-alt"></i>
+                        </div>
+                        <div>
+                            <h5 class="modal-title">Record Supplier Payment</h5>
+                            <p class="modal-subtitle">Log settlement against purchase order outstanding balance.</p>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
                         <input type="hidden" name="action" value="record_supplier_payment">
                         <input type="hidden" name="po_id" id="payment_po_id">
-                        <div class="small text-muted mb-3" id="supplierPaymentMeta"></div>
-                        <div class="mb-3">
-                            <label class="form-label">Payment Date</label>
-                            <input type="date" name="payment_date" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
+
+                        <div class="p-3 rounded mb-3" style="background: #f8f9fa; border: 1px solid #eaecf0;">
+                            <div class="small fw-semibold text-muted" id="supplierPaymentMeta"></div>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Amount Paid</label>
-                            <input type="number" name="amount_paid" id="payment_amount_paid" class="form-control" step="0.01" min="0.01" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Payment Method</label>
-                            <select name="payment_method" class="form-select">
-                                <option value="Cash">Cash</option>
-                                <option value="Bank Transfer">Bank Transfer</option>
-                                <option value="GCash">GCash</option>
-                                <option value="Check">Check</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Reference Number</label>
-                            <input type="text" name="payment_reference" class="form-control" maxlength="120" placeholder="Optional bank/check/reference number">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Notes</label>
-                            <textarea name="payment_notes" class="form-control" rows="3" placeholder="Optional supplier payment note"></textarea>
+
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <div class="form-section-title">
+                                    <i class="fas fa-receipt text-danger"></i>
+                                    Settlement Details
+                                </div>
+                                <span class="form-req-pill">Required</span>
+                            </div>
+
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Payment Date</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-calendar-alt form-input-icon"></i>
+                                            <input type="date" name="payment_date" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern" for="payment_amount_paid">Amount Paid (₱)</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-peso-sign form-input-icon"></i>
+                                            <input type="number" name="amount_paid" id="payment_amount_paid" class="form-control" step="0.01" min="0.01" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Payment Method</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-credit-card form-input-icon"></i>
+                                            <select name="payment_method" class="form-select">
+                                                <option value="Cash">Cash</option>
+                                                <option value="Bank Transfer">Bank Transfer</option>
+                                                <option value="GCash">GCash</option>
+                                                <option value="Check">Check</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Reference Number</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-hashtag form-input-icon"></i>
+                                            <input type="text" name="payment_reference" class="form-control" maxlength="120" placeholder="Bank ref / check number">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Notes / Memo <span class="text-muted fw-normal">(Optional)</span></label>
+                                        <textarea name="payment_notes" class="form-control" rows="2" placeholder="Optional supplier payment note"></textarea>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                        <button type="submit" class="btn btn-primary">Record Payment</button>
+                        <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn-modal-primary">Record Payment</button>
                     </div>
                 </form>
             </div>
@@ -3283,12 +3459,18 @@ unset($_SESSION['success'], $_SESSION['error']);
     </div>
 
     <!-- Receive Stock Modal -->
-    <div class="modal fade" id="receiveStockModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
+    <div class="modal fade modern-form-modal" id="receiveStockModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Inspect & Receive Delivery</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <div class="modal-header-icon">
+                        <i class="fas fa-dolly"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title">Inspect & Receive Delivery</h5>
+                        <p class="modal-subtitle">Verify delivered material quantity against purchase order items.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body" id="receiveStockBody">
                     <!-- Content loaded via AJAX -->

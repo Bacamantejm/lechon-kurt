@@ -893,49 +893,78 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
     </div>
     
     <!-- Update Status Modal -->
-    <div class="modal fade" id="statusModal" tabindex="-1">
-        <div class="modal-dialog">
+    <div class="modal fade modern-form-modal" id="statusModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Update Pre-Order Status</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <div class="modal-header-icon">
+                        <i class="fas fa-tasks"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title">Update Pre-Order Status</h5>
+                        <p class="modal-subtitle">Update fulfillment progress and log internal operational notes.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <form method="POST" id="updateStatusForm">
                         <input type="hidden" id="preOrderId" name="pre_order_id">
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
-                        <div class="mb-3">
-                            <label class="form-label"><strong>New Status</strong></label>
-                            <select name="new_status" class="form-select" required>
-                                <option value="">-- Select Status --</option>
-                                <option value="confirmed">Confirmed</option>
-                                <option value="in_preparation">In Preparation</option>
-                                <option value="ready_for_pickup">Ready for Pickup</option>
-                                <option value="completed">Completed</option>
-                                <option value="cancelled">Cancelled</option>
-                            </select>
+                        
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-check-circle"></i> Fulfillment Progress</span>
+                                <span class="form-req-pill">Required</span>
+                            </div>
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">New Order Status <span class="form-req-star">*</span></label>
+                                <div class="form-input-wrap">
+                                    <i class="fas fa-flag form-input-icon"></i>
+                                    <select name="new_status" class="form-select" required>
+                                        <option value="">-- Select Status --</option>
+                                        <option value="confirmed">Confirmed</option>
+                                        <option value="in_preparation">In Preparation</option>
+                                        <option value="ready_for_pickup">Ready for Pickup</option>
+                                        <option value="completed">Completed</option>
+                                        <option value="cancelled">Cancelled</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Admin Notes</label>
-                            <textarea name="admin_notes" class="form-control" rows="4" placeholder="Add any notes about this status change..."></textarea>
+
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-sticky-note"></i> Admin Remarks</span>
+                                <span class="form-opt-pill">Optional</span>
+                            </div>
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Internal Processing Notes</label>
+                                <textarea name="admin_notes" class="form-control" rows="3" placeholder="Add any details about preparation, delivery coordination, or customer updates..."></textarea>
+                            </div>
                         </div>
                     </form>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" name="update_status" form="updateStatusForm" class="btn btn-primary">Update Status</button>
+                    <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" name="update_status" form="updateStatusForm" class="btn-modal-primary"><i class="fas fa-save"></i> Update Status</button>
                 </div>
             </div>
         </div>
     </div>
     
     <!-- Pre-Order Details Modal -->
-    <div class="modal fade" id="preorderDetailsModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
+    <div class="modal fade modern-form-modal" id="preorderDetailsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Pre-Order Details</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <div class="modal-header-icon">
+                        <i class="fas fa-receipt"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title">Pre-Order Details</h5>
+                        <p class="modal-subtitle">Review customer information, menu items, payment details, and dispatch status.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body" id="preOrderDetails">
                     <!-- Loaded via JS -->

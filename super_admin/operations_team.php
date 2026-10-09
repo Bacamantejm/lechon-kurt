@@ -87,30 +87,45 @@ saRenderModuleHeader('Operations Team & Roles', 'Operations Team & Roles', $admi
         <div class="metric-card"><span class="metric-label">Total Assigned</span><div class="metric-value"><?php echo number_format((int)$summary['total_assigned']); ?></div></div>
         <div class="metric-card"><span class="metric-label">Search Results</span><div class="metric-value"><?php echo number_format(count($filtered_candidates)); ?></div></div>
     </div>
-    <form method="post" class="module-form-grid" data-sa-confirm="1" data-sa-confirm-title-template="Assign {field_label:role_name}?" data-sa-confirm-text-template="This will update the selected user's back-office access to {field_label:role_name}." data-sa-confirm-confirm-text="Assign Role">
-        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
-        <input type="hidden" name="action" value="assign_operational_role">
-        <select name="user_id" class="form-select" required>
-            <option value="">Select user account</option>
-            <?php foreach ($filtered_candidates as $candidate): ?>
-                <option value="<?php echo (int)$candidate['id']; ?>">
-                    <?php echo htmlspecialchars((string)$candidate['full_name'] . ' - ' . (string)$candidate['email'] . (!empty($candidate['role_name']) ? ' [' . (string)$candidate['role_name'] . ']' : ' [no role]')); ?>
-                </option>
-            <?php endforeach; ?>
-        </select>
-        <select name="role_name" class="form-select" required>
-            <option value="">Select operational role</option>
-            <?php foreach ($roles as $role): ?>
-                <option value="<?php echo htmlspecialchars((string)$role['name']); ?>">
-                    <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', (string)$role['name']))); ?>
-                </option>
-            <?php endforeach; ?>
-        </select>
-        <div class="module-inline-actions">
-            <button type="submit" class="btn btn-primary"><i class="fas fa-user-plus"></i> Assign Operational Role</button>
-            <a href="../super_admin/operations_dashboard.php" class="btn btn-outline-primary">Back to Dashboard</a>
+    <div class="form-section-card mt-3">
+        <div class="form-section-head mb-3">
+            <div class="form-section-title">
+                <i class="fas fa-user-plus text-danger"></i>
+                Assign Operational Account
+            </div>
+            <span class="form-req-pill">Role Assignment</span>
         </div>
-    </form>
+        <form method="post" class="module-form-grid" data-sa-confirm="1" data-sa-confirm-title-template="Assign {field_label:role_name}?" data-sa-confirm-text-template="This will update the selected user's back-office access to {field_label:role_name}." data-sa-confirm-confirm-text="Assign Role">
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+            <input type="hidden" name="action" value="assign_operational_role">
+            <div class="form-input-wrap">
+                <i class="fas fa-user form-input-icon"></i>
+                <select name="user_id" class="form-select" required>
+                    <option value="">Select user account</option>
+                    <?php foreach ($filtered_candidates as $candidate): ?>
+                        <option value="<?php echo (int)$candidate['id']; ?>">
+                            <?php echo htmlspecialchars((string)$candidate['full_name'] . ' - ' . (string)$candidate['email'] . (!empty($candidate['role_name']) ? ' [' . (string)$candidate['role_name'] . ']' : ' [no role]')); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="form-input-wrap">
+                <i class="fas fa-user-shield form-input-icon"></i>
+                <select name="role_name" class="form-select" required>
+                    <option value="">Select operational role</option>
+                    <?php foreach ($roles as $role): ?>
+                        <option value="<?php echo htmlspecialchars((string)$role['name']); ?>">
+                            <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', (string)$role['name']))); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="module-inline-actions">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-user-plus"></i> Assign Operational Role</button>
+                <a href="../super_admin/operations_dashboard.php" class="btn btn-outline-primary">Back to Dashboard</a>
+            </div>
+        </form>
+    </div>
 </div>
 
 <div class="module-section">

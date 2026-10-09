@@ -120,53 +120,77 @@ if (saTableExists($conn, 'franchise_applications')) {
         <span class="status-chip <?php echo $app_status_chip; ?>"><?php echo htmlspecialchars(ucfirst($app_status !== '' ? $app_status : 'unknown')); ?></span>
     </div>
     
-    <div class="app-info-grid">
-        <div class="info-section">
-            <h6>Applicant Information</h6>
-            <p><strong>Name:</strong> <?php echo htmlspecialchars((string)($user['full_name'] ?? 'Unknown')); ?></p>
-            <p><strong>Email:</strong> <?php echo htmlspecialchars((string)($user['email'] ?? 'N/A')); ?></p>
-            <p><strong>Phone:</strong> <?php echo htmlspecialchars((string)($user['phone'] ?? 'N/A')); ?></p>
+    <div class="row g-3 mb-3">
+        <div class="col-md-6">
+            <div class="form-section-card h-100 mb-0">
+                <div class="form-section-head">
+                    <span class="form-section-title"><i class="fas fa-user"></i> Applicant Information</span>
+                    <span class="form-req-pill">Verified</span>
+                </div>
+                <div class="p-1">
+                    <div class="mb-2"><span class="text-muted small d-block">NAME</span><strong><?php echo htmlspecialchars((string)($user['full_name'] ?? 'Unknown')); ?></strong></div>
+                    <div class="mb-2"><span class="text-muted small d-block">EMAIL</span><strong><?php echo htmlspecialchars((string)($user['email'] ?? 'N/A')); ?></strong></div>
+                    <div><span class="text-muted small d-block">PHONE</span><strong><?php echo htmlspecialchars((string)($user['phone'] ?? 'N/A')); ?></strong></div>
+                </div>
+            </div>
         </div>
         
-        <div class="info-section">
-            <h6>Business Information</h6>
-            <p><strong>Business Name:</strong> <?php echo htmlspecialchars($app['business_name']); ?></p>
-            <p><strong>Business Type:</strong> <?php echo ucfirst($app['business_type']); ?></p>
-            <p><strong>TIN:</strong> <?php echo htmlspecialchars($app['tin_number']); ?></p>
+        <div class="col-md-6">
+            <div class="form-section-card h-100 mb-0">
+                <div class="form-section-head">
+                    <span class="form-section-title"><i class="fas fa-store"></i> Business Information</span>
+                    <span class="form-req-pill">Entity</span>
+                </div>
+                <div class="p-1">
+                    <div class="mb-2"><span class="text-muted small d-block">BUSINESS NAME</span><strong><?php echo htmlspecialchars($app['business_name']); ?></strong></div>
+                    <div class="mb-2"><span class="text-muted small d-block">BUSINESS TYPE</span><strong><?php echo ucfirst($app['business_type']); ?></strong></div>
+                    <div><span class="text-muted small d-block">TIN NUMBER</span><strong><?php echo htmlspecialchars($app['tin_number']); ?></strong></div>
+                </div>
+            </div>
         </div>
     </div>
 
-    <div class="app-section">
-        <h6>Application Workflow Status</h6>
-        <div class="detail-row">
-            <span>Total Attempts:</span>
-            <p><?php echo (int)$applicant_attempts; ?> / 2</p>
+    <!-- Workflow Status -->
+    <div class="form-section-card mb-3">
+        <div class="form-section-head">
+            <span class="form-section-title"><i class="fas fa-tasks"></i> Workflow Status</span>
+            <span class="form-opt-pill">Policy Rules</span>
         </div>
-        <div class="detail-row">
-            <span>Approved Attempts:</span>
-            <p><?php echo (int)$approved_attempts; ?></p>
-        </div>
-        <div class="detail-row">
-            <span>Rejected Attempts:</span>
-            <p><?php echo (int)$rejected_attempts; ?></p>
+        <div class="row g-2 mb-2">
+            <div class="col-4">
+                <div class="p-2 rounded bg-light border text-center">
+                    <span class="d-block text-muted" style="font-size: 11px; font-weight: 600;">ATTEMPTS</span>
+                    <strong><?php echo (int)$applicant_attempts; ?> / 2</strong>
+                </div>
+            </div>
+            <div class="col-4">
+                <div class="p-2 rounded bg-light border text-center">
+                    <span class="d-block text-muted" style="font-size: 11px; font-weight: 600;">APPROVED</span>
+                    <strong style="color: #027a48;"><?php echo (int)$approved_attempts; ?></strong>
+                </div>
+            </div>
+            <div class="col-4">
+                <div class="p-2 rounded bg-light border text-center">
+                    <span class="d-block text-muted" style="font-size: 11px; font-weight: 600;">REJECTED</span>
+                    <strong style="color: #b3261e;"><?php echo (int)$rejected_attempts; ?></strong>
+                </div>
+            </div>
         </div>
         <?php if ($next_reapply_at !== null): ?>
-        <div class="detail-row">
-            <span>Cooldown Ends:</span>
-            <p><?php echo htmlspecialchars($next_reapply_at); ?></p>
-        </div>
+            <div class="alert alert-warning py-2 px-3 small mb-2"><i class="fas fa-hourglass-half me-1"></i> Cooldown ends on <strong><?php echo htmlspecialchars($next_reapply_at); ?></strong></div>
         <?php endif; ?>
-        <div class="detail-row">
-            <span>Operational Rule:</span>
-            <p>Applicants get up to 2 total submissions. Rejected applicants wait 3 days before the final retry. Approved partners enter a 1-month trial and should not re-register.</p>
-        </div>
+        <p class="text-muted small mb-0"><i class="fas fa-info-circle me-1"></i> Applicants get up to 2 total submissions. Rejected applicants wait 3 days before final retry. Approved partners enter a 1-month trial.</p>
     </div>
     
-    <div class="app-section">
-        <h6>Business Details</h6>
-        <div class="detail-row">
-            <span>Business Address:</span>
-            <p><?php echo nl2br(htmlspecialchars($app['business_address'])); ?></p>
+    <!-- Business Details -->
+    <div class="form-section-card mb-3">
+        <div class="form-section-head">
+            <span class="form-section-title"><i class="fas fa-map-marker-alt"></i> Location & Capital</span>
+            <span class="form-req-pill">Commercial</span>
+        </div>
+        <div class="mb-2">
+            <span class="text-muted small d-block">BUSINESS ADDRESS</span>
+            <p class="mb-0" style="color: #101828; font-size: 13.5px;"><?php echo nl2br(htmlspecialchars($app['business_address'])); ?></p>
         </div>
         <?php
             $psgc_parts = array_filter([
@@ -180,23 +204,21 @@ if (saTableExists($conn, 'franchise_applications')) {
             $psgc_location_line = implode(', ', $psgc_parts);
         ?>
         <?php if ($psgc_location_line !== ''): ?>
-        <div class="detail-row">
-            <span>PSGC Location:</span>
-            <p><?php echo htmlspecialchars($psgc_location_line); ?></p>
-        </div>
+            <div class="mb-2">
+                <span class="text-muted small d-block">PSGC REGION / LOCATION</span>
+                <strong style="color: #101828; font-size: 13.5px;"><?php echo htmlspecialchars($psgc_location_line); ?></strong>
+            </div>
         <?php endif; ?>
-        <div class="detail-row">
-            <span>Capital Investment:</span>
-            <p>PHP <?php echo number_format((float)($app['capital_investment'] ?? 0), 2); ?></p>
+        <div class="mb-2">
+            <span class="text-muted small d-block">COMMITTED CAPITAL INVESTMENT</span>
+            <strong style="color: #b3261e; font-size: 15px;">PHP <?php echo number_format((float)($app['capital_investment'] ?? 0), 2); ?></strong>
         </div>
-        <div class="detail-row">
-            <span>Business Experience:</span>
-            <p><?php echo nl2br(htmlspecialchars($app['business_experience'])); ?></p>
-        </div>
-        <div class="detail-row">
-            <span>Marketing Plan:</span>
-            <p><?php echo nl2br(htmlspecialchars($app['marketing_plan'])); ?></p>
-        </div>
+        <?php if (!empty($app['business_experience'])): ?>
+            <div class="mb-2">
+                <span class="text-muted small d-block">BUSINESS EXPERIENCE</span>
+                <p class="mb-0 text-muted small"><?php echo nl2br(htmlspecialchars($app['business_experience'])); ?></p>
+            </div>
+        <?php endif; ?>
     </div>
     
     <div class="app-documents">
@@ -325,19 +347,23 @@ if (saTableExists($conn, 'franchise_applications')) {
     </div>
     
     <?php if ($app['status'] === 'pending' || $app['status'] === 'incomplete'): ?>
-        <div class="app-actions">
+        <div class="form-section-card mt-3">
+            <div class="form-section-head">
+                <span class="form-section-title"><i class="fas fa-gavel"></i> Administrative Review & Decision</span>
+                <span class="form-req-pill">Action Required</span>
+            </div>
             <form method="POST" action="../super_admin/franchise_applications.php" id="appForm">
                 <input type="hidden" name="app_id" value="<?php echo $app_id; ?>">
                 <input type="hidden" name="app_action" id="app_action" value="">
                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token, ENT_QUOTES, 'UTF-8'); ?>">
                 
-                <div class="form-group">
-                    <label>Overall Admin Feedback / Instructions to Applicant</label>
+                <div class="form-group-modern mb-3">
+                    <label class="form-label-modern">Overall Admin Feedback / Instructions to Applicant</label>
                     <textarea name="admin_notes" id="admin_notes" class="form-control" rows="3" placeholder="Add overall notes or instructions for the applicant..."><?php echo htmlspecialchars($app['admin_notes'] ?? ''); ?></textarea>
-                    <small class="text-muted d-block mt-1">If you flag specific documents above and click <strong>Mark Incomplete</strong>, the applicant will only be prompted to re-upload the flagged files without losing their other data.</small>
+                    <div class="form-helper-text"><i class="fas fa-info-circle"></i> If you flag specific documents above and click <strong>Mark Incomplete</strong>, the applicant will only be prompted to re-upload the flagged files without losing their other data.</div>
                 </div>
                 
-                <div class="action-buttons" style="display:flex; gap:10px; flex-wrap:wrap;">
+                <div class="action-buttons d-flex gap-2 flex-wrap pt-2 border-top">
                     <button type="submit"
                             name="app_action"
                             value="approve"
@@ -359,10 +385,13 @@ if (saTableExists($conn, 'franchise_applications')) {
             </form>
         </div>
     <?php else: ?>
-        <div class="app-notes">
-            <h6>Admin Notes</h6>
-            <p><?php echo nl2br(htmlspecialchars($app['admin_notes'] ?? 'No notes')); ?></p>
-            <small>
+        <div class="form-section-card mt-3">
+            <div class="form-section-head">
+                <span class="form-section-title"><i class="fas fa-clipboard-check"></i> Review Notes</span>
+                <span class="form-opt-pill">Completed</span>
+            </div>
+            <p class="mb-1 text-dark"><?php echo nl2br(htmlspecialchars($app['admin_notes'] ?? 'No notes recorded')); ?></p>
+            <small class="text-muted">
                 Reviewed by: <?php echo htmlspecialchars((string)($app['admin_id'] ?? 'N/A')); ?>
                 on <?php echo htmlspecialchars(saFormatDateTime($app['reviewed_at'] ?? null, 'M d, Y H:i', 'N/A')); ?>
             </small>

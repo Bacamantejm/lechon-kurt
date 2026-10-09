@@ -562,10 +562,17 @@ $active_days_count = count(array_filter($operating_days_arr));
             font-weight: 700;
         }
 
+        .calendar-scroll-wrap {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
         @media (max-width: 991px) {
             .calendar-cells-grid,
             .calendar-week-header {
                 gap: 4px;
+                min-width: 640px;
             }
             .date-tile {
                 min-height: 85px;
@@ -580,6 +587,58 @@ $active_days_count = count(array_filter($operating_days_arr));
             }
             .tile-footer {
                 display: none;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .schedule-shell {
+                padding: 16px 12px 140px 12px;
+            }
+            .schedule-hero {
+                flex-direction: column;
+                align-items: flex-start;
+                padding: 16px;
+                gap: 12px;
+            }
+            .schedule-hero .d-flex {
+                width: 100%;
+                flex-direction: column;
+            }
+            .schedule-hero .btn {
+                width: 100%;
+                justify-content: center;
+            }
+            .calendar-header-bar {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 14px;
+            }
+            .cal-nav-group {
+                width: 100%;
+                justify-content: space-between;
+            }
+            .cal-month-heading {
+                min-width: 0;
+                font-size: 1.25rem;
+            }
+            .legend-row {
+                gap: 6px;
+            }
+            .legend-chip {
+                font-size: 0.72rem;
+                padding: 3px 8px;
+            }
+            .calendar-main-card {
+                padding: 16px 12px;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .kpi-row {
+                grid-template-columns: 1fr;
+            }
+            .schedule-shell {
+                padding: 12px 8px 140px 8px;
             }
         }
     </style>
@@ -701,99 +760,102 @@ $active_days_count = count(array_filter($operating_days_arr));
                         </div>
                     </div>
 
-                    <!-- Weekday Headers -->
-                    <div class="calendar-week-header">
-                        <div class="weekday-name">Mon</div>
-                        <div class="weekday-name">Tue</div>
-                        <div class="weekday-name">Wed</div>
-                        <div class="weekday-name">Thu</div>
-                        <div class="weekday-name">Fri</div>
-                        <div class="weekday-name">Sat</div>
-                        <div class="weekday-name">Sun</div>
-                    </div>
+                    <!-- Calendar Scroll Wrap for Mobile Responsiveness -->
+                    <div class="calendar-scroll-wrap">
+                        <!-- Weekday Headers -->
+                        <div class="calendar-week-header">
+                            <div class="weekday-name">Mon</div>
+                            <div class="weekday-name">Tue</div>
+                            <div class="weekday-name">Wed</div>
+                            <div class="weekday-name">Thu</div>
+                            <div class="weekday-name">Fri</div>
+                            <div class="weekday-name">Sat</div>
+                            <div class="weekday-name">Sun</div>
+                        </div>
 
-                    <!-- Day Cells Grid -->
-                    <div class="calendar-cells-grid">
-                        <?php 
-                        // Empty leading offset cells
-                        for ($pad = 1; $pad < $cal_data['first_day_weekday']; $pad++) {
-                            echo '<div class="date-tile empty-cell"></div>';
-                        }
-
-                        // Active month days
-                        foreach ($cal_data['days'] as $day_data): 
-                            $date_str = $day_data['date'];
-                            $is_avail = $day_data['available'];
-                            $status = $day_data['status'];
-                            $booked = (int)$day_data['booked_count'];
-                            $capacity = (int)$day_data['max_daily_capacity'];
-                            $remaining = (int)$day_data['remaining_capacity'];
-
-                            $tile_class = 'tile-open';
-                            $pill_class = 'pill-open';
-                            $pill_text = 'Open';
-                            $pill_icon = 'fa-check';
-
-                            if ($status === 'blackout') {
-                                $tile_class = 'tile-blocked';
-                                $pill_class = 'pill-blocked';
-                                $pill_text = 'Blocked';
-                                $pill_icon = 'fa-ban';
-                            } elseif ($status === 'fully_booked') {
-                                $tile_class = 'tile-full';
-                                $pill_class = 'pill-full';
-                                $pill_text = 'Full Capacity';
-                                $pill_icon = 'fa-fire';
-                            } elseif ($status === 'lead_time_cutoff') {
-                                $tile_class = 'tile-cutoff';
-                                $pill_class = 'pill-cutoff';
-                                $pill_text = 'Notice Cutoff';
-                                $pill_icon = 'fa-hourglass-half';
-                            } elseif ($status === 'closed_weekday') {
-                                $tile_class = 'tile-closed';
-                                $pill_class = 'pill-closed';
-                                $pill_text = 'Closed (' . $day_data['day_name'] . ')';
-                                $pill_icon = 'fa-times';
-                            } elseif ($status === 'past') {
-                                $tile_class = 'tile-past';
-                                $pill_class = 'pill-closed';
-                                $pill_text = 'Past';
-                                $pill_icon = 'fa-calendar-xmark';
-                            } else {
-                                $pill_text = ($remaining > 0) ? "Open ({$remaining} left)" : 'Open';
+                        <!-- Day Cells Grid -->
+                        <div class="calendar-cells-grid">
+                            <?php 
+                            // Empty leading offset cells
+                            for ($pad = 1; $pad < $cal_data['first_day_weekday']; $pad++) {
+                                echo '<div class="date-tile empty-cell"></div>';
                             }
-                        ?>
-                            <div class="date-tile <?php echo $tile_class; ?>" 
-                                 data-date="<?php echo $date_str; ?>" 
-                                 onclick="handleDateCellClick('<?php echo $date_str; ?>')">
-                                <div class="tile-top">
-                                    <span class="tile-day-num"><?php echo $day_data['day']; ?></span>
-                                    <div class="d-flex align-items-center gap-1">
-                                        <?php if (!empty($day_data['has_custom_capacity'])): ?>
-                                            <span class="tile-custom-badge" title="Custom capacity limit set for this day">
-                                                <i class="fas fa-tag"></i> <?php echo $capacity; ?>
-                                            </span>
-                                        <?php endif; ?>
-                                        <?php if ($booked > 0): ?>
-                                            <span class="tile-orders-badge" title="<?php echo $booked; ?> pre-orders booked">
-                                                <?php echo $booked; ?> <?php echo $booked === 1 ? 'Order' : 'Orders'; ?>
-                                            </span>
-                                        <?php endif; ?>
+
+                            // Active month days
+                            foreach ($cal_data['days'] as $day_data): 
+                                $date_str = $day_data['date'];
+                                $is_avail = $day_data['available'];
+                                $status = $day_data['status'];
+                                $booked = (int)$day_data['booked_count'];
+                                $capacity = (int)$day_data['max_daily_capacity'];
+                                $remaining = (int)$day_data['remaining_capacity'];
+
+                                $tile_class = 'tile-open';
+                                $pill_class = 'pill-open';
+                                $pill_text = 'Open';
+                                $pill_icon = 'fa-check';
+
+                                if ($status === 'blackout') {
+                                    $tile_class = 'tile-blocked';
+                                    $pill_class = 'pill-blocked';
+                                    $pill_text = 'Blocked';
+                                    $pill_icon = 'fa-ban';
+                                } elseif ($status === 'fully_booked') {
+                                    $tile_class = 'tile-full';
+                                    $pill_class = 'pill-full';
+                                    $pill_text = 'Full Capacity';
+                                    $pill_icon = 'fa-fire';
+                                } elseif ($status === 'lead_time_cutoff') {
+                                    $tile_class = 'tile-cutoff';
+                                    $pill_class = 'pill-cutoff';
+                                    $pill_text = 'Notice Cutoff';
+                                    $pill_icon = 'fa-hourglass-half';
+                                } elseif ($status === 'closed_weekday') {
+                                    $tile_class = 'tile-closed';
+                                    $pill_class = 'pill-closed';
+                                    $pill_text = 'Closed (' . $day_data['day_name'] . ')';
+                                    $pill_icon = 'fa-times';
+                                } elseif ($status === 'past') {
+                                    $tile_class = 'tile-past';
+                                    $pill_class = 'pill-closed';
+                                    $pill_text = 'Past';
+                                    $pill_icon = 'fa-calendar-xmark';
+                                } else {
+                                    $pill_text = ($remaining > 0) ? "Open ({$remaining} left)" : 'Open';
+                                }
+                            ?>
+                                <div class="date-tile <?php echo $tile_class; ?>" 
+                                     data-date="<?php echo $date_str; ?>" 
+                                     onclick="handleDateCellClick('<?php echo $date_str; ?>')">
+                                    <div class="tile-top">
+                                        <span class="tile-day-num"><?php echo $day_data['day']; ?></span>
+                                        <div class="d-flex align-items-center gap-1">
+                                            <?php if (!empty($day_data['has_custom_capacity'])): ?>
+                                                <span class="tile-custom-badge" title="Custom capacity limit set for this day">
+                                                    <i class="fas fa-tag"></i> <?php echo $capacity; ?>
+                                                </span>
+                                            <?php endif; ?>
+                                            <?php if ($booked > 0): ?>
+                                                <span class="tile-orders-badge" title="<?php echo $booked; ?> pre-orders booked">
+                                                    <?php echo $booked; ?> <?php echo $booked === 1 ? 'Order' : 'Orders'; ?>
+                                                </span>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+
+                                    <div class="tile-body">
+                                        <div class="status-pill <?php echo $pill_class; ?>">
+                                            <i class="fas <?php echo $pill_icon; ?> me-1"></i> <?php echo htmlspecialchars($pill_text); ?>
+                                        </div>
+                                    </div>
+
+                                    <div class="tile-footer">
+                                        <span><?php echo $booked; ?> / <?php echo $capacity; ?> booked</span>
+                                        <span class="tile-click-hint"><i class="fas fa-edit me-1"></i>Edit</span>
                                     </div>
                                 </div>
-
-                                <div class="tile-body">
-                                    <div class="status-pill <?php echo $pill_class; ?>">
-                                        <i class="fas <?php echo $pill_icon; ?> me-1"></i> <?php echo htmlspecialchars($pill_text); ?>
-                                    </div>
-                                </div>
-
-                                <div class="tile-footer">
-                                    <span><?php echo $booked; ?> / <?php echo $capacity; ?> booked</span>
-                                    <span class="tile-click-hint"><i class="fas fa-edit me-1"></i>Edit</span>
-                                </div>
-                            </div>
-                        <?php endforeach; ?>
+                            <?php endforeach; ?>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -802,22 +864,25 @@ $active_days_count = count(array_filter($operating_days_arr));
 
     <!-- ========================================================= -->
     <!-- Date Schedule Editor Modal                                -->
-    <!-- ========================================================= -->
-    <div class="modal fade" id="dateEditorModal" tabindex="-1" aria-labelledby="dateModalTitle" aria-hidden="true">
+    <!-- ========================================================= --    <div class="modal fade modern-form-modal" id="dateEditorModal" tabindex="-1" aria-labelledby="dateModalTitle" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content">
-                <div class="modal-header">
-                    <div>
-                        <h5 class="modal-title" id="dateModalTitle">
-                            <i class="fas fa-calendar-day text-danger me-2"></i>
-                            <span id="modalDateHeading">Date Schedule</span>
-                        </h5>
-                        <small class="text-muted" id="modalDateSubtitle">Configure pickup availability and daily limits</small>
+                <div class="modal-header modal-header-modern">
+                    <div class="modal-header-content">
+                        <div class="modal-header-icon">
+                            <i class="fas fa-calendar-day"></i>
+                        </div>
+                        <div>
+                            <h5 class="modal-title" id="dateModalTitle">
+                                <span id="modalDateHeading">Date Schedule</span>
+                            </h5>
+                            <div class="modal-subtitle" id="modalDateSubtitle">Configure pickup availability and daily limits</div>
+                        </div>
                     </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
 
-                <div class="modal-body">
+                <div class="modal-body p-4">
                     <!-- Loading Spinner Indicator -->
                     <div id="dateModalLoading" class="text-center py-5">
                         <div class="spinner-border text-danger" role="status"></div>
@@ -829,84 +894,106 @@ $active_days_count = count(array_filter($operating_days_arr));
                         <input type="hidden" id="editDateValue" value="">
 
                         <!-- Status Selector Radio Cards -->
-                        <div class="mb-4">
-                            <label class="form-label fw-bold" style="color: #101828;">Date Pick-up Status</label>
-                            <div class="status-picker-grid">
-                                <label class="status-choice-card" id="choiceCardOpen">
-                                    <input type="radio" name="modal_date_status" value="open" id="radioStatusOpen">
-                                    <div class="fw-bold fs-6 mb-1"><i class="fas fa-check-circle me-1"></i> Open for Pick-Up</div>
-                                    <small style="font-size: 0.76rem; display: block; opacity: 0.85;">Customers can book reservations for this day</small>
-                                </label>
+                        <div class="form-section-card mb-4">
+                            <div class="form-section-head">
+                                <div class="form-section-title">
+                                    <i class="fas fa-toggle-on"></i>
+                                    Date Pick-up Status
+                                </div>
+                                <span class="form-req-pill">Required</span>
+                            </div>
+                            <div class="p-3">
+                                <div class="status-picker-grid">
+                                    <label class="status-choice-card" id="choiceCardOpen">
+                                        <input type="radio" name="modal_date_status" value="open" id="radioStatusOpen">
+                                        <div class="fw-bold fs-6 mb-1"><i class="fas fa-check-circle me-1"></i> Open for Pick-Up</div>
+                                        <small style="font-size: 0.76rem; display: block; opacity: 0.85;">Customers can book reservations for this day</small>
+                                    </label>
 
-                                <label class="status-choice-card" id="choiceCardBlocked">
-                                    <input type="radio" name="modal_date_status" value="blocked" id="radioStatusBlocked">
-                                    <div class="fw-bold fs-6 mb-1"><i class="fas fa-ban me-1"></i> Block This Date</div>
-                                    <small style="font-size: 0.76rem; display: block; opacity: 0.85;">Closed for holiday, maintenance, or day off</small>
-                                </label>
+                                    <label class="status-choice-card" id="choiceCardBlocked">
+                                        <input type="radio" name="modal_date_status" value="blocked" id="radioStatusBlocked">
+                                        <div class="fw-bold fs-6 mb-1"><i class="fas fa-ban me-1"></i> Block This Date</div>
+                                        <small style="font-size: 0.76rem; display: block; opacity: 0.85;">Closed for holiday, maintenance, or day off</small>
+                                    </label>
+                                </div>
                             </div>
                         </div>
 
                         <!-- Capacity Override -->
-                        <div class="schedule-card mb-4" style="background:#f8f9fa; border:1px solid #eaecf0; border-radius:12px; padding:16px;">
-                            <div class="form-check form-switch mb-2">
-                                <input class="form-check-input" type="checkbox" role="switch" id="toggleCustomCapacity">
-                                <label class="form-check-label fw-bold" for="toggleCustomCapacity">
-                                    Set Custom Roasting Capacity for this Specific Date
-                                </label>
+                        <div class="form-section-card mb-4">
+                            <div class="form-section-head">
+                                <div class="form-section-title">
+                                    <i class="fas fa-fire"></i>
+                                    Custom Roasting Capacity
+                                </div>
+                                <span class="form-opt-pill">Optional</span>
                             </div>
-                            <p class="text-muted small mb-2">Override your store's default daily limit (<span id="modalDefaultDailyText"><?php echo (int)$schedule['max_orders_per_day']; ?> orders/day</span>) for special occasions, fiestas, or reduced capacity days.</p>
-                            
-                            <div id="customCapacityWrap" style="display: none;" class="mt-3">
-                                <div class="row align-items-center g-2">
-                                    <div class="col-sm-6">
-                                        <div class="input-group">
-                                            <span class="input-group-text"><i class="fas fa-boxes-stacked"></i></span>
-                                            <input type="number" id="modalCustomCapacityInput" class="form-control" min="1" max="200" placeholder="e.g. 25">
-                                            <span class="input-group-text">orders / day</span>
+                            <div class="p-3">
+                                <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="toggleCustomCapacity">
+                                    <label class="form-check-label fw-bold" for="toggleCustomCapacity">
+                                        Set Custom Roasting Capacity for this Specific Date
+                                    </label>
+                                </div>
+                                <p class="text-muted small mb-2">Override your store's default daily limit (<span id="modalDefaultDailyText"><?php echo (int)$schedule['max_orders_per_day']; ?> orders/day</span>) for special occasions, fiestas, or reduced capacity days.</p>
+                                
+                                <div id="customCapacityWrap" style="display: none;" class="mt-3">
+                                    <div class="row align-items-center g-2">
+                                        <div class="col-sm-6">
+                                            <div class="form-group-modern mb-0">
+                                                <div class="form-input-wrap">
+                                                    <i class="fas fa-boxes-stacked form-input-icon"></i>
+                                                    <input type="number" id="modalCustomCapacityInput" class="form-control" min="1" max="200" placeholder="e.g. 25 orders/day">
+                                                </div>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div class="col-sm-6">
-                                        <small class="text-muted">Total orders permitted across all pickup slots on this date.</small>
+                                        <div class="col-sm-6">
+                                            <small class="text-muted">Total orders permitted across all pickup slots on this date.</small>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Pre-Orders on This Date -->
-                        <div class="mb-4">
-                            <div class="d-flex align-items-center justify-content-between mb-2">
-                                <label class="form-label fw-bold mb-0" style="color: #101828;">
-                                    <i class="fas fa-receipt text-danger me-1"></i> Pre-Orders Booked for this Date
-                                </label>
+                        <div class="form-section-card mb-4">
+                            <div class="form-section-head">
+                                <div class="form-section-title">
+                                    <i class="fas fa-receipt"></i>
+                                    Pre-Orders Booked for this Date
+                                </div>
                                 <span class="badge" id="modalOrdersCountBadge" style="background:#eff8ff; color:#175cd3; border:1px solid #b2ddff; border-radius:6px;">0 Orders</span>
                             </div>
-
-                            <div id="modalOrdersListContainer" style="max-height: 180px; overflow-y: auto;">
-                                <!-- Dynamic orders loaded via JS -->
+                            <div class="p-3">
+                                <div id="modalOrdersListContainer" style="max-height: 180px; overflow-y: auto;">
+                                    <!-- Dynamic orders loaded via JS -->
+                                </div>
                             </div>
                         </div>
 
                         <!-- Time Slots Breakdown -->
-                        <div>
-                            <label class="form-label fw-bold mb-2" style="color: #101828;">
-                                <i class="fas fa-clock text-warning me-1"></i> Pickup Time Slots
-                            </label>
-                            <div class="slots-pills-wrap" id="modalSlotsContainer">
-                                <!-- Dynamic slots loaded via JS -->
+                        <div class="form-section-card mb-0">
+                            <div class="form-section-head">
+                                <div class="form-section-title">
+                                    <i class="fas fa-clock"></i>
+                                    Pickup Time Slots
+                                </div>
+                                <span class="form-opt-pill">Slots Breakdown</span>
+                            </div>
+                            <div class="p-3">
+                                <div class="slots-pills-wrap" id="modalSlotsContainer">
+                                    <!-- Dynamic slots loaded via JS -->
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="modal-footer d-flex justify-content-between">
-                    <div>
-                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
-                    </div>
-                    <div class="d-flex gap-2">
-                        <button type="button" class="btn btn-primary" id="btnSaveDateSchedule" style="background:#b3261e; border-color:#b3261e; border-radius:10px; font-weight:700;">
-                            <i class="fas fa-save me-1"></i> Save Date Schedule
-                        </button>
-                    </div>
+                <div class="modal-footer modal-footer-modern">
+                    <button type="button" class="btn btn-modal-cancel" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-modal-primary" id="btnSaveDateSchedule">
+                        <i class="fas fa-save me-1"></i> Save Date Schedule
+                    </button>
                 </div>
             </div>
         </div>
@@ -915,133 +1002,191 @@ $active_days_count = count(array_filter($operating_days_arr));
     <!-- ========================================================= -->
     <!-- Store Default Schedule Rules Modal                        -->
     <!-- ========================================================= -->
-    <div class="modal fade" id="defaultRulesModal" tabindex="-1" aria-labelledby="defaultRulesModalTitle" aria-hidden="true">
+    <div class="modal fade modern-form-modal" id="defaultRulesModal" tabindex="-1" aria-labelledby="defaultRulesModalTitle" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content">
                 <form method="POST">
                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
                     <input type="hidden" name="save_store_rules" value="1">
 
-                    <div class="modal-header">
-                        <div>
-                            <h5 class="modal-title" id="defaultRulesModalTitle">
-                                <i class="fas fa-sliders text-danger me-2"></i> Store Schedule Rules &amp; Defaults
-                            </h5>
-                            <small class="text-muted">Configure default lead times, operating days, and daily roasting capacity</small>
+                    <div class="modal-header modal-header-modern">
+                        <div class="modal-header-content">
+                            <div class="modal-header-icon">
+                                <i class="fas fa-sliders-h"></i>
+                            </div>
+                            <div>
+                                <h5 class="modal-title" id="defaultRulesModalTitle">Store Schedule Rules &amp; Defaults</h5>
+                                <div class="modal-subtitle">Configure default lead times, operating days, and daily roasting capacity</div>
+                            </div>
                         </div>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
 
-                    <div class="modal-body">
+                    <div class="modal-body p-4">
                         <!-- 1. Lead Time & Cutoff Rules -->
-                        <div class="schedule-card mb-3" style="background:#ffffff; border:1px solid #eaecf0; border-radius:12px; padding:18px;">
-                            <h6 class="fw-bold mb-3" style="color:#101828;">
-                                <i class="fas fa-stopwatch text-danger me-1"></i> 1. Booking Notice &amp; Cutoff Rule
-                            </h6>
-                            <div class="row g-3 mb-2">
-                                <div class="col-md-6">
-                                    <label class="form-label fw-semibold">Minimum Advance Notice (Lead Time)</label>
-                                    <div class="input-group">
-                                        <input type="number" name="lead_time_days" class="form-control" value="<?php echo (int)$schedule['lead_time_days']; ?>" min="0" max="14" required>
-                                        <span class="input-group-text">Day(s)</span>
-                                    </div>
-                                    <small class="text-muted">Set to <code>1</code> for 24-hr notice, or <code>2</code> for 48-hr.</small>
+                        <div class="form-section-card mb-3">
+                            <div class="form-section-head">
+                                <div class="form-section-title">
+                                    <i class="fas fa-stopwatch"></i>
+                                    1. Booking Notice &amp; Cutoff Rule
                                 </div>
-                                <div class="col-md-6">
-                                    <label class="form-label fw-semibold">Daily Order Cutoff Time</label>
-                                    <input type="time" name="cutoff_time" class="form-control" value="<?php echo htmlspecialchars(substr($schedule['cutoff_time'], 0, 5)); ?>" required>
-                                    <small class="text-muted">Orders placed after this time advance availability by +1 day.</small>
-                                </div>
+                                <span class="form-req-pill">Notice Window</span>
                             </div>
-                            <div class="row g-3">
-                                <div class="col-md-6">
-                                    <label class="form-label fw-semibold">Maximum Days in Advance</label>
-                                    <div class="input-group">
-                                        <input type="number" name="max_advance_days" class="form-control" value="<?php echo (int)$schedule['max_advance_days']; ?>" min="7" max="90" required>
-                                        <span class="input-group-text">Days</span>
+                            <div class="p-3">
+                                <div class="row g-3 mb-2">
+                                    <div class="col-md-6">
+                                        <div class="form-group-modern">
+                                            <label class="form-label-modern">Minimum Advance Notice (Days)</label>
+                                            <div class="form-input-wrap">
+                                                <i class="fas fa-clock form-input-icon"></i>
+                                                <input type="number" name="lead_time_days" class="form-control" value="<?php echo (int)$schedule['lead_time_days']; ?>" min="0" max="14" required>
+                                            </div>
+                                            <small class="text-muted mt-1 d-block" style="font-size:0.8rem;">Set to <code>1</code> for 24-hr notice, or <code>2</code> for 48-hr.</small>
+                                        </div>
                                     </div>
-                                    <small class="text-muted">Rolling calendar window (e.g. up to 30 or 60 days ahead).</small>
+                                    <div class="col-md-6">
+                                        <div class="form-group-modern">
+                                            <label class="form-label-modern">Daily Order Cutoff Time</label>
+                                            <div class="form-input-wrap">
+                                                <i class="fas fa-hourglass-half form-input-icon"></i>
+                                                <input type="time" name="cutoff_time" class="form-control" value="<?php echo htmlspecialchars(substr($schedule['cutoff_time'], 0, 5)); ?>" required>
+                                            </div>
+                                            <small class="text-muted mt-1 d-block" style="font-size:0.8rem;">Orders placed after this time advance availability by +1 day.</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <div class="form-group-modern mb-0">
+                                            <label class="form-label-modern">Maximum Days in Advance</label>
+                                            <div class="form-input-wrap">
+                                                <i class="fas fa-calendar-alt form-input-icon"></i>
+                                                <input type="number" name="max_advance_days" class="form-control" value="<?php echo (int)$schedule['max_advance_days']; ?>" min="7" max="90" required>
+                                            </div>
+                                            <small class="text-muted mt-1 d-block" style="font-size:0.8rem;">Rolling calendar window (e.g. up to 30 or 60 days ahead).</small>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
                         <!-- 2. Operating Days -->
-                        <div class="schedule-card mb-3" style="background:#ffffff; border:1px solid #eaecf0; border-radius:12px; padding:18px;">
-                            <h6 class="fw-bold mb-2" style="color:#101828;">
-                                <i class="fas fa-calendar-week text-primary me-1"></i> 2. Operating Roasting Days
-                            </h6>
-                            <p class="text-muted small mb-3">Uncheck days when your roasting pit does not accept pre-order pickups.</p>
-                            
-                            <div class="day-checkbox-grid">
-                                <?php foreach ($days_map as $val => $name): 
-                                    $is_checked = in_array($val, $operating_days_arr, true);
-                                ?>
-                                    <label class="day-toggle-card">
-                                        <input type="checkbox" name="operating_days[]" value="<?php echo $val; ?>" <?php echo $is_checked ? 'checked' : ''; ?>>
-                                        <span><?php echo $name; ?></span>
-                                    </label>
-                                <?php endforeach; ?>
+                        <div class="form-section-card mb-3">
+                            <div class="form-section-head">
+                                <div class="form-section-title">
+                                    <i class="fas fa-calendar-week"></i>
+                                    2. Operating Roasting Days
+                                </div>
+                                <span class="form-req-pill">Weekly Schedule</span>
+                            </div>
+                            <div class="p-3">
+                                <p class="text-muted small mb-3">Uncheck days when your roasting pit does not accept pre-order pickups.</p>
+                                
+                                <div class="day-checkbox-grid">
+                                    <?php foreach ($days_map as $val => $name): 
+                                        $is_checked = in_array($val, $operating_days_arr, true);
+                                    ?>
+                                        <label class="day-toggle-card">
+                                            <input type="checkbox" name="operating_days[]" value="<?php echo $val; ?>" <?php echo $is_checked ? 'checked' : ''; ?>>
+                                            <span><?php echo $name; ?></span>
+                                        </label>
+                                    <?php endforeach; ?>
+                                </div>
                             </div>
                         </div>
 
                         <!-- 3. Pickup Time Slots & Roasting Capacity -->
-                        <div class="schedule-card mb-3" style="background:#ffffff; border:1px solid #eaecf0; border-radius:12px; padding:18px;">
-                            <h6 class="fw-bold mb-3" style="color:#101828;">
-                                <i class="fas fa-fire text-warning me-1"></i> 3. Pickup Hours &amp; Capacity
-                            </h6>
-                            <div class="row g-3 mb-3">
-                                <div class="col-md-4">
-                                    <label class="form-label fw-semibold">First Pickup Time</label>
-                                    <input type="time" name="slot_start_time" class="form-control" value="<?php echo htmlspecialchars(substr($schedule['slot_start_time'], 0, 5)); ?>" required>
+                        <div class="form-section-card mb-3">
+                            <div class="form-section-head">
+                                <div class="form-section-title">
+                                    <i class="fas fa-fire"></i>
+                                    3. Pickup Hours &amp; Capacity
                                 </div>
-                                <div class="col-md-4">
-                                    <label class="form-label fw-semibold">Last Pickup Time</label>
-                                    <input type="time" name="slot_end_time" class="form-control" value="<?php echo htmlspecialchars(substr($schedule['slot_end_time'], 0, 5)); ?>" required>
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label fw-semibold">Slot Interval</label>
-                                    <select name="slot_interval_minutes" class="form-select">
-                                        <option value="30" <?php echo (int)$schedule['slot_interval_minutes'] === 30 ? 'selected' : ''; ?>>Every 30 mins</option>
-                                        <option value="60" <?php echo (int)$schedule['slot_interval_minutes'] === 60 ? 'selected' : ''; ?>>Every 1 hour (Default)</option>
-                                        <option value="90" <?php echo (int)$schedule['slot_interval_minutes'] === 90 ? 'selected' : ''; ?>>Every 1.5 hours</option>
-                                        <option value="120" <?php echo (int)$schedule['slot_interval_minutes'] === 120 ? 'selected' : ''; ?>>Every 2 hours</option>
-                                    </select>
-                                </div>
+                                <span class="form-req-pill">Roasting Pit Limits</span>
                             </div>
-
-                            <div class="row g-3">
-                                <div class="col-md-6">
-                                    <label class="form-label fw-semibold">Max Orders Per Time Slot</label>
-                                    <div class="input-group">
-                                        <span class="input-group-text"><i class="fas fa-boxes-stacked"></i></span>
-                                        <input type="number" name="max_orders_per_slot" class="form-control" value="<?php echo (int)$schedule['max_orders_per_slot']; ?>" min="1" max="50" required>
-                                        <span class="input-group-text">orders / slot</span>
+                            <div class="p-3">
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-4">
+                                        <div class="form-group-modern">
+                                            <label class="form-label-modern">First Pickup Time</label>
+                                            <div class="form-input-wrap">
+                                                <i class="fas fa-clock form-input-icon"></i>
+                                                <input type="time" name="slot_start_time" class="form-control" value="<?php echo htmlspecialchars(substr($schedule['slot_start_time'], 0, 5)); ?>" required>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-group-modern">
+                                            <label class="form-label-modern">Last Pickup Time</label>
+                                            <div class="form-input-wrap">
+                                                <i class="fas fa-clock form-input-icon"></i>
+                                                <input type="time" name="slot_end_time" class="form-control" value="<?php echo htmlspecialchars(substr($schedule['slot_end_time'], 0, 5)); ?>" required>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-group-modern">
+                                            <label class="form-label-modern">Slot Interval</label>
+                                            <div class="form-input-wrap">
+                                                <i class="fas fa-history form-input-icon"></i>
+                                                <select name="slot_interval_minutes" class="form-control">
+                                                    <option value="30" <?php echo (int)$schedule['slot_interval_minutes'] === 30 ? 'selected' : ''; ?>>Every 30 mins</option>
+                                                    <option value="60" <?php echo (int)$schedule['slot_interval_minutes'] === 60 ? 'selected' : ''; ?>>Every 1 hour (Default)</option>
+                                                    <option value="90" <?php echo (int)$schedule['slot_interval_minutes'] === 90 ? 'selected' : ''; ?>>Every 1.5 hours</option>
+                                                    <option value="120" <?php echo (int)$schedule['slot_interval_minutes'] === 120 ? 'selected' : ''; ?>>Every 2 hours</option>
+                                                </select>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                                <div class="col-md-6">
-                                    <label class="form-label fw-semibold">Max Total Orders Per Day</label>
-                                    <div class="input-group">
-                                        <span class="input-group-text"><i class="fas fa-calendar-day"></i></span>
-                                        <input type="number" name="max_orders_per_day" class="form-control" value="<?php echo (int)$schedule['max_orders_per_day']; ?>" min="1" max="200" required>
-                                        <span class="input-group-text">orders / day</span>
+
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <div class="form-group-modern mb-0">
+                                            <label class="form-label-modern">Max Orders Per Slot</label>
+                                            <div class="form-input-wrap">
+                                                <i class="fas fa-boxes-stacked form-input-icon"></i>
+                                                <input type="number" name="max_orders_per_slot" class="form-control" value="<?php echo (int)$schedule['max_orders_per_slot']; ?>" min="1" max="50" required>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group-modern mb-0">
+                                            <label class="form-label-modern">Max Total Orders Per Day</label>
+                                            <div class="form-input-wrap">
+                                                <i class="fas fa-calendar-day form-input-icon"></i>
+                                                <input type="number" name="max_orders_per_day" class="form-control" value="<?php echo (int)$schedule['max_orders_per_day']; ?>" min="1" max="200" required>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
                         <!-- 4. Global Blackout Dates Input -->
-                        <div class="schedule-card" style="background:#ffffff; border:1px solid #eaecf0; border-radius:12px; padding:18px;">
-                            <h6 class="fw-bold mb-2" style="color:#101828;">
-                                <i class="fas fa-ban text-danger me-1"></i> 4. Blocked Holiday Dates
-                            </h6>
-                            <input type="text" name="blackout_dates" class="form-control" value="<?php echo htmlspecialchars((string)$schedule['blackout_dates']); ?>" placeholder="e.g. 2026-12-25, 2026-01-01">
-                            <small class="text-muted">Separate multiple dates with commas. You can also block or open dates directly on the calendar.</small>
+                        <div class="form-section-card mb-0">
+                            <div class="form-section-head">
+                                <div class="form-section-title">
+                                    <i class="fas fa-ban"></i>
+                                    4. Blocked Holiday Dates
+                                </div>
+                                <span class="form-opt-pill">Blackouts</span>
+                            </div>
+                            <div class="p-3">
+                                <div class="form-group-modern mb-0">
+                                    <div class="form-input-wrap">
+                                        <i class="fas fa-calendar-times form-input-icon"></i>
+                                        <input type="text" name="blackout_dates" class="form-control" value="<?php echo htmlspecialchars((string)$schedule['blackout_dates']); ?>" placeholder="e.g. 2026-12-25, 2026-01-01">
+                                    </div>
+                                    <small class="text-muted mt-1 d-block" style="font-size:0.8rem;">Separate multiple dates with commas. You can also block or open dates directly on the calendar.</small>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary fw-bold" style="background:#b3261e; border-color:#b3261e; border-radius:10px;">
+                    <div class="modal-footer modal-footer-modern">
+                        <button type="button" class="btn btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-modal-primary">
                             <i class="fas fa-save me-1"></i> Save Store Schedule Rules
                         </button>
                     </div>

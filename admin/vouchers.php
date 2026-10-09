@@ -238,41 +238,167 @@ unset($_SESSION['success'], $_SESSION['error']);
                 </div>
             </div>
 
-            <div class="card mb-3">
-                <div class="card-header"><strong>Create Voucher</strong></div>
-                <div class="card-body">
-                    <form method="POST" id="createVoucherForm">
-                        <input type="hidden" name="create_voucher" value="1">
-                        <div class="row g-3">
-                            <?php if ($is_full_admin): ?>
-                                <div class="col-md-12">
-                                    <label class="form-label"><strong>Voucher Scope (Platform or Specific Shop)</strong></label>
-                                    <select class="form-select" name="seller_id" required>
-                                        <option value="0">Platform-Wide (All Stores / Welcome Perk)</option>
-                                        <?php foreach ($admin_store_options as $store): ?>
-                                            <option value="<?php echo (int)$store['id']; ?>">Store: <?php echo htmlspecialchars($store['store_name']); ?> (ID: <?php echo (int)$store['id']; ?>)</option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                    <div class="form-text">Choose whether this promotion applies across all branches or is exclusive to a specific partner shop.</div>
-                                </div>
-                            <?php endif; ?>
-                            <div class="col-md-4"><label class="form-label">Code</label><input class="form-control" name="code" maxlength="60" required></div>
-                            <div class="col-md-4"><label class="form-label">Name</label><input class="form-control" name="name" maxlength="120" required></div>
-                            <div class="col-md-4"><label class="form-label">Discount Type</label><select class="form-select" name="discount_type"><option value="percent">Percent</option><option value="fixed">Fixed</option></select></div>
-                            <div class="col-md-3"><label class="form-label">Discount Value</label><input class="form-control" type="number" name="discount_value" min="0.01" step="0.01" required></div>
-                            <div class="col-md-3"><label class="form-label">Minimum Order</label><input class="form-control" type="number" name="min_order_amount" min="0" step="0.01" value="0"></div>
-                            <div class="col-md-3"><label class="form-label">Max Discount</label><input class="form-control" type="number" name="max_discount_amount" min="0" step="0.01" value="0"></div>
-                            <div class="col-md-3"><label class="form-label">Usage Limit</label><input class="form-control" type="number" name="usage_limit" min="0" step="1" value="0"></div>
-                            <div class="col-md-4"><label class="form-label">Start</label><input class="form-control" type="datetime-local" name="start_at"></div>
-                            <div class="col-md-4"><label class="form-label">End</label><input class="form-control" type="datetime-local" name="end_at"></div>
-                            <div class="col-md-4"><label class="form-label">Per User Limit</label><input class="form-control" type="number" name="per_user_limit" min="1" step="1" value="1"></div>
-                            <div class="col-12"><label class="form-label">Description</label><textarea class="form-control" name="description" rows="2"></textarea></div>
-                            <div class="col-12 d-flex align-items-center gap-2"><input type="checkbox" id="is_active" name="is_active" checked><label class="mb-0" for="is_active">Set active immediately</label></div>
+            <form method="POST" id="createVoucherForm" class="mb-4">
+                <input type="hidden" name="create_voucher" value="1">
+
+                <div class="form-section-card mb-3">
+                    <div class="form-section-head">
+                        <div class="form-section-title">
+                            <i class="fas fa-ticket-alt"></i>
+                            Voucher Details & Scope
                         </div>
-                        <div class="mt-3 text-end"><button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Voucher</button></div>
-                    </form>
+                        <span class="form-req-pill">Required</span>
+                    </div>
+
+                    <?php if ($is_full_admin): ?>
+                        <div class="form-group-modern mb-3">
+                            <label class="form-label-modern">Voucher Scope (Platform or Specific Shop)</label>
+                            <div class="form-input-wrap">
+                                <i class="fas fa-store form-input-icon"></i>
+                                <select class="form-control" name="seller_id" required>
+                                    <option value="0">Platform-Wide (All Stores / Welcome Perk)</option>
+                                    <?php foreach ($admin_store_options as $store): ?>
+                                        <option value="<?php echo (int)$store['id']; ?>">Store: <?php echo htmlspecialchars($store['store_name']); ?> (ID: <?php echo (int)$store['id']; ?>)</option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <small class="text-muted mt-1 d-block" style="font-size:0.8rem;">Choose whether this promotion applies across all branches or is exclusive to a specific partner shop.</small>
+                        </div>
+                    <?php endif; ?>
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Voucher Code</label>
+                                <div class="form-input-wrap">
+                                    <i class="fas fa-barcode form-input-icon"></i>
+                                    <input class="form-control text-uppercase" name="code" maxlength="60" placeholder="e.g. SUMMERLECHON20" required>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Campaign / Voucher Name</label>
+                                <div class="form-input-wrap">
+                                    <i class="fas fa-tag form-input-icon"></i>
+                                    <input class="form-control" name="name" maxlength="120" placeholder="e.g. Summer Promo 20% Off" required>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Description <span class="text-muted fw-normal">(Optional)</span></label>
+                                <div class="form-input-wrap">
+                                    <i class="fas fa-align-left form-input-icon"></i>
+                                    <textarea class="form-control" name="description" rows="2" placeholder="Brief note or conditions for this discount voucher..."></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </div>
+
+                <div class="form-section-card mb-3">
+                    <div class="form-section-head">
+                        <div class="form-section-title">
+                            <i class="fas fa-percent"></i>
+                            Discount Rules & Usage Limits
+                        </div>
+                        <span class="form-req-pill">Configuration</span>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Discount Type</label>
+                                <div class="form-input-wrap">
+                                    <i class="fas fa-cog form-input-icon"></i>
+                                    <select class="form-control" name="discount_type">
+                                        <option value="percent">Percentage (%)</option>
+                                        <option value="fixed">Fixed Amount (PHP)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Discount Value</label>
+                                <div class="form-input-wrap">
+                                    <i class="fas fa-coins form-input-icon"></i>
+                                    <input class="form-control" type="number" name="discount_value" min="0.01" step="0.01" placeholder="e.g. 10 or 100" required>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Max Discount Amount</label>
+                                <div class="form-input-wrap">
+                                    <i class="fas fa-arrow-up form-input-icon"></i>
+                                    <input class="form-control" type="number" name="max_discount_amount" min="0" step="0.01" value="0" placeholder="0 for unlimited">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Minimum Order Amount</label>
+                                <div class="form-input-wrap">
+                                    <i class="fas fa-shopping-basket form-input-icon"></i>
+                                    <input class="form-control" type="number" name="min_order_amount" min="0" step="0.01" value="0">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Total Usage Limit</label>
+                                <div class="form-input-wrap">
+                                    <i class="fas fa-users form-input-icon"></i>
+                                    <input class="form-control" type="number" name="usage_limit" min="0" step="1" value="0" placeholder="0 for unlimited">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Per User Limit</label>
+                                <div class="form-input-wrap">
+                                    <i class="fas fa-user-check form-input-icon"></i>
+                                    <input class="form-control" type="number" name="per_user_limit" min="1" step="1" value="1">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Valid From <span class="text-muted fw-normal">(Optional)</span></label>
+                                <div class="form-input-wrap">
+                                    <i class="fas fa-calendar-plus form-input-icon"></i>
+                                    <input class="form-control" type="datetime-local" name="start_at">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Valid Until <span class="text-muted fw-normal">(Optional)</span></label>
+                                <div class="form-input-wrap">
+                                    <i class="fas fa-calendar-minus form-input-icon"></i>
+                                    <input class="form-control" type="datetime-local" name="end_at">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 mt-2">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="is_active" name="is_active" checked>
+                                <label class="form-check-label fw-semibold text-dark" for="is_active">
+                                    Activate voucher immediately upon creation
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-end gap-2">
+                    <button type="submit" class="btn btn-modal-primary px-4 py-2">
+                        <i class="fas fa-save me-1"></i> Save Voucher
+                    </button>
+                </div>
+            </form>
 
             <div class="card">
                 <div class="card-header"><strong>Manage Vouchers</strong></div>

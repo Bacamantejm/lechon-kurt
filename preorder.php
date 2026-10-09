@@ -1683,7 +1683,8 @@ body {
 
 @media (max-width: 768px) {
     .page-header h1 { font-size: 1.6rem; }
-    .preorder-container { padding: 16px; }
+    .preorder-section { padding-bottom: 140px !important; }
+    .preorder-container { padding: 16px; border-radius: 16px; }
     .preorder-step1-layout { grid-template-columns: 1fr; }
     .preorder-cart-sidebar { position: static; }
     .form-row { grid-template-columns: 1fr; gap: 12px; }
@@ -1695,6 +1696,24 @@ body {
     .progress-step-circle { width: 32px; height: 32px; font-size: 0.8rem; }
     .store-details-card { flex-direction: column; align-items: flex-start; }
     .btn-directions { width: 100%; }
+}
+
+@media (max-width: 480px) {
+    .store-cards-grid {
+        grid-template-columns: 1fr !important;
+    }
+    .progress-step {
+        width: 60px;
+        font-size: 0.72rem;
+    }
+    .progress-step-circle {
+        width: 28px;
+        height: 28px;
+        font-size: 0.74rem;
+    }
+    .page-header h1 {
+        font-size: 1.35rem;
+    }
 }
 
 /* ==========================================================================

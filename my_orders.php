@@ -1414,6 +1414,26 @@ unset($order);
 .swal-proof-hint.required { color: #b91c1c; font-weight: 600; }
 
 @media (max-width: 768px) {
+    .orders-page-container {
+        padding: 16px 12px 140px 12px !important;
+    }
+    .orders-nav-tabs {
+        overflow-x: auto;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        gap: 20px;
+        padding-bottom: 4px;
+        margin-bottom: 16px;
+    }
+    .orders-nav-tabs::-webkit-scrollbar {
+        display: none;
+    }
+    .nav-tab-item {
+        flex-shrink: 0;
+        font-size: 0.88rem;
+        padding: 10px 0;
+    }
     .ecom-card-top, .ecom-card-bottom, .actions-line {
         flex-direction: column;
         align-items: flex-start;
@@ -1432,6 +1452,13 @@ unset($order);
         gap: 8px;
     }
     .timeline-stepper .line { display: none; }
+    .item-row {
+        gap: 12px;
+    }
+    .item-img {
+        width: 60px;
+        height: 60px;
+    }
 }
 
 /* ==========================================================================

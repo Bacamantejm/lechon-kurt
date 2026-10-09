@@ -197,6 +197,47 @@ include 'includes/header.php';
     color: #171922;
 }
 .form-control:focus { outline: none; border-color: #b3261e; box-shadow: 0 0 0 3px rgba(179,38,30,0.12); }
+
+@media (max-width: 768px) {
+    .ad-manager-page {
+        padding: 20px 0 140px !important;
+    }
+    .ad-manager-card {
+        padding: 16px;
+        border-radius: 14px;
+    }
+    .ad-manager-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 14px;
+    }
+    .ad-manager-header .market-btn,
+    .ad-manager-header button {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .ad-grid {
+        grid-template-columns: 1fr !important;
+        gap: 14px;
+    }
+    #createAdForm button[type="submit"] {
+        width: 100% !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .ad-manager-header h1 {
+        font-size: 1.25rem;
+    }
+    .ad-title {
+        font-size: 1.05rem;
+    }
+    .ad-preview-card {
+        padding: 16px;
+    }
+}
 </style>
 
 <section class="ad-manager-page">

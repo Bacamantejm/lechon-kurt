@@ -375,57 +375,84 @@ $department_presets = [
     </div>
     
     <!-- Add Department Modal -->
-    <div class="modal fade" id="addDepartmentModal" tabindex="-1">
-        <div class="modal-dialog">
+    <div class="modal fade modern-form-modal" id="addDepartmentModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Add Department</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <div class="modal-header-icon">
+                        <i class="fas fa-building"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title">Add Department</h5>
+                        <p class="modal-subtitle">Create a business unit or department and configure operational responsibilities.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <form method="POST">
                     <div class="modal-body">
                         <input type="hidden" name="action" value="add_department">
                         <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
                         
-                        <div class="form-group mb-3">
-                            <label class="form-label fw-bold"><i class="fas fa-layer-group me-1 text-danger"></i> Department Preset / Role</label>
-                            <select id="addDeptPresetSelect" class="form-select">
-                                <option value="">-- Select department preset (e.g. Cook, Logistics, Cashier) --</option>
-                                <?php foreach ($department_presets as $preset): ?>
-                                    <option value="<?php echo htmlspecialchars($preset['dept_name']); ?>"
-                                            data-name="<?php echo htmlspecialchars($preset['dept_name']); ?>"
-                                            data-desc="<?php echo htmlspecialchars($preset['desc']); ?>">
-                                        <?php echo htmlspecialchars($preset['label']); ?>
-                                    </option>
-                                <?php endforeach; ?>
-                                <option value="__custom__">-- Custom / Other (Enter Manually) --</option>
-                            </select>
-                            <div class="form-text text-muted" style="font-size: 0.8rem;">
-                                Selecting a preset automatically fills the department name and description below.
+                        <!-- Section 1: Preset & Role Definition -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-layer-group"></i> Department Role & Preset</span>
+                                <span class="form-opt-pill">Optional</span>
+                            </div>
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Department Preset</label>
+                                <div class="form-input-wrap">
+                                    <i class="fas fa-magic form-input-icon"></i>
+                                    <select id="addDeptPresetSelect" class="form-select">
+                                        <option value="">-- Select department preset (e.g. Cook, Logistics, Cashier) --</option>
+                                        <?php foreach ($department_presets as $preset): ?>
+                                            <option value="<?php echo htmlspecialchars($preset['dept_name']); ?>"
+                                                    data-name="<?php echo htmlspecialchars($preset['dept_name']); ?>"
+                                                    data-desc="<?php echo htmlspecialchars($preset['desc']); ?>">
+                                                <?php echo htmlspecialchars($preset['label']); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                        <option value="__custom__">-- Custom / Other (Enter Manually) --</option>
+                                    </select>
+                                </div>
+                                <div class="form-helper-text"><i class="fas fa-info-circle"></i> Selecting a preset auto-populates title and operational scope.</div>
                             </div>
                         </div>
 
-                        <div class="form-group mb-3">
-                            <label class="form-label fw-bold">Department Name *</label>
-                            <input type="text" name="department_name" id="addDepartmentName" class="form-control" placeholder="e.g. Kitchen & Roasting" required>
-                        </div>
-                        <div class="form-group mb-3">
-                            <label class="form-label fw-bold">Description</label>
-                            <textarea name="description" id="addDepartmentDescription" class="form-control" rows="3" placeholder="Enter department responsibilities, tasks, and scope..."></textarea>
-                        </div>
-                        <div class="form-group mb-3">
-                            <label class="form-label fw-bold">Manager</label>
-                            <select name="manager_id" class="form-select">
-                                <option value="">Unassigned</option>
-                                <?php foreach ($managers as $manager): ?>
-                                    <option value="<?php echo $manager['id']; ?>"><?php echo htmlspecialchars($manager['full_name']); ?></option>
-                                <?php endforeach; ?>
-                            </select>
+                        <!-- Section 2: Department Details -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-info-circle"></i> Department Details</span>
+                                <span class="form-req-pill">Required</span>
+                            </div>
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Department Name <span class="form-req-star">*</span></label>
+                                <div class="form-input-wrap">
+                                    <i class="fas fa-building form-input-icon"></i>
+                                    <input type="text" name="department_name" id="addDepartmentName" class="form-control" placeholder="e.g. Kitchen & Roasting" required>
+                                </div>
+                            </div>
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Description</label>
+                                <textarea name="description" id="addDepartmentDescription" class="form-control" rows="3" placeholder="Enter department responsibilities, tasks, and scope..."></textarea>
+                            </div>
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Department Manager</label>
+                                <div class="form-input-wrap">
+                                    <i class="fas fa-user-tie form-input-icon"></i>
+                                    <select name="manager_id" class="form-select">
+                                        <option value="">Unassigned</option>
+                                        <?php foreach ($managers as $manager): ?>
+                                            <option value="<?php echo $manager['id']; ?>"><?php echo htmlspecialchars($manager['full_name']); ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Create Department</button>
+                        <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn-modal-primary"><i class="fas fa-plus"></i> Create Department</button>
                     </div>
                 </form>
             </div>
@@ -433,12 +460,18 @@ $department_presets = [
     </div>
 
     <!-- Edit Department Modal -->
-    <div class="modal fade" id="editDepartmentModal" tabindex="-1">
-        <div class="modal-dialog">
+    <div class="modal fade modern-form-modal" id="editDepartmentModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Edit Department</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <div class="modal-header-icon">
+                        <i class="fas fa-edit"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title">Edit Department</h5>
+                        <p class="modal-subtitle">Update department details, description, or assigned manager.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <form method="POST">
                     <div class="modal-body">
@@ -446,48 +479,71 @@ $department_presets = [
                         <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
                         <input type="hidden" name="dept_id" id="editDeptId">
 
-                        <div class="form-group mb-3">
-                            <label class="form-label fw-bold"><i class="fas fa-layer-group me-1 text-danger"></i> Department Preset / Role <span class="text-muted fw-normal">(Optional)</span></label>
-                            <select id="editDeptPresetSelect" class="form-select">
-                                <option value="">-- Apply a standard preset template --</option>
-                                <?php foreach ($department_presets as $preset): ?>
-                                    <option value="<?php echo htmlspecialchars($preset['dept_name']); ?>"
-                                            data-name="<?php echo htmlspecialchars($preset['dept_name']); ?>"
-                                            data-desc="<?php echo htmlspecialchars($preset['desc']); ?>">
-                                        <?php echo htmlspecialchars($preset['label']); ?>
-                                    </option>
-                                <?php endforeach; ?>
-                                <option value="__custom__">-- Custom / Keep Current --</option>
-                            </select>
-                            <div class="form-text text-muted" style="font-size: 0.8rem;">
-                                Quickly apply standard descriptions and roles to this department.
+                        <!-- Section 1: Preset & Role Definition -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-layer-group"></i> Department Role & Preset</span>
+                                <span class="form-opt-pill">Optional</span>
+                            </div>
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Apply Standard Preset</label>
+                                <div class="form-input-wrap">
+                                    <i class="fas fa-magic form-input-icon"></i>
+                                    <select id="editDeptPresetSelect" class="form-select">
+                                        <option value="">-- Apply a standard preset template --</option>
+                                        <?php foreach ($department_presets as $preset): ?>
+                                            <option value="<?php echo htmlspecialchars($preset['dept_name']); ?>"
+                                                    data-name="<?php echo htmlspecialchars($preset['dept_name']); ?>"
+                                                    data-desc="<?php echo htmlspecialchars($preset['desc']); ?>">
+                                                <?php echo htmlspecialchars($preset['label']); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                        <option value="__custom__">-- Custom / Keep Current --</option>
+                                    </select>
+                                </div>
+                                <div class="form-helper-text"><i class="fas fa-info-circle"></i> Quickly overwrite or update department parameters with standard preset.</div>
                             </div>
                         </div>
 
-                        <div class="form-group mb-3">
-                            <label class="form-label fw-bold">Department Name *</label>
-                            <input type="text" name="department_name" id="editDepartmentName" class="form-control" required>
-                        </div>
-                        <div class="form-group mb-3">
-                            <label class="form-label fw-bold">Description</label>
-                            <textarea name="description" id="editDescription" class="form-control" rows="3"></textarea>
-                        </div>
-                        <div class="form-group mb-3">
-                            <label class="form-label fw-bold">Manager</label>
-                            <select name="manager_id" id="editManagerId" class="form-select">
-                                <option value="">Unassigned</option>
-                                <?php foreach ($managers as $manager): ?>
-                                    <option value="<?php echo $manager['id']; ?>"><?php echo htmlspecialchars($manager['full_name']); ?></option>
-                                <?php endforeach; ?>
-                            </select>
+                        <!-- Section 2: Department Details -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-info-circle"></i> Department Details</span>
+                                <span class="form-req-pill">Required</span>
+                            </div>
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Department Name <span class="form-req-star">*</span></label>
+                                <div class="form-input-wrap">
+                                    <i class="fas fa-building form-input-icon"></i>
+                                    <input type="text" name="department_name" id="editDepartmentName" class="form-control" required>
+                                </div>
+                            </div>
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Description</label>
+                                <textarea name="description" id="editDescription" class="form-control" rows="3"></textarea>
+                            </div>
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Department Manager</label>
+                                <div class="form-input-wrap">
+                                    <i class="fas fa-user-tie form-input-icon"></i>
+                                    <select name="manager_id" id="editManagerId" class="form-select">
+                                        <option value="">Unassigned</option>
+                                        <?php foreach ($managers as $manager): ?>
+                                            <option value="<?php echo $manager['id']; ?>"><?php echo htmlspecialchars($manager['full_name']); ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                        <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn-modal-primary"><i class="fas fa-save"></i> Save Changes</button>
                     </div>
                 </form>
             </div>
+        </div>
+    </div>
         </div>
     </div>
 

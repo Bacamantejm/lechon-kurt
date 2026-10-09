@@ -6323,12 +6323,21 @@ body {
     background: #ef6b2e !important;
 }
 @media (max-width: 768px) {
+    .menu-section {
+        padding-bottom: 140px !important;
+    }
     .menu-items-grid {
         grid-template-columns: 1fr !important;
         gap: 16px !important;
     }
     .storefront-copy h1 {
         font-size: 1.8rem !important;
+    }
+}
+@media (max-width: 480px) {
+    .menu-shops-directory-grid {
+        grid-template-columns: 1fr !important;
+        gap: 14px !important;
     }
 }
 

@@ -50,18 +50,21 @@ require_once __DIR__ . '/header.php';
         <div class="col-12 col-lg-5">
             <!-- Profile Header Card (Section 17) -->
             <div class="rider-card text-center mb-3">
+                <?php 
+                    $profile_name = !empty($rider['rider_name']) ? $rider['rider_name'] : (!empty($_SESSION['rider_name']) ? $_SESSION['rider_name'] : 'Rider');
+                ?>
                 <div style="position: relative; display: inline-block; margin-bottom: 12px;">
                     <?php if (!empty($rider['profile_image'])): ?>
                         <img src="../<?php echo htmlspecialchars($rider['profile_image']); ?>" alt="Profile" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 3px solid var(--border-neutral);">
                     <?php else: ?>
                         <div style="width: 80px; height: 80px; border-radius: 50%; background: #fee4e2; color: var(--primary-red); display:flex; align-items:center; justify-content:center; font-size: 32px; font-weight: 800; margin: 0 auto;">
-                            <?php echo strtoupper(substr($rider['rider_name'] ?? 'R', 0, 1)); ?>
+                            <?php echo strtoupper(substr($profile_name, 0, 1)); ?>
                         </div>
                     <?php endif; ?>
                     <span class="pulse-dot <?php echo htmlspecialchars($rider['duty_status']); ?>" style="position: absolute; bottom: 4px; right: 4px; border: 2px solid #ffffff;"></span>
                 </div>
 
-                <h5 class="fw-bold mb-1" style="font-size: 1.25rem;"><?php echo htmlspecialchars($rider['rider_name'] ?? 'Rider'); ?></h5>
+                <h5 class="fw-bold mb-1" style="font-size: 1.25rem;"><?php echo htmlspecialchars($profile_name); ?></h5>
                 <div class="d-flex justify-content-center align-items-center gap-2 mb-2 flex-wrap">
                     <span class="badge" style="background:#fff1f0; color:#b3261e; border:1px solid #fee4e2; font-weight:700;">
                         <?php echo htmlspecialchars($rider['rider_code']); ?>

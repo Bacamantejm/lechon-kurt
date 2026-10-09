@@ -125,44 +125,89 @@ $materials = mysqli_query($conn, "SELECT * FROM materials ORDER BY name");
     </div>
 
     <!-- Material Modal -->
-    <div class="modal fade" id="materialModal" tabindex="-1">
-        <div class="modal-dialog">
+    <div class="modal fade modern-form-modal" id="materialModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <form method="POST">
                     <div class="modal-header">
-                        <h5 class="modal-title" id="modalTitle">Add Material</h5>
+                        <div class="modal-header-icon">
+                            <i class="fas fa-boxes"></i>
+                        </div>
+                        <div>
+                            <h5 class="modal-title" id="modalTitle">Add Material</h5>
+                            <p class="modal-subtitle">Configure raw inventory items, supplier unit pricing, and low-level reorder alerts.</p>
+                        </div>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
                         <input type="hidden" name="material_id" id="material_id">
-                        <div class="mb-3">
-                            <label>Name</label>
-                            <input type="text" name="name" id="name" class="form-control" required>
+                        
+                        <!-- Section 1: Item Details -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-tag"></i> Material Specification</span>
+                                <span class="form-req-pill">Required</span>
+                            </div>
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Material Name <span class="form-req-star">*</span></label>
+                                <div class="form-input-wrap">
+                                    <i class="fas fa-box-open form-input-icon"></i>
+                                    <input type="text" name="name" id="name" class="form-control" placeholder="e.g. Whole Pig (Live/Dressed), Lemongrass" required>
+                                </div>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Unit of Measure <span class="form-req-star">*</span></label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-balance-scale form-input-icon"></i>
+                                            <input type="text" name="unit" id="unit" class="form-control" placeholder="e.g. kg, heads, bundles" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Cost per Unit (PHP) <span class="form-req-star">*</span></label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-peso-sign form-input-icon"></i>
+                                            <input type="number" step="0.01" name="cost_per_unit" id="cost_per_unit" class="form-control" placeholder="0.00" required>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label>Unit (e.g., kg, pcs)</label>
-                                <input type="text" name="unit" id="unit" class="form-control" required>
+
+                        <!-- Section 2: Stock Allocation -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-cubes"></i> Stock & Thresholds</span>
+                                <span class="form-req-pill">Required</span>
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <label>Cost per Unit</label>
-                                <input type="number" step="0.01" name="cost_per_unit" id="cost_per_unit" class="form-control" required>
-                            </div>
-                        </div>
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label>Current Stock</label>
-                                <input type="number" step="0.01" name="current_stock" id="current_stock" class="form-control" required>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label>Min Level</label>
-                                <input type="number" step="0.01" name="min_level" id="min_level" class="form-control" required>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Current Stock <span class="form-req-star">*</span></label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-layer-group form-input-icon"></i>
+                                            <input type="number" step="0.01" name="current_stock" id="current_stock" class="form-control" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Min Alert Level <span class="form-req-star">*</span></label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-bell form-input-icon"></i>
+                                            <input type="number" step="0.01" name="min_level" id="min_level" class="form-control" required>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                        <button type="submit" name="save_material" class="btn btn-primary">Save</button>
+                        <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Close</button>
+                        <button type="submit" name="save_material" class="btn-modal-primary"><i class="fas fa-save"></i> Save Material</button>
                     </div>
                 </form>
             </div>

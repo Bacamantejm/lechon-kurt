@@ -1933,39 +1933,58 @@ if ($current_page_number < 1) {
         </div>
     </div>
 
-    <!-- Update Delivery Status Modal (NEW) -->
-    <div class="modal fade" id="deliveryStatusModal" tabindex="-1">
-        <div class="modal-dialog">
+    <!-- Update Delivery Status Modal -->
+    <div class="modal fade modern-form-modal" id="deliveryStatusModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Update Delivery Status</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <form method="POST" id="updateDeliveryStatusForm">
-                        <input type="hidden" name="update_delivery_status" value="1">
-                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
-                        <input type="hidden" name="tracking_id" id="editDeliveryId">
-                        <input type="hidden" name="order_id" id="editDeliveryOrderId" value="0">
-                        <div class="mb-3">
-                            <label class="form-label">Status</label>
-                            <select name="new_status" id="editDeliveryStatus" class="form-select" required>
-                                <option value="pending">Pending</option>
-                                <option value="assigned">Assigned</option>
-                                <option value="picked_up">Picked Up</option>
-                                <option value="on_the_way">On the Way</option>
-                                <option value="arriving">Arriving</option>
-                                <option value="delivered">Delivered</option>
-                                <option value="failed">Failed</option>
-                                <option value="cancelled">Cancelled</option>
-                            </select>
+                <form method="POST" id="updateDeliveryStatusForm">
+                    <input type="hidden" name="update_delivery_status" value="1">
+                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+                    <input type="hidden" name="tracking_id" id="editDeliveryId">
+                    <input type="hidden" name="order_id" id="editDeliveryOrderId" value="0">
+                    <div class="modal-header">
+                        <div class="modal-header-icon">
+                            <i class="fas fa-truck-moving"></i>
                         </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" form="updateDeliveryStatusForm" class="btn btn-primary" style="background:#b3261e; border-color:#b3261e;">Save Changes</button>
-                </div>
+                        <div>
+                            <h5 class="modal-title">Update Delivery Status</h5>
+                            <p class="modal-subtitle">Change fulfillment milestone and notify customer in real time.</p>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <div class="form-section-title">
+                                    <i class="fas fa-route text-danger"></i>
+                                    Fulfillment Stage
+                                </div>
+                                <span class="form-req-pill">Required</span>
+                            </div>
+
+                            <div class="form-group-modern">
+                                <label class="form-label-modern" for="editDeliveryStatus">Select Live Status</label>
+                                <div class="form-input-wrap">
+                                    <i class="fas fa-truck form-input-icon"></i>
+                                    <select name="new_status" id="editDeliveryStatus" class="form-select" required>
+                                        <option value="pending">Pending</option>
+                                        <option value="assigned">Assigned</option>
+                                        <option value="picked_up">Picked Up</option>
+                                        <option value="on_the_way">On the Way</option>
+                                        <option value="arriving">Arriving</option>
+                                        <option value="delivered">Delivered</option>
+                                        <option value="failed">Failed</option>
+                                        <option value="cancelled">Cancelled</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn-modal-primary">Save Changes</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
@@ -2011,86 +2030,147 @@ if ($current_page_number < 1) {
     </div>
 
     <!-- Update Pre-Order Status Modal -->
-    <div class="modal fade" id="preorderStatusModal" tabindex="-1">
-        <div class="modal-dialog">
+    <div class="modal fade modern-form-modal" id="preorderStatusModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Update Pre-Order Status</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <form method="POST" id="updatePreOrderStatusForm">
-                        <input type="hidden" id="preOrderId" name="pre_order_id">
-                        <input type="hidden" name="update_preorder_status" value="1">
-                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
-                        <div class="mb-3">
-                            <label class="form-label"><strong>New Status</strong></label>
-                            <select name="new_status" class="form-select" required>
-                                <option value="">-- Select Status --</option>
-                                <option value="confirmed">Confirmed</option>
-                                <option value="in_preparation">In Preparation</option>
-                                <option value="ready_for_pickup">Ready for Pickup</option>
-                                <option value="completed">Completed</option>
-                                <option value="cancelled">Cancelled</option>
-                            </select>
+                <form method="POST" id="updatePreOrderStatusForm">
+                    <input type="hidden" id="preOrderId" name="pre_order_id">
+                    <input type="hidden" name="update_preorder_status" value="1">
+                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+                    <div class="modal-header">
+                        <div class="modal-header-icon">
+                            <i class="fas fa-calendar-check"></i>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Admin Notes</label>
-                            <textarea name="admin_notes" class="form-control" rows="4" placeholder="Add any notes about this status change..."></textarea>
+                        <div>
+                            <h5 class="modal-title">Update Pre-Order Status</h5>
+                            <p class="modal-subtitle">Transition reservation through kitchen preparation steps.</p>
                         </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" form="updatePreOrderStatusForm" class="btn btn-primary">Update Status</button>
-                </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-section-card mb-3">
+                            <div class="form-section-head">
+                                <div class="form-section-title">
+                                    <i class="fas fa-tasks text-danger"></i>
+                                    Status Milestone
+                                </div>
+                                <span class="form-req-pill">Required</span>
+                            </div>
+
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Target Status</label>
+                                <div class="form-input-wrap">
+                                    <i class="fas fa-clock form-input-icon"></i>
+                                    <select name="new_status" class="form-select" required>
+                                        <option value="">-- Select Status --</option>
+                                        <option value="confirmed">Confirmed</option>
+                                        <option value="in_preparation">In Preparation</option>
+                                        <option value="ready_for_pickup">Ready for Pickup</option>
+                                        <option value="completed">Completed</option>
+                                        <option value="cancelled">Cancelled</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <div class="form-section-title">
+                                    <i class="fas fa-comment-alt text-danger"></i>
+                                    Fulfillment Remarks
+                                </div>
+                                <span class="form-opt-pill">Optional</span>
+                            </div>
+
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Admin Notes</label>
+                                <textarea name="admin_notes" class="form-control" rows="3" placeholder="Add any notes about this status change..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn-modal-primary">Update Status</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
 
     <!-- Pre-Order Details Modal -->
-    <div class="modal fade" id="preorderDetailsModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
+    <div class="modal fade modern-form-modal" id="preorderDetailsModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Pre-Order Details</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <div class="modal-header-icon">
+                        <i class="fas fa-receipt"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title">Pre-Order Details</h5>
+                        <p class="modal-subtitle">Reservation line items, roasting schedule, and customer contact.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body" id="preOrderDetails">
                     <!-- Loaded via JS -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Close</button>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Assign Driver Modal -->
-    <div class="modal fade" id="assignDriverModal" tabindex="-1">
-        <div class="modal-dialog">
+    <div class="modal fade modern-form-modal" id="assignDriverModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Assign Driver to Delivery</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
                 <form id="assignDriverForm">
+                    <input type="hidden" name="tracking_id" id="assignTrackingId">
+                    <input type="hidden" id="assignOrderId">
+                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+                    <div class="modal-header">
+                        <div class="modal-header-icon">
+                            <i class="fas fa-motorcycle"></i>
+                        </div>
+                        <div>
+                            <h5 class="modal-title">Assign Driver to Delivery</h5>
+                            <p class="modal-subtitle">Select an eligible on-duty rider for this delivery route.</p>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
                     <div class="modal-body">
-                        <input type="hidden" name="tracking_id" id="assignTrackingId">
-                        <input type="hidden" id="assignOrderId">
-                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
-                        <div class="mb-3">
-                            <label for="driverSelect" class="form-label">Select Driver</label>
-                            <select name="employee_id" id="driverSelect" class="form-select" required>
-                                <option value="">-- Loading eligible riders... --</option>
-                            </select>
-                            <div class="form-text">Only riders with attendance on this order's delivery date are shown.</div>
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <div class="form-section-title">
+                                    <i class="fas fa-user-check text-danger"></i>
+                                    Driver Allocation
+                                </div>
+                                <span class="form-req-pill">Required</span>
+                            </div>
+
+                            <div class="form-group-modern">
+                                <label for="driverSelect" class="form-label-modern">Select Available Rider</label>
+                                <div class="form-input-wrap">
+                                    <i class="fas fa-user form-input-icon"></i>
+                                    <select name="employee_id" id="driverSelect" class="form-select" required>
+                                        <option value="">-- Loading eligible riders... --</option>
+                                    </select>
+                                </div>
+                                <small class="text-muted d-block mt-2" style="font-size: 11px;">
+                                    <i class="fas fa-info-circle me-1 text-danger"></i> Only riders with attendance on this order's delivery date are shown.
+                                </small>
+                            </div>
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Assign Driver</button>
+                        <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn-modal-primary">Assign Driver</button>
                     </div>
                 </form>
             </div>
         </div>
+    </div>
     <!-- Pickup Handover Verification Modal -->
     <div class="modal fade" id="pickupHandoverModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">

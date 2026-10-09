@@ -612,11 +612,68 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
         /* Sidebar Toggler */
         .sidebar-toggler { background: #fff9f2; border: 1px solid var(--food-border); font-size: 1.1rem; color: var(--food-ink); cursor: pointer; display: none; width: 38px; height: 38px; border-radius: 12px; align-items: center; justify-content: center; margin-right: 12px; }
         body.dark-mode .sidebar-toggler { background: #272a37; border-color: #373a4b; color: #e2e8f0; }
+        .employee-sidebar-backdrop {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.45);
+            backdrop-filter: blur(2px);
+            -webkit-backdrop-filter: blur(2px);
+            z-index: 999;
+            opacity: 0;
+            transition: opacity 0.25s ease;
+        }
+
         @media (max-width: 992px) {
             .sidebar-toggler { display: flex; }
-            .admin-sidebar { left: -260px; }
-            .admin-content { margin-left: 0; width: 100%; }
+            .admin-sidebar { 
+                left: -260px;
+                z-index: 1050 !important;
+                box-shadow: 0 0 25px rgba(0, 0, 0, 0.25) !important;
+            }
+            .admin-content { margin-left: 0; width: 100%; min-width: 0; }
             .admin-container.sidebar-collapsed .admin-sidebar { left: 0; }
+            .admin-container.sidebar-collapsed .employee-sidebar-backdrop {
+                display: block;
+                opacity: 1;
+            }
+            .admin-topbar {
+                padding: 10px 16px;
+            }
+            .admin-main {
+                padding: 20px 16px 140px 16px !important;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .date-display {
+                display: none !important;
+            }
+            .topbar-title h1 {
+                font-size: 1.15rem;
+            }
+            .table-responsive {
+                overflow-x: auto !important;
+                -webkit-overflow-scrolling: touch;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .admin-topbar {
+                padding: 8px 12px;
+            }
+            .admin-main {
+                padding: 14px 10px 140px 10px !important;
+            }
+            .admin-profile span {
+                display: none;
+            }
+            .admin-profile {
+                padding: 5px 8px;
+            }
+            .card {
+                border-radius: 12px;
+            }
         }
     </style>
 </head>
@@ -649,6 +706,7 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
 </script>
 <div class="page-loader"><div class="spinner"></div></div>
 <div class="admin-container">
+    <div class="employee-sidebar-backdrop" id="employeeSidebarBackdrop" onclick="document.querySelector('.admin-container').classList.remove('sidebar-collapsed');"></div>
     <nav class="admin-sidebar" id="adminSidebar">
         <h3><i class="fas fa-drumstick-bite"></i> Lechon Delights</h3>
         <div class="sidebar-nav-list">

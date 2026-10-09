@@ -994,13 +994,21 @@ include 'includes/header.php';
     padding: 4px;
     margin-bottom: 16px;
     gap: 4px;
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+.mobile-segmented-nav::-webkit-scrollbar {
+    display: none;
 }
 
 .mobile-segment-btn {
     flex: 1;
+    flex-shrink: 0;
     border: none;
     background: transparent;
-    padding: 8px;
+    padding: 8px 14px;
     font-size: 0.8rem;
     font-weight: 700;
     color: #475467;
@@ -1045,6 +1053,35 @@ include 'includes/header.php';
     .hero-action-btn {
         flex: 1;
         justify-content: center;
+    }
+}
+
+@media (max-width: 576px) {
+    .account-page-v2 {
+        padding: 16px 12px 140px 12px !important;
+    }
+    .acc-panel-card {
+        padding: 18px 14px;
+        border-radius: 14px;
+    }
+    .account-hero-card {
+        padding: 18px 14px;
+        border-radius: 14px;
+    }
+    .account-hero-left {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+    .account-hero-right {
+        flex-direction: column;
+        width: 100%;
+    }
+    .hero-action-btn {
+        width: 100%;
+    }
+    .acc-address-frame-wrap {
+        min-height: 500px;
     }
 }
 

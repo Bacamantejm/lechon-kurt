@@ -985,7 +985,7 @@ body {
 }
 @media (max-width: 540px) {
     .locations-directory {
-        padding-bottom: 56px;
+        padding-bottom: 140px !important;
     }
     .directory-toolbar {
         padding: 12px;

@@ -34,158 +34,133 @@ if (!$review) {
 $rating_color = $review['overall_rating'] >= 4 ? 'success' : ($review['overall_rating'] >= 3 ? 'warning' : 'danger');
 ?>
 
-<div class="performance-details">
-    <div class="review-header">
-        <h5><?php echo htmlspecialchars($review['emp_first'] . ' ' . $review['emp_last']); ?></h5>
-        <span class="status-badge badge-<?php echo $review['status']; ?>"><?php echo ucfirst($review['status']); ?></span>
-    </div>
-    
-    <div class="review-period">
-        <strong>Review Period:</strong> <?php echo date('M d, Y', strtotime($review['period_start'])); ?> - <?php echo date('M d, Y', strtotime($review['period_end'])); ?>
-    </div>
-    
-    <div class="ratings-grid">
-        <div class="rating-item">
-            <label>Attendance</label>
-            <div class="rating-stars"><?php echo str_repeat('★', $review['attendance_rating']); ?><?php echo str_repeat('☆', 5 - $review['attendance_rating']); ?></div>
-            <span class="rating-score"><?php echo $review['attendance_rating']; ?>/5</span>
+<div class="performance-details-wrap">
+    <!-- Section 1: Overview & Rating -->
+    <div class="form-section-card mb-3">
+        <div class="form-section-head">
+            <div class="form-section-title">
+                <i class="fas fa-user-check text-danger"></i>
+                Review Overview
+            </div>
+            <span class="badge" style="background: <?php echo $review['status'] === 'completed' ? '#ecfdf3' : '#eff8ff'; ?>; color: <?php echo $review['status'] === 'completed' ? '#027a48' : '#175cd3'; ?>; border: 1px solid <?php echo $review['status'] === 'completed' ? '#abefc6' : '#b2ddff'; ?>; font-weight: 600; font-size: 12px; padding: 4px 10px; border-radius: 20px;">
+                <i class="fas fa-circle me-1" style="font-size: 7px;"></i> <?php echo ucfirst(str_replace('_', ' ', $review['status'])); ?>
+            </span>
         </div>
-        <div class="rating-item">
-            <label>Performance</label>
-            <div class="rating-stars"><?php echo str_repeat('★', $review['performance_rating']); ?><?php echo str_repeat('☆', 5 - $review['performance_rating']); ?></div>
-            <span class="rating-score"><?php echo $review['performance_rating']; ?>/5</span>
-        </div>
-        <div class="rating-item">
-            <label>Teamwork</label>
-            <div class="rating-stars"><?php echo str_repeat('★', $review['teamwork_rating']); ?><?php echo str_repeat('☆', 5 - $review['teamwork_rating']); ?></div>
-            <span class="rating-score"><?php echo $review['teamwork_rating']; ?>/5</span>
-        </div>
-        <div class="rating-item">
-            <label>Communication</label>
-            <div class="rating-stars"><?php echo str_repeat('★', $review['communication_rating']); ?><?php echo str_repeat('☆', 5 - $review['communication_rating']); ?></div>
-            <span class="rating-score"><?php echo $review['communication_rating']; ?>/5</span>
-        </div>
-    </div>
-    
-    <div class="overall-rating">
-        <strong>Overall Rating:</strong>
-        <span class="badge bg-<?php echo $rating_color; ?>"><?php echo str_repeat('★', $review['overall_rating']); ?> <?php echo $review['overall_rating']; ?>/5</span>
-    </div>
-    
-    <div class="review-sections">
-        <div class="review-section">
-            <h6>Strengths</h6>
-            <p><?php echo nl2br(htmlspecialchars(isset($review['strengths']) ? $review['strengths'] : 'Not specified')); ?></p>
-        </div>
-        <div class="review-section">
-            <h6>Areas for Improvement</h6>
-            <p><?php echo nl2br(htmlspecialchars(isset($review['areas_for_improvement']) ? $review['areas_for_improvement'] : 'Not specified')); ?></p>
-        </div>
-        <div class="review-section">
-            <h6>Goals for Next Period</h6>
-            <p><?php echo nl2br(htmlspecialchars(isset($review['goals_for_next_period']) ? $review['goals_for_next_period'] : 'Not specified')); ?></p>
-        </div>
-        <div class="review-section">
-            <h6>Comments</h6>
-            <p><?php echo nl2br(htmlspecialchars(isset($review['comments']) ? $review['comments'] : 'No additional comments')); ?></p>
+
+        <div class="row g-3 align-items-center">
+            <div class="col-md-7">
+                <div class="p-3 rounded" style="background: #f8f9fa; border: 1px solid #eaecf0;">
+                    <div class="fw-bold mb-1" style="color: #101828; font-size: 15px;">
+                        <?php echo htmlspecialchars($review['emp_first'] . ' ' . $review['emp_last']); ?>
+                    </div>
+                    <div class="text-muted" style="font-size: 12px;">
+                        <i class="fas fa-calendar-alt text-danger me-1"></i>
+                        Period: <?php echo date('M d, Y', strtotime($review['period_start'])); ?> &ndash; <?php echo date('M d, Y', strtotime($review['period_end'])); ?>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-5">
+                <div class="p-3 rounded text-center" style="background: #f8f9fa; border: 1px solid #eaecf0;">
+                    <small class="text-muted d-block fw-semibold mb-1" style="font-size: 11px; text-transform: uppercase;">Overall Rating</small>
+                    <div class="d-inline-flex align-items-center gap-2 px-3 py-1 rounded-pill" style="background: <?php echo $review['overall_rating'] >= 4 ? '#ecfdf3' : ($review['overall_rating'] >= 3 ? '#fffaeb' : '#fff1f0'); ?>; color: <?php echo $review['overall_rating'] >= 4 ? '#027a48' : ($review['overall_rating'] >= 3 ? '#b54708' : '#b3261e'); ?>; border: 1px solid <?php echo $review['overall_rating'] >= 4 ? '#abefc6' : ($review['overall_rating'] >= 3 ? '#fedf89' : '#fee4e2'); ?>; font-weight: 700; font-size: 15px;">
+                        <span>★ <?php echo number_format($review['overall_rating'], 1); ?> / 5.0</span>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
-    
-    <div class="review-footer">
-        <strong>Reviewer:</strong> <?php echo htmlspecialchars($review['reviewer_name']); ?><br>
-        <strong>Date:</strong> <?php echo date('M d, Y', strtotime($review['created_at'])); ?>
+
+    <!-- Section 2: Competency Breakdown -->
+    <div class="form-section-card mb-3">
+        <div class="form-section-head">
+            <div class="form-section-title">
+                <i class="fas fa-award text-danger"></i>
+                Competency Scores
+            </div>
+            <span class="form-opt-pill">1 to 5 Stars</span>
+        </div>
+
+        <div class="row g-2 text-center">
+            <div class="col-sm-3 col-6">
+                <div class="p-2 rounded" style="background: #f8f9fa; border: 1px solid #eaecf0;">
+                    <small class="text-muted d-block fw-bold" style="font-size: 11px;">ATTENDANCE</small>
+                    <div class="text-warning my-1" style="font-size: 14px;"><?php echo str_repeat('★', $review['attendance_rating']); ?><?php echo str_repeat('☆', 5 - $review['attendance_rating']); ?></div>
+                    <span class="fw-bold" style="color: #101828; font-size: 13px;"><?php echo $review['attendance_rating']; ?>/5</span>
+                </div>
+            </div>
+            <div class="col-sm-3 col-6">
+                <div class="p-2 rounded" style="background: #f8f9fa; border: 1px solid #eaecf0;">
+                    <small class="text-muted d-block fw-bold" style="font-size: 11px;">PERFORMANCE</small>
+                    <div class="text-warning my-1" style="font-size: 14px;"><?php echo str_repeat('★', $review['performance_rating']); ?><?php echo str_repeat('☆', 5 - $review['performance_rating']); ?></div>
+                    <span class="fw-bold" style="color: #101828; font-size: 13px;"><?php echo $review['performance_rating']; ?>/5</span>
+                </div>
+            </div>
+            <div class="col-sm-3 col-6">
+                <div class="p-2 rounded" style="background: #f8f9fa; border: 1px solid #eaecf0;">
+                    <small class="text-muted d-block fw-bold" style="font-size: 11px;">TEAMWORK</small>
+                    <div class="text-warning my-1" style="font-size: 14px;"><?php echo str_repeat('★', $review['teamwork_rating']); ?><?php echo str_repeat('☆', 5 - $review['teamwork_rating']); ?></div>
+                    <span class="fw-bold" style="color: #101828; font-size: 13px;"><?php echo $review['teamwork_rating']; ?>/5</span>
+                </div>
+            </div>
+            <div class="col-sm-3 col-6">
+                <div class="p-2 rounded" style="background: #f8f9fa; border: 1px solid #eaecf0;">
+                    <small class="text-muted d-block fw-bold" style="font-size: 11px;">COMMUNICATION</small>
+                    <div class="text-warning my-1" style="font-size: 14px;"><?php echo str_repeat('★', $review['communication_rating']); ?><?php echo str_repeat('☆', 5 - $review['communication_rating']); ?></div>
+                    <span class="fw-bold" style="color: #101828; font-size: 13px;"><?php echo $review['communication_rating']; ?>/5</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 3: Qualitative Feedback -->
+    <div class="form-section-card mb-3">
+        <div class="form-section-head">
+            <div class="form-section-title">
+                <i class="fas fa-comment-alt text-danger"></i>
+                Qualitative Feedback & Goals
+            </div>
+            <span class="form-opt-pill">Evaluations</span>
+        </div>
+
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="p-3 rounded h-100" style="background: #f8f9fa; border: 1px solid #eaecf0;">
+                    <small class="text-muted d-block fw-bold mb-1" style="font-size: 11px; text-transform: uppercase;">Key Strengths</small>
+                    <p class="mb-0" style="color: #344054; font-size: 13px;"><?php echo nl2br(htmlspecialchars(isset($review['strengths']) ? $review['strengths'] : 'Not specified')); ?></p>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="p-3 rounded h-100" style="background: #f8f9fa; border: 1px solid #eaecf0;">
+                    <small class="text-muted d-block fw-bold mb-1" style="font-size: 11px; text-transform: uppercase;">Areas for Improvement</small>
+                    <p class="mb-0" style="color: #344054; font-size: 13px;"><?php echo nl2br(htmlspecialchars(isset($review['areas_for_improvement']) ? $review['areas_for_improvement'] : 'Not specified')); ?></p>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="p-3 rounded h-100" style="background: #f8f9fa; border: 1px solid #eaecf0;">
+                    <small class="text-muted d-block fw-bold mb-1" style="font-size: 11px; text-transform: uppercase;">Goals for Next Period</small>
+                    <p class="mb-0" style="color: #344054; font-size: 13px;"><?php echo nl2br(htmlspecialchars(isset($review['goals_for_next_period']) ? $review['goals_for_next_period'] : 'Not specified')); ?></p>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="p-3 rounded h-100" style="background: #f8f9fa; border: 1px solid #eaecf0;">
+                    <small class="text-muted d-block fw-bold mb-1" style="font-size: 11px; text-transform: uppercase;">Comments</small>
+                    <p class="mb-0" style="color: #344054; font-size: 13px;"><?php echo nl2br(htmlspecialchars(isset($review['comments']) ? $review['comments'] : 'No additional comments')); ?></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 4: Sign-off & Audit -->
+    <div class="form-section-card">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 text-muted" style="font-size: 12px;">
+            <div>
+                <i class="fas fa-user-edit text-danger me-1"></i>
+                Evaluated by: <strong class="text-dark"><?php echo htmlspecialchars($review['reviewer_name']); ?></strong>
+            </div>
+            <div>
+                <i class="fas fa-clock text-danger me-1"></i>
+                Recorded: <strong class="text-dark"><?php echo date('M d, Y h:i A', strtotime($review['created_at'])); ?></strong>
+            </div>
+        </div>
     </div>
 </div>
-
-<style>
-.performance-details {
-    padding: 10px 0;
-    font-size: 13px;
-}
-.review-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 15px;
-    padding-bottom: 10px;
-    border-bottom: 2px solid #eee;
-}
-.review-header h5 {
-    margin: 0;
-    font-size: 16px;
-}
-.review-period {
-    font-size: 12px;
-    color: #666;
-    margin-bottom: 15px;
-}
-.ratings-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
-    margin: 15px 0;
-    padding: 15px;
-    background: #f9f9f9;
-    border-radius: 4px;
-}
-.rating-item {
-    text-align: center;
-}
-.rating-item label {
-    display: block;
-    font-weight: 600;
-    font-size: 12px;
-    margin-bottom: 5px;
-    color: #333;
-}
-.rating-stars {
-    display: block;
-    font-size: 18px;
-    color: #ffc107;
-    margin-bottom: 3px;
-}
-.rating-score {
-    display: block;
-    font-size: 12px;
-    color: #999;
-}
-.overall-rating {
-    text-align: center;
-    padding: 12px;
-    background: #e3f2fd;
-    border-radius: 4px;
-    margin: 15px 0;
-}
-.overall-rating strong {
-    display: block;
-    margin-bottom: 5px;
-}
-.review-sections {
-    margin: 15px 0;
-}
-.review-section {
-    margin-bottom: 12px;
-    padding: 10px;
-    background: #f5f5f5;
-    border-radius: 4px;
-}
-.review-section h6 {
-    margin: 0 0 8px 0;
-    font-size: 12px;
-    font-weight: 600;
-    color: #666;
-    text-transform: uppercase;
-}
-.review-section p {
-    margin: 0;
-    font-size: 13px;
-    color: #333;
-    line-height: 1.5;
-}
-.review-footer {
-    padding-top: 10px;
-    border-top: 1px solid #eee;
-    font-size: 12px;
-    color: #999;
-}
-</style>

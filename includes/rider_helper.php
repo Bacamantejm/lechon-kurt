@@ -21,27 +21,6 @@ if (!function_exists('isDeliveryDriverUser')) {
             return false;
         }
 
-        // 1. Fast check on session values (ONLY if checking the currently logged-in user)
-        $is_current_session_user = !empty($_SESSION['user_id']) && (int)$_SESSION['user_id'] === $user_id;
-        if ($is_current_session_user) {
-            $session_role = strtolower(trim((string)($_SESSION['role_name'] ?? '')));
-            if (in_array($session_role, ['super_admin', 'business_owner'], true)) {
-                return false;
-            }
-            if (in_array($session_role, ['driver', 'rider', 'delivery_rider', 'dept_delivery_riders'], true)) {
-                return true;
-            }
-
-            $session_type = strtolower(trim((string)($_SESSION['user_type'] ?? '')));
-            if (in_array($session_type, ['driver', 'rider'], true)) {
-                return true;
-            }
-
-            if (!empty($_SESSION['is_driver'])) {
-                return true;
-            }
-        }
-
         if (!$conn || !($conn instanceof mysqli)) {
             global $conn;
         }
@@ -50,70 +29,122 @@ if (!function_exists('isDeliveryDriverUser')) {
             return false;
         }
 
-        // Exclude super admins from DB check
-        $role_chk = mysqli_query($conn, "SELECT r.name FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id = $user_id LIMIT 1");
-        if ($role_chk && mysqli_num_rows($role_chk) > 0) {
-            $r_name = strtolower(trim((string)mysqli_fetch_row($role_chk)[0]));
-            if (in_array($r_name, ['super_admin', 'business_owner'], true)) {
-                return false;
-            }
-        }
-
-        // 2. Check riders table directly
-        $r_chk = mysqli_query($conn, "SELECT id, verification_status FROM riders WHERE user_id = $user_id LIMIT 1");
-        if ($r_chk && mysqli_num_rows($r_chk) > 0) {
-            $r_row = mysqli_fetch_assoc($r_chk);
-            if (($r_row['verification_status'] ?? '') === 'verified') {
-                $_SESSION['is_driver'] = true;
-                return true;
-            }
-        }
-
-        // 3. Check roles assigned in DB for the user
-        $role_sql = "
-            SELECT r.name 
-            FROM users u 
-            JOIN roles r ON u.role_id = r.id 
-            WHERE u.id = ? 
+        // 1. Fetch user data and joined role/department
+        $user_sql = "
+            SELECT u.id, u.email, u.user_type, u.role_id,
+                   r.name AS role_name, r.description AS role_desc,
+                   rd.department_name AS role_dept_name
+            FROM users u
+            LEFT JOIN roles r ON u.role_id = r.id
+            LEFT JOIN departments rd ON r.department_id = rd.id
+            WHERE u.id = ?
             LIMIT 1
         ";
-        if ($stmt = mysqli_prepare($conn, $role_sql)) {
-            mysqli_stmt_bind_param($stmt, "i", $user_id);
-            mysqli_stmt_execute($stmt);
-            $res = mysqli_stmt_get_result($stmt);
-            if ($row = mysqli_fetch_assoc($res)) {
-                $r_name = strtolower(trim((string)$row['name']));
-                if (in_array($r_name, ['driver', 'rider', 'delivery_rider', 'dept_delivery_riders'], true)) {
-                    mysqli_stmt_close($stmt);
-                    $_SESSION['is_driver'] = true;
-                    return true;
-                }
-            }
-            mysqli_stmt_close($stmt);
+        $user_data = null;
+        if ($u_stmt = mysqli_prepare($conn, $user_sql)) {
+            mysqli_stmt_bind_param($u_stmt, "i", $user_id);
+            mysqli_stmt_execute($u_stmt);
+            $u_res = mysqli_stmt_get_result($u_stmt);
+            $user_data = mysqli_fetch_assoc($u_res);
+            mysqli_stmt_close($u_stmt);
         }
 
-        // 3. Check employees table for vehicle details, delivery department, or logistics module permissions
+        if (!$user_data) {
+            return false;
+        }
+
+        // Super admins and business owners should never be forced to rider portal
+        $r_name = strtolower(trim((string)($user_data['role_name'] ?? '')));
+        if (in_array($r_name, ['super_admin', 'business_owner'], true)) {
+            return false;
+        }
+
+        $is_driver = false;
+        $matched_emp = null;
+        $driver_keywords = ['driver', 'rider', 'delivery', 'logistics', 'courier'];
+
+        // 2. Check user's direct role, user type, or role description
+        $u_type = strtolower(trim((string)($user_data['user_type'] ?? '')));
+        $r_desc = strtolower(trim((string)($user_data['role_desc'] ?? '')));
+        $rd_name = strtolower(trim((string)($user_data['role_dept_name'] ?? '')));
+
+        if (in_array($u_type, ['driver', 'rider'], true)) {
+            $is_driver = true;
+        }
+
+        foreach ($driver_keywords as $kw) {
+            if ($r_name !== '' && strpos($r_name, $kw) !== false) {
+                $is_driver = true;
+                break;
+            }
+            if ($r_desc !== '' && strpos($r_desc, $kw) !== false) {
+                $is_driver = true;
+                break;
+            }
+            if ($rd_name !== '' && strpos($rd_name, $kw) !== false) {
+                $is_driver = true;
+                break;
+            }
+        }
+
+        // 3. Check employees table (linked by user_id OR matching email)
+        $user_email = trim((string)($user_data['email'] ?? ''));
         $emp_sql = "
-            SELECT e.id, e.vehicle_details, d.department_name, e.position_id
+            SELECT e.id, e.user_id, e.first_name, e.last_name, e.email, e.position, e.vehicle_details,
+                   d.department_name, e.position_id, jp.position_title AS job_title
             FROM employees e
             LEFT JOIN departments d ON e.department_id = d.id
-            WHERE e.user_id = ? AND e.status = 'active'
+            LEFT JOIN job_positions jp ON e.position_id = jp.id
+            WHERE (e.user_id = ? OR (e.email = ? AND e.email IS NOT NULL AND e.email != ''))
+              AND e.status = 'active'
+            ORDER BY (e.user_id = ?) DESC, e.id DESC
             LIMIT 1
         ";
-        if ($stmt = mysqli_prepare($conn, $emp_sql)) {
-            mysqli_stmt_bind_param($stmt, "i", $user_id);
-            mysqli_stmt_execute($stmt);
-            $res = mysqli_stmt_get_result($stmt);
-            if ($row = mysqli_fetch_assoc($res)) {
-                $dept = strtolower(trim((string)($row['department_name'] ?? '')));
-                $has_vehicle = !empty($row['vehicle_details']);
-                if (strpos($dept, 'deliver') !== false || strpos($dept, 'logistics') !== false || $has_vehicle) {
-                    mysqli_stmt_close($stmt);
-                    $_SESSION['is_driver'] = true;
-                    return true;
+        if ($emp_stmt = mysqli_prepare($conn, $emp_sql)) {
+            mysqli_stmt_bind_param($emp_stmt, "isi", $user_id, $user_email, $user_id);
+            mysqli_stmt_execute($emp_stmt);
+            $emp_res = mysqli_stmt_get_result($emp_stmt);
+            if ($emp_row = mysqli_fetch_assoc($emp_res)) {
+                $matched_emp = $emp_row;
+
+                // Auto-link user_id on employee if unlinked or mismatched
+                if ((int)($emp_row['user_id'] ?? 0) !== $user_id) {
+                    $upd_stmt = mysqli_prepare($conn, "UPDATE employees SET user_id = ? WHERE id = ?");
+                    if ($upd_stmt) {
+                        $emp_pk = (int)$emp_row['id'];
+                        mysqli_stmt_bind_param($upd_stmt, "ii", $user_id, $emp_pk);
+                        mysqli_stmt_execute($upd_stmt);
+                        mysqli_stmt_close($upd_stmt);
+                        $matched_emp['user_id'] = $user_id;
+                    }
                 }
 
-                $pos_id = (int)($row['position_id'] ?? 0);
+                $dept_name = strtolower(trim((string)($emp_row['department_name'] ?? '')));
+                $pos_name = strtolower(trim((string)($emp_row['position'] ?? '')));
+                $job_title = strtolower(trim((string)($emp_row['job_title'] ?? '')));
+                $has_vehicle = !empty($emp_row['vehicle_details']);
+
+                foreach ($driver_keywords as $kw) {
+                    if ($dept_name !== '' && strpos($dept_name, $kw) !== false) {
+                        $is_driver = true;
+                        break;
+                    }
+                    if ($pos_name !== '' && strpos($pos_name, $kw) !== false) {
+                        $is_driver = true;
+                        break;
+                    }
+                    if ($job_title !== '' && strpos($job_title, $kw) !== false) {
+                        $is_driver = true;
+                        break;
+                    }
+                }
+
+                if ($has_vehicle) {
+                    $is_driver = true;
+                }
+
+                // Check position logistics module access
+                $pos_id = (int)($emp_row['position_id'] ?? 0);
                 if ($pos_id > 0) {
                     $pma_sql = "SELECT 1 FROM hr_position_module_access WHERE position_id = ? AND module_key = 'employee.logistics' AND is_enabled = 1 LIMIT 1";
                     if ($p_stmt = mysqli_prepare($conn, $pma_sql)) {
@@ -121,16 +152,49 @@ if (!function_exists('isDeliveryDriverUser')) {
                         mysqli_stmt_execute($p_stmt);
                         mysqli_stmt_store_result($p_stmt);
                         if (mysqli_stmt_num_rows($p_stmt) > 0) {
-                            mysqli_stmt_close($p_stmt);
-                            mysqli_stmt_close($stmt);
-                            $_SESSION['is_driver'] = true;
-                            return true;
+                            $is_driver = true;
                         }
                         mysqli_stmt_close($p_stmt);
                     }
                 }
             }
-            mysqli_stmt_close($stmt);
+            mysqli_stmt_close($emp_stmt);
+        }
+
+        // 4. Check riders table directly
+        $r_chk = mysqli_query($conn, "SELECT id, verification_status FROM riders WHERE user_id = $user_id LIMIT 1");
+        if ($r_chk && mysqli_num_rows($r_chk) > 0) {
+            $r_row = mysqli_fetch_assoc($r_chk);
+            if (($r_row['verification_status'] ?? '') === 'verified') {
+                $is_driver = true;
+            }
+        }
+
+        // 5. If identified as driver, ensure active verified profile in riders table
+        if ($is_driver) {
+            $emp_id_val = !empty($matched_emp['id']) ? (int)$matched_emp['id'] : "NULL";
+            $r_code = 'RDR-' . str_pad((string)$user_id, 4, '0', STR_PAD_LEFT);
+            $v_type = !empty($matched_emp['vehicle_details']) ? mysqli_real_escape_string($conn, $matched_emp['vehicle_details']) : 'Motorcycle';
+
+            // Insert or ensure verified
+            $rider_sync_sql = "
+                INSERT INTO riders (user_id, employee_id, rider_code, rider_type, vehicle_type, verification_status, duty_status, rating)
+                VALUES ($user_id, $emp_id_val, '$r_code', 'shop_rider', '$v_type', 'verified', 'online', 5.00)
+                ON DUPLICATE KEY UPDATE 
+                    verification_status = 'verified',
+                    employee_id = COALESCE(riders.employee_id, VALUES(employee_id))
+            ";
+            mysqli_query($conn, $rider_sync_sql);
+
+            // Set session indicators
+            $_SESSION['is_driver'] = true;
+            $r_fetch = mysqli_query($conn, "SELECT id, rider_code FROM riders WHERE user_id = $user_id LIMIT 1");
+            if ($r_fetch && ($r_data = mysqli_fetch_assoc($r_fetch))) {
+                $_SESSION['rider_id'] = (int)$r_data['id'];
+                $_SESSION['rider_code'] = $r_data['rider_code'];
+            }
+
+            return true;
         }
 
         return false;

@@ -997,90 +997,148 @@ if (empty($product_decisions)) {
     </div>
     
     <!-- Add Product Modal -->
-    <div class="modal fade" id="addProductModal" tabindex="-1" aria-labelledby="addProductLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
+    <!-- Add Product Modal -->
+    <div class="modal fade modern-form-modal" id="addProductModal" tabindex="-1" aria-labelledby="addProductLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="addProductLabel"><i class="fas fa-plus-circle"></i> Add New Product</h5>
+                    <div class="modal-header-icon">
+                        <i class="fas fa-utensils"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title" id="addProductLabel">Add New Product</h5>
+                        <p class="modal-subtitle">Publish a new menu item, pricing, serving size, and preparation lead time.</p>
+                    </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <form id="addProductForm" method="POST" enctype="multipart/form-data">
                         <input type="hidden" name="add_new_product" value="1">
                         
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <label for="product_name" class="form-label"><strong>Product Name *</strong></label>
-                                <input type="text" class="form-control" id="product_name" name="product_name" placeholder="e.g., Lechon Kawali" required>
+                        <!-- Section 1: Basic Information -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-tag"></i> Basic Information</span>
+                                <span class="form-req-pill">Required</span>
                             </div>
-                            <div class="col-md-6">
-                                <label for="product_category" class="form-label"><strong>Category *</strong></label>
-                                <select class="form-select" id="product_category" name="product_category" required>
-                                    <option value="">Select Category</option>
-                                    <option value="Whole Lechon">Whole Lechon</option>
-                                    <option value="Lechon Belly">Lechon Belly</option>
-                                    <option value="Lechon Manok">Lechon Manok</option>
-                                    <option value="Platters">Platters</option>
-                                    <option value="Rice Meals">Rice Meals</option>
-                                    <option value="Sides">Sides</option>
-                                    <option value="Desserts">Desserts</option>
-                                    <option value="Beverages">Beverages</option>
-                                </select>
-                            </div>
-                        </div>
-                        
-                        <div class="row mb-3">
-                            <div class="col-md-4">
-                                <label for="product_price" class="form-label"><strong>Price (PHP) *</strong></label>
-                                <input type="number" class="form-control" id="product_price" name="product_price" placeholder="0.00" step="0.01" min="0" required>
-                            </div>
-                            <div class="col-md-4">
-                                <label for="lead_time_hours" class="form-label"><strong>Lead Time (Hours) *</strong></label>
-                                <input type="number" class="form-control" id="lead_time_hours" name="lead_time_hours" placeholder="e.g., 24" value="24" min="0" required>
-                                <small class="text-muted">Min. notice for pre-orders.</small>
-                            </div>
-                            <div class="col-md-4">
-                                <label for="product_image" class="form-label"><strong>Product Image</strong></label>
-                                <input type="file" class="form-control" id="product_image" name="product_image" accept="image/*">
-                                <small class="text-muted">JPG, PNG, GIF (Max 5MB)</small>
-                            </div>
-                        </div>
-                        
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <label for="weight_info" class="form-label"><strong>Weight Info</strong></label>
-                                <input type="text" class="form-control" id="weight_info" name="weight_info" placeholder="e.g., 1 kg, 500g">
-                            </div>
-                            <div class="col-md-6">
-                                <label for="pax_info" class="form-label"><strong>Pax Info</strong></label>
-                                <select class="form-select" id="pax_info" name="pax_info">
-                                    <option value="">Select Pax Info</option>
-                                    <option value="1 pax">1 pax</option>
-                                    <option value="2-3 pax">2-3 pax</option>
-                                    <option value="4-6 pax">4-6 pax</option>
-                                    <option value="8-10 pax">8-10 pax</option>
-                                    <option value="10-15 pax">10-15 pax</option>
-                                    <option value="20-25 pax">20-25 pax</option>
-                                    <option value="30-50 pax">30-50 pax</option>
-                                    <option value="50+ pax">50+ pax</option>
-                                </select>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label for="product_name" class="form-label-modern">Product Name <span class="form-req-star">*</span></label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-box form-input-icon"></i>
+                                            <input type="text" class="form-control" id="product_name" name="product_name" placeholder="e.g., Lechon Kawali" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label for="product_category" class="form-label-modern">Category <span class="form-req-star">*</span></label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-list-alt form-input-icon"></i>
+                                            <select class="form-select" id="product_category" name="product_category" required>
+                                                <option value="">Select Category</option>
+                                                <option value="Whole Lechon">Whole Lechon</option>
+                                                <option value="Lechon Belly">Lechon Belly</option>
+                                                <option value="Lechon Manok">Lechon Manok</option>
+                                                <option value="Platters">Platters</option>
+                                                <option value="Rice Meals">Rice Meals</option>
+                                                <option value="Sides">Sides</option>
+                                                <option value="Desserts">Desserts</option>
+                                                <option value="Beverages">Beverages</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         
-                        <div class="mb-3">
-                            <label for="product_description" class="form-label"><strong>Description</strong></label>
-                            <textarea class="form-control" id="product_description" name="product_description" rows="3" placeholder="Product details and description..."></textarea>
+                        <!-- Section 2: Pricing & Logistics -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-coins"></i> Pricing & Preparation</span>
+                                <span class="form-req-pill">Required</span>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <div class="form-group-modern">
+                                        <label for="product_price" class="form-label-modern">Price (PHP) <span class="form-req-star">*</span></label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-peso-sign form-input-icon"></i>
+                                            <input type="number" class="form-control" id="product_price" name="product_price" placeholder="0.00" step="0.01" min="0" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-group-modern">
+                                        <label for="lead_time_hours" class="form-label-modern">Lead Time (Hours) <span class="form-req-star">*</span></label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-clock form-input-icon"></i>
+                                            <input type="number" class="form-control" id="lead_time_hours" name="lead_time_hours" placeholder="e.g., 24" value="24" min="0" required>
+                                        </div>
+                                        <div class="form-helper-text"><i class="fas fa-info-circle"></i> Minimum notice required for pre-orders.</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-group-modern">
+                                        <label for="product_image" class="form-label-modern">Product Image</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-image form-input-icon"></i>
+                                            <input type="file" class="form-control" id="product_image" name="product_image" accept="image/*">
+                                        </div>
+                                        <div class="form-helper-text"><i class="fas fa-info-circle"></i> JPG, PNG, GIF (Max 5MB)</div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         
-                        <div class="alert alert-info" role="alert">
-                            <i class="fas fa-lightbulb"></i> <strong>Tip:</strong> Once added, this product will be automatically visible on the customer menu page!
+                        <!-- Section 3: Portions & Description -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-info-circle"></i> Portions & Details</span>
+                                <span class="form-opt-pill">Optional</span>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label for="weight_info" class="form-label-modern">Weight / Serving Info</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-weight-hanging form-input-icon"></i>
+                                            <input type="text" class="form-control" id="weight_info" name="weight_info" placeholder="e.g., 1 kg, 500g">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label for="pax_info" class="form-label-modern">Pax Capacity</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-users form-input-icon"></i>
+                                            <select class="form-select" id="pax_info" name="pax_info">
+                                                <option value="">Select Pax Info</option>
+                                                <option value="1 pax">1 pax</option>
+                                                <option value="2-3 pax">2-3 pax</option>
+                                                <option value="4-6 pax">4-6 pax</option>
+                                                <option value="8-10 pax">8-10 pax</option>
+                                                <option value="10-15 pax">10-15 pax</option>
+                                                <option value="20-25 pax">20-25 pax</option>
+                                                <option value="30-50 pax">30-50 pax</option>
+                                                <option value="50+ pax">50+ pax</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group-modern mt-3">
+                                <label for="product_description" class="form-label-modern">Product Description</label>
+                                <textarea class="form-control" id="product_description" name="product_description" rows="3" placeholder="Enter culinary details, flavor profile, and special instructions..."></textarea>
+                            </div>
                         </div>
                     </form>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" form="addProductForm" class="btn btn-success">
-                        <i class="fas fa-save"></i> Add Product
+                    <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" form="addProductForm" class="btn-modal-primary">
+                        <i class="fas fa-plus"></i> Add Product
                     </button>
                 </div>
             </div>
@@ -1088,11 +1146,17 @@ if (empty($product_decisions)) {
     </div>
     
     <!-- Edit Product Modal -->
-    <div class="modal fade" id="editProductModal" tabindex="-1" aria-labelledby="editProductLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
+    <div class="modal fade modern-form-modal" id="editProductModal" tabindex="-1" aria-labelledby="editProductLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="editProductLabel"><i class="fas fa-edit"></i> Edit Product</h5>
+                    <div class="modal-header-icon">
+                        <i class="fas fa-edit"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title" id="editProductLabel">Edit Product</h5>
+                        <p class="modal-subtitle">Update product specifications, inventory attributes, and pricing.</p>
+                    </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
@@ -1100,74 +1164,129 @@ if (empty($product_decisions)) {
                         <input type="hidden" name="update_product" value="1">
                         <input type="hidden" name="product_id" id="edit_product_id">
                         
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <label for="edit_product_name" class="form-label"><strong>Product Name *</strong></label>
-                                <input type="text" class="form-control" id="edit_product_name" name="product_name" required>
+                        <!-- Section 1: Basic Information -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-tag"></i> Basic Information</span>
+                                <span class="form-req-pill">Required</span>
                             </div>
-                            <div class="col-md-6">
-                                <label for="edit_product_category" class="form-label"><strong>Category *</strong></label>
-                                <select class="form-select" id="edit_product_category" name="product_category" required>
-                                    <option value="">Select Category</option>
-                                    <option value="Whole Lechon">Whole Lechon</option>
-                                    <option value="Lechon Belly">Lechon Belly</option>
-                                    <option value="Lechon Manok">Lechon Manok</option>
-                                    <option value="Platters">Platters</option>
-                                    <option value="Rice Meals">Rice Meals</option>
-                                    <option value="Sides">Sides</option>
-                                    <option value="Desserts">Desserts</option>
-                                    <option value="Beverages">Beverages</option>
-                                </select>
-                            </div>
-                        </div>
-                        
-                        <div class="row mb-3">
-                            <div class="col-md-4">
-                                <label for="edit_product_price" class="form-label"><strong>Price (PHP) *</strong></label>
-                                <input type="number" class="form-control" id="edit_product_price" name="product_price" step="0.01" min="0" required>
-                            </div>
-                            <div class="col-md-4">
-                                <label for="edit_lead_time_hours" class="form-label"><strong>Lead Time (Hours) *</strong></label>
-                                <input type="number" class="form-control" id="edit_lead_time_hours" name="lead_time_hours" required>
-                                <small class="text-muted">Min. notice for pre-orders.</small>
-                            </div>
-                            <div class="col-md-4">
-                                <label for="edit_product_image" class="form-label"><strong>Product Image</strong></label>
-                                <input type="file" class="form-control" id="edit_product_image" name="product_image" accept="image/*">
-                                <small class="text-muted">Leave empty to keep current image</small>
-                            </div>
-                        </div>
-                        
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <label for="edit_weight_info" class="form-label"><strong>Weight Info</strong></label>
-                                <input type="text" class="form-control" id="edit_weight_info" name="weight_info">
-                            </div>
-                            <div class="col-md-6">
-                                <label for="edit_pax_info" class="form-label"><strong>Pax Info</strong></label>
-                                <select class="form-select" id="edit_pax_info" name="pax_info">
-                                    <option value="">Select Pax Info</option>
-                                    <option value="1 pax">1 pax</option>
-                                    <option value="2-3 pax">2-3 pax</option>
-                                    <option value="4-6 pax">4-6 pax</option>
-                                    <option value="8-10 pax">8-10 pax</option>
-                                    <option value="10-15 pax">10-15 pax</option>
-                                    <option value="20-25 pax">20-25 pax</option>
-                                    <option value="30-50 pax">30-50 pax</option>
-                                    <option value="50+ pax">50+ pax</option>
-                                </select>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label for="edit_product_name" class="form-label-modern">Product Name <span class="form-req-star">*</span></label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-box form-input-icon"></i>
+                                            <input type="text" class="form-control" id="edit_product_name" name="product_name" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label for="edit_product_category" class="form-label-modern">Category <span class="form-req-star">*</span></label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-list-alt form-input-icon"></i>
+                                            <select class="form-select" id="edit_product_category" name="product_category" required>
+                                                <option value="">Select Category</option>
+                                                <option value="Whole Lechon">Whole Lechon</option>
+                                                <option value="Lechon Belly">Lechon Belly</option>
+                                                <option value="Lechon Manok">Lechon Manok</option>
+                                                <option value="Platters">Platters</option>
+                                                <option value="Rice Meals">Rice Meals</option>
+                                                <option value="Sides">Sides</option>
+                                                <option value="Desserts">Desserts</option>
+                                                <option value="Beverages">Beverages</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         
-                        <div class="mb-3">
-                            <label for="edit_product_description" class="form-label"><strong>Description</strong></label>
-                            <textarea class="form-control" id="edit_product_description" name="product_description" rows="3"></textarea>
+                        <!-- Section 2: Pricing & Logistics -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-coins"></i> Pricing & Preparation</span>
+                                <span class="form-req-pill">Required</span>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <div class="form-group-modern">
+                                        <label for="edit_product_price" class="form-label-modern">Price (PHP) <span class="form-req-star">*</span></label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-peso-sign form-input-icon"></i>
+                                            <input type="number" class="form-control" id="edit_product_price" name="product_price" step="0.01" min="0" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-group-modern">
+                                        <label for="edit_lead_time_hours" class="form-label-modern">Lead Time (Hours) <span class="form-req-star">*</span></label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-clock form-input-icon"></i>
+                                            <input type="number" class="form-control" id="edit_lead_time_hours" name="lead_time_hours" required>
+                                        </div>
+                                        <div class="form-helper-text"><i class="fas fa-info-circle"></i> Min. notice for pre-orders.</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-group-modern">
+                                        <label for="edit_product_image" class="form-label-modern">Product Image</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-image form-input-icon"></i>
+                                            <input type="file" class="form-control" id="edit_product_image" name="product_image" accept="image/*">
+                                        </div>
+                                        <div class="form-helper-text"><i class="fas fa-info-circle"></i> Leave empty to keep current image</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Section 3: Portions & Description -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-info-circle"></i> Portions & Details</span>
+                                <span class="form-opt-pill">Optional</span>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label for="edit_weight_info" class="form-label-modern">Weight Info</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-weight-hanging form-input-icon"></i>
+                                            <input type="text" class="form-control" id="edit_weight_info" name="weight_info">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label for="edit_pax_info" class="form-label-modern">Pax Capacity</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-users form-input-icon"></i>
+                                            <select class="form-select" id="edit_pax_info" name="pax_info">
+                                                <option value="">Select Pax Info</option>
+                                                <option value="1 pax">1 pax</option>
+                                                <option value="2-3 pax">2-3 pax</option>
+                                                <option value="4-6 pax">4-6 pax</option>
+                                                <option value="8-10 pax">8-10 pax</option>
+                                                <option value="10-15 pax">10-15 pax</option>
+                                                <option value="20-25 pax">20-25 pax</option>
+                                                <option value="30-50 pax">30-50 pax</option>
+                                                <option value="50+ pax">50+ pax</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group-modern mt-3">
+                                <label for="edit_product_description" class="form-label-modern">Description</label>
+                                <textarea class="form-control" id="edit_product_description" name="product_description" rows="3"></textarea>
+                            </div>
                         </div>
                     </form>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" form="editProductForm" class="btn btn-primary">
+                    <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" form="editProductForm" class="btn-modal-primary">
                         <i class="fas fa-save"></i> Update Product
                     </button>
                 </div>

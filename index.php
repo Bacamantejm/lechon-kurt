@@ -710,11 +710,8 @@ include 'includes/header.php';
     --transition-fast: all var(--motion-fast) var(--motion-ease);
     --transition-lift: transform var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
     position: relative;
-    overflow: visible;
-    background:
-        radial-gradient(circle at 8% -5%, rgba(239, 107, 46, 0.14), transparent 36%),
-        radial-gradient(circle at 90% 12%, rgba(179, 38, 30, 0.12), transparent 32%),
-        linear-gradient(180deg, #fff8ef 0%, #fff9f2 34%, #ffffff 100%);
+    overflow-x: clip;
+    background: #f8f9fa;
     color: var(--ink);
     padding: 20px 0 56px;
 }
@@ -1008,27 +1005,7 @@ body.dark-mode .reg-choice-desc {
 
 .market-home::before,
 .market-home::after {
-    content: "";
-    position: absolute;
-    border-radius: 999px;
-    pointer-events: none;
-    z-index: 0;
-}
-
-.market-home::before {
-    width: 260px;
-    height: 260px;
-    right: -80px;
-    top: 160px;
-    background: radial-gradient(circle, rgba(239, 107, 46, 0.2), rgba(239, 107, 46, 0));
-}
-
-.market-home::after {
-    width: 220px;
-    height: 220px;
-    left: -70px;
-    top: 520px;
-    background: radial-gradient(circle, rgba(179, 38, 30, 0.2), rgba(179, 38, 30, 0));
+    display: none !important;
 }
 
 .market-home .container {
@@ -1327,16 +1304,110 @@ body.dark-mode .reg-choice-desc {
     100% { transform: translateY(-10px) scale(1.1); }
 }
 
-@media (max-width: 640px) {
-    .panda-hero-card {
-        padding: 20px;
+@media (max-width: 768px) {
+    .market-home {
+        padding-bottom: 140px !important;
     }
-    .panda-card-graphic {
-        flex: 0 0 120px;
-        height: 110px;
+    .panda-hero-banners {
+        grid-template-columns: 1fr !important;
+        gap: 14px !important;
+    }
+    .panda-hero-card {
+        padding: 20px 18px !important;
+        border-radius: 18px !important;
+        min-height: auto !important;
+        position: relative !important;
+        overflow: hidden !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 12px !important;
+    }
+    .panda-card-content {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        gap: 6px !important;
+        z-index: 2 !important;
+    }
+    .panda-card-title {
+        font-size: 1.25rem !important;
+        line-height: 1.2 !important;
+    }
+    .panda-card-desc {
+        font-size: 0.84rem !important;
+        line-height: 1.4 !important;
+    }
+    .panda-card-btn {
+        min-height: 36px !important;
+        padding: 0 16px !important;
+        font-size: 0.82rem !important;
+        margin-top: 4px !important;
+    }
+    .panda-card-arch,
+    .panda-card-heart-bg {
+        display: none !important;
+    }
+    .panda-card-graphic,
+    .panda-card-graphic-cluster {
+        position: absolute !important;
+        right: 10px !important;
+        bottom: 0 !important;
+        margin: 0 !important;
+        flex: none !important;
+        width: 95px !important;
+        height: 95px !important;
+        opacity: 0.28 !important;
+        pointer-events: none !important;
+        z-index: 1 !important;
     }
     .panda-card-graphic img.panda-mascot-img {
-        height: 110px;
+        height: 95px !important;
+        width: auto !important;
+        margin-bottom: 0 !important;
+    }
+    .user-promo-row {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .panda-hero-card {
+        padding: 16px 14px !important;
+        border-radius: 16px !important;
+    }
+    .panda-card-title {
+        font-size: 1.15rem !important;
+    }
+    .panda-card-desc {
+        font-size: 0.8rem !important;
+    }
+    .panda-card-btn {
+        min-height: 34px !important;
+        padding: 0 14px !important;
+        font-size: 0.78rem !important;
+    }
+    .panda-card-graphic,
+    .panda-card-graphic-cluster {
+        width: 80px !important;
+        height: 80px !important;
+        right: 6px !important;
+        opacity: 0.22 !important;
+    }
+    .panda-card-graphic img.panda-mascot-img {
+        height: 80px !important;
+    }
+    .panda-welcome-banner {
+        padding: 18px 16px !important;
+        border-radius: 16px !important;
+    }
+    .market-store-list,
+    .store-list-grid,
+    .store-list-rows {
+        grid-template-columns: 1fr !important;
+        gap: 14px !important;
     }
 }
 

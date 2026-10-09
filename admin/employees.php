@@ -196,6 +196,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             mysqli_stmt_bind_param($stmt, $types, ...$params_to_bind);
             
             if (mysqli_stmt_execute($stmt)) {
+                require_once __DIR__ . '/../includes/rider_helper.php';
+                foreach ($employee_ids as $eid) {
+                    $emp_q = mysqli_query($conn, "SELECT user_id, email FROM employees WHERE id = " . (int)$eid . " LIMIT 1");
+                    if ($emp_q && ($er = mysqli_fetch_assoc($emp_q))) {
+                        $uid = !empty($er['user_id']) ? (int)$er['user_id'] : 0;
+                        if (!$uid && !empty($er['email'])) {
+                            $u_match = mysqli_query($conn, "SELECT id FROM users WHERE email = '" . mysqli_real_escape_string($conn, $er['email']) . "' LIMIT 1");
+                            if ($u_match && ($ur = mysqli_fetch_assoc($u_match))) {
+                                $uid = (int)$ur['id'];
+                                mysqli_query($conn, "UPDATE employees SET user_id = $uid WHERE id = " . (int)$eid . " LIMIT 1");
+                            }
+                        }
+                        if ($uid > 0) {
+                            isDeliveryDriverUser($conn, $uid);
+                        }
+                    }
+                }
                 $_SESSION['success'] = count($employee_ids) . " employees assigned to the department.";
             } else {
                 $_SESSION['error'] = "Failed to assign employees: " . mysqli_error($conn);
@@ -238,7 +255,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($emp_result && mysqli_num_rows($emp_result) > 0) {
             $employee = mysqli_fetch_assoc($emp_result);
             $email = $employee['email'];
-            $full_name = $employee['first_name'] . ' ' . $employee['last_name'];
+            $full_name = formatEmployeeFullName($employee['first_name'] ?? '', $employee['middle_initial'] ?? '', $employee['last_name'] ?? '', $employee['suffix'] ?? '');
             $phone = $employee['phone'];
 
             // Check if user account with this email already exists
@@ -279,6 +296,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     mysqli_stmt_bind_param($stmt_link, "ii", $new_user_id, $employee_id_to_link);
                     
                     if (mysqli_stmt_execute($stmt_link)) {
+                        require_once __DIR__ . '/../includes/rider_helper.php';
+                        isDeliveryDriverUser($conn, $new_user_id);
                         $_SESSION['success'] = "User account created and linked to employee successfully.";
                     } else {
                         $_SESSION['error'] = "Account created, but failed to link to employee record.";
@@ -301,7 +320,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $first_name = trim($_POST['first_name'] ?? '');
+        $middle_initial = trim($_POST['middle_initial'] ?? '');
         $last_name = trim($_POST['last_name'] ?? '');
+        $suffix = trim($_POST['suffix'] ?? '');
         $email = trim($_POST['email'] ?? '');
         $phone = trim($_POST['phone'] ?? '');
         $department_id = isset($_POST['department_id']) && $_POST['department_id'] !== '' ? intval($_POST['department_id']) : 0;
@@ -313,7 +334,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit();
         }
         $position = $position_record['title'] ?? '';
-        if (!empty($position_record['department_id'])) {
+        if ($department_id <= 0 && !empty($position_record['department_id'])) {
             $department_id = (int)$position_record['department_id'];
         }
         $hire_date = trim($_POST['hire_date'] ?? '');
@@ -363,19 +384,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['error'] = "Password and Role are required when creating a user account.";
         } elseif ($create_user && mysqli_num_rows($user_check_result) > 0) {
             $_SESSION['error'] = "Email is already registered to a user account.";
-        } elseif ($first_name === '' || $last_name === '' || $email === '' || $position_id <= 0 || $position === '' || $hire_date === '' || $base_salary_input <= 0) {
-            $_SESSION['error'] = "Please fill in all required fields.";
+        } elseif ($first_name === '' || $last_name === '' || $email === '' || $phone === '' || $sss === '' || $philhealth === '' || $pagibig === '' || $tin === '' || $department_id <= 0 || $position_id <= 0 || $position === '' || $hire_date === '' || $base_salary_input <= 0) {
+            $_SESSION['error'] = "Please fill in all required fields (personal info, phone, government IDs, department, position, hire date, and salary).";
         } else { // Proceed with adding employee
             $user_id_for_employee = null; // Initialize user_id to null
 
             // If creating a user account, do it first to get the user_id
             if ($create_user) {
                 $hashed_password = password_hash($user_password, PASSWORD_DEFAULT);
-                $full_name = $first_name . ' ' . $last_name;
+                $full_name = formatEmployeeFullName($first_name, $middle_initial, $last_name, $suffix);
                 // Changed user_type from 'admin' to 'employee'
-                $user_query = "INSERT INTO users (full_name, email, phone, password, user_type, role_id, is_active) VALUES (?, ?, ?, ?, 'employee', ?, 1)";
+                $user_query = "INSERT INTO users (full_name, middle_name, suffix, email, phone, password, user_type, role_id, is_active) VALUES (?, ?, ?, ?, ?, ?, 'employee', ?, 1)";
                 $stmt_user = mysqli_prepare($conn, $user_query);
-                mysqli_stmt_bind_param($stmt_user, "ssssi", $full_name, $email, $phone, $hashed_password, $user_role_id);
+                mysqli_stmt_bind_param($stmt_user, "ssssssi", $full_name, $middle_initial, $suffix, $email, $phone, $hashed_password, $user_role_id);
                 if (mysqli_stmt_execute($stmt_user)) {
                     $user_id_for_employee = mysqli_insert_id($conn); // Get the ID of the newly created user
                     if ($is_partner_scoped_hr) {
@@ -401,13 +422,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 mysqli_stmt_close($stmt_user);
             }
 
-            // Now insert the employee record, linking to the user_id if created
-            $query = "INSERT INTO employees (employee_id, first_name, last_name, email, user_id, phone, sss_number, philhealth_number, pagibig_number, tin_number, department_id, position_id, position, hire_date, employment_type, employment_basis, salary, daily_rate, status)
-                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?,0), ?, ?, ?, ?, ?, ?, ?, 'active')";
+            // If user account wasn't created via checkbox, check if user with this email already exists
+            if (!$create_user && $user_id_for_employee === null) {
+                $user_check_stmt = mysqli_prepare($conn, "SELECT id FROM users WHERE email = ? LIMIT 1");
+                if ($user_check_stmt) {
+                    mysqli_stmt_bind_param($user_check_stmt, "s", $email);
+                    mysqli_stmt_execute($user_check_stmt);
+                    $u_res = mysqli_stmt_get_result($user_check_stmt);
+                    if ($u_row = mysqli_fetch_assoc($u_res)) {
+                        $user_id_for_employee = (int)$u_row['id'];
+                    }
+                    mysqli_stmt_close($user_check_stmt);
+                }
+            }
+
+            // Now insert the employee record, linking to the user_id if created or found
+            $query = "INSERT INTO employees (employee_id, first_name, middle_initial, last_name, suffix, email, user_id, phone, sss_number, philhealth_number, pagibig_number, tin_number, department_id, position_id, position, hire_date, employment_type, employment_basis, salary, daily_rate, status)
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?,0), ?, ?, ?, ?, ?, ?, ?, 'active')";
             $stmt = mysqli_prepare($conn, $query);
-            mysqli_stmt_bind_param($stmt, "ssssisssssiissssdd", $employee_id, $first_name, $last_name, $email, $user_id_for_employee, $phone, $sss, $philhealth, $pagibig, $tin, $department_id, $position_id, $position, $hire_date, $employment_type, $employment_basis, $salary, $daily_rate);
+            mysqli_stmt_bind_param($stmt, "ssssssisssssiissssdd", $employee_id, $first_name, $middle_initial, $last_name, $suffix, $email, $user_id_for_employee, $phone, $sss, $philhealth, $pagibig, $tin, $department_id, $position_id, $position, $hire_date, $employment_type, $employment_basis, $salary, $daily_rate);
 
             if ($stmt && mysqli_stmt_execute($stmt)) {
+                $new_emp_pk = mysqli_insert_id($conn);
+                if ($user_id_for_employee && $user_id_for_employee > 0) {
+                    require_once __DIR__ . '/../includes/rider_helper.php';
+                    isDeliveryDriverUser($conn, $user_id_for_employee);
+                }
                 $_SESSION['success'] = (isset($_SESSION['success']) ? $_SESSION['success'] . " Employee added successfully." : "Employee added successfully.");
             } else {
                 $_SESSION['error'] = "Error adding employee: " . mysqli_error($conn);
@@ -430,7 +470,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit();
         }
         $first_name = trim($_POST['first_name'] ?? '');
+        $middle_initial = trim($_POST['middle_initial'] ?? '');
         $last_name = trim($_POST['last_name'] ?? '');
+        $suffix = trim($_POST['suffix'] ?? '');
         $email = trim($_POST['email'] ?? '');
         $phone = trim($_POST['phone'] ?? '');
         $department_id = isset($_POST['department_id']) && $_POST['department_id'] !== '' ? intval($_POST['department_id']) : 0;
@@ -442,7 +484,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit();
         }
         $position = $position_record['title'] ?? '';
-        if (!empty($position_record['department_id'])) {
+        if ($department_id <= 0 && !empty($position_record['department_id'])) {
             $department_id = (int)$position_record['department_id'];
         }
         if ($is_partner_scoped_hr && $position_id > 0 && !hrPositionIdInScope($conn, $position_id)) {
@@ -472,17 +514,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pagibig = trim($_POST['pagibig_number'] ?? '');
         $tin = trim($_POST['tin_number'] ?? '');
 
-        if ($first_name === '' || $last_name === '' || $email === '' || $position_id <= 0 || $position === '' || $hire_date === '' || $base_salary_input <= 0) {
-            $_SESSION['error'] = "Please fill in all required employee fields.";
+        if ($first_name === '' || $last_name === '' || $email === '' || $phone === '' || $sss === '' || $philhealth === '' || $pagibig === '' || $tin === '' || $department_id <= 0 || $position_id <= 0 || $position === '' || $hire_date === '' || $base_salary_input <= 0) {
+            $_SESSION['error'] = "Please fill in all required employee fields (personal info, phone, government IDs, department, position, hire date, and salary).";
             header("Location: employees.php");
             exit();
         }
 
-        $query = "UPDATE employees SET first_name=?, last_name=?, email=?, phone=?, department_id=NULLIF(?,0), position_id=?, position=?, hire_date=?, employment_type=?, employment_basis=?, salary=?, daily_rate=?, sss_number=?, philhealth_number=?, pagibig_number=?, tin_number=? WHERE id=?";
+        $query = "UPDATE employees SET first_name=?, middle_initial=?, last_name=?, suffix=?, email=?, phone=?, department_id=NULLIF(?,0), position_id=?, position=?, hire_date=?, employment_type=?, employment_basis=?, salary=?, daily_rate=?, sss_number=?, philhealth_number=?, pagibig_number=?, tin_number=? WHERE id=?";
         $stmt = mysqli_prepare($conn, $query);
-        mysqli_stmt_bind_param($stmt, "ssssiissssddssssi", $first_name, $last_name, $email, $phone, $department_id, $position_id, $position, $hire_date, $employment_type, $employment_basis, $salary, $daily_rate, $sss, $philhealth, $pagibig, $tin, $id);
+        mysqli_stmt_bind_param($stmt, "ssssssiissssddssssi", $first_name, $middle_initial, $last_name, $suffix, $email, $phone, $department_id, $position_id, $position, $hire_date, $employment_type, $employment_basis, $salary, $daily_rate, $sss, $philhealth, $pagibig, $tin, $id);
 
         if ($stmt && mysqli_stmt_execute($stmt)) {
+            // Find or link user_id if employee has a user account with matching email
+            $emp_u_chk = mysqli_query($conn, "SELECT user_id, email FROM employees WHERE id = " . (int)$id . " LIMIT 1");
+            $sync_user_id = 0;
+            if ($emp_u_chk && ($e_row = mysqli_fetch_assoc($emp_u_chk))) {
+                if (!empty($e_row['user_id'])) {
+                    $sync_user_id = (int)$e_row['user_id'];
+                } elseif (!empty($e_row['email'])) {
+                    $u_chk = mysqli_prepare($conn, "SELECT id FROM users WHERE email = ? LIMIT 1");
+                    if ($u_chk) {
+                        mysqli_stmt_bind_param($u_chk, "s", $e_row['email']);
+                        mysqli_stmt_execute($u_chk);
+                        $u_res = mysqli_stmt_get_result($u_chk);
+                        if ($u_r = mysqli_fetch_assoc($u_res)) {
+                            $sync_user_id = (int)$u_r['id'];
+                            mysqli_query($conn, "UPDATE employees SET user_id = $sync_user_id WHERE id = " . (int)$id . " LIMIT 1");
+                        }
+                        mysqli_stmt_close($u_chk);
+                    }
+                }
+            }
+
+            if ($sync_user_id > 0) {
+                $full_name = formatEmployeeFullName($first_name, $middle_initial, $last_name, $suffix);
+                $u_upd = mysqli_prepare($conn, "UPDATE users SET full_name = ?, middle_name = ?, suffix = ? WHERE id = ?");
+                if ($u_upd) {
+                    mysqli_stmt_bind_param($u_upd, "sssi", $full_name, $middle_initial, $suffix, $sync_user_id);
+                    mysqli_stmt_execute($u_upd);
+                    mysqli_stmt_close($u_upd);
+                }
+            }
+
+            if ($sync_user_id > 0) {
+                require_once __DIR__ . '/../includes/rider_helper.php';
+                isDeliveryDriverUser($conn, $sync_user_id);
+            }
+
             $_SESSION['success'] = "Employee updated successfully.";
         } else {
             $_SESSION['error'] = "Error updating employee: " . mysqli_error($conn);
@@ -577,12 +655,15 @@ $params = [];
 $param_types = '';
 
 if ($search !== '') {
-    $where_clauses[] = "(e.first_name LIKE ? OR e.last_name LIKE ? OR e.email LIKE ?)";
+    $where_clauses[] = "(e.first_name LIKE ? OR e.middle_initial LIKE ? OR e.last_name LIKE ? OR e.suffix LIKE ? OR e.email LIKE ? OR CONCAT_WS(' ', e.first_name, e.middle_initial, e.last_name, e.suffix) LIKE ?)";
     $search_like = "%{$search}%";
     $params[] = $search_like;
     $params[] = $search_like;
     $params[] = $search_like;
-    $param_types .= 'sss';
+    $params[] = $search_like;
+    $params[] = $search_like;
+    $params[] = $search_like;
+    $param_types .= 'ssssss';
 }
 if ($department_filter !== '') {
     $where_clauses[] = "e.department_id = ?";
@@ -727,26 +808,398 @@ if ($roles_query) while ($r = mysqli_fetch_assoc($roles_query)) {
             color: #ffc107;
         }
 
-        #addEmployeeModal .modal-body,
-        #editEmployeeModal .modal-body {
-            background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+        /* Modern Employee Modal UI/UX Tokens */
+        .emp-modal .modal-content {
+            border: 1px solid #eaecf0;
+            border-radius: 16px;
+            box-shadow: 0 20px 45px rgba(16, 24, 40, 0.12);
+            overflow: hidden;
+            background: #ffffff;
         }
 
-        #addEmployeeModal .form-group,
-        #editEmployeeModal .form-group {
-            margin-bottom: 12px;
+        .emp-modal .modal-header {
+            padding: 20px 24px;
+            background: #ffffff;
+            border-bottom: 1px solid #eaecf0;
+            display: flex;
+            align-items: center;
+            gap: 14px;
         }
 
-        #addEmployeeModal .form-control,
-        #addEmployeeModal .form-select,
-        #editEmployeeModal .form-control,
-        #editEmployeeModal .form-select {
+        .emp-modal .modal-header-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            background: #fff1f0;
+            color: #b3261e;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            flex-shrink: 0;
+            border: 1px solid #fee4e2;
+        }
+
+        .emp-modal .modal-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #101828;
+            margin: 0;
+            line-height: 1.3;
+        }
+
+        .emp-modal .modal-subtitle {
+            font-size: 13px;
+            color: #475467;
+            margin: 3px 0 0;
+            line-height: 1.4;
+        }
+
+        .emp-modal .btn-close {
+            margin-left: auto;
+            background-color: #f2f4f7;
+            border-radius: 8px;
+            opacity: 0.7;
+            transition: all 0.18s ease;
+            padding: 8px;
+        }
+
+        .emp-modal .btn-close:hover {
+            opacity: 1;
+            background-color: #fee4e2;
+        }
+
+        .emp-modal .modal-body {
+            padding: 20px 24px;
+            background: #f8f9fa;
+            max-height: calc(85vh - 140px);
+            overflow-y: auto;
+        }
+
+        /* Form Section Cards */
+        .emp-section-card {
+            background: #ffffff;
+            border: 1px solid #eaecf0;
+            border-radius: 12px;
+            padding: 18px 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+        }
+
+        .emp-section-card:last-child {
+            margin-bottom: 0;
+        }
+
+        .emp-section-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 14px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #f2f4f7;
+        }
+
+        .emp-section-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #1d2939;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .emp-section-title i {
+            color: #b3261e;
+            font-size: 14px;
+        }
+
+        .emp-req-pill {
+            font-size: 11px;
+            font-weight: 600;
+            color: #b3261e;
+            background: #fff1f0;
+            border: 1px solid #fee4e2;
+            padding: 2px 8px;
+            border-radius: 6px;
+            letter-spacing: 0.02em;
+        }
+
+        .emp-form-group {
+            margin-bottom: 0;
+        }
+
+        .emp-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #344054;
+            margin-bottom: 6px;
+        }
+
+        .emp-req-star {
+            color: #b3261e !important;
+            font-weight: 700;
+            margin-left: 2px;
+        }
+
+        .emp-input-wrap {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .emp-input-icon {
+            position: absolute;
+            left: 14px;
+            color: #98a2b3;
+            font-size: 14px;
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        .emp-input-wrap .form-control,
+        .emp-input-wrap .form-select {
+            padding-left: 40px !important;
+        }
+
+        .emp-modal .form-control,
+        .emp-modal .form-select {
+            border: 1px solid #d0d5dd;
             border-radius: 10px;
+            padding: 10px 14px;
+            font-size: 13.5px;
+            color: #101828;
+            background: #ffffff;
+            box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+            transition: all 0.2s ease;
         }
 
-        body.dark-mode #addEmployeeModal .modal-body,
-        body.dark-mode #editEmployeeModal .modal-body {
-            background: var(--card-bg-dark);
+        .emp-modal .form-control:focus,
+        .emp-modal .form-select:focus {
+            border-color: #b3261e;
+            box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.12);
+            outline: none;
+        }
+
+        .emp-modal .form-control::placeholder {
+            color: #98a2b3;
+            font-size: 13px;
+        }
+
+        .emp-helper-text {
+            font-size: 12px;
+            color: #667085;
+            margin-top: 5px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        /* User Account Toggle Card */
+        .emp-toggle-card {
+            background: #f8f9fa;
+            border: 1px solid #eaecf0;
+            border-radius: 12px;
+            padding: 16px 18px;
+            transition: all 0.2s ease;
+        }
+
+        .emp-toggle-card:hover {
+            border-color: #d0d5dd;
+        }
+
+        .emp-toggle-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .emp-toggle-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .emp-toggle-icon {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            background: #ffffff;
+            border: 1px solid #eaecf0;
+            color: #b3261e;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 15px;
+            flex-shrink: 0;
+        }
+
+        .emp-toggle-title {
+            font-size: 13.5px;
+            font-weight: 700;
+            color: #101828;
+            margin: 0;
+        }
+
+        .emp-toggle-desc {
+            font-size: 12px;
+            color: #667085;
+            margin: 2px 0 0;
+        }
+
+        .emp-switch-input {
+            width: 44px;
+            height: 24px;
+            cursor: pointer;
+        }
+
+        /* Modal Footer */
+        .emp-modal .modal-footer {
+            padding: 16px 24px;
+            background: #ffffff;
+            border-top: 1px solid #eaecf0;
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+
+        .emp-btn-cancel {
+            background: #ffffff;
+            border: 1px solid #d0d5dd;
+            color: #344054;
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.18s ease;
+        }
+
+        .emp-btn-cancel:hover {
+            background: #f8f9fa;
+            border-color: #98a2b3;
+            color: #1d2939;
+        }
+
+        .emp-btn-primary {
+            background: #b3261e;
+            border: 1px solid #b3261e;
+            color: #ffffff;
+            padding: 10px 24px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 1px 3px rgba(179, 38, 30, 0.2);
+            transition: all 0.18s ease;
+        }
+
+        .emp-btn-primary:hover {
+            background: #981b15;
+            border-color: #981b15;
+            color: #ffffff;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(179, 38, 30, 0.25);
+        }
+
+        /* Dark Mode Tokens */
+        body.dark-mode .emp-modal .modal-content {
+            background: #181d26 !important;
+            border-color: #27303f !important;
+        }
+
+        body.dark-mode .emp-modal .modal-header,
+        body.dark-mode .emp-modal .modal-footer {
+            background: #181d26 !important;
+            border-color: #27303f !important;
+        }
+
+        body.dark-mode .emp-modal .modal-body {
+            background: #0f1319 !important;
+        }
+
+        body.dark-mode .emp-modal .modal-title {
+            color: #f8fafc !important;
+        }
+
+        body.dark-mode .emp-modal .modal-subtitle {
+            color: #94a3b8 !important;
+        }
+
+        body.dark-mode .emp-modal .modal-header-icon {
+            background: #2a1818 !important;
+            border-color: #4c1d1d !important;
+            color: #ff6b6b !important;
+        }
+
+        body.dark-mode .emp-section-card {
+            background: #181d26 !important;
+            border-color: #27303f !important;
+        }
+
+        body.dark-mode .emp-section-head {
+            border-bottom-color: #27303f !important;
+        }
+
+        body.dark-mode .emp-section-title {
+            color: #f1f5f9 !important;
+        }
+
+        body.dark-mode .emp-section-title i {
+            color: #ff6b6b !important;
+        }
+
+        body.dark-mode .emp-label {
+            color: #cbd5e1 !important;
+        }
+
+        body.dark-mode .emp-modal .form-control,
+        body.dark-mode .emp-modal .form-select {
+            background: #222936 !important;
+            border-color: #2e3848 !important;
+            color: #f8fafc !important;
+        }
+
+        body.dark-mode .emp-modal .form-control:focus,
+        body.dark-mode .emp-modal .form-select:focus {
+            border-color: #ef4444 !important;
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2) !important;
+        }
+
+        body.dark-mode .emp-modal .form-control::placeholder {
+            color: #64748b !important;
+        }
+
+        body.dark-mode .emp-toggle-card {
+            background: #13171f !important;
+            border-color: #27303f !important;
+        }
+
+        body.dark-mode .emp-toggle-icon {
+            background: #1e2430 !important;
+            border-color: #2e3848 !important;
+            color: #ff6b6b !important;
+        }
+
+        body.dark-mode .emp-toggle-title {
+            color: #f8fafc !important;
+        }
+
+        body.dark-mode .emp-toggle-desc {
+            color: #94a3b8 !important;
+        }
+
+        body.dark-mode .emp-btn-cancel {
+            background: #222936 !important;
+            border-color: #2e3848 !important;
+            color: #e2e8f0 !important;
+        }
+
+        body.dark-mode .emp-btn-cancel:hover {
+            background: #2a3444 !important;
         }
     </style>
 </head>
@@ -850,12 +1303,12 @@ if ($roles_query) while ($r = mysqli_fetch_assoc($roles_query)) {
                                     $dept_name = isset($emp['department_name']) ? $emp['department_name'] : 'Unassigned';
                                     $user_account_status = 'No Account';
                                     $user_account_class = 'badge-secondary';
-                                    $employee_name_safe = htmlspecialchars(trim((string)($emp['first_name'] ?? '')) . ' ' . trim((string)($emp['last_name'] ?? '')));
+                                    $employee_name_safe = htmlspecialchars(formatEmployeeFullName($emp['first_name'] ?? '', $emp['middle_initial'] ?? '', $emp['last_name'] ?? '', $emp['suffix'] ?? ''));
                                     $employee_email_safe = htmlspecialchars((string)($emp['email'] ?? ''));
                                     $department_name_safe = htmlspecialchars((string)$dept_name);
                                     $position_label_safe = htmlspecialchars((string)($emp['position_label'] ?? ''));
                                     $employee_id_safe = htmlspecialchars((string)($emp['employee_id'] ?? ''));
-                                    $employee_name_js = htmlspecialchars(json_encode(trim((string)($emp['first_name'] ?? '')) . ' ' . trim((string)($emp['last_name'] ?? '')), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES);
+                                    $employee_name_js = htmlspecialchars(json_encode(formatEmployeeFullName($emp['first_name'] ?? '', $emp['middle_initial'] ?? '', $emp['last_name'] ?? '', $emp['suffix'] ?? ''), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES);
                                     $employee_email_js = htmlspecialchars(json_encode((string)($emp['email'] ?? ''), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES);
                                     if ($emp['user_id'] && $emp['user_type']) {
                                         $user_account_status = ucfirst($emp['user_type']);
@@ -925,134 +1378,275 @@ if ($roles_query) while ($r = mysqli_fetch_assoc($roles_query)) {
     </div>
     
     <!-- Add Employee Modal -->
-    <div class="modal fade" id="addEmployeeModal" tabindex="-1">
-        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal fade emp-modal" id="addEmployeeModal" tabindex="-1" aria-labelledby="addEmployeeModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Add New Employee</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <div class="modal-header-icon">
+                        <i class="fas fa-user-plus"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title" id="addEmployeeModalLabel">Add New Employee</h5>
+                        <p class="modal-subtitle">Complete all required employee credentials, mandatory government IDs, and payroll details.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <form method="POST">
                     <div class="modal-body">
                         <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
-                        <div class="form-group">
-                            <label>First Name *</label>
-                            <input type="text" name="first_name" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label>Last Name *</label>
-                            <input type="text" name="last_name" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label>Email *</label>
-                            <input type="email" name="email" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label>Phone</label>
-                            <input type="text" name="phone" class="form-control">
-                        </div>
-                        <div class="form-group">
-                            <label>Government IDs (Optional)</label>
-                            <div class="row g-2">
-                                <div class="col-6">
-                                    <input type="text" name="sss_number" class="form-control form-control-sm" placeholder="SSS Number">
-                                </div>
-                                <div class="col-6">
-                                    <input type="text" name="philhealth_number" class="form-control form-control-sm" placeholder="PhilHealth">
-                                </div>
-                                <div class="col-6">
-                                    <input type="text" name="pagibig_number" class="form-control form-control-sm" placeholder="Pag-IBIG">
-                                </div>
-                                <div class="col-6">
-                                    <input type="text" name="tin_number" class="form-control form-control-sm" placeholder="TIN">
-                                </div>
-                            </div>
-                        </div>
-                        <div class="row g-2">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label>Department</label>
-                                    <select name="department_id" id="add_department_id" class="form-select">
-                                        <option value="">Select Department</option>
-                                        <?php foreach ($departments as $dept): ?>
-                                            <option value="<?php echo (int)($dept['id'] ?? 0); ?>">
-                                                <?php echo htmlspecialchars((string)($dept['department_name'] ?? '')); ?>
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label>Position *</label>
-                                    <select name="position_id" id="add_position_id" class="form-select" required>
-                                        <option value="">Select Position</option>
-                                    </select>
-                                    <small class="text-muted">Positions are centralized from Recruitment (`job_positions`).</small>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label>Hire Date *</label>
-                            <input type="date" name="hire_date" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label>Employment Type</label>
-                            <select name="employment_type" class="form-select">
-                                <option value="full_time">Full Time</option>
-                                <option value="part_time">Part Time</option>
-                                <option value="contract">Contract</option>
-                                <option value="temporary">Temporary</option>
-                            </select>
-                        </div>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label>Employment Basis</label>
-                                    <select name="employment_basis" class="form-select">
-                                        <option value="monthly">Monthly</option>
-                                        <option value="daily">Daily</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label>Base Salary/Rate (&#8369;)</label>
-                                    <input type="number" name="base_salary" class="form-control" step="0.01" required placeholder="e.g. 20000 or 570">
-                                </div>
-                            </div>
-                        </div>
                         
-                        <hr>
-                        <div class="form-check mb-3">
-                            <input type="checkbox" class="form-check-input" id="createUserCheck" name="create_user" onchange="toggleUserFields()">
-                            <label class="form-check-label" for="createUserCheck">Create Login Account</label>
-                        </div>
-                        
-                        <div id="userFields" style="display:none; background: #f8f9fa; padding: 15px; border-radius: 5px;">
-                            <div class="form-group mb-2">
-                                <label>System Role *</label>
-                                <select name="role_id" class="form-select">
-                                    <option value="">Select Role</option>
-                                    <?php foreach ($roles as $role): ?>
-                                        <?php
-                                            $display_name = $role['department_name'] 
-                                                ? htmlspecialchars($role['department_name']) . ' (Dept. Role)' 
-                                                : getRoleDisplayName($role['name']);
-                                        ?>
-                                        <option value="<?php echo $role['id']; ?>"><?php echo $display_name; ?></option>
-                                    <?php endforeach; ?>
-                                </select>
+                        <!-- Section 1: Personal & Contact Information -->
+                        <div class="emp-section-card">
+                            <div class="emp-section-head">
+                                <span class="emp-section-title"><i class="fas fa-user"></i> Personal & Contact Info</span>
+                                <span class="emp-req-pill">Required</span>
                             </div>
-                            <div class="form-group">
-                                <label>Password *</label>
-                                <input type="password" name="password" class="form-control" placeholder="Set login password">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">First Name <span class="emp-req-star">*</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-user emp-input-icon"></i>
+                                            <input type="text" name="first_name" class="form-control" placeholder="e.g. Juan" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-2">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">M.I. <span class="text-muted fw-normal" style="font-size: 11px;">(Optional)</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-signature emp-input-icon"></i>
+                                            <input type="text" name="middle_initial" class="form-control" placeholder="e.g. D." maxlength="10">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">Last Name <span class="emp-req-star">*</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-user emp-input-icon"></i>
+                                            <input type="text" name="last_name" class="form-control" placeholder="e.g. Dela Cruz" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-2">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">Suffix <span class="text-muted fw-normal" style="font-size: 11px;">(Optional)</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-tag emp-input-icon"></i>
+                                            <input type="text" name="suffix" class="form-control" placeholder="e.g. Jr." maxlength="20">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">Email Address <span class="emp-req-star">*</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-envelope emp-input-icon"></i>
+                                            <input type="email" name="email" class="form-control" placeholder="juan.delacruz@company.com" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">Phone Number <span class="emp-req-star">*</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-phone-alt emp-input-icon"></i>
+                                            <input type="text" name="phone" class="form-control" placeholder="0917-123-4567" required>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Section 2: Mandatory Government Compliance IDs -->
+                        <div class="emp-section-card">
+                            <div class="emp-section-head">
+                                <span class="emp-section-title"><i class="fas fa-id-card"></i> Mandatory Government IDs</span>
+                                <span class="emp-req-pill">Required</span>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">SSS Number <span class="emp-req-star">*</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-shield-alt emp-input-icon"></i>
+                                            <input type="text" name="sss_number" class="form-control" placeholder="XX-XXXXXXX-X" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">PhilHealth Number <span class="emp-req-star">*</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-heartbeat emp-input-icon"></i>
+                                            <input type="text" name="philhealth_number" class="form-control" placeholder="XX-XXXXXXXXX-X" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">Pag-IBIG Number <span class="emp-req-star">*</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-home emp-input-icon"></i>
+                                            <input type="text" name="pagibig_number" class="form-control" placeholder="XXXX-XXXX-XXXX" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">TIN (Tax Identification) <span class="emp-req-star">*</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-file-invoice-dollar emp-input-icon"></i>
+                                            <input type="text" name="tin_number" class="form-control" placeholder="XXX-XXX-XXX-XXX" required>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Section 3: Department, Position & Compensation -->
+                        <div class="emp-section-card">
+                            <div class="emp-section-head">
+                                <span class="emp-section-title"><i class="fas fa-briefcase"></i> Position & Compensation</span>
+                                <span class="emp-req-pill">Required</span>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">Department <span class="emp-req-star">*</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-building emp-input-icon"></i>
+                                            <select name="department_id" id="add_department_id" class="form-select" required>
+                                                <option value="">Select Department</option>
+                                                <?php foreach ($departments as $dept): ?>
+                                                    <option value="<?php echo (int)($dept['id'] ?? 0); ?>">
+                                                        <?php echo htmlspecialchars((string)($dept['department_name'] ?? '')); ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">Position <span class="emp-req-star">*</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-user-tag emp-input-icon"></i>
+                                            <select name="position_id" id="add_position_id" class="form-select" required>
+                                                <option value="">Select Position</option>
+                                            </select>
+                                        </div>
+                                        <div class="emp-helper-text">
+                                            <i class="fas fa-info-circle"></i> Synced from Recruitment (`job_positions`).
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">Hire Date <span class="emp-req-star">*</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-calendar-alt emp-input-icon"></i>
+                                            <input type="date" name="hire_date" class="form-control" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">Employment Type <span class="emp-req-star">*</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-clock emp-input-icon"></i>
+                                            <select name="employment_type" class="form-select" required>
+                                                <option value="full_time">Full Time</option>
+                                                <option value="part_time">Part Time</option>
+                                                <option value="contract">Contract</option>
+                                                <option value="temporary">Temporary</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">Employment Basis <span class="emp-req-star">*</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-sliders-h emp-input-icon"></i>
+                                            <select name="employment_basis" class="form-select" required>
+                                                <option value="monthly">Monthly</option>
+                                                <option value="daily">Daily</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">Base Salary/Rate (&#8369;) <span class="emp-req-star">*</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-money-bill-wave emp-input-icon"></i>
+                                            <input type="number" name="base_salary" class="form-control" step="0.01" min="0" required placeholder="e.g. 20000.00 or 570.00">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Section 4: Login Account (Optional Toggle) -->
+                        <div class="emp-section-card">
+                            <div class="emp-toggle-card">
+                                <div class="emp-toggle-header" onclick="const chk = document.getElementById('createUserCheck'); chk.checked = !chk.checked; toggleUserFields();">
+                                    <div class="emp-toggle-info">
+                                        <div class="emp-toggle-icon">
+                                            <i class="fas fa-user-shield"></i>
+                                        </div>
+                                        <div>
+                                            <h6 class="emp-toggle-title">Create Login Account</h6>
+                                            <p class="emp-toggle-desc">Enable system access credentials and dashboard permissions for this employee.</p>
+                                        </div>
+                                    </div>
+                                    <div class="form-check form-switch m-0" onclick="event.stopPropagation()">
+                                        <input type="checkbox" class="form-check-input emp-switch-input" id="createUserCheck" name="create_user" onchange="toggleUserFields()">
+                                    </div>
+                                </div>
+                                
+                                <div id="userFields" style="display:none; margin-top: 16px; padding-top: 16px; border-top: 1px solid #eaecf0;">
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <div class="emp-form-group">
+                                                <label class="emp-label">System Role <span class="emp-req-star">*</span></label>
+                                                <div class="emp-input-wrap">
+                                                    <i class="fas fa-user-shield emp-input-icon"></i>
+                                                    <select name="role_id" class="form-select">
+                                                        <option value="">Select Role</option>
+                                                        <?php foreach ($roles as $role): ?>
+                                                            <?php
+                                                                $display_name = $role['department_name'] 
+                                                                    ? htmlspecialchars($role['department_name']) . ' (Dept. Role)' 
+                                                                    : getRoleDisplayName($role['name']);
+                                                            ?>
+                                                            <option value="<?php echo $role['id']; ?>"><?php echo $display_name; ?></option>
+                                                        <?php endforeach; ?>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="emp-form-group">
+                                                <label class="emp-label">Password <span class="emp-req-star">*</span></label>
+                                                <div class="emp-input-wrap">
+                                                    <i class="fas fa-lock emp-input-icon"></i>
+                                                    <input type="password" name="password" class="form-control" placeholder="Set login password">
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" name="add_employee" value="1" class="btn btn-primary">Add Employee</button>
+                        <button type="button" class="emp-btn-cancel" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" name="add_employee" value="1" class="emp-btn-primary">
+                            <i class="fas fa-plus"></i> Add Employee
+                        </button>
                     </div>
                 </form>
             </div>
@@ -1060,12 +1654,18 @@ if ($roles_query) while ($r = mysqli_fetch_assoc($roles_query)) {
     </div>
     
     <!-- Edit Employee Modal -->
-    <div class="modal fade" id="editEmployeeModal" tabindex="-1">
-        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal fade emp-modal" id="editEmployeeModal" tabindex="-1" aria-labelledby="editEmployeeModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Edit Employee</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <div class="modal-header-icon">
+                        <i class="fas fa-user-edit"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title" id="editEmployeeModalLabel">Edit Employee</h5>
+                        <p class="modal-subtitle">Update staff records, mandatory government IDs, and compensation structure.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <form method="POST">
                     <div class="modal-body">
@@ -1073,55 +1673,202 @@ if ($roles_query) while ($r = mysqli_fetch_assoc($roles_query)) {
                         <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
                         <input type="hidden" name="employee_id" id="edit_employee_id">
                         
-                        <div class="form-group"><label>First Name *</label><input type="text" name="first_name" id="edit_first_name" class="form-control" required></div>
-                        <div class="form-group"><label>Last Name *</label><input type="text" name="last_name" id="edit_last_name" class="form-control" required></div>
-                        <div class="form-group"><label>Email *</label><input type="email" name="email" id="edit_email" class="form-control" required></div>
-                        <div class="form-group"><label>Phone</label><input type="text" name="phone" id="edit_phone" class="form-control"></div>
-                        
-                        <div class="form-group">
-                            <label>Government IDs</label>
-                            <div class="row g-2">
-                                <div class="col-6"><input type="text" name="sss_number" id="edit_sss" class="form-control form-control-sm" placeholder="SSS"></div>
-                                <div class="col-6"><input type="text" name="philhealth_number" id="edit_philhealth" class="form-control form-control-sm" placeholder="PhilHealth"></div>
-                                <div class="col-6"><input type="text" name="pagibig_number" id="edit_pagibig" class="form-control form-control-sm" placeholder="Pag-IBIG"></div>
-                                <div class="col-6"><input type="text" name="tin_number" id="edit_tin" class="form-control form-control-sm" placeholder="TIN"></div>
+                        <!-- Section 1: Personal & Contact Information -->
+                        <div class="emp-section-card">
+                            <div class="emp-section-head">
+                                <span class="emp-section-title"><i class="fas fa-user"></i> Personal & Contact Info</span>
+                                <span class="emp-req-pill">Required</span>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">First Name <span class="emp-req-star">*</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-user emp-input-icon"></i>
+                                            <input type="text" name="first_name" id="edit_first_name" class="form-control" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-2">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">M.I. <span class="text-muted fw-normal" style="font-size: 11px;">(Optional)</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-signature emp-input-icon"></i>
+                                            <input type="text" name="middle_initial" id="edit_middle_initial" class="form-control" placeholder="e.g. D." maxlength="10">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">Last Name <span class="emp-req-star">*</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-user emp-input-icon"></i>
+                                            <input type="text" name="last_name" id="edit_last_name" class="form-control" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-2">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">Suffix <span class="text-muted fw-normal" style="font-size: 11px;">(Optional)</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-tag emp-input-icon"></i>
+                                            <input type="text" name="suffix" id="edit_suffix" class="form-control" placeholder="e.g. Jr." maxlength="20">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">Email Address <span class="emp-req-star">*</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-envelope emp-input-icon"></i>
+                                            <input type="email" name="email" id="edit_email" class="form-control" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">Phone Number <span class="emp-req-star">*</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-phone-alt emp-input-icon"></i>
+                                            <input type="text" name="phone" id="edit_phone" class="form-control" required>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="form-group">
-                            <label>Department</label>
-                            <select name="department_id" id="edit_department_id" class="form-select">
-                                <option value="">Select Department</option>
-                                <?php foreach ($departments as $dept): ?>
-                                    <option value="<?php echo (int)($dept['id'] ?? 0); ?>">
-                                        <?php echo htmlspecialchars((string)($dept['department_name'] ?? '')); ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
+                        <!-- Section 2: Mandatory Government Compliance IDs -->
+                        <div class="emp-section-card">
+                            <div class="emp-section-head">
+                                <span class="emp-section-title"><i class="fas fa-id-card"></i> Mandatory Government IDs</span>
+                                <span class="emp-req-pill">Required</span>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">SSS Number <span class="emp-req-star">*</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-shield-alt emp-input-icon"></i>
+                                            <input type="text" name="sss_number" id="edit_sss" class="form-control" placeholder="XX-XXXXXXX-X" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">PhilHealth Number <span class="emp-req-star">*</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-heartbeat emp-input-icon"></i>
+                                            <input type="text" name="philhealth_number" id="edit_philhealth" class="form-control" placeholder="XX-XXXXXXXXX-X" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">Pag-IBIG Number <span class="emp-req-star">*</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-home emp-input-icon"></i>
+                                            <input type="text" name="pagibig_number" id="edit_pagibig" class="form-control" placeholder="XXXX-XXXX-XXXX" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">TIN (Tax Identification) <span class="emp-req-star">*</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-file-invoice-dollar emp-input-icon"></i>
+                                            <input type="text" name="tin_number" id="edit_tin" class="form-control" placeholder="XXX-XXX-XXX-XXX" required>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
-                        <div class="form-group">
-                            <label>Position *</label>
-                            <select name="position_id" id="edit_position_id" class="form-select" required>
-                                <option value="">Select Position</option>
-                            </select>
-                        </div>
-                        <div class="form-group"><label>Hire Date *</label><input type="date" name="hire_date" id="edit_hire_date" class="form-control" required></div>
-                        
-                        <div class="form-group"><label>Employment Type</label>
-                            <select name="employment_type" id="edit_employment_type" class="form-select">
-                                <option value="full_time">Full Time</option><option value="part_time">Part Time</option><option value="contract">Contract</option><option value="temporary">Temporary</option>
-                            </select>
-                        </div>
-                        
-                        <div class="row">
-                            <div class="col-6"><label>Basis</label><select name="employment_basis" id="edit_employment_basis" class="form-select"><option value="monthly">Monthly</option><option value="daily">Daily</option></select></div>
-                            <div class="col-6"><label>Base Rate (&#8369;)</label><input type="number" name="base_salary" id="edit_base_salary" class="form-control" step="0.01" required></div>
+                        <!-- Section 3: Department, Position & Compensation -->
+                        <div class="emp-section-card">
+                            <div class="emp-section-head">
+                                <span class="emp-section-title"><i class="fas fa-briefcase"></i> Position & Compensation</span>
+                                <span class="emp-req-pill">Required</span>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">Department <span class="emp-req-star">*</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-building emp-input-icon"></i>
+                                            <select name="department_id" id="edit_department_id" class="form-select" required>
+                                                <option value="">Select Department</option>
+                                                <?php foreach ($departments as $dept): ?>
+                                                    <option value="<?php echo (int)($dept['id'] ?? 0); ?>">
+                                                        <?php echo htmlspecialchars((string)($dept['department_name'] ?? '')); ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">Position <span class="emp-req-star">*</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-user-tag emp-input-icon"></i>
+                                            <select name="position_id" id="edit_position_id" class="form-select" required>
+                                                <option value="">Select Position</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">Hire Date <span class="emp-req-star">*</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-calendar-alt emp-input-icon"></i>
+                                            <input type="date" name="hire_date" id="edit_hire_date" class="form-control" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">Employment Type <span class="emp-req-star">*</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-clock emp-input-icon"></i>
+                                            <select name="employment_type" id="edit_employment_type" class="form-select" required>
+                                                <option value="full_time">Full Time</option>
+                                                <option value="part_time">Part Time</option>
+                                                <option value="contract">Contract</option>
+                                                <option value="temporary">Temporary</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">Employment Basis <span class="emp-req-star">*</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-sliders-h emp-input-icon"></i>
+                                            <select name="employment_basis" id="edit_employment_basis" class="form-select" required>
+                                                <option value="monthly">Monthly</option>
+                                                <option value="daily">Daily</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">Base Salary/Rate (&#8369;) <span class="emp-req-star">*</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-money-bill-wave emp-input-icon"></i>
+                                            <input type="number" name="base_salary" id="edit_base_salary" class="form-control" step="0.01" min="0" required>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Update Employee</button>
+                        <button type="button" class="emp-btn-cancel" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="emp-btn-primary">
+                            <i class="fas fa-save"></i> Update Employee
+                        </button>
                     </div>
                 </form>
             </div>
@@ -1338,7 +2085,9 @@ if ($roles_query) while ($r = mysqli_fetch_assoc($roles_query)) {
                     
                     $('#edit_employee_id').val(data.id);
                     $('#edit_first_name').val(data.first_name);
+                    $('#edit_middle_initial').val(data.middle_initial || '');
                     $('#edit_last_name').val(data.last_name);
+                    $('#edit_suffix').val(data.suffix || '');
                     $('#edit_email').val(data.email);
                     $('#edit_phone').val(data.phone);
                     $('#edit_sss').val(data.sss_number);

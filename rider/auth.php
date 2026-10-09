@@ -22,13 +22,13 @@ function checkRiderAccess(): array {
 
     // Query rider profile joined with user and employee details
     $sql = "
-        SELECT r.*, 
+        SELECT r.*, e.id AS matched_emp_id,
                u.full_name, u.email, u.phone AS user_phone, u.profile_image, u.user_type,
                e.first_name, e.last_name, e.phone AS emp_phone, e.vehicle_details AS emp_vehicle,
                sl.store_name, sl.address AS store_address, sl.city AS store_city
         FROM riders r
         JOIN users u ON r.user_id = u.id
-        LEFT JOIN employees e ON r.employee_id = e.id
+        LEFT JOIN employees e ON (r.employee_id = e.id OR e.user_id = u.id OR (u.email IS NOT NULL AND u.email != '' AND e.email = u.email))
         LEFT JOIN store_locations sl ON r.store_id = sl.store_id
         WHERE r.user_id = ?
         LIMIT 1
@@ -45,29 +45,33 @@ function checkRiderAccess(): array {
     $rider = mysqli_fetch_assoc($res);
     mysqli_stmt_close($stmt);
 
-    if (!$rider) {
-        // Check if user is an employee with driver position, and auto-register into riders table
-        $emp_chk = mysqli_prepare($conn, "SELECT id, first_name, last_name, vehicle_details FROM employees WHERE user_id = ? AND (position LIKE '%driver%' OR position LIKE '%rider%' OR vehicle_details IS NOT NULL) LIMIT 1");
-        if ($emp_chk) {
-            mysqli_stmt_bind_param($emp_chk, "i", $user_id);
-            mysqli_stmt_execute($emp_chk);
-            $emp_res = mysqli_stmt_get_result($emp_chk);
-            if ($emp_row = mysqli_fetch_assoc($emp_res)) {
-                $e_id = (int)$emp_row['id'];
-                $r_code = 'RDR-' . str_pad($e_id, 4, '0', STR_PAD_LEFT);
-                $v_type = !empty($emp_row['vehicle_details']) ? $emp_row['vehicle_details'] : 'Motorcycle';
-                mysqli_query($conn, "INSERT INTO riders (user_id, employee_id, rider_code, rider_type, vehicle_type, verification_status, duty_status, rating) VALUES ($user_id, $e_id, '$r_code', 'platform_rider', '$v_type', 'verified', 'online', 5.00)");
-                
-                // Retry fetch
-                return checkRiderAccess();
-            }
-            mysqli_stmt_close($emp_chk);
-        }
+    require_once __DIR__ . '/../includes/rider_helper.php';
 
+    if (!$rider || $rider['verification_status'] !== 'verified') {
+        if (function_exists('isDeliveryDriverUser') && isDeliveryDriverUser($conn, $user_id)) {
+            $stmt = mysqli_prepare($conn, $sql);
+            if ($stmt) {
+                mysqli_stmt_bind_param($stmt, "i", $user_id);
+                mysqli_stmt_execute($stmt);
+                $res = mysqli_stmt_get_result($stmt);
+                $rider = mysqli_fetch_assoc($res);
+                mysqli_stmt_close($stmt);
+            }
+        }
+    }
+
+    if (!$rider) {
         // Not a registered rider
         session_destroy();
         header("Location: login.php?error=" . urlencode("Access denied. No active delivery rider profile found for this account."));
         exit;
+    }
+
+    // Auto-link rider to employee record if unlinked but matched
+    if (empty($rider['employee_id']) && !empty($rider['matched_emp_id'])) {
+        $matched_id = (int)$rider['matched_emp_id'];
+        mysqli_query($conn, "UPDATE riders SET employee_id = $matched_id WHERE id = " . (int)$rider['id'] . " LIMIT 1");
+        $rider['employee_id'] = $matched_id;
     }
 
     // Check verification status
@@ -79,11 +83,27 @@ function checkRiderAccess(): array {
         exit;
     }
 
-    // Set convenience session indicators
+    // Compute display name from employee or user records
+    $first_last = trim(($rider['first_name'] ?? '') . ' ' . ($rider['last_name'] ?? ''));
+    $full_name = trim((string)($rider['full_name'] ?? ''));
+    $session_name = trim((string)($_SESSION['full_name'] ?? ''));
+
+    if ($first_last !== '') {
+        $display_name = ucwords(strtolower($first_last));
+    } elseif ($full_name !== '') {
+        $display_name = ucwords(strtolower($full_name));
+    } elseif ($session_name !== '') {
+        $display_name = ucwords(strtolower($session_name));
+    } else {
+        $display_name = 'Delivery Rider';
+    }
+
+    // Set convenience session indicators & populate rider_name in rider array
+    $rider['rider_name'] = $display_name;
     $_SESSION['is_driver'] = true;
     $_SESSION['rider_id'] = (int)$rider['id'];
     $_SESSION['rider_code'] = $rider['rider_code'];
-    $_SESSION['rider_name'] = !empty($rider['full_name']) ? $rider['full_name'] : trim($rider['first_name'] . ' ' . $rider['last_name']);
+    $_SESSION['rider_name'] = $display_name;
 
     return $rider;
 }

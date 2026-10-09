@@ -2864,14 +2864,22 @@ $audit_reset_url = 'finance.php?' . http_build_query($audit_base_params) . '#dec
     </div>
 
     <!-- Payroll Review Modal -->
-    <div class="modal fade" id="payrollReviewModal" tabindex="-1" aria-labelledby="payrollReviewModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-xl">
+    <div class="modal fade modern-form-modal" id="payrollReviewModal" tabindex="-1" aria-labelledby="payrollReviewModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
             <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="payrollReviewModalLabel">Review Payroll</h5>
+                <div class="modal-header modal-header-modern">
+                    <div class="modal-header-content">
+                        <div class="modal-header-icon">
+                            <i class="fas fa-file-invoice-dollar"></i>
+                        </div>
+                        <div>
+                            <h5 class="modal-title" id="payrollReviewModalLabel">Review Payroll Record</h5>
+                            <div class="modal-subtitle">Audit pay period hours, gross compensation, and statutory deductions</div>
+                        </div>
+                    </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <div class="modal-body" id="payrollReviewDetails">
+                <div class="modal-body p-4" id="payrollReviewDetails">
                     <!-- Content loaded via AJAX -->
                 </div>
             </div>

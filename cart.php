@@ -492,7 +492,7 @@ $downpayment = round($grand_total * 0.30, 2);
 
 @media (max-width: 640px) {
     .cart-page {
-        padding: 30px 0 44px;
+        padding: 20px 0 140px !important;
     }
 
     .cart-items-panel,

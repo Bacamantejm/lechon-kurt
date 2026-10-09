@@ -502,6 +502,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if (mysqli_stmt_execute($update_stmt)) {
                             $_SESSION['success'] = "User role assigned successfully";
                             logRBACAction($conn, $current_user_id, 'USER_ROLE_ASSIGNED', 'users', "Assigned role {$target_role['name']} to user ID $user_id");
+                            require_once __DIR__ . '/../includes/rider_helper.php';
+                            isDeliveryDriverUser($conn, $user_id);
                         } else {
                             $_SESSION['error'] = 'Failed to assign role: ' . mysqli_error($conn);
                         }
@@ -617,6 +619,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 mysqli_stmt_close($link_stmt);
 
                 mysqli_commit($conn);
+                require_once __DIR__ . '/../includes/rider_helper.php';
+                isDeliveryDriverUser($conn, $new_user_id);
                 $_SESSION['success'] = 'Sub-user created and linked successfully.';
                 logRBACAction($conn, $current_user_id, 'PARTNER_SUBUSER_CREATED', 'users', "Created partner sub-user ID {$new_user_id}");
             } catch (Throwable $e) {

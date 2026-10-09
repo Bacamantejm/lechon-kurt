@@ -1372,24 +1372,123 @@ unset($_SESSION['success'], $_SESSION['error']);
     </div>
 
 <?php if ($can_manage_expenses): ?>
-<div class="modal fade" id="addExpenseModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade modern-form-modal" id="addExpenseModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
-            <div class="modal-header"><h5 class="modal-title"><i class="fas fa-plus-circle text-danger"></i> Record New Expense</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+            <div class="modal-header">
+                <div class="modal-header-icon">
+                    <i class="fas fa-receipt"></i>
+                </div>
+                <div>
+                    <h5 class="modal-title">Record New Expense</h5>
+                    <p class="modal-subtitle">Log operational expenditures, inventory purchases, or administrative costs.</p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
             <form method="POST" enctype="multipart/form-data" id="addExpenseForm">
                 <div class="modal-body">
-                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf); ?>"><input type="hidden" name="return_month" value="<?php echo htmlspecialchars($month); ?>"><input type="hidden" name="return_category" value="<?php echo htmlspecialchars($category_filter); ?>"><input type="hidden" name="add_expense" value="1">
-                    <div class="row g-3">
-                        <div class="col-md-4"><label class="form-label">Date</label><input type="date" name="expense_date" class="form-control" value="<?php echo date('Y-m-d'); ?>" required></div>
-                        <div class="col-md-4"><label class="form-label">Category</label><select name="category" class="form-select" required><?php foreach ($expense_categories as $c): ?><option value="<?php echo htmlspecialchars($c); ?>"><?php echo htmlspecialchars($c); ?></option><?php endforeach; ?></select></div>
-                        <div class="col-md-4"><label class="form-label">Payment Method</label><select name="payment_method" class="form-select"><?php foreach ($payment_methods as $p): ?><option value="<?php echo htmlspecialchars($p); ?>"><?php echo htmlspecialchars($p); ?></option><?php endforeach; ?></select></div>
-                        <div class="col-md-6"><label class="form-label">Vendor / Supplier</label><input type="text" name="vendor" class="form-control" maxlength="100" placeholder="e.g. Prime Pork Supplier"></div>
-                        <div class="col-md-6"><label class="form-label">Amount (PHP)</label><input type="number" name="amount" class="form-control" step="0.01" min="0.01" required></div>
-                        <div class="col-12"><label class="form-label">Description</label><textarea name="description" class="form-control" rows="3" maxlength="1000" placeholder="Optional details for audit trail"></textarea></div>
-                        <div class="col-12"><label class="form-label">Receipt (Optional)</label><input type="file" name="receipt" class="form-control" accept="image/*,application/pdf"><small class="text-muted">Max file size: 5MB</small></div>
+                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf); ?>">
+                    <input type="hidden" name="return_month" value="<?php echo htmlspecialchars($month); ?>">
+                    <input type="hidden" name="return_category" value="<?php echo htmlspecialchars($category_filter); ?>">
+                    <input type="hidden" name="add_expense" value="1">
+                    
+                    <!-- Section 1: Classification & Timing -->
+                    <div class="form-section-card">
+                        <div class="form-section-head">
+                            <span class="form-section-title"><i class="fas fa-tags"></i> Classification & Timing</span>
+                            <span class="form-req-pill">Required</span>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <div class="form-group-modern">
+                                    <label class="form-label-modern">Expense Date <span class="form-req-star">*</span></label>
+                                    <div class="form-input-wrap">
+                                        <i class="fas fa-calendar-day form-input-icon"></i>
+                                        <input type="date" name="expense_date" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group-modern">
+                                    <label class="form-label-modern">Category <span class="form-req-star">*</span></label>
+                                    <div class="form-input-wrap">
+                                        <i class="fas fa-folder form-input-icon"></i>
+                                        <select name="category" class="form-select" required>
+                                            <?php foreach ($expense_categories as $c): ?>
+                                                <option value="<?php echo htmlspecialchars($c); ?>"><?php echo htmlspecialchars($c); ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group-modern">
+                                    <label class="form-label-modern">Payment Method <span class="form-req-star">*</span></label>
+                                    <div class="form-input-wrap">
+                                        <i class="fas fa-credit-card form-input-icon"></i>
+                                        <select name="payment_method" class="form-select">
+                                            <?php foreach ($payment_methods as $p): ?>
+                                                <option value="<?php echo htmlspecialchars($p); ?>"><?php echo htmlspecialchars($p); ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 2: Payee & Financials -->
+                    <div class="form-section-card">
+                        <div class="form-section-head">
+                            <span class="form-section-title"><i class="fas fa-coins"></i> Amount & Supplier</span>
+                            <span class="form-req-pill">Required</span>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="form-group-modern">
+                                    <label class="form-label-modern">Vendor / Supplier</label>
+                                    <div class="form-input-wrap">
+                                        <i class="fas fa-store form-input-icon"></i>
+                                        <input type="text" name="vendor" class="form-control" maxlength="100" placeholder="e.g. Prime Pork Supplier">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group-modern">
+                                    <label class="form-label-modern">Amount (PHP) <span class="form-req-star">*</span></label>
+                                    <div class="form-input-wrap">
+                                        <i class="fas fa-peso-sign form-input-icon"></i>
+                                        <input type="number" name="amount" class="form-control" step="0.01" min="0.01" placeholder="0.00" required>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 3: Audit Trail & Documentation -->
+                    <div class="form-section-card">
+                        <div class="form-section-head">
+                            <span class="form-section-title"><i class="fas fa-file-invoice"></i> Audit & Documentation</span>
+                            <span class="form-opt-pill">Optional</span>
+                        </div>
+                        <div class="form-group-modern">
+                            <label class="form-label-modern">Description / Audit Notes</label>
+                            <textarea name="description" class="form-control" rows="2" maxlength="1000" placeholder="Optional details for audit trail and bookkeeping..."></textarea>
+                        </div>
+                        <div class="form-group-modern mt-3">
+                            <label class="form-label-modern">Receipt / Invoice Document</label>
+                            <div class="form-input-wrap">
+                                <i class="fas fa-paperclip form-input-icon"></i>
+                                <input type="file" name="receipt" class="form-control" accept="image/*,application/pdf">
+                            </div>
+                            <div class="form-helper-text"><i class="fas fa-info-circle"></i> Max file size: 5MB (JPG, PNG, PDF)</div>
+                        </div>
                     </div>
                 </div>
-                <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-danger">Save Expense</button></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn-modal-primary"><i class="fas fa-plus"></i> Save Expense</button>
+                </div>
             </form>
         </div>
     </div>

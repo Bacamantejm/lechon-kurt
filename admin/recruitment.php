@@ -260,77 +260,130 @@ $departments = mysqli_query($conn, $departments_sql);
     </div>
     
     <!-- Add Position Modal -->
-    <div class="modal fade" id="addPositionModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
+    <div class="modal fade modern-form-modal" id="addPositionModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Post New Job Position</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <div class="modal-header-icon">
+                        <i class="fas fa-briefcase"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title">Post New Job Position</h5>
+                        <p class="modal-subtitle">Publish open job roles, compensation brackets, and hiring requirements.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <form method="POST">
                     <div class="modal-body">
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
-                        <div class="mb-3">
-                            <label>Position Title</label>
-                            <input type="text" name="position_title" class="form-control" required>
-                        </div>
                         
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label>Department</label>
-                                <select name="department_id" class="form-control">
-                                    <option value="">Unassigned</option>
-                                    <?php
-                                    if ($departments) {
-                                        mysqli_data_seek($departments, 0);
-                                        while ($dept = mysqli_fetch_assoc($departments)) {
-                                            echo "<option value='{$dept['id']}'>" . htmlspecialchars($dept['department_name']) . "</option>";
-                                        }
-                                    }
-                                    ?>
-                                </select>
+                        <!-- Section 1: Role & Department -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-user-tag"></i> Role & Department</span>
+                                <span class="form-req-pill">Required</span>
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <label>Employment Type</label>
-                                <select name="employment_type" class="form-control" required>
-                                    <option value="">Select Type</option>
-                                    <option value="full_time">Full Time</option>
-                                    <option value="part_time">Part Time</option>
-                                    <option value="contract">Contract</option>
-                                    <option value="temporary">Temporary</option>
-                                </select>
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Position Title <span class="form-req-star">*</span></label>
+                                <div class="form-input-wrap">
+                                    <i class="fas fa-id-badge form-input-icon"></i>
+                                    <input type="text" name="position_title" class="form-control" placeholder="e.g. Master Roaster, Cashier, Kitchen Cook" required>
+                                </div>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Department</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-building form-input-icon"></i>
+                                            <select name="department_id" class="form-select">
+                                                <option value="">Unassigned</option>
+                                                <?php
+                                                if ($departments) {
+                                                    mysqli_data_seek($departments, 0);
+                                                    while ($dept = mysqli_fetch_assoc($departments)) {
+                                                        echo "<option value='{$dept['id']}'>" . htmlspecialchars($dept['department_name']) . "</option>";
+                                                    }
+                                                }
+                                                ?>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Employment Type <span class="form-req-star">*</span></label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-business-time form-input-icon"></i>
+                                            <select name="employment_type" class="form-select" required>
+                                                <option value="">Select Type</option>
+                                                <option value="full_time">Full Time</option>
+                                                <option value="part_time">Part Time</option>
+                                                <option value="contract">Contract</option>
+                                                <option value="temporary">Temporary</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label>Salary Range (Min)</label>
-                                <input type="number" name="salary_min" class="form-control" step="0.01">
+                        <!-- Section 2: Compensation & Timeline -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-coins"></i> Compensation & Schedule</span>
+                                <span class="form-opt-pill">Optional</span>
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <label>Salary Range (Max)</label>
-                                <input type="number" name="salary_max" class="form-control" step="0.01">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Salary Min (PHP)</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-peso-sign form-input-icon"></i>
+                                            <input type="number" name="salary_min" class="form-control" placeholder="0.00" step="0.01">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Salary Max (PHP)</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-peso-sign form-input-icon"></i>
+                                            <input type="number" name="salary_max" class="form-control" placeholder="0.00" step="0.01">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Closing Date</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-calendar-alt form-input-icon"></i>
+                                            <input type="date" name="closing_date" class="form-control">
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         
-                        <div class="mb-3">
-                            <label>Position Description</label>
-                            <textarea name="description" class="form-control" rows="4"></textarea>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label>Requirements</label>
-                            <textarea name="requirements" class="form-control" rows="4"></textarea>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label>Closing Date</label>
-                            <input type="date" name="closing_date" class="form-control">
+                        <!-- Section 3: Job Description & Requirements -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-file-alt"></i> Job Details & Criteria</span>
+                                <span class="form-opt-pill">Optional</span>
+                            </div>
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Position Description</label>
+                                <textarea name="description" class="form-control" rows="3" placeholder="Outline day-to-day duties and operational goals..."></textarea>
+                            </div>
+                            <div class="form-group-modern mt-3">
+                                <label class="form-label-modern">Candidate Requirements</label>
+                                <textarea name="requirements" class="form-control" rows="3" placeholder="Skills, years of experience, certifications, and educational background..."></textarea>
+                            </div>
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" name="add_position" class="btn btn-primary">Post Position</button>
+                        <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" name="add_position" class="btn-modal-primary"><i class="fas fa-plus"></i> Post Position</button>
                     </div>
                 </form>
             </div>

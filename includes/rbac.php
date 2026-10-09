@@ -676,6 +676,7 @@ function getUserDashboardRoute($conn, $user_id, $user_type = '') {
 
     // Check if user is a registered delivery rider
     if ($conn && $user_id > 0) {
+        require_once __DIR__ . '/rider_helper.php';
         if (function_exists('isDeliveryDriverUser') && isDeliveryDriverUser($conn, $user_id)) {
             return 'rider/index.php';
         }

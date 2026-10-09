@@ -454,12 +454,18 @@ saRenderModuleHeader('Business Applications', 'Business Applications', $admin_in
     <?php endif; ?>
 </div>
 
-<div class="modal fade" id="appModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+<div class="modal fade modern-form-modal" id="appModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Application Details</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <div class="modal-header-icon">
+                    <i class="fas fa-store"></i>
+                </div>
+                <div>
+                    <h5 class="modal-title">Franchise Application Details</h5>
+                    <p class="modal-subtitle">Verify business credentials, submitted legal requirements, and capital capacity.</p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" id="appDetails">
                 <div class="text-muted">Loading application details...</div>
@@ -468,12 +474,18 @@ saRenderModuleHeader('Business Applications', 'Business Applications', $admin_in
     </div>
 </div>
 
-<div class="modal fade" id="documentPreviewModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade modern-form-modal" id="documentPreviewModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="documentPreviewTitle">Document Preview</h5>
-                <div class="document-preview-controls" id="documentPreviewControls" aria-label="Image zoom controls">
+                <div class="modal-header-icon">
+                    <i class="fas fa-file-invoice"></i>
+                </div>
+                <div>
+                    <h5 class="modal-title" id="documentPreviewTitle">Document Preview</h5>
+                    <p class="modal-subtitle">High-resolution preview of submitted government permits and credentials.</p>
+                </div>
+                <div class="document-preview-controls ms-auto me-2" id="documentPreviewControls" aria-label="Image zoom controls">
                     <button type="button" class="btn btn-sm btn-outline-secondary" onclick="changeDocumentZoom(-0.25)" title="Zoom out" aria-label="Zoom out">
                         <i class="fas fa-minus"></i>
                     </button>
@@ -486,6 +498,9 @@ saRenderModuleHeader('Business Applications', 'Business Applications', $admin_in
             </div>
             <div class="modal-body document-preview-body" id="documentPreviewBody">
                 <div class="text-muted text-center">Loading document preview...</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
     </div>

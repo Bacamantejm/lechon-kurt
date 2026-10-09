@@ -159,6 +159,8 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
         
         * { box-sizing:border-box; }
         html, body { margin:0; padding:0; overflow-x:clip !important; max-width:100vw; width:100%; font-family:"Plus Jakarta Sans","Segoe UI",sans-serif; background:var(--bg); color:var(--ink); }
+        img, video, iframe, canvas { max-width:100%; height:auto; }
+        pre, code { max-width:100%; }
         h1,h2,h3,h4,h5,h6 { font-family:"Outfit","Plus Jakarta Sans",sans-serif; }
         .site-main { min-height:calc(100vh - 260px); }
         .site-header { position:sticky; top:0; z-index:1200; background:var(--card); border-bottom:1px solid var(--line); box-shadow:0 6px 20px rgba(15,23,42,.04); width:100%; }
@@ -704,6 +706,7 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
         .logo-sub { font-size:.65rem; text-transform:uppercase; letter-spacing:.12em; color:#7f879a; font-weight:700; }
         .header-actions,.auth-buttons,.main-nav,.market-home-nav { display:flex; align-items:center; gap:9px; flex-shrink:0; }
         .auth-buttons { gap:10px; display:flex !important; }
+        .mobile-user-btn { display:none; }
         .btn-signin,.btn-register { min-height:38px; padding:0 16px; border-radius:999px; border:1px solid; text-decoration:none; font-weight:700; font-size:.84rem; display:inline-flex; align-items:center; justify-content:center; transition:var(--transition-fast); white-space:nowrap; }
         .btn-signin { border-color:#d0d5dd; color:#344054; background:#ffffff; }
         .btn-signin:hover { background:#f8fafc; border-color:#98a2b3; color:#101828; }
@@ -1482,29 +1485,35 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
                 align-items: center !important;
                 justify-content: space-between !important;
                 gap: 8px !important;
-                min-height: 54px !important;
+                min-height: 52px !important;
                 padding: 6px 12px !important;
                 flex-wrap: nowrap !important;
             }
             .mobile-toggle {
                 display: inline-flex !important;
-                width: 38px !important;
-                height: 38px !important;
+                width: 36px !important;
+                height: 36px !important;
                 border-radius: 10px !important;
                 border: 1px solid #eaecf0 !important;
                 background: #ffffff !important;
                 color: #101828 !important;
-                order: 1 !important;
                 flex-shrink: 0 !important;
                 align-items: center !important;
                 justify-content: center !important;
             }
-            .logo-link {
+            .market-header-top .logo-link {
+                display: none !important;
+            }
+            .standard-top .logo-link {
+                display: inline-flex !important;
+                gap: 8px !important;
+            }
+            .standard-top .logo-sub {
                 display: none !important;
             }
             .market-address-wrap {
-                order: 2 !important;
-                flex: 1 !important;
+                order: 1 !important;
+                flex: 1 1 auto !important;
                 min-width: 0 !important;
                 margin: 0 !important;
                 display: flex !important;
@@ -1523,22 +1532,47 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
                 display: flex !important;
                 align-items: center !important;
                 gap: 6px !important;
+                min-width: 0 !important;
             }
             .market-address-trigger .address-text {
                 white-space: nowrap !important;
                 overflow: hidden !important;
                 text-overflow: ellipsis !important;
-                flex: 1 !important;
+                flex: 1 1 auto !important;
                 text-align: left !important;
                 font-size: 0.8rem !important;
                 color: #1e293b !important;
+                min-width: 0 !important;
+            }
+            .market-address-popover {
+                left: 0 !important;
+                right: auto !important;
+                width: min(340px, calc(100vw - 20px)) !important;
+                max-width: calc(100vw - 20px) !important;
+                padding: 14px 12px !important;
             }
             .header-actions {
-                order: 3 !important;
+                order: 2 !important;
                 display: flex !important;
                 align-items: center !important;
                 gap: 6px !important;
                 flex-shrink: 0 !important;
+            }
+            .header-actions .auth-buttons {
+                display: none !important;
+            }
+            .mobile-user-btn {
+                display: inline-flex !important;
+                width: 36px !important;
+                height: 36px !important;
+                border-radius: 10px !important;
+                align-items: center !important;
+                justify-content: center !important;
+            }
+            .header-actions #favoritesToggle,
+            .header-actions #chatBtn,
+            .header-actions .notification-wrapper {
+                display: none !important;
             }
             .header-actions .icon-btn {
                 width: 36px !important;
@@ -1567,11 +1601,32 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
             .market-home-search input {
                 font-size: 0.88rem !important;
             }
-            .btn-signin, .btn-register {
-                padding: 0 10px !important;
-                font-size: 0.76rem !important;
-                min-height: 32px !important;
+        }
+
+        @media (max-width: 480px) {
+            .market-header-top, .standard-top {
+                padding: 6px 8px !important;
+                gap: 6px !important;
             }
+            .header-actions {
+                gap: 4px !important;
+            }
+            .header-actions .icon-btn,
+            .mobile-user-btn,
+            .mobile-toggle {
+                width: 34px !important;
+                height: 34px !important;
+                font-size: 0.84rem !important;
+            }
+            .market-address-trigger {
+                min-height: 34px !important;
+                padding: 0 8px !important;
+                font-size: 0.76rem !important;
+            }
+            .market-address-trigger .address-text {
+                font-size: 0.76rem !important;
+            }
+        }
 
             /* Foodpanda Style Slide-in Drawer */
             .mobile-menu {
@@ -1771,6 +1826,7 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
                     <a href="<?php echo $path_prefix; ?>register.php?mode=login#login" class="btn-signin">Log in</a>
                     <a href="<?php echo $path_prefix; ?>register.php?mode=register#register" class="btn-register">Create account</a>
                 </div>
+                <a href="<?php echo $path_prefix; ?>register.php?mode=login#login" class="icon-btn mobile-user-btn" title="Log in" aria-label="Log in"><i class="fas fa-user"></i></a>
                 <?php endif; ?>
             <?php endif; ?>
             <button type="button" class="icon-btn market-theme-btn" id="marketThemeToggler" title="Toggle Theme" aria-label="Toggle Dark or Light Theme"><i class="fas fa-moon"></i></button>
@@ -1950,6 +2006,7 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
                     <a href="<?php echo $path_prefix; ?>register.php?mode=login#login" class="btn-signin">Log in</a>
                     <a href="<?php echo $path_prefix; ?>register.php?mode=register#register" class="btn-register">Create account</a>
                 </div>
+                <a href="<?php echo $path_prefix; ?>register.php?mode=login#login" class="icon-btn mobile-user-btn" title="Log in" aria-label="Log in"><i class="fas fa-user"></i></a>
                 <?php endif; ?>
             <?php endif; ?>
             <?php if ($favorites_feature_enabled): ?>

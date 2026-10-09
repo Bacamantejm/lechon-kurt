@@ -377,122 +377,187 @@ $page_title = $po_id > 0 ? "Edit PO #" . htmlspecialchars($po['po_number']) : "C
                 <form method="POST">
                     <input type="hidden" name="action" value="update_po_details">
                     <input type="hidden" name="po_id" value="<?php echo $po_id; ?>">
-                    <div class="card mb-4">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                            <h5>PO Details</h5>
+                    <div class="form-section-card mb-4">
+                        <div class="form-section-head">
+                            <div class="form-section-title">
+                                <i class="fas fa-file-invoice"></i>
+                                Purchase Order Details
+                            </div>
                             <span class="status-badge badge-<?php echo str_replace('_', '-', $po['status']); ?>"><?php echo ucwords(str_replace('_', ' ', $po['status'])); ?></span>
                         </div>
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-4 mb-3">
-                                    <label>Supplier</label>
-                                    <select name="supplier_id" class="form-select" required>
-                                        <?php foreach($suppliers as $sup): ?>
-                                            <option value="<?php echo $sup['id']; ?>" <?php echo ($po['supplier_id'] == $sup['id']) ? 'selected' : ''; ?>>
-                                                <?php echo htmlspecialchars($sup['name']); ?>
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
+                        <div class="p-3">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Supplier</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-truck form-input-icon"></i>
+                                            <select name="supplier_id" class="form-control" required>
+                                                <?php foreach($suppliers as $sup): ?>
+                                                    <option value="<?php echo $sup['id']; ?>" <?php echo ($po['supplier_id'] == $sup['id']) ? 'selected' : ''; ?>>
+                                                        <?php echo htmlspecialchars($sup['name']); ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="col-md-4 mb-3">
-                                    <label>Order Date</label>
-                                    <input type="date" name="order_date" class="form-control" value="<?php echo $po['order_date']; ?>" required>
+                                <div class="col-md-4">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Order Date</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-calendar-alt form-input-icon"></i>
+                                            <input type="date" name="order_date" class="form-control" value="<?php echo $po['order_date']; ?>" required>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="col-md-4 mb-3">
-                                    <label>Expected Delivery</label>
-                                    <input type="date" name="expected_delivery_date" class="form-control" value="<?php echo $po['expected_delivery_date']; ?>">
+                                <div class="col-md-4">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Expected Delivery</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-calendar-check form-input-icon"></i>
+                                            <input type="date" name="expected_delivery_date" class="form-control" value="<?php echo $po['expected_delivery_date']; ?>">
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="col-md-8 mb-3">
-                                    <label>Notes</label>
-                                    <textarea name="notes" class="form-control" rows="1"><?php echo htmlspecialchars($po['notes']); ?></textarea>
+                                <div class="col-md-8">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Notes / Special Instructions</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-sticky-note form-input-icon"></i>
+                                            <textarea name="notes" class="form-control" rows="1"><?php echo htmlspecialchars($po['notes']); ?></textarea>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="col-md-4 mb-3">
-                                    <label>Status</label>
-                                    <select name="status" class="form-select">
-                                        <option value="draft" <?php echo $po['status'] == 'draft' ? 'selected' : ''; ?>>Draft</option>
-                                        <option value="ordered" <?php echo $po['status'] == 'ordered' ? 'selected' : ''; ?>>Ordered</option>
-                                        <option value="partially_received" <?php echo $po['status'] == 'partially_received' ? 'selected' : ''; ?>>Partially Received</option>
-                                        <option value="completed" <?php echo $po['status'] == 'completed' ? 'selected' : ''; ?>>Completed</option>
-                                        <option value="cancelled" <?php echo $po['status'] == 'cancelled' ? 'selected' : ''; ?>>Cancelled</option>
-                                    </select>
+                                <div class="col-md-4">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Order Status</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-tasks form-input-icon"></i>
+                                            <select name="status" class="form-control">
+                                                <option value="draft" <?php echo $po['status'] == 'draft' ? 'selected' : ''; ?>>Draft</option>
+                                                <option value="ordered" <?php echo $po['status'] == 'ordered' ? 'selected' : ''; ?>>Ordered</option>
+                                                <option value="partially_received" <?php echo $po['status'] == 'partially_received' ? 'selected' : ''; ?>>Partially Received</option>
+                                                <option value="completed" <?php echo $po['status'] == 'completed' ? 'selected' : ''; ?>>Completed</option>
+                                                <option value="cancelled" <?php echo $po['status'] == 'cancelled' ? 'selected' : ''; ?>>Cancelled</option>
+                                            </select>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                            <button type="submit" class="btn btn-primary">Update Details</button>
+                            <div class="mt-3 text-end">
+                                <button type="submit" class="btn btn-modal-primary px-4 py-2">
+                                    <i class="fas fa-save me-1"></i> Update Details
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </form>
 
-                <div class="card mb-4">
-                    <div class="card-header"><h5>Items on this Purchase Order</h5></div>
-                    <div class="card-body">
+                <div class="form-section-card mb-4">
+                    <div class="form-section-head">
+                        <div class="form-section-title">
+                            <i class="fas fa-boxes-stacked"></i>
+                            Items on this Purchase Order
+                        </div>
+                        <span class="form-req-pill"><?php echo count($po_items); ?> Item(s)</span>
+                    </div>
+                    <div class="p-3">
                         <form method="POST">
                             <input type="hidden" name="action" value="update_items">
                             <input type="hidden" name="po_id" value="<?php echo $po_id; ?>">
-                            <table class="admin-table">
-                                <thead>
-                                    <tr>
-                                        <th>Material</th>
-                                        <th style="width: 120px;">Quantity</th>
-                                        <th style="width: 120px;">Unit Cost</th>
-                                        <th style="width: 150px;">Line Total</th>
-                                        <th style="width: 50px;">Delete</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php if(empty($po_items)): ?>
-                                        <tr><td colspan="5" class="text-center text-muted">No items added yet.</td></tr>
-                                    <?php else: ?>
-                                        <?php foreach($po_items as $item): ?>
+                            <div class="table-responsive">
+                                <table class="admin-table">
+                                    <thead>
                                         <tr>
-                                            <td><?php echo htmlspecialchars($item['material_name']); ?> (<?php echo $item['unit']; ?>)</td>
-                                            <td><input type="number" name="quantity[]" class="form-control form-control-sm" value="<?php echo $item['quantity_ordered']; ?>" step="0.01"></td>
-                                            <td><input type="number" name="cost[]" class="form-control form-control-sm" value="<?php echo $item['unit_cost']; ?>" step="0.01"></td>
-                                            <td>₱<?php echo number_format($item['quantity_ordered'] * $item['unit_cost'], 2); ?></td>
-                                            <td class="text-center">
-                                                <input type="hidden" name="item_id[]" value="<?php echo $item['id']; ?>">
-                                                <input type="checkbox" name="delete_item[]" value="<?php echo $item['id']; ?>" class="form-check-input">
-                                            </td>
+                                            <th>Material</th>
+                                            <th style="width: 130px;">Quantity</th>
+                                            <th style="width: 140px;">Unit Cost</th>
+                                            <th style="width: 150px;">Line Total</th>
+                                            <th style="width: 60px;" class="text-center">Remove</th>
                                         </tr>
-                                        <?php endforeach; ?>
-                                    <?php endif; ?>
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody>
+                                        <?php if(empty($po_items)): ?>
+                                            <tr><td colspan="5" class="text-center text-muted py-4">No items added to this purchase order yet.</td></tr>
+                                        <?php else: ?>
+                                            <?php foreach($po_items as $item): ?>
+                                            <tr>
+                                                <td class="fw-semibold"><?php echo htmlspecialchars($item['material_name']); ?> <span class="text-muted small">(<?php echo $item['unit']; ?>)</span></td>
+                                                <td><input type="number" name="quantity[]" class="form-control form-control-sm" value="<?php echo $item['quantity_ordered']; ?>" step="0.01"></td>
+                                                <td><input type="number" name="cost[]" class="form-control form-control-sm" value="<?php echo $item['unit_cost']; ?>" step="0.01"></td>
+                                                <td class="fw-bold text-dark">PHP <?php echo number_format($item['quantity_ordered'] * $item['unit_cost'], 2); ?></td>
+                                                <td class="text-center">
+                                                    <input type="hidden" name="item_id[]" value="<?php echo $item['id']; ?>">
+                                                    <input type="checkbox" name="delete_item[]" value="<?php echo $item['id']; ?>" class="form-check-input">
+                                                </td>
+                                            </tr>
+                                            <?php endforeach; ?>
+                                        <?php endif; ?>
+                                    </tbody>
+                                </table>
+                            </div>
                             <?php if(!empty($po_items)): ?>
                             <div class="mt-3 d-flex justify-content-between align-items-center">
-                                <button type="submit" class="btn btn-success">Update Items</button>
-                                <div class="fw-bold fs-5">Total: ₱<?php echo number_format($po['total_amount'], 2); ?></div>
+                                <button type="submit" class="btn btn-modal-primary px-3 py-2">
+                                    <i class="fas fa-check me-1"></i> Update Items
+                                </button>
+                                <div class="fw-bold fs-5 text-dark">Total: PHP <?php echo number_format($po['total_amount'], 2); ?></div>
                             </div>
                             <?php endif; ?>
                         </form>
                     </div>
                 </div>
 
-                <div class="card">
-                    <div class="card-header"><h5>Add New Item</h5></div>
-                    <div class="card-body">
+                <div class="form-section-card mb-4">
+                    <div class="form-section-head">
+                        <div class="form-section-title">
+                            <i class="fas fa-plus-circle"></i>
+                            Add Item to Order
+                        </div>
+                        <span class="form-opt-pill">Line Item</span>
+                    </div>
+                    <div class="p-3">
                         <form method="POST">
                             <input type="hidden" name="action" value="add_item">
                             <input type="hidden" name="po_id" value="<?php echo $po_id; ?>">
                             <div class="row g-3 align-items-end">
                                 <div class="col-md-5">
-                                    <label>Material</label>
-                                    <select name="material_id" id="materialSelect" class="form-select" required>
-                                        <option value="">-- Select Material --</option>
-                                        <?php foreach($materials as $mat): ?>
-                                            <option value="<?php echo $mat['id']; ?>" data-cost="<?php echo $mat['cost_per_unit']; ?>"><?php echo htmlspecialchars($mat['name']); ?> (<?php echo $mat['unit']; ?>)</option>
-                                        <?php endforeach; ?>
-                                    </select>
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Material</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-box-archive form-input-icon"></i>
+                                            <select name="material_id" id="materialSelect" class="form-control" required>
+                                                <option value="">-- Select Material --</option>
+                                                <?php foreach($materials as $mat): ?>
+                                                    <option value="<?php echo $mat['id']; ?>" data-cost="<?php echo $mat['cost_per_unit']; ?>"><?php echo htmlspecialchars($mat['name']); ?> (<?php echo $mat['unit']; ?>)</option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div class="col-md-2">
-                                    <label>Quantity</label>
-                                    <input type="number" name="quantity" class="form-control" step="0.01" required>
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Quantity</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-cubes form-input-icon"></i>
+                                            <input type="number" name="quantity" class="form-control" step="0.01" placeholder="0.00" required>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div class="col-md-3">
-                                    <label>Unit Cost (₱)</label>
-                                    <input type="number" name="unit_cost" id="unitCost" class="form-control" step="0.01" required>
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Unit Cost (PHP)</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-tag form-input-icon"></i>
+                                            <input type="number" name="unit_cost" id="unitCost" class="form-control" step="0.01" placeholder="0.00" required>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div class="col-md-2">
-                                    <button type="submit" class="btn btn-primary w-100">Add Item</button>
+                                    <button type="submit" class="btn btn-modal-primary w-100 py-2">
+                                        <i class="fas fa-plus me-1"></i> Add Item
+                                    </button>
                                 </div>
                             </div>
                         </form>
@@ -500,40 +565,70 @@ $page_title = $po_id > 0 ? "Edit PO #" . htmlspecialchars($po['po_number']) : "C
                 </div>
 
                 <?php else: // CREATE MODE ?>
-                <div class="card">
-                    <div class="card-header"><h5>Create New Purchase Order</h5></div>
-                    <div class="card-body">
-                        <div class="alert alert-info">Create the PO in draft first, finalize quantities and costs, then move it to <strong>Ordered</strong> only after the day budget is finance-approved.</div>
+                <div class="form-section-card mb-4">
+                    <div class="form-section-head">
+                        <div class="form-section-title">
+                            <i class="fas fa-cart-plus"></i>
+                            Create New Purchase Order
+                        </div>
+                        <span class="form-req-pill">New PO</span>
+                    </div>
+                    <div class="p-3">
+                        <div class="alert alert-info mb-3">Create the PO in draft first, finalize quantities and costs, then move it to <strong>Ordered</strong> only after the day budget is finance-approved.</div>
                         <form method="POST">
                             <input type="hidden" name="action" value="create_po">
                             <?php if($pr_id > 0): ?>
                                 <input type="hidden" name="pr_id" value="<?php echo $pr_id; ?>">
                                 <div class="alert alert-info">Creating PO from Requisition #<?php echo $pr_id; ?>. Items will be copied automatically.</div>
                             <?php endif; ?>
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label>Supplier *</label>
-                                    <select name="supplier_id" class="form-select" required>
-                                        <option value="">-- Select Supplier --</option>
-                                        <?php foreach($suppliers as $sup): ?>
-                                            <option value="<?php echo $sup['id']; ?>"><?php echo htmlspecialchars($sup['name']); ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Supplier *</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-truck form-input-icon"></i>
+                                            <select name="supplier_id" class="form-control" required>
+                                                <option value="">-- Select Supplier --</option>
+                                                <?php foreach($suppliers as $sup): ?>
+                                                    <option value="<?php echo $sup['id']; ?>"><?php echo htmlspecialchars($sup['name']); ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="col-md-3 mb-3">
-                                    <label>Order Date *</label>
-                                    <input type="date" name="order_date" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
+                                <div class="col-md-3">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Order Date *</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-calendar-alt form-input-icon"></i>
+                                            <input type="date" name="order_date" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="col-md-3 mb-3">
-                                    <label>Expected Delivery</label>
-                                    <input type="date" name="expected_delivery_date" class="form-control">
+                                <div class="col-md-3">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Expected Delivery</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-calendar-check form-input-icon"></i>
+                                            <input type="date" name="expected_delivery_date" class="form-control">
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="col-12 mb-3">
-                                    <label>Notes</label>
-                                    <textarea name="notes" class="form-control" rows="3" placeholder="Add any notes for this PO..."></textarea>
+                                <div class="col-12">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Notes / Scope Memo</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-sticky-note form-input-icon"></i>
+                                            <textarea name="notes" class="form-control" rows="3" placeholder="Add any notes for this PO..."></textarea>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                            <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Create PO & Add Items</button>
+                            <div class="mt-4 text-end">
+                                <button type="submit" class="btn btn-modal-primary px-4 py-2">
+                                    <i class="fas fa-plus me-1"></i> Create PO & Add Items
+                                </button>
+                            </div>
                         </form>
                     </div>
                 </div>

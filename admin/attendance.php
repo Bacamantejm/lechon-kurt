@@ -665,44 +665,58 @@ if ($emp_res) {
     </div>
 
     <!-- Time Clock Modal -->
-    <div class="modal fade" id="timeClockModal" tabindex="-1">
-        <div class="modal-dialog">
+    <div class="modal fade modern-form-modal" id="timeClockModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
-                <div class="modal-header bg-primary text-white">
-                    <h5 class="modal-title"><i class="fas fa-clock"></i> Digital Time Clock</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <div class="modal-header">
+                    <div class="modal-header-icon">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title">Digital Attendance Clock</h5>
+                        <p class="modal-subtitle">Store geolocation verified time tracking kiosk.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <div class="modal-body text-center">
-                    <h2 id="clockDisplay" class="mb-4 fw-bold">00:00:00</h2>
-                    <p class="text-muted mb-2"><i class="fas fa-map-marker-alt"></i> Location Tracking Enabled</p>
-                    <p class="small text-muted mb-4">Clock-ins inside the configured store radius are auto-approved.</p>
-                    
+                <div class="modal-body">
+                    <div class="form-section-card text-center mb-3">
+                        <h2 id="clockDisplay" class="fw-bold mb-2" style="font-size: 2.2rem; color: #101828; letter-spacing: 1px;">00:00:00</h2>
+                        <div class="d-inline-flex align-items-center gap-2 px-3 py-1 rounded-pill" style="background: #ecfdf3; color: #027a48; font-size: 13px; font-weight: 600; border: 1px solid #abefc6;">
+                            <i class="fas fa-map-marker-alt"></i> Geolocation Tracking Active
+                        </div>
+                        <p class="text-muted small mt-2 mb-0">Clock-ins inside store radius are automatically recorded and verified.</p>
+                    </div>
+
                     <form method="POST" id="clockForm">
                         <input type="hidden" name="latitude" id="lat">
                         <input type="hidden" name="longitude" id="long">
                         
-                        <div class="form-group mb-4">
-                            <input type="text" name="employee_id_input" class="form-control form-control-lg text-center" placeholder="Scan or Enter Employee ID" required autocomplete="off">
+                        <div class="form-group-modern mb-3">
+                            <label class="form-label-modern" for="empIdInput">Employee ID / Badge Scan</label>
+                            <div class="form-input-wrap">
+                                <i class="fas fa-id-card form-input-icon"></i>
+                                <input type="text" id="empIdInput" name="employee_id_input" class="form-control text-center fw-bold" placeholder="Scan or Enter Employee ID" required autocomplete="off" style="font-size: 1.05rem;">
+                            </div>
                         </div>
                         
                         <div class="d-grid gap-2">
-                            <button type="submit" name="action" value="clock_in" class="btn btn-success btn-lg">
-                                <i class="fas fa-sign-in-alt"></i> CLOCK IN
+                            <button type="submit" name="action" value="clock_in" class="btn btn-lg fw-semibold" style="background: #027a48; color: #ffffff; border-radius: 10px;">
+                                <i class="fas fa-sign-in-alt me-1"></i> CLOCK IN
                             </button>
                             <div class="row g-2">
                                 <div class="col">
-                                    <button type="submit" name="action" value="break_start" class="btn btn-warning w-100">
-                                        <i class="fas fa-coffee"></i> Start Break
+                                    <button type="submit" name="action" value="break_start" class="btn w-100 fw-semibold" style="background: #f79009; color: #ffffff; border-radius: 10px;">
+                                        <i class="fas fa-coffee me-1"></i> Start Break
                                     </button>
                                 </div>
                                 <div class="col">
-                                    <button type="submit" name="action" value="break_end" class="btn btn-info w-100">
-                                        <i class="fas fa-play"></i> End Break
+                                    <button type="submit" name="action" value="break_end" class="btn w-100 fw-semibold" style="background: #175cd3; color: #ffffff; border-radius: 10px;">
+                                        <i class="fas fa-play me-1"></i> End Break
                                     </button>
                                 </div>
                             </div>
-                            <button type="submit" name="action" value="clock_out" class="btn btn-danger btn-lg">
-                                <i class="fas fa-sign-out-alt"></i> CLOCK OUT
+                            <button type="submit" name="action" value="clock_out" class="btn btn-lg fw-semibold" style="background: #b3261e; color: #ffffff; border-radius: 10px;">
+                                <i class="fas fa-sign-out-alt me-1"></i> CLOCK OUT
                             </button>
                         </div>
                     </form>
@@ -712,15 +726,24 @@ if ($emp_res) {
     </div>
 
     <!-- Employee Details Modal -->
-    <div class="modal fade" id="employeeDetailsModal" tabindex="-1">
-        <div class="modal-dialog">
+    <div class="modal fade modern-form-modal" id="employeeDetailsModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Employee Details</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <div class="modal-header-icon">
+                        <i class="fas fa-id-badge"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title">Employee Profile & Compliance</h5>
+                        <p class="modal-subtitle">Employment terms, compensation rates, and statutory IDs.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body" id="employeeDetailsContent">
                     <!-- Loaded via JS -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Close</button>
                 </div>
             </div>
         </div>

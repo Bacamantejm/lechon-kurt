@@ -343,66 +343,133 @@ $deductions = $has_deductions_table ? mysqli_query($conn, $deductions_sql) : fal
     </div>
 
     <!-- Deduction Modal -->
-    <div class="modal fade" id="deductionModal" tabindex="-1">
-        <div class="modal-dialog">
+    <div class="modal fade modern-form-modal" id="deductionModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content">
                 <form method="POST">
                     <div class="modal-header">
-                        <h5 class="modal-title" id="modalTitle">Add Deduction</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        <div class="modal-header-icon">
+                            <i class="fas fa-hand-holding-usd"></i>
+                        </div>
+                        <div>
+                            <h5 class="modal-title" id="modalTitle">Add Deduction</h5>
+                            <p class="modal-subtitle">Configure employee payroll deductions, loan repayments, and advances.</p>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
                         <input type="hidden" name="action" value="save_deduction">
                         <input type="hidden" name="deduction_id" id="deduction_id">
-                        <div class="mb-3">
-                            <label>Employee</label>
-                            <select name="employee_id" id="employee_id" class="form-select" required>
-                                <?php if ($employees): ?>
-                                    <?php mysqli_data_seek($employees, 0); while($e = mysqli_fetch_assoc($employees)): ?>
-                                        <option value="<?php echo $e['id']; ?>"><?php echo htmlspecialchars($e['first_name'] . ' ' . $e['last_name']); ?></option>
-                                    <?php endwhile; ?>
-                                <?php endif; ?>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label>Deduction Type</label>
-                            <select name="deduction_type" id="deduction_type" class="form-select" required>
-                                <option value="loan">Loan</option>
-                                <option value="cash_advance">Cash Advance</option>
-                                <option value="other">Other</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label>Description</label>
-                            <input type="text" name="description" id="description" class="form-control" placeholder="e.g., SSS Loan, Rice Advance" required>
-                        </div>
-                        <div class="mb-3">
-                            <label>Amount per Payroll (&#8369;)</label>
-                            <input type="number" name="amount_per_payroll" id="amount_per_payroll" class="form-control" step="0.01" required>
-                        </div>
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label>Start Date</label>
-                                <input type="date" name="start_date" id="start_date" class="form-control" required>
+
+                        <!-- Section 1: Employee & Classification -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <div class="form-section-title">
+                                    <i class="fas fa-user-tag text-danger"></i>
+                                    Employee & Classification
+                                </div>
+                                <span class="form-req-pill">Required</span>
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <label>End Date (Optional)</label>
-                                <input type="date" name="end_date" id="end_date" class="form-control">
+
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern" for="employee_id">Employee Account</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-user form-input-icon"></i>
+                                            <select name="employee_id" id="employee_id" class="form-select" required>
+                                                <?php if ($employees): ?>
+                                                    <?php mysqli_data_seek($employees, 0); while($e = mysqli_fetch_assoc($employees)): ?>
+                                                        <option value="<?php echo $e['id']; ?>"><?php echo htmlspecialchars($e['first_name'] . ' ' . $e['last_name']); ?></option>
+                                                    <?php endwhile; ?>
+                                                <?php endif; ?>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern" for="deduction_type">Deduction Type</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-layer-group form-input-icon"></i>
+                                            <select name="deduction_type" id="deduction_type" class="form-select" required>
+                                                <option value="loan">Loan</option>
+                                                <option value="cash_advance">Cash Advance</option>
+                                                <option value="other">Other</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern" for="description">Description / Purpose</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-file-alt form-input-icon"></i>
+                                            <input type="text" name="description" id="description" class="form-control" placeholder="e.g., SSS Loan, Rice Advance, Uniform Deduction" required>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <div class="mb-3">
-                            <label>Status</label>
-                            <select name="status" id="status" class="form-select" required>
-                                <option value="active">Active</option>
-                                <option value="inactive">Inactive</option>
-                                <option value="completed">Completed</option>
-                            </select>
+
+                        <!-- Section 2: Financials & Period -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <div class="form-section-title">
+                                    <i class="fas fa-coins text-danger"></i>
+                                    Amount & Schedule
+                                </div>
+                                <span class="form-req-pill">Required</span>
+                            </div>
+
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern" for="amount_per_payroll">Amount per Payroll (₱)</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-peso-sign form-input-icon"></i>
+                                            <input type="number" name="amount_per_payroll" id="amount_per_payroll" class="form-control" step="0.01" min="0" placeholder="0.00" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern" for="status">Deduction Status</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-toggle-on form-input-icon"></i>
+                                            <select name="status" id="status" class="form-select" required>
+                                                <option value="active">Active</option>
+                                                <option value="inactive">Inactive</option>
+                                                <option value="completed">Completed</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern" for="start_date">Start Date</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-calendar-alt form-input-icon"></i>
+                                            <input type="date" name="start_date" id="start_date" class="form-control" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern" for="end_date">End Date <span class="text-muted fw-normal">(Optional)</span></label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-calendar-check form-input-icon"></i>
+                                            <input type="date" name="end_date" id="end_date" class="form-control">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                        <button type="submit" class="btn btn-primary">Save Deduction</button>
+                        <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn-modal-primary">Save Deduction</button>
                     </div>
                 </form>
             </div>

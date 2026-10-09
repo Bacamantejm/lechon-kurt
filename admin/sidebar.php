@@ -507,6 +507,28 @@ body.dark-mode .sidebar-footer .logout-btn {
     border: 1px solid #2e3848 !important;
     color: #e2e8f0 !important;
 }
+.sidebar-menu .menu-item.active {
+    background: #fff1f0 !important;
+    color: #b3261e !important;
+    border-radius: 10px !important;
+    font-weight: 700 !important;
+}
+.sidebar-menu .menu-item.active i {
+    color: #b3261e !important;
+}
+.sidebar-menu .menu-item.active::before {
+    display: none !important;
+}
+html.dark-mode .sidebar-menu .menu-item.active,
+body.dark-mode .sidebar-menu .menu-item.active {
+    background: #2a1818 !important;
+    color: #ff6b6b !important;
+    border: 1px solid #4c1d1d !important;
+}
+html.dark-mode .sidebar-menu .menu-item.active i,
+body.dark-mode .sidebar-menu .menu-item.active i {
+    color: #ff6b6b !important;
+}
 </style>
 
 <!-- Admin Sidebar Navigation -->
@@ -581,7 +603,7 @@ body.dark-mode .sidebar-footer .logout-btn {
                     <i class="fas fa-project-diagram"></i>
                     <span>Partner Pipeline</span>
                     <?php if ($pipeline_total_count > 0): ?>
-                        <span style="margin-left:auto; margin-right:24px; background:#b3261e; color:#fff; border-radius:10px; padding:1px 7px; font-size:11px; font-weight:600;">
+                        <span class="sidebar-count-badge" style="margin-left:auto; margin-right:24px; background:#b3261e; color:#fff; border-radius:10px; padding:1px 7px; font-size:11px; font-weight:600;">
                             <?php echo $pipeline_total_count; ?>
                         </span>
                     <?php endif; ?>
@@ -676,13 +698,7 @@ body.dark-mode .sidebar-footer .logout-btn {
                         <span>Logistics</span>
                     </a>
                 </li>
-                <li>
-                    <a href="../rider/index.php" target="_blank" class="menu-item" title="Open Mobile Rider Portal">
-                        <i class="fas fa-motorcycle"></i>
-                        <span>Rider Portal</span>
-                        <span style="font-size: 10px; background: #eaecf0; color: #344054; padding: 2px 6px; border-radius: 4px; margin-left: auto;">Mobile</span>
-                    </a>
-                </li>
+
             <?php endif; ?>
 
             <?php if ($can_chat): ?>
@@ -2564,9 +2580,10 @@ body.dark-mode .sidebar-footer .logout-btn {
             const sessionErrorMessage = <?php echo json_encode($_SESSION['error']); ?>;
             <?php unset($_SESSION['error']); ?>
             if (typeof Swal !== 'undefined') {
+                const isAccessDenied = /access denied|unauthorized|permission|forbidden/i.test(sessionErrorMessage);
                 Swal.fire({
                     icon: 'error',
-                    title: 'Access Denied',
+                    title: isAccessDenied ? 'Access Denied' : 'Error',
                     text: sessionErrorMessage,
                     confirmButtonText: 'OK'
                 });
@@ -2856,13 +2873,389 @@ body.dark-mode .sidebar-footer .logout-btn {
     -webkit-backdrop-filter: blur(2px);
 }
 
-/* Desktop Collapsed */
+/* Desktop Collapsed — Modern Slender Dock */
 @media (min-width: 769px) {
-    .admin-container.sidebar-collapsed .admin-sidebar {
-        transform: translateX(-100%) !important;
+    .admin-sidebar {
+        transition: width 0.25s cubic-bezier(0.22, 1, 0.36, 1), transform 0.25s cubic-bezier(0.22, 1, 0.36, 1) !important;
     }
+    .admin-content {
+        transition: margin-left 0.25s cubic-bezier(0.22, 1, 0.36, 1) !important;
+    }
+
+    /* Collapsed Sidebar Dock Geometry */
+    .admin-container.sidebar-collapsed .admin-sidebar {
+        width: 74px !important;
+        min-width: 74px !important;
+        max-width: 74px !important;
+        transform: translateX(0) !important;
+        overflow: visible !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        z-index: 1045 !important;
+    }
+
     .admin-container.sidebar-collapsed .admin-content {
-        margin-left: 0 !important;
+        margin-left: 74px !important;
+    }
+
+    /* Header in Collapsed Dock */
+    .admin-container.sidebar-collapsed .sidebar-header {
+        padding: 16px 0 !important;
+        width: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-bottom: 1px solid var(--border) !important;
+    }
+
+    .admin-container.sidebar-collapsed .sidebar-brand-mark {
+        margin: 0 auto !important;
+    }
+
+    .admin-container.sidebar-collapsed .sidebar-brand-logo,
+    .admin-container.sidebar-collapsed .sidebar-brand-fallback {
+        width: 40px !important;
+        height: 40px !important;
+        border-radius: 12px !important;
+        font-size: 16px !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+    }
+
+    .admin-container.sidebar-collapsed .sidebar-header h3,
+    .admin-container.sidebar-collapsed .sidebar-header p,
+    .admin-container.sidebar-collapsed .sidebar-header .badge,
+    .admin-container.sidebar-collapsed .sidebar-account-badge {
+        display: none !important;
+    }
+
+    /* Search in Collapsed Dock */
+    .admin-container.sidebar-collapsed .sidebar-search-container {
+        padding: 10px 0 !important;
+        width: 100% !important;
+        display: flex !important;
+        justify-content: center !important;
+        border-bottom: 1px solid var(--border) !important;
+    }
+
+    .admin-container.sidebar-collapsed .sidebar-search-wrap {
+        width: 44px !important;
+        height: 44px !important;
+        border-radius: 12px !important;
+        background: #f1f5f9 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        cursor: pointer !important;
+        position: relative !important;
+        transition: all 0.2s cubic-bezier(0.22, 1, 0.36, 1) !important;
+    }
+
+    .admin-container.sidebar-collapsed .sidebar-search-wrap:hover {
+        background: #e2e8f0 !important;
+        transform: translateY(-1px) !important;
+    }
+
+    .admin-container.sidebar-collapsed .sidebar-search-input,
+    .admin-container.sidebar-collapsed .sidebar-search-clear {
+        display: none !important;
+    }
+
+    .admin-container.sidebar-collapsed .sidebar-search-icon {
+        position: static !important;
+        font-size: 14px !important;
+        color: #64748b !important;
+    }
+
+    /* Menu List in Collapsed Dock */
+    .admin-container.sidebar-collapsed .sidebar-menu {
+        padding: 10px 0 !important;
+        width: 100% !important;
+        overflow-x: visible !important;
+        overflow-y: auto !important;
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+    }
+
+    .admin-container.sidebar-collapsed .sidebar-menu::-webkit-scrollbar {
+        display: none !important;
+    }
+
+    /* Force hide all category headers, search empty state, and stray text in collapsed dock */
+    .admin-container.sidebar-collapsed .menu-header,
+    .admin-container.sidebar-collapsed li.menu-header,
+    .admin-container.sidebar-collapsed .sidebar-menu li.menu-header,
+    .admin-container.sidebar-collapsed .sidebar-search-empty,
+    .admin-container.sidebar-collapsed li.sidebar-search-empty,
+    .admin-container.sidebar-collapsed .sidebar-menu li.sidebar-search-empty {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        min-height: 0 !important;
+        max-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+        font-size: 0 !important;
+        line-height: 0 !important;
+        overflow: hidden !important;
+        pointer-events: none !important;
+        opacity: 0 !important;
+    }
+
+    /* Only regular navigation items become centered dock icons */
+    .admin-container.sidebar-collapsed .sidebar-menu li:not(.menu-header):not(.sidebar-search-empty) {
+        display: flex !important;
+        justify-content: center !important;
+        width: 100% !important;
+        position: relative !important;
+        margin-bottom: 4px !important;
+    }
+
+    /* Menu Items in Collapsed Dock */
+    .admin-container.sidebar-collapsed .menu-item {
+        width: 44px !important;
+        height: 44px !important;
+        padding: 0 !important;
+        margin: 2px auto !important;
+        border-radius: 12px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        position: relative !important;
+        border-left: none !important;
+        transition: all 0.18s cubic-bezier(0.22, 1, 0.36, 1) !important;
+    }
+
+    .admin-container.sidebar-collapsed .menu-item.active::before {
+        display: none !important;
+    }
+
+    /* Strictly hide text spans and chevrons in collapsed items */
+    .admin-container.sidebar-collapsed .menu-item > span:not(.sidebar-count-badge),
+    .admin-container.sidebar-collapsed .menu-item span:not(.sidebar-count-badge),
+    .admin-container.sidebar-collapsed .menu-item .submenu-arrow {
+        display: none !important;
+        visibility: hidden !important;
+        width: 0 !important;
+        height: 0 !important;
+        font-size: 0 !important;
+        line-height: 0 !important;
+        overflow: hidden !important;
+        opacity: 0 !important;
+    }
+
+    .admin-container.sidebar-collapsed .menu-item i {
+        font-size: 16px !important;
+        width: auto !important;
+        margin: 0 !important;
+        color: #64748b !important;
+        transition: transform 0.18s ease, color 0.18s ease !important;
+    }
+
+    /* Active Item in Collapsed Dock (Matches Reference Soft Pill) */
+    .admin-container.sidebar-collapsed .menu-item.active {
+        background: #fff1f0 !important;
+        box-shadow: 0 2px 8px rgba(179, 38, 30, 0.12) !important;
+    }
+
+    .admin-container.sidebar-collapsed .menu-item.active i {
+        color: #b3261e !important;
+    }
+
+    .admin-container.sidebar-collapsed .menu-item:hover {
+        background: #f1f5f9 !important;
+        transform: translateY(-1px) !important;
+    }
+
+    .admin-container.sidebar-collapsed .menu-item:hover i {
+        color: #b3261e !important;
+        transform: scale(1.1) !important;
+    }
+
+    /* Notification dot on collapsed icon */
+    .admin-container.sidebar-collapsed .menu-item .sidebar-count-badge {
+        display: block !important;
+        position: absolute !important;
+        top: 7px !important;
+        right: 7px !important;
+        width: 8px !important;
+        height: 8px !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        border-radius: 50% !important;
+        background: #b3261e !important;
+        border: 2px solid #ffffff !important;
+        font-size: 0 !important;
+        line-height: 0 !important;
+    }
+
+    /* Sleek Floating Hover Tooltips */
+    .admin-container.sidebar-collapsed .menu-item::after,
+    .admin-container.sidebar-collapsed .logout-btn::after,
+    .admin-container.sidebar-collapsed .sidebar-search-wrap::after,
+    .admin-container.sidebar-collapsed .sidebar-brand-link::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        left: calc(100% + 12px);
+        top: 50%;
+        transform: translateY(-50%) translateX(-6px);
+        background: #0f172a;
+        color: #ffffff;
+        padding: 6px 12px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1.3;
+        white-space: nowrap;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transition: opacity 0.18s cubic-bezier(0.22, 1, 0.36, 1), transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), visibility 0.18s;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        z-index: 9999;
+    }
+
+    .admin-container.sidebar-collapsed .menu-item:hover::after,
+    .admin-container.sidebar-collapsed .logout-btn:hover::after,
+    .admin-container.sidebar-collapsed .sidebar-search-wrap:hover::after,
+    .admin-container.sidebar-collapsed .sidebar-brand-link:hover::after {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(-50%) translateX(0);
+    }
+
+    .admin-container.sidebar-collapsed .menu-item::before,
+    .admin-container.sidebar-collapsed .logout-btn::before,
+    .admin-container.sidebar-collapsed .sidebar-search-wrap::before,
+    .admin-container.sidebar-collapsed .sidebar-brand-link::before {
+        content: '';
+        position: absolute;
+        left: calc(100% + 6px);
+        top: 50%;
+        transform: translateY(-50%) translateX(-4px);
+        border: 5px solid transparent;
+        border-right-color: #0f172a;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transition: opacity 0.18s cubic-bezier(0.22, 1, 0.36, 1), transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), visibility 0.18s;
+        z-index: 9999;
+    }
+
+    .admin-container.sidebar-collapsed .menu-item:hover::before,
+    .admin-container.sidebar-collapsed .logout-btn:hover::before,
+    .admin-container.sidebar-collapsed .sidebar-search-wrap:hover::before,
+    .admin-container.sidebar-collapsed .sidebar-brand-link:hover::before {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(-50%) translateX(0);
+    }
+
+    /* Submenu Floating Flyout */
+    .admin-container.sidebar-collapsed .sidebar-submenu {
+        position: absolute !important;
+        left: calc(100% + 10px) !important;
+        top: 0 !important;
+        min-width: 210px !important;
+        background: #ffffff !important;
+        border: 1px solid #eaecf0 !important;
+        border-radius: 14px !important;
+        box-shadow: 0 12px 30px rgba(16, 24, 40, 0.15) !important;
+        padding: 8px !important;
+        margin: 0 !important;
+        display: none !important;
+        z-index: 9999 !important;
+    }
+
+    .admin-container.sidebar-collapsed li:hover > .sidebar-submenu {
+        display: block !important;
+        animation: submenuFlyout 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    @keyframes submenuFlyout {
+        from { opacity: 0; transform: translateX(-6px); }
+        to { opacity: 1; transform: translateX(0); }
+    }
+
+    .admin-container.sidebar-collapsed .sidebar-submenu .submenu-item {
+        margin: 2px 0 !important;
+        padding: 8px 12px !important;
+        border-radius: 8px !important;
+        font-size: 13px !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+    }
+
+    /* Footer in Collapsed Dock */
+    .admin-container.sidebar-collapsed .sidebar-footer {
+        padding: 12px 0 !important;
+        width: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        border-top: 1px solid var(--border) !important;
+    }
+
+    .admin-container.sidebar-collapsed .logout-btn {
+        width: 44px !important;
+        height: 44px !important;
+        padding: 0 !important;
+        margin: 4px auto !important;
+        border-radius: 12px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        position: relative !important;
+    }
+
+    .admin-container.sidebar-collapsed .logout-btn span {
+        display: none !important;
+    }
+
+    .admin-container.sidebar-collapsed .logout-btn i {
+        font-size: 16px !important;
+        margin: 0 !important;
+    }
+
+    /* Dark Mode Collapsed Dock Styles */
+    body.dark-mode .admin-container.sidebar-collapsed .sidebar-search-wrap {
+        background: #222936 !important;
+    }
+    body.dark-mode .admin-container.sidebar-collapsed .sidebar-search-wrap:hover {
+        background: #2e3848 !important;
+    }
+    body.dark-mode .admin-container.sidebar-collapsed .sidebar-search-icon {
+        color: #94a3b8 !important;
+    }
+    body.dark-mode .admin-container.sidebar-collapsed .menu-item.active {
+        background: #2a1818 !important;
+        border: 1px solid #4c1d1d !important;
+        box-shadow: 0 2px 8px rgba(255, 107, 107, 0.15) !important;
+    }
+    body.dark-mode .admin-container.sidebar-collapsed .menu-item.active i {
+        color: #ff6b6b !important;
+    }
+    body.dark-mode .admin-container.sidebar-collapsed .menu-item:hover {
+        background: #222936 !important;
+    }
+    body.dark-mode .admin-container.sidebar-collapsed .menu-item:hover i {
+        color: #f8fafc !important;
+    }
+    body.dark-mode .admin-container.sidebar-collapsed .menu-item .sidebar-count-badge {
+        border-color: #181d26 !important;
+    }
+    body.dark-mode .admin-container.sidebar-collapsed .sidebar-submenu {
+        background: #181d26 !important;
+        border-color: #27303f !important;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45) !important;
+    }
+    body.dark-mode .admin-container.sidebar-collapsed .sidebar-submenu .submenu-item:hover {
+        background: #222936 !important;
+        color: #ffffff !important;
     }
 }
 
@@ -2985,8 +3378,13 @@ body.dark-mode .sidebar-menu .menu-item:hover {
 }
 
 body.dark-mode .sidebar-menu .menu-item.active {
-    background: #b3261e !important;
-    color: #ffffff !important;
+    background: #2a1818 !important;
+    color: #fca5a5 !important;
+    border: 1px solid #4c1d1d !important;
+}
+
+body.dark-mode .sidebar-menu .menu-item.active i {
+    color: #ff6b6b !important;
 }
 
 body.dark-mode .sidebar-submenu {
@@ -3210,6 +3608,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (e) {
             e.preventDefault();
             e.stopPropagation();
+            if (typeof e.stopImmediatePropagation === 'function') {
+                e.stopImmediatePropagation();
+            }
         }
         if (window.innerWidth > 768) {
             // Desktop: Toggle collapsed state
@@ -3229,7 +3630,7 @@ document.addEventListener('DOMContentLoaded', function() {
     togglers.forEach(function(btn) {
         if (btn.dataset.sidebarBound === '1') return;
         btn.dataset.sidebarBound = '1';
-        btn.addEventListener('click', handleToggle);
+        btn.addEventListener('click', handleToggle, true);
     });
 
     // On mobile, clicking a navigation link inside the sidebar closes the drawer
@@ -3243,6 +3644,40 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     }
+
+    // Modern Collapsed Tooltip Initializer & Interactive Dock Enhancements
+    function initSidebarTooltips() {
+        if (!sidebar) return;
+        sidebar.querySelectorAll('.menu-item, .logout-btn').forEach(function(el) {
+            if (!el.getAttribute('data-tooltip')) {
+                const span = el.querySelector('span');
+                const text = span ? span.textContent.trim() : (el.getAttribute('title') || '');
+                if (text) {
+                    el.setAttribute('data-tooltip', text);
+                }
+            }
+        });
+        const brandLink = sidebar.querySelector('.sidebar-brand-link');
+        if (brandLink && !brandLink.getAttribute('data-tooltip')) {
+            const h3 = brandLink.querySelector('h3');
+            if (h3) brandLink.setAttribute('data-tooltip', h3.textContent.trim());
+        }
+        const searchWrap = sidebar.querySelector('.sidebar-search-wrap');
+        if (searchWrap && !searchWrap.getAttribute('data-tooltip')) {
+            searchWrap.setAttribute('data-tooltip', 'Search Menu');
+            searchWrap.addEventListener('click', function(e) {
+                if (adminContainer.classList.contains('sidebar-collapsed')) {
+                    adminContainer.classList.remove('sidebar-collapsed');
+                    try { localStorage.setItem('admin_sidebar_collapsed', '0'); } catch(err) {}
+                    const searchInput = document.getElementById('sidebarSearchInput');
+                    if (searchInput) {
+                        setTimeout(function() { searchInput.focus(); }, 160);
+                    }
+                }
+            });
+        }
+    }
+    initSidebarTooltips();
 
     // 2. Sidebar Navigation Live Search Filter
     const searchInput = document.getElementById('sidebarSearchInput');

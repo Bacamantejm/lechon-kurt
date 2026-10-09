@@ -504,6 +504,31 @@ require_once 'includes/header.php';
     .market-sidebar {
         position: static !important;
     }
+    .market-home {
+        padding-bottom: 140px !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .market-store-list,
+    .store-list-grid {
+        grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr)) !important;
+        gap: 20px 16px !important;
+    }
+    .store-card-image-wrap {
+        height: 150px !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .market-store-list,
+    .store-list-grid {
+        grid-template-columns: 1fr !important;
+        gap: 16px !important;
+    }
+    .store-card-image-wrap {
+        height: 160px !important;
+    }
 }
 
 /* ==========================================================================

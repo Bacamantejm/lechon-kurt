@@ -352,6 +352,45 @@ body.dark-mode .module-table td {
     }
 }
 
+@media (max-width: 768px) {
+    .module-section {
+        padding: 14px 12px;
+        margin-bottom: 14px;
+        border-radius: 12px;
+    }
+    .module-section-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    .metrics-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+    .module-form-grid {
+        grid-template-columns: 1fr;
+    }
+    .module-table {
+        min-width: 650px;
+    }
+}
+
+@media (max-width: 576px) {
+    .metrics-grid {
+        grid-template-columns: 1fr;
+    }
+    .metric-value {
+        font-size: 1.15rem;
+    }
+    .ops-table-actions {
+        flex-direction: column;
+        width: 100%;
+    }
+    .ops-table-actions > * {
+        width: 100%;
+    }
+}
+
 body.dark-mode .live-indicator {
     background: #0f172a !important;
     border-color: #134e4a !important;
@@ -378,3 +417,363 @@ body.dark-mode .ops-highlight-card {
     background: linear-gradient(135deg, #292524 0%, #1c1917 100%) !important;
     border-color: #78350f !important;
 }
+
+/* ==========================================================================
+   MODERN FORM & MODAL DESIGN SYSTEM (Section Cards, Icon Wraps, Pill Badges)
+   ========================================================================== */
+.modern-form-modal .modal-content,
+.modal.modern-form-modal .modal-content,
+.modal-content.modern-modal {
+    border: 1px solid #eaecf0;
+    border-radius: 16px;
+    box-shadow: 0 20px 45px rgba(16, 24, 40, 0.12);
+    overflow: hidden;
+    background: #ffffff;
+}
+
+.modern-form-modal .modal-header,
+.modal-header.modern-header {
+    padding: 20px 24px;
+    background: #ffffff;
+    border-bottom: 1px solid #eaecf0;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.modal-header-icon,
+.emp-modal-badge,
+.modern-modal-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: #fff1f0;
+    color: #b3261e;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+    border: 1px solid #fee4e2;
+}
+
+.modern-form-modal .modal-title,
+.modal-title.modern-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #101828;
+    margin: 0;
+    line-height: 1.3;
+}
+
+.modal-subtitle {
+    font-size: 13px;
+    color: #475467;
+    margin: 3px 0 0;
+    line-height: 1.4;
+}
+
+.modern-form-modal .btn-close,
+.btn-close.modern-close {
+    margin-left: auto;
+    background-color: #f2f4f7;
+    border-radius: 8px;
+    opacity: 0.7;
+    transition: all 0.18s ease;
+    padding: 8px;
+}
+
+.modern-form-modal .btn-close:hover,
+.btn-close.modern-close:hover {
+    opacity: 1;
+    background-color: #fee4e2;
+}
+
+.modern-form-modal .modal-body,
+.modal-body.modern-body {
+    padding: 20px 24px;
+    background: #f8f9fa;
+    max-height: calc(85vh - 140px);
+    overflow-y: auto;
+}
+
+/* Form Section Cards */
+.form-section-card,
+.emp-section-card {
+    background: #ffffff;
+    border: 1px solid #eaecf0;
+    border-radius: 12px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+}
+
+.form-section-card:last-child,
+.emp-section-card:last-child {
+    margin-bottom: 0;
+}
+
+.form-section-head,
+.emp-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #f2f4f7;
+}
+
+.form-section-title,
+.emp-section-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #1d2939;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.form-section-title i,
+.emp-section-title i {
+    color: #b3261e;
+    font-size: 14px;
+}
+
+.form-req-pill,
+.emp-req-pill {
+    font-size: 11px;
+    font-weight: 600;
+    color: #b3261e;
+    background: #fff1f0;
+    border: 1px solid #fee4e2;
+    padding: 2px 8px;
+    border-radius: 6px;
+    letter-spacing: 0.02em;
+}
+
+.form-opt-pill {
+    font-size: 11px;
+    font-weight: 600;
+    color: #475467;
+    background: #f2f4f7;
+    border: 1px solid #eaecf0;
+    padding: 2px 8px;
+    border-radius: 6px;
+    letter-spacing: 0.02em;
+}
+
+.form-group-modern,
+.emp-form-group {
+    margin-bottom: 14px;
+}
+
+.form-group-modern:last-child {
+    margin-bottom: 0;
+}
+
+.form-label-modern,
+.emp-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #344054;
+    margin-bottom: 6px;
+}
+
+.form-req-star,
+.emp-req-star {
+    color: #b3261e !important;
+    font-weight: 700;
+    margin-left: 2px;
+}
+
+.form-input-wrap,
+.emp-input-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.form-input-icon,
+.emp-input-icon {
+    position: absolute;
+    left: 14px;
+    color: #98a2b3;
+    font-size: 14px;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.form-input-wrap .form-control,
+.form-input-wrap .form-select,
+.emp-input-wrap .form-control,
+.emp-input-wrap .form-select {
+    padding-left: 40px !important;
+}
+
+.modern-form-modal .form-control,
+.modern-form-modal .form-select,
+.form-section-card .form-control,
+.form-section-card .form-select,
+.emp-modal .form-control,
+.emp-modal .form-select {
+    border: 1px solid #d0d5dd;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 13.5px;
+    color: #101828;
+    background: #ffffff;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+    transition: all 0.2s ease;
+}
+
+.modern-form-modal .form-control:focus,
+.modern-form-modal .form-select:focus,
+.form-section-card .form-control:focus,
+.form-section-card .form-select:focus,
+.emp-modal .form-control:focus,
+.emp-modal .form-select:focus {
+    border-color: #b3261e;
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.12);
+    outline: none;
+}
+
+.modern-form-modal .form-control::placeholder,
+.form-section-card .form-control::placeholder,
+.emp-modal .form-control::placeholder {
+    color: #98a2b3;
+    font-size: 13px;
+}
+
+.form-helper-text,
+.emp-helper-text {
+    font-size: 12px;
+    color: #667085;
+    margin-top: 5px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Modern Modal Footer & Buttons */
+.modern-form-modal .modal-footer,
+.modal-footer.modern-footer {
+    padding: 16px 24px;
+    background: #ffffff;
+    border-top: 1px solid #eaecf0;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.btn-modal-cancel,
+.emp-btn-cancel {
+    background: #ffffff;
+    border: 1px solid #d0d5dd;
+    color: #344054;
+    padding: 10px 20px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.18s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.btn-modal-cancel:hover,
+.emp-btn-cancel:hover {
+    background: #f8f9fa;
+    border-color: #98a2b3;
+    color: #1d2939;
+}
+
+.btn-modal-primary,
+.emp-btn-primary {
+    background: #b3261e;
+    border: 1px solid #b3261e;
+    color: #ffffff;
+    padding: 10px 24px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: center;
+    box-shadow: 0 1px 3px rgba(179, 38, 30, 0.2);
+    transition: all 0.18s ease;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.btn-modal-primary:hover,
+.emp-btn-primary:hover {
+    background: #981b15;
+    border-color: #981b15;
+    color: #ffffff;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(179, 38, 30, 0.25);
+}
+
+/* Dark Mode Overrides */
+body.dark-mode .modern-form-modal .modal-content,
+body.dark-mode .modal-content.modern-modal,
+body.dark-mode .form-section-card,
+body.dark-mode .emp-section-card {
+    background: #1e293b;
+    border-color: #334155;
+    color: #f8fafc;
+}
+
+body.dark-mode .modern-form-modal .modal-header,
+body.dark-mode .modern-form-modal .modal-footer,
+body.dark-mode .modal-header.modern-header,
+body.dark-mode .modal-footer.modern-footer {
+    background: #1e293b;
+    border-color: #334155;
+}
+
+body.dark-mode .modern-form-modal .modal-body,
+body.dark-mode .modal-body.modern-body {
+    background: #0f172a;
+}
+
+body.dark-mode .form-section-head,
+body.dark-mode .emp-section-head {
+    border-color: #334155;
+}
+
+body.dark-mode .modern-form-modal .modal-title,
+body.dark-mode .form-section-title,
+body.dark-mode .emp-section-title {
+    color: #f8fafc;
+}
+
+body.dark-mode .form-label-modern,
+body.dark-mode .emp-label {
+    color: #cbd5e1;
+}
+
+body.dark-mode .modal-subtitle,
+body.dark-mode .form-helper-text,
+body.dark-mode .emp-helper-text {
+    color: #94a3b8;
+}
+
+body.dark-mode .btn-modal-cancel,
+body.dark-mode .emp-btn-cancel {
+    background: #1e293b;
+    border-color: #475569;
+    color: #cbd5e1;
+}
+
+body.dark-mode .btn-modal-cancel:hover,
+body.dark-mode .emp-btn-cancel:hover {
+    background: #334155;
+    color: #ffffff;
+}
+

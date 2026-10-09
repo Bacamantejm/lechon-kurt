@@ -78,20 +78,23 @@ if ($init_avail_res) {
                 <div class="d-flex align-items-center justify-content-between mb-3">
                     <div class="d-flex align-items-center gap-3">
                         <div style="position: relative;">
+                            <?php 
+                                $rider_display_name = !empty($rider['rider_name']) ? $rider['rider_name'] : (!empty($_SESSION['rider_name']) ? $_SESSION['rider_name'] : 'Delivery Rider');
+                            ?>
                             <?php if (!empty($rider['profile_image'])): ?>
                                 <img src="../<?php echo htmlspecialchars($rider['profile_image']); ?>" alt="Rider Photo" style="width: 54px; height: 54px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border-neutral);">
                             <?php else: ?>
                                 <div style="width: 54px; height: 54px; border-radius: 50%; background: #fee4e2; color: var(--primary-red); display:flex; align-items:center; justify-content:center; font-size: 24px; font-weight: 800;">
-                                    <?php echo strtoupper(substr($rider['rider_name'] ?? 'R', 0, 1)); ?>
+                                    <?php echo strtoupper(substr($rider_display_name, 0, 1)); ?>
                                 </div>
                             <?php endif; ?>
                             <span class="pulse-dot <?php echo htmlspecialchars($rider['duty_status']); ?>" style="position: absolute; bottom: 2px; right: 2px; border: 2px solid #ffffff;"></span>
                         </div>
                         <div>
-                            <h5 class="mb-0 fw-bold" style="color: var(--primary-ink); font-size: 1.1rem;">
-                                <?php echo htmlspecialchars($rider['rider_name'] ?? 'Delivery Rider'); ?>
+                            <h5 class="mb-0 fw-bold" style="color: var(--primary-ink); font-size: 1.15rem; line-height: 1.25;">
+                                <?php echo htmlspecialchars($rider_display_name); ?>
                             </h5>
-                            <div class="d-flex align-items-center gap-2 mt-1">
+                            <div class="d-flex align-items-center gap-2 mt-1 flex-wrap">
                                 <span class="badge" style="background:#fff1f0; color:#b3261e; border:1px solid #fee4e2; font-size:10.5px; font-weight:700;">
                                     <?php echo htmlspecialchars($rider['rider_code']); ?>
                                 </span>

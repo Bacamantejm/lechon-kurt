@@ -742,53 +742,85 @@ $latestReminder = $billingReminders[0] ?? null;
                     </div>
                 </div>
 
-                <div class="billing-card">
-                    <h3 class="billing-title">Subscription Request Center</h3>
-                    <p class="billing-sub">Apply as a new subscriber, renew your current plan, or request a plan change directly from your shop billing dashboard.</p>
-                    <?php if ($has_prefill_request): ?>
-                        <div class="alert alert-info" style="border-radius:14px;">
-                            The plan request form was prefilled from the Subscription Plans page. Review it, adjust anything you want, then submit.
+                <div class="form-section-card mb-4">
+                    <div class="form-section-head">
+                        <div class="form-section-title">
+                            <i class="fas fa-crown"></i>
+                            Subscription Request Center
                         </div>
-                    <?php endif; ?>
-                    <form method="post" class="row g-3">
-                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
-                        <input type="hidden" name="action" value="submit_subscription_request">
-                        <div class="col-12 col-md-4">
-                            <label class="form-label">Request Type</label>
-                            <select name="request_type" class="form-select" required>
-                                <option value="new" <?php echo $requested_request_type === 'new' ? 'selected' : ''; ?>>New Subscription</option>
-                                <option value="renew" <?php echo $requested_request_type === 'renew' ? 'selected' : ''; ?>>Renew Current Plan</option>
-                                <option value="upgrade" <?php echo $requested_request_type === 'upgrade' ? 'selected' : ''; ?>>Upgrade Plan</option>
-                                <option value="downgrade" <?php echo $requested_request_type === 'downgrade' ? 'selected' : ''; ?>>Downgrade Plan</option>
-                                <option value="change_plan" <?php echo $requested_request_type === 'change_plan' ? 'selected' : ''; ?>>Change Plan</option>
-                            </select>
-                        </div>
-                        <div class="col-12 col-md-4">
-                            <label class="form-label">Plan</label>
-                            <select name="plan_id" class="form-select" required>
-                                <option value="">Select plan</option>
-                                <?php foreach ($availablePlans as $plan): ?>
-                                    <option value="<?php echo (int)$plan['id']; ?>" <?php echo $requested_plan_id === (int)$plan['id'] ? 'selected' : ''; ?>>
-                                        <?php echo htmlspecialchars((string)$plan['plan_name'] . ' - PHP ' . number_format((float)($plan['monthly_price'] ?? 0), 2) . '/mo'); ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="col-12 col-md-4">
-                            <label class="form-label">Billing Cycle</label>
-                            <select name="billing_cycle" class="form-select" required>
-                                <option value="monthly" <?php echo $requested_billing_cycle === 'monthly' ? 'selected' : ''; ?>>Monthly</option>
-                                <option value="annual" <?php echo $requested_billing_cycle === 'annual' ? 'selected' : ''; ?>>Annual</option>
-                            </select>
-                        </div>
-                        <div class="col-12">
-                            <label class="form-label">Notes</label>
-                            <textarea name="partner_notes" class="form-control" rows="3" placeholder="Optional note for the platform owner, such as why you want to upgrade or renew."></textarea>
-                        </div>
-                        <div class="col-12">
-                            <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Submit Subscription Request</button>
-                        </div>
-                    </form>
+                        <span class="form-req-pill">Plan Application</span>
+                    </div>
+                    <div class="p-3">
+                        <p class="text-muted small mb-3">Apply as a new subscriber, renew your current plan, or request a plan change directly from your shop billing dashboard.</p>
+                        <?php if ($has_prefill_request): ?>
+                            <div class="alert alert-info py-2 px-3 mb-3" style="background:#eff8ff; color:#175cd3; border:1px solid #b2ddff; border-radius:10px; font-size:0.88rem;">
+                                <i class="fas fa-info-circle me-1"></i> The plan request form was prefilled from the Subscription Plans page. Review it, adjust anything you want, then submit.
+                            </div>
+                        <?php endif; ?>
+                        <form method="post">
+                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+                            <input type="hidden" name="action" value="submit_subscription_request">
+                            <div class="row g-3">
+                                <div class="col-12 col-md-4">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Request Type</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-exchange-alt form-input-icon"></i>
+                                            <select name="request_type" class="form-control" required>
+                                                <option value="new" <?php echo $requested_request_type === 'new' ? 'selected' : ''; ?>>New Subscription</option>
+                                                <option value="renew" <?php echo $requested_request_type === 'renew' ? 'selected' : ''; ?>>Renew Current Plan</option>
+                                                <option value="upgrade" <?php echo $requested_request_type === 'upgrade' ? 'selected' : ''; ?>>Upgrade Plan</option>
+                                                <option value="downgrade" <?php echo $requested_request_type === 'downgrade' ? 'selected' : ''; ?>>Downgrade Plan</option>
+                                                <option value="change_plan" <?php echo $requested_request_type === 'change_plan' ? 'selected' : ''; ?>>Change Plan</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-12 col-md-4">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Plan</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-layer-group form-input-icon"></i>
+                                            <select name="plan_id" class="form-control" required>
+                                                <option value="">Select plan</option>
+                                                <?php foreach ($availablePlans as $plan): ?>
+                                                    <option value="<?php echo (int)$plan['id']; ?>" <?php echo $requested_plan_id === (int)$plan['id'] ? 'selected' : ''; ?>>
+                                                        <?php echo htmlspecialchars((string)$plan['plan_name'] . ' - PHP ' . number_format((float)($plan['monthly_price'] ?? 0), 2) . '/mo'); ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-12 col-md-4">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Billing Cycle</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-calendar-alt form-input-icon"></i>
+                                            <select name="billing_cycle" class="form-control" required>
+                                                <option value="monthly" <?php echo $requested_billing_cycle === 'monthly' ? 'selected' : ''; ?>>Monthly</option>
+                                                <option value="annual" <?php echo $requested_billing_cycle === 'annual' ? 'selected' : ''; ?>>Annual</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Notes / Justification <span class="text-muted fw-normal">(Optional)</span></label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-comment-alt form-input-icon"></i>
+                                            <textarea name="partner_notes" class="form-control" rows="2" placeholder="Optional note for the platform owner, such as why you want to upgrade or renew."></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-12 text-end">
+                                    <button type="submit" class="btn btn-modal-primary px-4 py-2">
+                                        <i class="fas fa-paper-plane me-1"></i> Submit Subscription Request
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
                 </div>
 
                 <div class="billing-card">

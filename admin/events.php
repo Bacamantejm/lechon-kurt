@@ -480,64 +480,103 @@ foreach (($event_insights['upcoming_events'] ?? []) as $item) {
 
 <?php if (!$is_partner_scoped_admin): ?>
 <!-- Add Event Modal -->
-<div class="modal fade" id="addEventModal" tabindex="-1">
-    <div class="modal-dialog">
+<div class="modal fade modern-form-modal" id="addEventModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
-            <div class="modal-header" style="background-color: #667eea; color: white;">
-                <h5 class="modal-title"><i class="fas fa-plus"></i> Add Business Event</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close">
-                </button>
-            </div>
             <form method="post">
                 <input type="hidden" name="action" value="add">
+                <div class="modal-header">
+                    <div class="modal-header-icon">
+                        <i class="fas fa-calendar-plus"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title">Add Business Event</h5>
+                        <p class="modal-subtitle">Log calendar holidays, promos, and demand impact adjustments.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
                 <div class="modal-body">
-                    <div class="form-group">
-                        <label>Event Name *</label>
-                        <input type="text" name="event_name" class="form-control" required 
-                               placeholder="e.g., New Year Holiday, Valentine's Day">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Date *</label>
-                        <input type="date" name="event_date" class="form-control" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Type *</label>
-                        <select name="event_type" class="form-control" required>
-                            <option value="">-- Select Type --</option>
-                            <option value="holiday">Holiday (Reduced demand)</option>
-                            <option value="promotion">Promotion (Sales boost)</option>
-                            <option value="special_event">Special Event (High demand)</option>
-                            <option value="seasonal">Seasonal (Pattern change)</option>
-                            <option value="maintenance">Maintenance (Limited service)</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Demand Impact Multiplier *</label>
-                        <div class="input-group">
-                            <input type="number" name="impact_multiplier" class="form-control" required 
-                                   min="0.1" max="3" step="0.1" value="1.0"
-                                   onchange="updatePreview(this.value)">
-                            <div class="input-group-append">
-                                <span class="input-group-text">x normal demand</span>
+                    <!-- Section 1: Event Identity -->
+                    <div class="form-section-card">
+                        <div class="form-section-head">
+                            <div class="form-section-title">
+                                <i class="fas fa-calendar-day text-danger"></i>
+                                Event Classification
+                            </div>
+                            <span class="form-req-pill">Required</span>
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="form-group-modern">
+                                    <label class="form-label-modern" for="addEventName">Event Name</label>
+                                    <div class="form-input-wrap">
+                                        <i class="fas fa-tag form-input-icon"></i>
+                                        <input type="text" id="addEventName" name="event_name" class="form-control" required placeholder="e.g., New Year Holiday, Town Fiesta">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group-modern">
+                                    <label class="form-label-modern" for="addEventDate">Event Date</label>
+                                    <div class="form-input-wrap">
+                                        <i class="fas fa-calendar-alt form-input-icon"></i>
+                                        <input type="date" id="addEventDate" name="event_date" class="form-control" required>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <div class="form-group-modern">
+                                    <label class="form-label-modern" for="addEventType">Event Type</label>
+                                    <div class="form-input-wrap">
+                                        <i class="fas fa-layer-group form-input-icon"></i>
+                                        <select id="addEventType" name="event_type" class="form-select" required>
+                                            <option value="">Select Event Type</option>
+                                            <option value="holiday">Holiday (Reduced demand)</option>
+                                            <option value="promotion">Promotion (Sales boost)</option>
+                                            <option value="special_event">Special Event (High demand)</option>
+                                            <option value="seasonal">Seasonal (Pattern change)</option>
+                                            <option value="maintenance">Maintenance (Limited service)</option>
+                                        </select>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <small class="form-text text-muted">
-                            1.0 = normal, <0.5 = reduced, >1.5 = high demand
-                        </small>
                     </div>
-                    
-                    <div class="form-group">
-                        <label>Description</label>
-                        <textarea name="description" class="form-control" rows="3" 
-                                  placeholder="Optional notes about this event"></textarea>
+
+                    <!-- Section 2: Demand Multiplier -->
+                    <div class="form-section-card">
+                        <div class="form-section-head">
+                            <div class="form-section-title">
+                                <i class="fas fa-chart-line text-danger"></i>
+                                Demand & Forecast Impact
+                            </div>
+                            <span class="form-req-pill">Required</span>
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="form-group-modern">
+                                    <label class="form-label-modern" for="addImpactMultiplier">Demand Impact Multiplier</label>
+                                    <div class="form-input-wrap">
+                                        <i class="fas fa-times-circle form-input-icon"></i>
+                                        <input type="number" id="addImpactMultiplier" name="impact_multiplier" class="form-control" required min="0.1" max="3" step="0.1" value="1.0" onchange="updatePreview(this.value)">
+                                    </div>
+                                    <small class="text-muted d-block mt-1" style="font-size: 11px;">1.0 = normal, &lt; 0.5 = reduced, &gt; 1.5 = high volume.</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group-modern">
+                                    <label class="form-label-modern" for="addEventDescription">Internal Notes <span class="text-muted fw-normal">(Optional)</span></label>
+                                    <textarea id="addEventDescription" name="description" class="form-control" rows="2" placeholder="Optional notes about event preparations..."></textarea>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary btn-primary-custom">Add Event</button>
+                    <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn-modal-primary">Add Event</button>
                 </div>
             </form>
         </div>
@@ -545,54 +584,89 @@ foreach (($event_insights['upcoming_events'] ?? []) as $item) {
 </div>
 
 <!-- Edit Event Modal -->
-<div class="modal fade" id="editEventModal" tabindex="-1">
-    <div class="modal-dialog">
+<div class="modal fade modern-form-modal" id="editEventModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
-            <div class="modal-header" style="background-color: #667eea; color: white;">
-                <h5 class="modal-title"><i class="fas fa-edit"></i> Edit Event</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close">
-                </button>
-            </div>
             <form method="post">
                 <input type="hidden" name="action" value="update">
                 <input type="hidden" name="event_id" id="edit_event_id">
+                <div class="modal-header">
+                    <div class="modal-header-icon">
+                        <i class="fas fa-edit"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title">Edit Business Event</h5>
+                        <p class="modal-subtitle">Adjust forecast demand multiplier or activation status.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
                 <div class="modal-body">
-                    <div class="form-group">
-                        <label>Event Name</label>
-                        <input type="text" id="edit_event_name" class="form-control" disabled>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Date</label>
-                        <input type="date" id="edit_event_date" class="form-control" disabled>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Type</label>
-                        <input type="text" id="edit_event_type" class="form-control" disabled>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Demand Impact Multiplier</label>
-                        <div class="input-group">
-                            <input type="number" name="impact_multiplier" id="edit_impact_multiplier" 
-                                   class="form-control" min="0.1" max="3" step="0.1">
-                            <div class="input-group-append">
-                                <span class="input-group-text">x normal demand</span>
+                    <div class="form-section-card">
+                        <div class="form-section-head">
+                            <div class="form-section-title">
+                                <i class="fas fa-info-circle text-danger"></i>
+                                Event Summary
+                            </div>
+                            <span class="form-opt-pill">Read Only</span>
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <div class="form-group-modern">
+                                    <label class="form-label-modern">Event Name</label>
+                                    <input type="text" id="edit_event_name" class="form-control bg-light" disabled>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group-modern">
+                                    <label class="form-label-modern">Event Date</label>
+                                    <input type="date" id="edit_event_date" class="form-control bg-light" disabled>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group-modern">
+                                    <label class="form-label-modern">Event Type</label>
+                                    <input type="text" id="edit_event_type" class="form-control bg-light" disabled>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    
-                    <div class="form-check">
-                        <input type="checkbox" name="is_active" id="edit_is_active" class="form-check-input">
-                        <label class="form-check-label" for="edit_is_active">
-                            Active (affects forecasts)
-                        </label>
+
+                    <div class="form-section-card">
+                        <div class="form-section-head">
+                            <div class="form-section-title">
+                                <i class="fas fa-sliders-h text-danger"></i>
+                                Forecast Multiplier & State
+                            </div>
+                            <span class="form-req-pill">Editable</span>
+                        </div>
+
+                        <div class="row g-3 align-items-center">
+                            <div class="col-md-7">
+                                <div class="form-group-modern">
+                                    <label class="form-label-modern" for="edit_impact_multiplier">Demand Impact Multiplier</label>
+                                    <div class="form-input-wrap">
+                                        <i class="fas fa-times-circle form-input-icon"></i>
+                                        <input type="number" name="impact_multiplier" id="edit_impact_multiplier" class="form-control" min="0.1" max="3" step="0.1">
+                                    </div>
+                                    <small class="text-muted d-block mt-1" style="font-size: 11px;">Multiplier applied to kitchen and roasting prep forecasts.</small>
+                                </div>
+                            </div>
+                            <div class="col-md-5">
+                                <div class="form-check form-switch pt-3">
+                                    <input type="checkbox" name="is_active" id="edit_is_active" class="form-check-input" role="switch">
+                                    <label class="form-check-label fw-bold" for="edit_is_active" style="color: #101828;">
+                                        Active Forecast Rule
+                                    </label>
+                                    <small class="text-muted d-block" style="font-size: 11px;">When disabled, baseline forecast rules apply.</small>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary btn-primary-custom">Update Event</button>
+                    <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn-modal-primary">Update Event</button>
                 </div>
             </form>
         </div>
