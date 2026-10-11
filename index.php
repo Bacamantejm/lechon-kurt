@@ -2854,10 +2854,30 @@ body:not(.dark-mode) {
     width: 100% !important;
 }
 
+.market-sidebar-header {
+    margin-bottom: 8px !important;
+    padding-bottom: 0 !important;
+    border-bottom: none !important;
+}
+
+.market-sidebar-header h3 {
+    margin: 0 !important;
+    font-size: 1.15rem !important;
+    font-weight: 800 !important;
+    color: #1e293b !important;
+}
+
 .market-sidebar-section {
     border-bottom: 1px solid #f1f5f9 !important;
     padding-bottom: 16px !important;
     margin-bottom: 16px !important;
+}
+
+.market-sidebar-header + .market-sidebar-section,
+.market-sidebar-section.market-sort-section {
+    border-top: none !important;
+    margin-top: 0 !important;
+    padding-top: 0 !important;
 }
 
 .market-sidebar-section:last-child {
@@ -2923,7 +2943,8 @@ body:not(.dark-mode) {
         color: #b3261e;
         margin-right: 6px;
     }
-    .market-sidebar.is-collapsed-mobile .market-sidebar-section {
+    .market-sidebar.is-collapsed-mobile .market-sidebar-section,
+    .market-sidebar.is-collapsed-mobile .market-sidebar-header {
         display: none !important;
     }
     .market-sidebar.is-collapsed-mobile .toggle-icon {
@@ -3189,10 +3210,10 @@ body.dark-mode .deal-copy-btn {
                         <i class="fas fa-chevron-down toggle-icon"></i>
                     </div>
 
-                    <div class="market-sidebar-section">
+                    <div class="market-sidebar-header">
                         <h3>Filters</h3>
                     </div>
-                    <div class="market-sidebar-section">
+                    <div class="market-sidebar-section market-sort-section">
                         <h4>Sort by</h4>
                         <div class="market-radio-list">
                             <label class="market-radio"><input type="radio" name="storeSort" value="relevance" checked> <span>Relevance</span></label>
@@ -3211,7 +3232,7 @@ body.dark-mode .deal-copy-btn {
                             <label class="market-check"><input type="checkbox" id="filterNearbyOnly"> <span>Nearby only</span></label>
                         </div>
                     </div>
-                    <div class="market-sidebar-section">
+                    <div class="market-sidebar-section" id="nearestShopsSidebarSection">
                         <h4>Nearest Cavite lechon shops</h4>
                         <p class="market-helper">Allow location access and the page will rank the closest saved Cavite branches first using your browser position and store coordinates.</p>
                         <button type="button" class="market-btn market-detect-btn" id="detectNearestStores"><i class="fas fa-location-crosshairs"></i> Detect nearest shops</button>
@@ -4213,6 +4234,10 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         if (isUserGps) {
+            const nearestSection = document.getElementById('nearestShopsSidebarSection');
+            if (nearestSection) {
+                nearestSection.style.display = 'none';
+            }
             currentSort = 'distance';
             sortInputs.forEach(function (input) {
                 input.checked = input.value === 'distance';

@@ -33,6 +33,25 @@ $cart_count = isset($_SESSION['cart']) && is_array($_SESSION['cart']) ? count($_
 $current_user_address = trim((string)($current_user_address ?? ($_SESSION['address'] ?? '')));
 $market_header_address_display = $current_user_address !== '' ? $current_user_address : 'Select your address';
 
+if (!function_exists('formatHeaderLocationText')) {
+    function formatHeaderLocationText($address, $maxLength = 38) {
+        $address = trim((string)$address);
+        if ($address === '' || $address === 'Select your address') {
+            return 'Select your address';
+        }
+        if (mb_strlen($address) > $maxLength) {
+            $cut = mb_substr($address, 0, $maxLength);
+            $lastComma = mb_strrpos($cut, ',');
+            if ($lastComma !== false && $lastComma > 18) {
+                $cut = mb_substr($cut, 0, $lastComma);
+            }
+            return rtrim($cut, ', ') . ' etc....';
+        }
+        return $address;
+    }
+}
+$market_header_address_display_short = formatHeaderLocationText($market_header_address_display);
+
 $viewer_name = trim((string)($_SESSION['full_name'] ?? ''));
 $viewer_email = trim((string)($_SESSION['email'] ?? ''));
 $viewer_first_name = $viewer_name !== '' ? explode(' ', $viewer_name)[0] : 'Welcome';
@@ -1420,7 +1439,8 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
             transform: translateY(-1px);
         }
 
-        .market-address-trigger { border:1px solid var(--line); background:#fff7ef; border-radius:999px; min-height:38px; padding:0 12px; color:#2a3042; display:inline-flex; align-items:center; gap:7px; cursor:pointer; font-size:.84rem; font-weight:600; max-width:260px; transition:var(--transition-lift); flex-shrink:0; }
+        .market-address-trigger { border:1px solid var(--line); background:#fff7ef; border-radius:999px; min-height:38px; padding:0 14px; color:#2a3042; display:inline-flex; align-items:center; gap:7px; cursor:pointer; font-size:.84rem; font-weight:600; max-width:280px; transition:var(--transition-lift); flex-shrink:0; }
+        .market-address-trigger .address-text { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:210px; display:inline-block; vertical-align:middle; text-align:left; }
         .market-partner-cta { min-height:38px; padding:0 14px; border-radius:999px; border:1px solid #f0c4a8; background:linear-gradient(135deg,#171922,#2b3144); color:#fff; text-decoration:none; font-size:.82rem; font-weight:800; display:inline-flex; align-items:center; gap:8px; transition:var(--transition-lift); white-space:nowrap; }
         .market-search-popover {
             position: absolute;
@@ -1736,8 +1756,8 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
 
         <?php if (in_array($current_page, ['index', 'home', 'pickup'], true)): ?>
         <div class="market-address-wrap" id="marketAddressWrap">
-            <button type="button" class="market-address-trigger" id="marketAddressToggle">
-                <i class="fas fa-location-dot"></i><span class="address-text" id="marketAddressDisplay"><?php echo htmlspecialchars($market_header_address_display); ?></span><i class="fas fa-chevron-down"></i>
+            <button type="button" class="market-address-trigger" id="marketAddressToggle" title="<?php echo htmlspecialchars($market_header_address_display); ?>">
+                <i class="fas fa-location-dot"></i><span class="address-text" id="marketAddressDisplay" title="<?php echo htmlspecialchars($market_header_address_display); ?>"><?php echo htmlspecialchars($market_header_address_display_short); ?></span><i class="fas fa-chevron-down"></i>
             </button>
             <div class="market-address-popover" id="marketAddressPopover">
                 <div class="market-address-input-row">
@@ -1820,16 +1840,16 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
                 <div class="notification-dropdown" id="notificationDropdown"><div class="notification-header">Notifications</div><div class="notification-empty">No new notifications yet.</div></div>
             </div>
             <button class="icon-btn cart-btn" id="cartToggle" onclick="location.href='<?php echo $path_prefix; ?>cart.php'"><i class="fas fa-shopping-cart"></i><span class="badge" id="cartBadge"><?php echo (int)$cart_count; ?></span></button>
+            <button type="button" class="icon-btn market-theme-btn" id="marketThemeToggler" title="Toggle Theme" aria-label="Toggle Dark or Light Theme"><i class="fas fa-moon"></i></button>
             <?php else: ?>
+                <button type="button" class="icon-btn market-theme-btn" id="marketThemeToggler" title="Toggle Theme" aria-label="Toggle Dark or Light Theme"><i class="fas fa-moon"></i></button>
                 <?php if ($current_page !== 'register' && $current_page !== 'login'): ?>
                 <div class="auth-buttons">
                     <a href="<?php echo $path_prefix; ?>register.php?mode=login#login" class="btn-signin">Log in</a>
                     <a href="<?php echo $path_prefix; ?>register.php?mode=register#register" class="btn-register">Create account</a>
                 </div>
-                <a href="<?php echo $path_prefix; ?>register.php?mode=login#login" class="icon-btn mobile-user-btn" title="Log in" aria-label="Log in"><i class="fas fa-user"></i></a>
                 <?php endif; ?>
             <?php endif; ?>
-            <button type="button" class="icon-btn market-theme-btn" id="marketThemeToggler" title="Toggle Theme" aria-label="Toggle Dark or Light Theme"><i class="fas fa-moon"></i></button>
             <button class="icon-btn mobile-toggle" id="mobileToggle"><i class="fas fa-bars"></i></button>
         </div>
     </div>
@@ -2001,12 +2021,12 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
                 </div>
             </div>
             <?php else: ?>
+                <button type="button" class="icon-btn market-theme-btn" id="marketThemeTogglerSite" title="Toggle Theme" aria-label="Toggle Dark or Light Theme"><i class="fas fa-moon"></i></button>
                 <?php if ($current_page !== 'register' && $current_page !== 'login'): ?>
                 <div class="auth-buttons">
                     <a href="<?php echo $path_prefix; ?>register.php?mode=login#login" class="btn-signin">Log in</a>
                     <a href="<?php echo $path_prefix; ?>register.php?mode=register#register" class="btn-register">Create account</a>
                 </div>
-                <a href="<?php echo $path_prefix; ?>register.php?mode=login#login" class="icon-btn mobile-user-btn" title="Log in" aria-label="Log in"><i class="fas fa-user"></i></a>
                 <?php endif; ?>
             <?php endif; ?>
             <?php if ($favorites_feature_enabled): ?>
@@ -2016,6 +2036,9 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
             <button class="icon-btn" id="chatBtn" onclick="location.href='<?php echo $path_prefix; ?>help_center.php'" title="Help Center"><i class="fas fa-comment-dots"></i><span class="badge" id="chatBadge" style="display:none;">0</span></button>
             <?php endif; ?>
             <button class="icon-btn cart-btn" id="cartToggle" onclick="location.href='<?php echo $path_prefix; ?>cart.php'"><i class="fas fa-shopping-cart"></i><span class="badge" id="cartBadge"><?php echo (int)$cart_count; ?></span></button>
+            <?php if ($is_logged_in_user): ?>
+            <button type="button" class="icon-btn market-theme-btn" id="marketThemeTogglerSiteLoggedIn" title="Toggle Theme" aria-label="Toggle Dark or Light Theme"><i class="fas fa-moon"></i></button>
+            <?php endif; ?>
             <button class="icon-btn mobile-toggle" id="mobileToggle"><i class="fas fa-bars"></i></button>
         </div>
         <?php endif; ?>
@@ -2613,10 +2636,32 @@ document.addEventListener('DOMContentLoaded', function () {
         return normalized;
     };
 
+    const formatHeaderLocationDisplay = function (address, maxLength) {
+        maxLength = maxLength || 38;
+        if (!address || address === 'Select your address') {
+            return 'Select your address';
+        }
+        const trimmed = String(address).trim();
+        if (trimmed.length > maxLength) {
+            let cut = trimmed.slice(0, maxLength);
+            const lastComma = cut.lastIndexOf(',');
+            if (lastComma > 18) {
+                cut = cut.slice(0, lastComma);
+            }
+            return cut.replace(/,\s*$/, '').trim() + ' etc....';
+        }
+        return trimmed;
+    };
+
     const renderMarketAddressDisplay = function (payload) {
         if (!marketAddressDisplay) return;
         const normalized = buildMarketAddressPayload(payload?.street_address, payload?.city, payload?.postal_code);
-        marketAddressDisplay.textContent = normalized.full_address || 'Select your address';
+        const fullAddress = normalized.full_address || 'Select your address';
+        marketAddressDisplay.textContent = formatHeaderLocationDisplay(fullAddress);
+        marketAddressDisplay.title = fullAddress;
+        if (marketAddressToggle) {
+            marketAddressToggle.title = fullAddress;
+        }
     };
 
     const applyAddress = function () {
