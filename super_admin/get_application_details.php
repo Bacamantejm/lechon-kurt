@@ -358,9 +358,9 @@ if (saTableExists($conn, 'franchise_applications')) {
                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token, ENT_QUOTES, 'UTF-8'); ?>">
                 
                 <div class="form-group-modern mb-3">
-                    <label class="form-label-modern">Overall Admin Feedback / Instructions to Applicant</label>
-                    <textarea name="admin_notes" id="admin_notes" class="form-control" rows="3" placeholder="Add overall notes or instructions for the applicant..."><?php echo htmlspecialchars($app['admin_notes'] ?? ''); ?></textarea>
-                    <div class="form-helper-text"><i class="fas fa-info-circle"></i> If you flag specific documents above and click <strong>Mark Incomplete</strong>, the applicant will only be prompted to re-upload the flagged files without losing their other data.</div>
+                    <label class="form-label-modern">Overall Admin Feedback / Reason <span class="text-danger">*</span></label>
+                    <textarea name="admin_notes" id="admin_notes" class="form-control" rows="3" placeholder="Explain why the application is rejected or incomplete..."><?php echo htmlspecialchars($app['admin_notes'] ?? ''); ?></textarea>
+                    <div class="form-helper-text"><i class="fas fa-info-circle"></i> A reason is required for rejection or incomplete decisions. Mark at least one specific document for re-upload when choosing <strong>Mark Incomplete</strong>.</div>
                 </div>
                 
                 <div class="action-buttons d-flex gap-2 flex-wrap pt-2 border-top">

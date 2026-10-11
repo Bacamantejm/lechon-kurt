@@ -130,6 +130,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($application_id <= 0 || !in_array($decision, ['approved', 'rejected'], true)) {
             saSetFlash('danger', 'Invalid business application review request.');
+        } elseif ($decision === 'rejected' && $admin_notes === '') {
+            saSetFlash('danger', 'A reason is required when rejecting a business application.');
         } else {
             $app_stmt = mysqli_prepare($conn, "SELECT id, user_id, business_name FROM franchise_applications WHERE id = ? LIMIT 1");
             if (!$app_stmt) {
@@ -492,7 +494,7 @@ saRenderModuleHeader('User & Business Management', 'User & Business Management',
                                                 <option value="approved">Approve</option>
                                                 <option value="rejected">Reject</option>
                                             </select>
-                                            <input type="text" name="admin_notes" class="form-control form-control-sm" placeholder="Optional notes" style="min-width: 180px;">
+                                            <input type="text" name="admin_notes" class="form-control form-control-sm" placeholder="Reason required for rejection" style="min-width: 180px;">
                                             <button type="submit"
                                                     class="btn btn-sm btn-primary"
                                                     data-sa-confirm="1"

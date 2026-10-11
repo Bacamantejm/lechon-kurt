@@ -92,6 +92,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_action'])) {
         exit;
     }
 
+    if (in_array($new_status, ['rejected', 'incomplete'], true) && $notes === '') {
+        saSetFlash('warning', 'A reason is required when rejecting or marking an application incomplete.');
+        header('Location: ' . $page_file);
+        exit;
+    }
+
     $store_result = null;
     $trial_started = false;
     try {
@@ -132,6 +138,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_action'])) {
                 if ($f_doc !== '') {
                     $incomplete_map[$f_doc] = trim((string)($doc_remarks[$f_doc] ?? ''));
                 }
+            }
+
+            if (empty($incomplete_map)) {
+                throw new RuntimeException('Select at least one specific document to mark for re-upload before marking the application incomplete.');
             }
         }
         $incomplete_json = !empty($incomplete_map) ? json_encode($incomplete_map, JSON_UNESCAPED_UNICODE) : null;
@@ -585,20 +595,36 @@ $extra_scripts = <<<'HTML'
         applyDocumentZoom();
     }
 
+    function getActiveApplicationForm() {
+        const forms = Array.from(document.querySelectorAll('form[id="appForm"]'));
+        return forms.find(form => form.getClientRects().length > 0) || forms[forms.length - 1] || null;
+    }
+
     function handleIncomplete(applicationNumber) {
-        const checkedBoxes = Array.from(document.querySelectorAll('#appForm input[name="flagged_docs[]"]:checked'));
+        const appForm = getActiveApplicationForm();
+        const checkedBoxes = appForm
+            ? Array.from(document.querySelectorAll('input[name="flagged_docs[]"]')).filter(checkbox => checkbox.checked && checkbox.form === appForm)
+            : [];
         const flaggedNames = checkedBoxes.map(cb => cb.getAttribute('data-doc-name') || cb.value);
+        const notesField = appForm ? appForm.querySelector('#admin_notes') : null;
+        const notes = notesField ? notesField.value.trim() : '';
+
+        if (flaggedNames.length === 0) {
+            Swal.fire({
+                title: 'Select a document first',
+                text: 'Mark at least one specific document for re-upload before continuing.',
+                icon: 'warning',
+                confirmButtonColor: '#b3261e'
+            });
+            return;
+        }
         
         let docListHtml = '';
-        if (flaggedNames.length > 0) {
-            docListHtml = '<div style="background:#fff8ef;border:1px solid #fedf89;border-radius:8px;padding:10px 14px;margin:12px 0;text-align:left;color:#b54708;font-size:13px;">' +
-                          '<strong>Flagged for Re-upload (' + flaggedNames.length + ' item' + (flaggedNames.length > 1 ? 's' : '') + '):</strong><ul style="margin:4px 0 0;padding-left:18px;">' +
-                          flaggedNames.map(name => '<li>' + name + '</li>').join('') +
-                          '</ul></div>' +
-                          '<p style="font-size:12px;color:#667085;margin-bottom:0;">The applicant will only need to re-upload the flagged document(s). All approved files and application information will be preserved.</p>';
-        } else {
-            docListHtml = '<p style="font-size:13px;color:#b54708;margin-top:10px;"><em>Note: No specific documents were checked. The applicant will receive your feedback notes to revise their submission.</em></p>';
-        }
+        docListHtml = '<div style="background:#fff8ef;border:1px solid #fedf89;border-radius:8px;padding:10px 14px;margin:12px 0;text-align:left;color:#b54708;font-size:13px;">' +
+                      '<strong>Flagged for Re-upload (' + flaggedNames.length + ' item' + (flaggedNames.length > 1 ? 's' : '') + '):</strong><ul style="margin:4px 0 0;padding-left:18px;">' +
+                      flaggedNames.map(name => '<li>' + name + '</li>').join('') +
+                      '</ul></div>' +
+                      '<p style="font-size:12px;color:#667085;margin-bottom:0;">The applicant will only need to re-upload the flagged document(s). All approved files and application information will be preserved.</p>';
 
         Swal.fire({
             title: 'Mark Incomplete Requirements',
@@ -607,14 +633,25 @@ $extra_scripts = <<<'HTML'
             showCancelButton: true,
             confirmButtonColor: '#f59e0b',
             cancelButtonColor: '#6c757d',
+            input: 'textarea',
+            inputValue: notes,
+            inputPlaceholder: 'Explain why this application is incomplete...',
+            inputAttributes: {
+                'aria-label': 'Reason for marking the application incomplete'
+            },
+            inputValidator: (value) => {
+                return value.trim() === '' ? 'A reason is required.' : undefined;
+            },
             confirmButtonText: 'Yes, Mark Incomplete & Notify Client',
             cancelButtonText: 'Cancel',
             backdrop: 'rgba(0,0,0,0.5)'
         }).then((result) => {
             if (result.isConfirmed) {
-                const appActionInput = document.getElementById('app_action');
-                const appForm = document.getElementById('appForm');
+                const appActionInput = appForm ? appForm.querySelector('#app_action') : null;
                 if (appActionInput && appForm) {
+                    if (notesField) {
+                        notesField.value = result.value.trim();
+                    }
                     appActionInput.value = 'incomplete';
                     appForm.submit();
                 }
@@ -623,6 +660,10 @@ $extra_scripts = <<<'HTML'
     }
 
     function handleReject(applicationNumber) {
+        const appForm = getActiveApplicationForm();
+        const notesField = appForm ? appForm.querySelector('#admin_notes') : null;
+        const notes = notesField ? notesField.value.trim() : '';
+
         Swal.fire({
             title: 'Confirm Rejection',
             html: 'Are you sure you want to <strong>REJECT</strong> this application?<br><br><strong>Application #:</strong> ' + applicationNumber + '<br><br>This action cannot be undone.',
@@ -630,14 +671,25 @@ $extra_scripts = <<<'HTML'
             showCancelButton: true,
             confirmButtonColor: '#dc3545',
             cancelButtonColor: '#6c757d',
+            input: 'textarea',
+            inputValue: notes,
+            inputPlaceholder: 'Explain why this application is rejected...',
+            inputAttributes: {
+                'aria-label': 'Reason for rejecting the application'
+            },
+            inputValidator: (value) => {
+                return value.trim() === '' ? 'A reason is required.' : undefined;
+            },
             confirmButtonText: 'Yes, Reject Application',
             cancelButtonText: 'Cancel',
             backdrop: 'rgba(0,0,0,0.5)'
         }).then((result) => {
             if (result.isConfirmed) {
-                const appActionInput = document.getElementById('app_action');
-                const appForm = document.getElementById('appForm');
+                const appActionInput = appForm ? appForm.querySelector('#app_action') : null;
                 if (appActionInput && appForm) {
+                    if (notesField) {
+                        notesField.value = result.value.trim();
+                    }
                     appActionInput.value = 'reject';
                     appForm.submit();
                 }
