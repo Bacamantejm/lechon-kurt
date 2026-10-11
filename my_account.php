@@ -482,6 +482,57 @@ if (function_exists('caFetchUserSavedAddresses')) {
     }
 }
 
+// Fetch latest franchise application for status display
+$franchise_app = null;
+$franchise_app_docs = [];
+$fa_has_inc = false;
+if (myAccountTableExists($conn, 'franchise_applications')) {
+    $fa_cols = 'id, application_number, business_name, business_type, status, created_at, reviewed_at, admin_notes';
+    // Check if incomplete_documents column exists
+    $fa_inc_check = mysqli_query($conn, "SHOW COLUMNS FROM franchise_applications LIKE 'incomplete_documents'");
+    $fa_has_inc = $fa_inc_check && mysqli_num_rows($fa_inc_check) > 0;
+    if ($fa_has_inc) {
+        $fa_cols .= ', incomplete_documents';
+    }
+    $fa_resubmit_check = mysqli_query($conn, "SHOW COLUMNS FROM franchise_applications LIKE 'resubmitted_at'");
+    $fa_has_resubmit = $fa_resubmit_check && mysqli_num_rows($fa_resubmit_check) > 0;
+    if ($fa_has_resubmit) {
+        $fa_cols .= ', resubmitted_at';
+    }
+
+    $fa_sql = "SELECT {$fa_cols} FROM franchise_applications WHERE user_id = ? ORDER BY created_at DESC LIMIT 1";
+    $fa_stmt = mysqli_prepare($conn, $fa_sql);
+    if ($fa_stmt) {
+        mysqli_stmt_bind_param($fa_stmt, "i", $user_id);
+        mysqli_stmt_execute($fa_stmt);
+        $fa_result = mysqli_stmt_get_result($fa_stmt);
+        $franchise_app = $fa_result ? mysqli_fetch_assoc($fa_result) : null;
+        mysqli_stmt_close($fa_stmt);
+    }
+
+    // Fetch associated uploaded documents if application exists
+    if ($franchise_app && myAccountTableExists($conn, 'franchise_documents')) {
+        $fd_sql = "SELECT document_type, file_path, status, admin_remarks, uploaded_at FROM franchise_documents WHERE application_id = ? ORDER BY uploaded_at ASC";
+        $fd_stmt = mysqli_prepare($conn, $fd_sql);
+        if ($fd_stmt) {
+            mysqli_stmt_bind_param($fd_stmt, "i", $franchise_app['id']);
+            mysqli_stmt_execute($fd_stmt);
+            $fd_result = mysqli_stmt_get_result($fd_stmt);
+            while ($fd_result && ($fd_row = mysqli_fetch_assoc($fd_result))) {
+                $franchise_app_docs[] = $fd_row;
+            }
+            mysqli_stmt_close($fd_stmt);
+        }
+    }
+}
+$has_franchise_app = !empty($franchise_app);
+$fa_status = $has_franchise_app ? strtolower(trim((string)($franchise_app['status'] ?? ''))) : '';
+$fa_incomplete_docs = [];
+if ($has_franchise_app && $fa_has_inc && !empty($franchise_app['incomplete_documents'])) {
+    $fa_incomplete_docs = json_decode((string)$franchise_app['incomplete_documents'], true);
+    if (!is_array($fa_incomplete_docs)) $fa_incomplete_docs = [];
+}
+
 $profile_image_relative_path = '';
 if ($avatar_column_exists_for_account) {
     $profile_image_relative_path = myAccountNormalizeAvatarPath($user[$avatar_column_for_account] ?? '');
@@ -994,21 +1045,13 @@ include 'includes/header.php';
     padding: 4px;
     margin-bottom: 16px;
     gap: 4px;
-    overflow-x: auto;
-    white-space: nowrap;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-}
-.mobile-segmented-nav::-webkit-scrollbar {
-    display: none;
 }
 
 .mobile-segment-btn {
     flex: 1;
-    flex-shrink: 0;
     border: none;
     background: transparent;
-    padding: 8px 14px;
+    padding: 8px;
     font-size: 0.8rem;
     font-weight: 700;
     color: #475467;
@@ -1053,35 +1096,6 @@ include 'includes/header.php';
     .hero-action-btn {
         flex: 1;
         justify-content: center;
-    }
-}
-
-@media (max-width: 576px) {
-    .account-page-v2 {
-        padding: 16px 12px 140px 12px !important;
-    }
-    .acc-panel-card {
-        padding: 18px 14px;
-        border-radius: 14px;
-    }
-    .account-hero-card {
-        padding: 18px 14px;
-        border-radius: 14px;
-    }
-    .account-hero-left {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 12px;
-    }
-    .account-hero-right {
-        flex-direction: column;
-        width: 100%;
-    }
-    .hero-action-btn {
-        width: 100%;
-    }
-    .acc-address-frame-wrap {
-        min-height: 500px;
     }
 }
 
@@ -1267,9 +1281,6 @@ body.dark-mode .mobile-segment-btn.active {
                 <a href="help_center.php" class="hero-action-btn">
                     <i class="fas fa-headset"></i> Help Center
                 </a>
-                <a href="javascript:void(0);" onclick="openCustomerTutorial(true)" class="hero-action-btn" title="Replay Welcome Tour">
-                    <i class="fas fa-compass" style="color: #b3261e;"></i> Guide Tour
-                </a>
                 <?php endif; ?>
             </div>
         </div>
@@ -1285,6 +1296,11 @@ body.dark-mode .mobile-segment-btn.active {
             <button type="button" class="mobile-segment-btn" data-tab="password">
                 <i class="fas fa-lock"></i> Security
             </button>
+            <?php if ($has_franchise_app): ?>
+            <button type="button" class="mobile-segment-btn" data-tab="franchise">
+                <i class="fas fa-store"></i> Application
+            </button>
+            <?php endif; ?>
         </nav>
 
         <!-- Main Account 2-Column Grid -->
@@ -1305,6 +1321,21 @@ body.dark-mode .mobile-segment-btn.active {
                     <i class="fas fa-shield-halved"></i>
                     <span>Password & Security</span>
                 </button>
+                <?php if ($has_franchise_app): ?>
+                <button type="button" class="acc-tab-nav-btn" data-tab="franchise">
+                    <i class="fas fa-store"></i>
+                    <span>Application Status</span>
+                    <?php
+                        $fa_badge_bg = '#f2f4f7'; $fa_badge_color = '#344054';
+                        $fa_badge_label = ucfirst($fa_status);
+                        if ($fa_status === 'pending') { $fa_badge_bg = '#fffaeb'; $fa_badge_color = '#b54708'; $fa_badge_label = 'Pending'; }
+                        elseif ($fa_status === 'approved') { $fa_badge_bg = '#ecfdf3'; $fa_badge_color = '#027a48'; $fa_badge_label = 'Approved'; }
+                        elseif ($fa_status === 'rejected') { $fa_badge_bg = '#fff1f0'; $fa_badge_color = '#b3261e'; $fa_badge_label = 'Rejected'; }
+                        elseif ($fa_status === 'incomplete') { $fa_badge_bg = '#fffaeb'; $fa_badge_color = '#b54708'; $fa_badge_label = 'Incomplete'; }
+                    ?>
+                    <span class="nav-badge" style="background:<?php echo $fa_badge_bg; ?>;color:<?php echo $fa_badge_color; ?>;font-weight:800;border:1px solid currentColor;"><?php echo htmlspecialchars($fa_badge_label); ?></span>
+                </button>
+                <?php endif; ?>
                 <?php if ($is_organization_account || $partner_subscription): ?>
                 <a href="subscription_plans.php" class="acc-tab-nav-btn" style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:10px;">
                     <i class="fas fa-crown" style="color:#b3261e;"></i>
@@ -1501,6 +1532,178 @@ body.dark-mode .mobile-segment-btn.active {
                         </form>
                     </div>
                 </div>
+
+                <!-- 4. Franchise Application Status Tab -->
+                <?php if ($has_franchise_app): ?>
+                <div class="acc-tab-pane" id="franchise">
+                    <?php
+                        // Status config for display
+                        $fa_status_config = [
+                            'pending'    => ['icon' => 'fa-clock',       'label' => 'Under Review',           'bg' => '#fffaeb', 'color' => '#b54708', 'border' => '#fedf89', 'desc' => 'Your business application is currently being reviewed by the admin team. You will be notified once a decision is made.'],
+                            'approved'   => ['icon' => 'fa-circle-check','label' => 'Approved',               'bg' => '#ecfdf3', 'color' => '#027a48', 'border' => '#abefc6', 'desc' => 'Your franchise application has been approved. Welcome aboard as a platform partner!'],
+                            'rejected'   => ['icon' => 'fa-circle-xmark','label' => 'Rejected',               'bg' => '#fff1f0', 'color' => '#b3261e', 'border' => '#fee4e2', 'desc' => 'Unfortunately, your application was not approved. Please review the admin feedback below.'],
+                            'incomplete' => ['icon' => 'fa-triangle-exclamation', 'label' => 'Incomplete Requirements', 'bg' => '#fffaeb', 'color' => '#b54708', 'border' => '#fedf89', 'desc' => 'Your application requires additional documents or revisions. Please go to the application form to re-upload the flagged items.'],
+                        ];
+                        $fa_cfg = $fa_status_config[$fa_status] ?? ['icon' => 'fa-circle-question', 'label' => ucfirst($fa_status), 'bg' => '#f8f9fa', 'color' => '#344054', 'border' => '#eaecf0', 'desc' => 'Application status information.'];
+                    ?>
+
+                    <!-- Status Banner -->
+                    <div style="background:<?php echo $fa_cfg['bg']; ?>;border:1px solid <?php echo $fa_cfg['border']; ?>;border-radius:14px;padding:18px 22px;margin-bottom:20px;display:flex;align-items:flex-start;gap:14px;">
+                        <div style="width:44px;height:44px;border-radius:12px;background:<?php echo $fa_cfg['bg']; ?>;color:<?php echo $fa_cfg['color']; ?>;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0;border:1px solid <?php echo $fa_cfg['border']; ?>;">
+                            <i class="fas <?php echo $fa_cfg['icon']; ?>"></i>
+                        </div>
+                        <div>
+                            <div style="font-weight:800;font-size:1rem;color:<?php echo $fa_cfg['color']; ?>;margin-bottom:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                                <?php echo htmlspecialchars($fa_cfg['label']); ?>
+                                <span style="background:<?php echo $fa_cfg['bg']; ?>;color:<?php echo $fa_cfg['color']; ?>;font-size:0.72rem;padding:2px 8px;border-radius:999px;border:1px solid <?php echo $fa_cfg['border']; ?>;font-weight:800;text-transform:uppercase;"><?php echo htmlspecialchars($fa_status); ?></span>
+                            </div>
+                            <p style="margin:0;font-size:0.86rem;color:#475467;line-height:1.5;"><?php echo htmlspecialchars($fa_cfg['desc']); ?></p>
+                        </div>
+                    </div>
+
+                    <!-- Application Details Card -->
+                    <div class="acc-panel-card">
+                        <div class="acc-panel-head">
+                            <div>
+                                <h3>Application Details</h3>
+                                <p>Overview of your submitted business franchise application.</p>
+                            </div>
+                        </div>
+
+                        <div class="acc-form-grid">
+                            <div class="acc-form-group">
+                                <label><span>Application Number</span></label>
+                                <input type="text" class="acc-form-input" value="<?php echo htmlspecialchars($franchise_app['application_number'] ?? 'N/A'); ?>" disabled>
+                            </div>
+                            <div class="acc-form-group">
+                                <label><span>Business Name</span></label>
+                                <input type="text" class="acc-form-input" value="<?php echo htmlspecialchars($franchise_app['business_name'] ?? 'N/A'); ?>" disabled>
+                            </div>
+                            <div class="acc-form-group">
+                                <label><span>Business Type</span></label>
+                                <input type="text" class="acc-form-input" value="<?php echo htmlspecialchars($franchise_app['business_type'] ?? 'N/A'); ?>" disabled>
+                            </div>
+                            <div class="acc-form-group">
+                                <label><span>Status</span></label>
+                                <div style="padding:10px 14px;border:1px solid <?php echo $fa_cfg['border']; ?>;border-radius:10px;background:<?php echo $fa_cfg['bg']; ?>;color:<?php echo $fa_cfg['color']; ?>;font-weight:700;font-size:0.9rem;display:flex;align-items:center;gap:8px;">
+                                    <i class="fas <?php echo $fa_cfg['icon']; ?>"></i>
+                                    <?php echo htmlspecialchars($fa_cfg['label']); ?>
+                                </div>
+                            </div>
+                            <div class="acc-form-group">
+                                <label><span>Date Submitted</span></label>
+                                <input type="text" class="acc-form-input" value="<?php echo !empty($franchise_app['created_at']) ? date('F j, Y g:i A', strtotime((string)$franchise_app['created_at'])) : 'N/A'; ?>" disabled>
+                            </div>
+                            <div class="acc-form-group">
+                                <label><span>Date Reviewed</span></label>
+                                <input type="text" class="acc-form-input" value="<?php echo !empty($franchise_app['reviewed_at']) ? date('F j, Y g:i A', strtotime((string)$franchise_app['reviewed_at'])) : 'Awaiting review'; ?>" disabled>
+                            </div>
+                        </div>
+
+                        <?php if (!empty($franchise_app['admin_notes'])): ?>
+                        <div style="margin-top:16px;">
+                            <label style="font-size:0.86rem;font-weight:700;color:#344054;display:block;margin-bottom:6px;">Admin Feedback / Notes</label>
+                            <div style="background:#f8f9fa;border:1px solid #eaecf0;border-radius:10px;padding:14px 16px;font-size:0.88rem;color:#475467;line-height:1.6;white-space:pre-wrap;"><?php echo htmlspecialchars($franchise_app['admin_notes']); ?></div>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+
+                    <?php if ($fa_status === 'incomplete' && !empty($fa_incomplete_docs)): ?>
+                    <!-- Incomplete Documents Breakdown -->
+                    <div class="acc-panel-card">
+                        <div class="acc-panel-head">
+                            <div>
+                                <h3>Flagged Documents</h3>
+                                <p>The following documents need to be revised and re-uploaded.</p>
+                            </div>
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:10px;">
+                            <?php foreach ($fa_incomplete_docs as $doc_key => $doc_info): ?>
+                            <?php
+                                $doc_label = is_array($doc_info) ? ($doc_info['label'] ?? $doc_key) : (string)$doc_info;
+                                $doc_reason = is_array($doc_info) ? ($doc_info['reason'] ?? 'Please re-upload this document.') : 'Please re-upload this document.';
+                            ?>
+                            <div style="background:#fffaeb;border:1px solid #fedf89;border-radius:10px;padding:12px 16px;display:flex;align-items:flex-start;gap:10px;">
+                                <i class="fas fa-triangle-exclamation" style="color:#b54708;margin-top:2px;flex-shrink:0;"></i>
+                                <div>
+                                    <strong style="font-size:0.88rem;color:#101828;"><?php echo htmlspecialchars($doc_label); ?></strong>
+                                    <p style="margin:2px 0 0;font-size:0.82rem;color:#b54708;"><?php echo htmlspecialchars($doc_reason); ?></p>
+                                </div>
+                            </div>
+                            <?php endforeach; ?>
+                        </div>
+
+                        <div style="margin-top:18px;">
+                            <a href="franchise_application.php" class="acc-btn-primary" style="text-decoration:none;">
+                                <i class="fas fa-arrow-rotate-right"></i> Resubmit Flagged Documents
+                            </a>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+
+                    <?php if (!empty($franchise_app_docs)): ?>
+                    <!-- Uploaded Documents List -->
+                    <div class="acc-panel-card">
+                        <div class="acc-panel-head">
+                            <div>
+                                <h3>Uploaded Documents</h3>
+                                <p>Documents you submitted with your franchise application.</p>
+                            </div>
+                        </div>
+                        <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(260px, 1fr));gap:12px;">
+                            <?php
+                            $doc_type_labels = [
+                                'valid_id' => 'Valid ID',
+                                'business_logo' => 'Business Logo',
+                                'dti_doc' => 'DTI/SEC Registration',
+                                'bir_doc' => 'BIR Registration',
+                                'address_proof' => 'Proof of Address',
+                                'mayors_permit' => "Mayor's Permit",
+                                'sanitary_permit' => 'Sanitary Permit',
+                                'fire_safety' => 'Fire Safety Certificate',
+                            ];
+                            foreach ($franchise_app_docs as $doc_row):
+                                $dtype = (string)($doc_row['document_type'] ?? '');
+                                $dlabel = $doc_type_labels[$dtype] ?? ucwords(str_replace('_', ' ', $dtype));
+                                $dstatus = strtolower(trim((string)($doc_row['status'] ?? 'pending')));
+                                $dstatus_cfg = [
+                                    'approved' => ['bg' => '#ecfdf3', 'color' => '#027a48', 'border' => '#abefc6', 'icon' => 'fa-circle-check'],
+                                    'rejected' => ['bg' => '#fff1f0', 'color' => '#b3261e', 'border' => '#fee4e2', 'icon' => 'fa-circle-xmark'],
+                                    'pending'  => ['bg' => '#f8f9fa', 'color' => '#344054', 'border' => '#eaecf0', 'icon' => 'fa-clock'],
+                                    'flagged'  => ['bg' => '#fffaeb', 'color' => '#b54708', 'border' => '#fedf89', 'icon' => 'fa-triangle-exclamation'],
+                                ];
+                                $dcfg = $dstatus_cfg[$dstatus] ?? $dstatus_cfg['pending'];
+                            ?>
+                            <div style="background:#ffffff;border:1px solid <?php echo $dcfg['border']; ?>;border-radius:12px;padding:14px;display:flex;align-items:center;gap:12px;">
+                                <div style="width:36px;height:36px;border-radius:8px;background:<?php echo $dcfg['bg']; ?>;color:<?php echo $dcfg['color']; ?>;display:flex;align-items:center;justify-content:center;font-size:0.95rem;flex-shrink:0;">
+                                    <i class="fas fa-file-alt"></i>
+                                </div>
+                                <div style="min-width:0;flex:1;">
+                                    <div style="font-weight:700;font-size:0.84rem;color:#101828;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><?php echo htmlspecialchars($dlabel); ?></div>
+                                    <div style="display:flex;align-items:center;gap:6px;margin-top:3px;">
+                                        <span style="font-size:0.72rem;font-weight:700;padding:2px 7px;border-radius:999px;background:<?php echo $dcfg['bg']; ?>;color:<?php echo $dcfg['color']; ?>;border:1px solid <?php echo $dcfg['border']; ?>;display:inline-flex;align-items:center;gap:4px;">
+                                            <i class="fas <?php echo $dcfg['icon']; ?>" style="font-size:0.65rem;"></i>
+                                            <?php echo ucfirst($dstatus); ?>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+
+                    <!-- Quick Actions -->
+                    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                        <a href="franchise_application.php" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:#ffffff;border:1px solid #eaecf0;border-radius:10px;font-size:0.86rem;font-weight:700;color:#344054;text-decoration:none;transition:all 0.15s ease;" onmouseover="this.style.background='#f8f9fa';this.style.borderColor='#d0d5dd';" onmouseout="this.style.background='#ffffff';this.style.borderColor='#eaecf0';">
+                            <i class="fas fa-file-lines"></i> View Application Form
+                        </a>
+                        <a href="help_center.php" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:#ffffff;border:1px solid #eaecf0;border-radius:10px;font-size:0.86rem;font-weight:700;color:#344054;text-decoration:none;transition:all 0.15s ease;" onmouseover="this.style.background='#f8f9fa';this.style.borderColor='#d0d5dd';" onmouseout="this.style.background='#ffffff';this.style.borderColor='#eaecf0';">
+                            <i class="fas fa-headset"></i> Contact Support
+                        </a>
+                    </div>
+                </div>
+                <?php endif; ?>
 
             </main>
         </div>

@@ -1172,7 +1172,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
                     $application_id = (int)$latest_application['id'];
                     $application_number = (string)$latest_application['application_number'];
 
-                    if ($franchise_psgc_columns_ready) {
+                    if ($franchise_psgc_columns_ready && $franchise_coords_columns_ready) {
                         $update_query = "UPDATE franchise_applications SET
                             business_name = ?, business_type = ?,
                             tin_number = ?, dti_sec_number = ?, bir_registration_number = ?, mayors_permit = NULLIF(?, ''),
@@ -1244,7 +1244,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
 
                     $stmt = mysqli_prepare($conn, $update_query);
                     if (!$stmt) {
-                        throw new RuntimeException("Unable to prepare application update query.");
+                        $prep_err = trim((string)mysqli_error($conn)); throw new RuntimeException($prep_err !== '' ? "Unable to prepare application update query: {$prep_err}" : "Unable to prepare application update query.");
                     }
                     if (!franchiseBindParams($stmt, $update_types, $update_params)) {
                         $bind_error = trim((string)mysqli_stmt_error($stmt));
@@ -1266,7 +1266,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
                     $application_number = generateUniqueFranchiseApplicationNumber($conn, $user_id);
 
                     $submission_stage = 'application insert';
-                    if ($franchise_psgc_columns_ready) {
+                    if ($franchise_psgc_columns_ready && $franchise_coords_columns_ready) {
                         $insert_query = "INSERT INTO franchise_applications (
                             application_number, user_id, business_name, business_type,
                             tin_number, dti_sec_number, bir_registration_number, mayors_permit,
@@ -1336,7 +1336,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
 
                     $stmt = mysqli_prepare($conn, $insert_query);
                     if (!$stmt) {
-                        throw new RuntimeException("Unable to prepare franchise application insert query.");
+                        $prep_err = trim((string)mysqli_error($conn)); throw new RuntimeException($prep_err !== '' ? "Unable to prepare franchise application insert query: {$prep_err}" : "Unable to prepare franchise application insert query.");
                     }
                     if (!franchiseBindParams($stmt, $insert_types, $insert_params)) {
                         $bind_error = trim((string)mysqli_stmt_error($stmt));
@@ -1432,14 +1432,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
                 ];
 
                 if ($is_incomplete_resubmission) {
-                    $success_msg = "Application revisions submitted successfully!<br>Your application number is: <strong>" . $application_number . "</strong><br>Your revised documents are now pending Super Admin review.<br><a href='my_account.php' style='color:#155724;text-decoration:underline;font-weight:600;'>View application status in My Account</a>";
+                    $success_msg = "Application revisions submitted successfully!<br>Your application number is: <strong>" . $application_number . "</strong><br>Your revised documents are now pending Super Admin review.<br><a href='my_account.php#franchise' style='color:#155724;text-decoration:underline;font-weight:600;'>View application status in My Account</a>";
                     $swal_alert = [
                         'icon' => 'success',
                         'title' => 'Revisions Submitted',
                         'text' => 'Your revised requirements were uploaded successfully and sent for review.'
                     ];
                 } else {
-                    $success_msg = "Business application submitted successfully!<br>Your application number is: <strong>" . $application_number . "</strong><br><a href='my_account.php' style='color:#155724;text-decoration:underline;font-weight:600;'>View application status in My Account</a>";
+                    $success_msg = "Business application submitted successfully!<br>Your application number is: <strong>" . $application_number . "</strong><br><a href='my_account.php#franchise' style='color:#155724;text-decoration:underline;font-weight:600;'>View application status in My Account</a>";
                     $swal_alert = [
                         'icon' => 'success',
                         'title' => 'Application Submitted',
@@ -1646,7 +1646,7 @@ include 'includes/header.php';
                     <?php endif; ?>
                 </div>
                 <div class="form-actions" style="margin-top:20px;">
-                    <a href="my_account.php" class="btn-primary btn-large" style="text-decoration:none;">
+                    <a href="my_account.php#franchise" class="btn-primary btn-large" style="text-decoration:none;">
                         <i class="fas fa-user-circle"></i> Go to My Account
                     </a>
                     <?php if (in_array($franchise_workflow['stage'], ['approved_partner', 'already_registered_partner'], true)): ?>
@@ -3633,7 +3633,11 @@ document.addEventListener('DOMContentLoaded', function() {
             if (f.files && f.files.length > 0) fileCount++;
         });
 
-        const retainedCount = <?php echo (int)count(array_filter($existing_uploaded_docs, function($d) use ($inc_map) { return !isset($inc_map[$d['document_type']]); })); ?>;
+        const retainedCount = <?php 
+            $inc_map = !empty($franchise_workflow['incomplete_documents']) && is_array($franchise_workflow['incomplete_documents']) ? $franchise_workflow['incomplete_documents'] : [];
+            $existing_docs_list = !empty($existing_uploaded_docs) && is_array($existing_uploaded_docs) ? $existing_uploaded_docs : [];
+            echo (int)count(array_filter($existing_docs_list, function($d) use ($inc_map) { return !isset($inc_map[$d['document_type']]); })); 
+        ?>;
         const totalDocsCount = fileCount + retainedCount;
         const docCountText = retainedCount > 0
             ? `${totalDocsCount} file(s) verified & attached (${retainedCount} retained, ${fileCount} newly uploaded)`

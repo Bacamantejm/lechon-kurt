@@ -50,7 +50,7 @@ class EmailService {
 
         if ($force_local_setting && !in_array(strtolower($smtp_host), ['localhost', '127.0.0.1'], true)) {
             $smtp_host = 'localhost';
-            $smtp_port = 1025;
+            $smtp_port = 25;
             $smtp_username = '';
             $smtp_password = '';
             $smtp_secure_mode = '';
@@ -61,18 +61,12 @@ class EmailService {
 
         if ($force_local_setting && !$is_local_host) {
             $smtp_host = 'localhost';
-            $smtp_port = 1025;
+            $smtp_port = 25;
             $smtp_username = '';
             $smtp_password = '';
             $smtp_secure_mode = '';
             $is_local_host = true;
         }
-
-        // On localhost / local development, default port 25 to Laragon Mailpit port 1025
-        if ($is_local_host && ($smtp_port === 25 || $smtp_port <= 0)) {
-            $smtp_port = 1025;
-        }
-
 
         if ($has_real_smtp_credentials && !$force_local_setting) {
             $this->mail->isSMTP();
@@ -160,34 +154,7 @@ class EmailService {
             $this->recordFailure("Primary mailer failed for {$safe_email}: " . $e->getMessage(), $e);
         }
 
-        // 2. Fallback attempt: Local Mailpit relay on 127.0.0.1:1025 (Laragon local mailer)
-        try {
-            $this->resetMessage();
-            $this->mail->isSMTP();
-            $this->mail->Host = '127.0.0.1';
-            $this->mail->SMTPAuth = false;
-            $this->mail->SMTPSecure = '';
-            $this->mail->Port = 1025;
-            $this->mail->SMTPAutoTLS = false;
-            $this->mail->Timeout = 3;
-            if ($recipient_name !== '') {
-                $this->mail->addAddress($safe_email, $recipient_name);
-            } else {
-                $this->mail->addAddress($safe_email);
-            }
-            $this->mail->Subject = $safe_subject;
-            $this->mail->Body    = $html;
-            $this->mail->AltBody = $alt_body !== '' ? $alt_body : strip_tags($html);
-
-            if ($this->mail->send()) {
-                error_log("Email to {$safe_email} sent successfully via local Mailpit fallback (port 1025).");
-                return true;
-            }
-        } catch (Throwable $e_mp) {
-            $this->recordFailure("Mailpit fallback failed for {$safe_email}: " . $e_mp->getMessage(), $e_mp);
-        }
-
-        // 3. Fallback attempt: PHPMailer isMail() transport
+        // 2. Fallback attempt: PHPMailer isMail() transport
         try {
             $this->resetMessage();
             $this->mail->isMail();
@@ -1372,6 +1339,7 @@ class EmailService {
 
             $applicant_name = htmlspecialchars($app_data['contact_person'] ?? $app_data['full_name'] ?? 'Applicant');
             $app_number = htmlspecialchars($app_data['application_number'] ?? '');
+            $business_name = htmlspecialchars($app_data['business_name'] ?? '');
             $raw_capital = (float)($app_data['capital_investment'] ?? 0);
             $capital_line = ($raw_capital > 0) ? "<p style='margin:0;'><strong>Capital Investment:</strong> PHP " . number_format($raw_capital, 2) . "</p>" : "";
             $business_address = htmlspecialchars($app_data['business_address'] ?? 'Cavite');
@@ -1411,7 +1379,7 @@ class EmailService {
         }
     }
 
-    public function sendFranchiseStatusEmail($recipient_email, string $status, array $app_data, string $admin_notes = ''): bool {
+    public function sendFranchiseStatusEmail($recipient_email, string $status, array $app_data, string $admin_notes = '', array $incomplete_documents = []): bool {
         try {
             $this->resetMessage();
             $safe_email = trim((string)$recipient_email);
@@ -1423,6 +1391,27 @@ class EmailService {
             $app_number = htmlspecialchars($app_data['application_number'] ?? '');
             $business_name = htmlspecialchars($app_data['business_name'] ?? '');
             $notes_html = !empty($admin_notes) ? nl2br(htmlspecialchars($admin_notes)) : '';
+
+            $doc_type_names = [
+                'business_logo' => 'Store Business Logo',
+                'dti_doc' => 'DTI / SEC Certificate',
+                'bir_doc' => 'BIR Registration (Form 2303)',
+                'mayor_doc' => "Mayor's Permit",
+                'barangay_clearance' => 'Barangay Clearance',
+                'lease_or_title' => 'Lease Contract / Title',
+                'occupancy_certificate' => 'Certificate of Occupancy',
+                'fire_safety_certificate' => 'Fire Safety Certificate',
+                'community_tax_certificate' => 'Community Tax Certificate (Cedula)',
+                'sanitary_permit' => 'Sanitary Permit',
+                'valid_id' => 'Valid ID of Owner',
+                'address_proof' => 'Proof of Address',
+                'bank_proof' => 'Bank Account Proof',
+                'bir_form' => 'BIR Form 1901/1903',
+                'sss_registration' => 'SSS Registration',
+                'philhealth_registration' => 'PhilHealth Registration',
+                'pagibig_registration' => 'Pag-IBIG Registration',
+                'industry_permit' => 'Industry-Specific Permit'
+            ];
 
             $this->mail->addAddress($safe_email, $applicant_name);
 
@@ -1452,28 +1441,48 @@ class EmailService {
                     <p style='margin-top:24px;'>Welcome to the Lechon Delights Family!<br><strong>Franchise Management Team</strong></p>
                 ";
             } elseif ($status === 'incomplete') {
-                $subject = "Action Required: Incomplete Requirements for Franchise Application [{$app_number}]";
+                $subject = "Action Required: Re-upload Specific Requirements for Franchise Application [{$app_number}]";
                 $content = "
-                    <h2 style='color:#b54708;margin-top:0;'>Incomplete Requirements</h2>
+                    <h2 style='color:#b54708;margin-top:0;'>Action Required: Document Revision Needed</h2>
                     <p>Dear <strong>{$applicant_name}</strong>,</p>
                     <p>Thank you for submitting your franchise application for <strong>{$business_name}</strong> (App #{$app_number}).</p>
-                    <p>Upon initial review of your submission, our compliance team noted that your application has <strong>INCOMPLETE REQUIREMENTS</strong> or requires document revisions before we can proceed with final approval.</p>
+                    <p>Upon reviewing your submission, our compliance team noted that specific requirements need correction (e.g. blurry image or updated document).</p>
                     <div style='background:#fffaeb;border:1px solid #fedf89;border-radius:12px;padding:16px;margin:20px 0;color:#b54708;'>
-                        <p style='margin:0 0 8px;'><strong>Application Status:</strong> Incomplete Requirements / Revisions Needed</p>
+                        <p style='margin:0 0 8px;'><strong>Application Status:</strong> Incomplete Requirements / Re-upload Needed</p>
                         <p style='margin:0;'><strong>Application Number:</strong> {$app_number}</p>
                     </div>
                 ";
-                if (!empty($notes_html)) {
+
+                if (!empty($incomplete_documents)) {
                     $content .= "
-                        <div style='background:#ffffff;border:1px solid #fedf89;border-radius:12px;padding:16px;margin-bottom:20px;'>
-                            <strong style='color:#b54708;'>Missing Requirements / Admin Notes:</strong>
-                            <p style='margin:8px 0 0;color:#344054;'>{$notes_html}</p>
+                        <div style='background:#ffffff;border:1.5px solid #fedf89;border-radius:12px;padding:18px;margin-bottom:20px;'>
+                            <h3 style='color:#b54708;margin:0 0 12px;font-size:16px;'>Items Requiring Re-upload:</h3>
+                            <ul style='margin:0;padding-left:20px;color:#344054;'>
+                    ";
+                    foreach ($incomplete_documents as $doc_key => $reason) {
+                        $doc_label = $doc_type_names[$doc_key] ?? ucfirst(str_replace('_', ' ', $doc_key));
+                        $reason_text = !empty($reason) ? htmlspecialchars($reason) : 'Document needs clear re-upload';
+                        $content .= "<li style='margin-bottom:8px;'><strong>{$doc_label}:</strong> <span style='color:#b54708;'>{$reason_text}</span></li>";
+                    }
+                    $content .= "
+                            </ul>
+                            <p style='margin:12px 0 0;font-size:13px;color:#667085;'><em>Great news: All your other submitted details and approved files have been saved. You only need to re-upload the flagged document(s) above!</em></p>
                         </div>
                     ";
                 }
+
+                if (!empty($notes_html)) {
+                    $content .= "
+                        <div style='background:#f8f9fa;border:1px solid #eaecf0;border-radius:12px;padding:16px;margin-bottom:20px;'>
+                            <strong style='color:#344054;'>Admin Instructions:</strong>
+                            <p style='margin:8px 0 0;color:#475467;'>{$notes_html}</p>
+                        </div>
+                    ";
+                }
+
                 $content .= "
-                    <p><strong>What to do next:</strong></p>
-                    <p>Please log in to your account and navigate to <strong>My Account &gt; Franchise Applications</strong> to upload the missing documents or update your application details.</p>
+                    <p><strong>How to update your application:</strong></p>
+                    <p>1. Sign in to your account.<br>2. Visit the <a href='http://" . ($_SERVER['HTTP_HOST'] ?? 'localhost') . "/franchise_application.php' style='color:#b3261e;font-weight:700;'>Business Application Page</a>.<br>3. Upload only the flagged document(s) and click <strong>Submit Revisions</strong>.</p>
                     <p style='margin-top:24px;'>Best regards,<br><strong>Lechon Delights Compliance Team</strong></p>
                 ";
             } else { // rejected
@@ -1493,7 +1502,7 @@ class EmailService {
                     ";
                 }
                 $content .= "
-                    <p>If eligible, you may submit a revised application after completing the 30-second evaluation cooldown period.</p>
+                    <p>If eligible, you may submit a revised application after completing the 3-day evaluation cooldown period.</p>
                     <p style='margin-top:24px;'>Best regards,<br><strong>Lechon Delights Franchise Evaluation Board</strong></p>
                 ";
             }
