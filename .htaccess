@@ -1,0 +1,107 @@
+# ─── Lechon System — Root .htaccess ─────────────────────────────────────────
+# Apache configuration for Hostinger shared hosting.
+# Requires: mod_rewrite, mod_headers, mod_expires (all enabled on Hostinger).
+
+Options -Indexes
+ServerSignature Off
+
+# ─── Block access to sensitive files ─────────────────────────────────────────
+<FilesMatch "(?i)^(\.git|\.env|composer\.(json|lock|phar)|composer-setup\.php|lechon_db.*\.sql|.*_backup.*\.sql|smtp_test\.php|temp_mail_test\.php|setup_partner_schema\.php|run\.php|GEMINI\.md|README\.md|preflight\.php|cleanup_before_upload\.php)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order deny,allow
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# ─── Block access to the includes/ folder directly ───────────────────────────
+# PHP includes are server-side only — no direct browser access needed.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Block direct requests to includes/
+    RewriteRule ^includes/ - [F,L]
+
+    # Block direct requests to controllers/
+    RewriteRule ^controllers/ - [F,L]
+
+    # Block direct requests to src/
+    RewriteRule ^src/ - [F,L]
+
+    # Block direct requests to tmp/
+    RewriteRule ^tmp/ - [F,L]
+</IfModule>
+
+# ─── Security headers ─────────────────────────────────────────────────────────
+<IfModule mod_headers.c>
+    # Prevent MIME type sniffing
+    Header always set X-Content-Type-Options "nosniff"
+
+    # Clickjacking protection
+    Header always set X-Frame-Options "SAMEORIGIN"
+
+    # Basic XSS filter for older browsers
+    Header always set X-XSS-Protection "1; mode=block"
+
+    # Referrer policy — send origin only, avoids leaking full URLs
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+
+    # Remove server info header
+    Header unset Server
+    Header unset X-Powered-By
+
+    # HSTS — tell browsers to always use HTTPS (6 months)
+    # Only activate this AFTER confirming SSL is working on Hostinger.
+    # Header always set Strict-Transport-Security "max-age=15768000; includeSubDomains"
+</IfModule>
+
+# ─── Force HTTPS ──────────────────────────────────────────────────────────────
+# Uncomment after confirming SSL is active on your Hostinger domain.
+# <IfModule mod_rewrite.c>
+#     RewriteEngine On
+#     RewriteCond %{HTTPS} off
+#     RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+# </IfModule>
+
+# ─── PHP settings (Hostinger shared hosting supports these) ──────────────────
+<IfModule mod_php.c>
+    # Never show errors in browser — log them only
+    php_flag display_errors Off
+    php_flag display_startup_errors Off
+    php_flag log_errors On
+
+    # Reasonable limits for file uploads (ID docs, franchise docs, products)
+    php_value upload_max_filesize 10M
+    php_value post_max_size 12M
+    php_value max_execution_time 60
+    php_value memory_limit 256M
+
+    # Session hardening
+    php_flag session.cookie_httponly On
+    php_flag session.cookie_secure On
+    php_value session.cookie_samesite Lax
+    php_flag session.use_strict_mode On
+</IfModule>
+
+# ─── Browser caching for static assets ───────────────────────────────────────
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType image/jpeg "access plus 1 month"
+    ExpiresByType image/png "access plus 1 month"
+    ExpiresByType image/webp "access plus 1 month"
+    ExpiresByType image/gif "access plus 1 month"
+    ExpiresByType image/x-icon "access plus 1 year"
+    ExpiresByType text/css "access plus 1 week"
+    ExpiresByType application/javascript "access plus 1 week"
+    ExpiresByType font/woff2 "access plus 1 month"
+    ExpiresByType font/woff "access plus 1 month"
+</IfModule>
+
+# ─── Gzip compression ─────────────────────────────────────────────────────────
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css application/javascript
+    AddOutputFilterByType DEFLATE application/json text/xml
+    AddOutputFilterByType DEFLATE font/woff font/woff2
+</IfModule>
