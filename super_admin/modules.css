@@ -58,6 +58,19 @@ body.dark-mode .theme-toggler {
     border: 1px solid #e2e8f0;
     border-radius: 12px;
     padding: 14px;
+    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+                border-color 0.2s ease;
+}
+
+.metric-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 20px -3px rgba(15, 23, 42, 0.08);
+    border-color: #cbd5e1;
+}
+
+.metric-card:active {
+    transform: translateY(-1px) scale(0.99);
 }
 
 .metric-label {
@@ -82,6 +95,13 @@ body.dark-mode .theme-toggler {
     font-weight: 600;
     border-radius: 999px;
     padding: 3px 10px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    cursor: default;
+}
+
+.status-chip:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
 }
 
 .chip-success {
@@ -776,4 +796,209 @@ body.dark-mode .emp-btn-cancel:hover {
     background: #334155;
     color: #ffffff;
 }
+
+/* ==========================================================================
+   Modern UI/UX Micro-Interactions & Animation System (Super Admin Portal)
+   ========================================================================== */
+
+/* Universal Transitions */
+.module-section,
+.module-table tbody tr,
+.sa-filter-pill,
+.sa-topbar-action-btn,
+.module-inline-actions button,
+.module-inline-actions a {
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Module Section Elevation */
+.module-section {
+    transition: box-shadow 0.22s ease, border-color 0.22s ease;
+}
+
+.module-section:hover {
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.07);
+    border-color: #cbd5e1;
+}
+
+/* Super Admin Action Buttons */
+.sa-topbar-action-btn {
+    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+                background-color 0.18s ease,
+                border-color 0.18s ease,
+                color 0.18s ease !important;
+}
+
+.sa-topbar-action-btn:hover {
+    transform: scale(1.08) !important;
+    background: #fff1f0 !important;
+    color: #b3261e !important;
+    border-color: #fda29b !important;
+}
+
+.sa-topbar-action-btn:active {
+    transform: scale(0.92) !important;
+    transition-duration: 0.08s !important;
+}
+
+/* Filter Pills */
+.sa-filter-pill {
+    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+                background-color 0.18s ease,
+                border-color 0.18s ease,
+                color 0.18s ease !important;
+    cursor: pointer;
+    user-select: none;
+}
+
+.sa-filter-pill:hover {
+    transform: translateY(-1px);
+    background: #f2f4f7;
+    color: #1d2939;
+}
+
+.sa-filter-pill:active {
+    transform: scale(0.95);
+    transition-duration: 0.08s;
+}
+
+.sa-filter-pill.active {
+    background: #b3261e !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+}
+
+/* Super Admin Module Tables */
+.module-table tbody tr {
+    transition: background-color 0.15s ease !important;
+}
+
+.module-table tbody tr:hover {
+    background-color: #f8fafc;
+}
+
+body.dark-mode .module-table tbody tr:hover {
+    background-color: rgba(255, 255, 255, 0.035) !important;
+}
+
+/* Inline Action Buttons (View, Edit, Approve, Reject) */
+.module-inline-actions button,
+.module-inline-actions a,
+.btn-sm {
+    transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 0.15s ease,
+                background-color 0.15s ease !important;
+    cursor: pointer;
+}
+
+.module-inline-actions button:hover,
+.module-inline-actions a:hover,
+.btn-sm:hover {
+    transform: translateY(-1px) scale(1.03);
+}
+
+.module-inline-actions button:active,
+.module-inline-actions a:active,
+.btn-sm:active {
+    transform: scale(0.95) !important;
+    transition-duration: 0.08s !important;
+}
+
+/* Super Admin Dropdowns Entrance */
+.sa-dropdown-panel.show {
+    animation: modernFadeScaleIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+/* ==========================================================================
+   Super Admin Mobile Glassmorphism & Responsive Viewports (< 768px)
+   ========================================================================== */
+@media (max-width: 768px) {
+    .metrics-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 10px !important;
+        margin-bottom: 16px;
+    }
+
+    .metric-card {
+        padding: 12px 14px !important;
+        border-radius: 16px !important;
+        background: rgba(255, 255, 255, 0.9) !important;
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        border: 1px solid rgba(226, 232, 240, 0.85) !important;
+        box-shadow: 0 4px 14px -2px rgba(15, 23, 42, 0.04) !important;
+    }
+
+    .metric-value {
+        font-size: 1.25rem !important;
+    }
+
+    .metric-label {
+        font-size: 0.76rem !important;
+    }
+
+    .module-section {
+        padding: 16px 14px !important;
+        border-radius: 18px !important;
+        background: rgba(255, 255, 255, 0.92) !important;
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(226, 232, 240, 0.85) !important;
+        box-shadow: 0 4px 18px -2px rgba(15, 23, 42, 0.05) !important;
+        margin-bottom: 14px !important;
+    }
+
+    .module-section-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    .sa-filter-bar,
+    .filter-pills-row {
+        display: flex !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        scrollbar-width: none !important;
+        gap: 8px !important;
+        padding-bottom: 6px !important;
+        flex-wrap: nowrap !important;
+    }
+
+    .sa-filter-bar::-webkit-scrollbar,
+    .filter-pills-row::-webkit-scrollbar {
+        display: none !important;
+    }
+
+    .sa-filter-pill {
+        white-space: nowrap !important;
+        flex-shrink: 0 !important;
+        padding: 6px 14px !important;
+        border-radius: 999px !important;
+        font-size: 0.8rem !important;
+    }
+
+    .table-wrap {
+        border-radius: 14px !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+
+    .module-table {
+        min-width: 620px !important;
+    }
+
+    body.dark-mode .metric-card {
+        background: rgba(30, 41, 59, 0.85) !important;
+        border-color: rgba(51, 65, 85, 0.85) !important;
+        color: #f8fafc !important;
+    }
+
+    body.dark-mode .module-section {
+        background: rgba(30, 41, 59, 0.88) !important;
+        border-color: rgba(51, 65, 85, 0.85) !important;
+        color: #f8fafc !important;
+    }
+}
+
 

@@ -1567,12 +1567,13 @@ class PlatformMonetizationService
         );
     }
 
-    public function completeInvoicePayment(int $invoice_id, int $partner_user_id, ?string $session_id = null, int $actor_user_id = 0): array
+    public function completeInvoicePayment(int $invoice_id, int $partner_user_id = 0, ?string $session_id = null, int $actor_user_id = 0): array
     {
-        $invoice = $this->getInvoiceById($invoice_id, $partner_user_id);
+        $invoice = $this->getInvoiceById($invoice_id, $partner_user_id > 0 ? $partner_user_id : null);
         if (!$invoice) {
             return ['success' => false, 'message' => 'Invoice not found.'];
         }
+        $partner_user_id = (int)($invoice['partner_user_id'] ?? $partner_user_id);
 
         if ((string)($invoice['invoice_status'] ?? '') === 'paid') {
             return ['success' => true, 'message' => 'Invoice is already marked paid.', 'invoice_status' => 'paid'];
@@ -2620,7 +2621,11 @@ class PlatformMonetizationService
 
     private function buildAbsoluteUrl(string $base_url, string $path, array $query = []): string
     {
-        $base_url = rtrim(trim($base_url), '/');
+        $base_url = trim($base_url);
+        if ($base_url === '' && function_exists('appBaseUrl')) {
+            $base_url = appBaseUrl();
+        }
+        $base_url = rtrim($base_url, '/');
         $url = $base_url . '/' . ltrim($path, '/');
         if ($query !== []) {
             $url .= '?' . http_build_query($query);

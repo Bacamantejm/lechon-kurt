@@ -260,10 +260,19 @@ $count_result = mysqli_query($conn, $count_query);
 $total_records = mysqli_fetch_assoc($count_result)['total'];
 $total_pages = ceil($total_records / $records_per_page);
 
+$has_admin_pod_table = false;
+$res_pod_check = mysqli_query($conn, "SHOW TABLES LIKE 'proof_of_delivery'");
+if ($res_pod_check && mysqli_num_rows($res_pod_check) > 0) {
+    $has_admin_pod_table = true;
+}
+$proof_photo_expr = $has_admin_pod_table
+    ? "COALESCE(lt.proof_of_delivery_path, (SELECT photo_path FROM proof_of_delivery WHERE order_id = o.id ORDER BY id DESC LIMIT 1), '')"
+    : "COALESCE(lt.proof_of_delivery_path, '')";
+
 $orders_query = "SELECT o.*{$partner_order_amount_sql},
     lt.id AS tracking_id,
     lt.current_status AS tracking_status,
-    COALESCE(lt.proof_of_delivery_path, (SELECT photo_path FROM proof_of_delivery WHERE order_id = o.id ORDER BY id DESC LIMIT 1), '') AS proof_photo,
+    {$proof_photo_expr} AS proof_photo,
     COALESCE(NULLIF(lt.driver_name, ''), u_rdr.full_name, CONCAT(e_rdr.first_name, ' ', e_rdr.last_name), '') AS driver_name,
     r.rider_code
 FROM orders o

@@ -180,6 +180,13 @@ if (isset($rider['id'])) {
             padding: 16px;
             margin-bottom: 14px;
             box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+            transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
+        }
+
+        .rider-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 18px rgba(16, 24, 40, 0.06);
+            border-color: #d0d5dd;
         }
 
         /* Duty Status Switch */
@@ -204,12 +211,20 @@ if (isset($rider['id'])) {
             text-transform: uppercase;
             border-radius: 24px;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
             color: var(--muted-ink);
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 6px;
+        }
+
+        .duty-switch-btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .duty-switch-btn:active {
+            transform: scale(0.95);
         }
 
         .duty-switch-btn.active.offline {
@@ -243,15 +258,24 @@ if (isset($rider['id'])) {
             align-items: center;
             justify-content: center;
             gap: 8px;
-            transition: background 0.2s;
+            transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1), background 0.18s ease;
             text-decoration: none;
             cursor: pointer;
             width: 100%;
+            user-select: none;
         }
 
         .btn-rider-primary:hover, .btn-rider-primary:focus {
             background-color: var(--primary-hover);
             color: #ffffff;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px -2px rgba(179, 38, 30, 0.28);
+        }
+
+        .btn-rider-primary:active {
+            transform: translateY(1.5px) scale(0.975);
+            box-shadow: 0 2px 4px rgba(179, 38, 30, 0.18);
+            transition-duration: 0.08s;
         }
 
         .btn-rider-secondary {
@@ -269,6 +293,19 @@ if (isset($rider['id'])) {
             text-decoration: none;
             cursor: pointer;
             width: 100%;
+            transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s ease, background-color 0.18s ease;
+            user-select: none;
+        }
+
+        .btn-rider-secondary:hover {
+            transform: translateY(-1.5px);
+            background-color: #f8fafc;
+            box-shadow: 0 4px 12px rgba(16, 24, 40, 0.06);
+        }
+
+        .btn-rider-secondary:active {
+            transform: translateY(1px) scale(0.98);
+            transition-duration: 0.08s;
         }
 
         .btn-rider-success {
@@ -286,6 +323,21 @@ if (isset($rider['id'])) {
             text-decoration: none;
             cursor: pointer;
             width: 100%;
+            transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s ease, background 0.18s ease;
+            user-select: none;
+        }
+
+        .btn-rider-success:hover {
+            background-color: #02663c;
+            color: #ffffff;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px -2px rgba(2, 122, 72, 0.28);
+        }
+
+        .btn-rider-success:active {
+            transform: translateY(1.5px) scale(0.975);
+            box-shadow: 0 2px 4px rgba(2, 122, 72, 0.18);
+            transition-duration: 0.08s;
         }
 
         /* Bottom Navigation Bar */

@@ -1113,7 +1113,7 @@ body.dark-mode .storefront-change-shop-btn:hover {
                     </div>
                 </div>
                 
-                <div style="display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap;">
+                <div class="preview-actions-wrap" style="display: flex; gap: 10px; margin-top: 14px; margin-bottom: 24px; padding-bottom: 16px; flex-wrap: wrap;">
                     <button class="btn-primary add-to-cart-confirm" id="addToCartConfirm" style="flex: 1; min-width: 160px;">
                         <i class="fas fa-cart-plus"></i> Add to Cart
                     </button>
@@ -1679,32 +1679,19 @@ body.dark-mode .storefront-change-shop-btn:hover {
     </div>
 </div>
 
-<!-- Mobile Compact Order Bar -->
-<div class="mobile-quick-order" id="mobileQuickOrder" aria-label="Quick order controls">
+<!-- Mobile Compact Order Bar (Screen 6 Reference: Clean glassmorphic capsule, only shown when items exist) -->
+<?php
+$initial_cart_items_count = (isset($_SESSION['cart']) && is_array($_SESSION['cart'])) ? count($_SESSION['cart']) : 0;
+$initial_cart_has_items = $initial_cart_items_count > 0;
+?>
+<div class="mobile-quick-order<?php echo $initial_cart_has_items ? ' has-items' : ''; ?>" id="mobileQuickOrder" aria-label="Quick order controls">
     <div class="mobile-quick-order-inner">
-        <div class="mobile-quick-order-top">
-            <div class="mobile-quick-order-tabs" role="tablist" aria-label="Mobile order option">
-                <button type="button"
-                        class="mobile-quick-order-tab<?php echo ($_SESSION['delivery_option'] ?? 'pickup') === 'delivery' ? ' active' : ''; ?>"
-                        data-delivery-option="delivery"
-                        onclick="switchDeliveryOptionTab('delivery')">
-                    Delivery
-                </button>
-                <button type="button"
-                        class="mobile-quick-order-tab<?php echo ($_SESSION['delivery_option'] ?? 'pickup') === 'pickup' ? ' active' : ''; ?>"
-                        data-delivery-option="pickup"
-                        onclick="switchDeliveryOptionTab('pickup')">
-                    Pick-up
-                </button>
-            </div>
-            <button type="button" class="mobile-quick-order-link" id="mobileSeeSummaryBtn">Summary</button>
-        </div>
         <div class="mobile-quick-order-bottom">
             <div class="mobile-quick-order-meta-wrap">
-                <p class="mobile-quick-order-meta" id="mobileQuickOrderMeta">Pick-up selected</p>
+                <p class="mobile-quick-order-meta" id="mobileQuickOrderMeta"><?php echo $initial_cart_has_items ? ($initial_cart_items_count . ' item' . ($initial_cart_items_count > 1 ? 's' : '') . ' • ' . (($_SESSION['delivery_option'] ?? 'pickup') === 'delivery' ? 'Delivery' : 'Pick-up')) : 'Pick-up selected'; ?></p>
                 <strong class="mobile-quick-order-total" id="mobileQuickOrderTotal">&#8369;0.00</strong>
             </div>
-            <button type="button" class="mobile-quick-order-checkout" id="mobileQuickCheckoutBtn" disabled>Checkout</button>
+            <button type="button" class="mobile-quick-order-checkout" id="mobileQuickCheckoutBtn" <?php echo $initial_cart_has_items ? '' : 'disabled'; ?>>Checkout &rarr;</button>
         </div>
     </div>
 </div>
@@ -2073,6 +2060,14 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         if (mobileQuickCheckoutBtn) {
             mobileQuickCheckoutBtn.disabled = itemCount <= 0;
+        }
+        const mobileQuickOrderEl = document.getElementById('mobileQuickOrder');
+        if (mobileQuickOrderEl) {
+            if (itemCount > 0 && finalTotal > 0) {
+                mobileQuickOrderEl.classList.add('has-items');
+            } else {
+                mobileQuickOrderEl.classList.remove('has-items');
+            }
         }
 
         setQuickOrderTabsActive(deliveryOption);
@@ -6336,8 +6331,34 @@ body {
 }
 @media (max-width: 480px) {
     .menu-shops-directory-grid {
-        grid-template-columns: 1fr !important;
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        touch-action: pan-x !important;
+        scroll-snap-type: x mandatory !important;
         gap: 14px !important;
+        padding: 4px 2px 14px 2px !important;
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+        cursor: grab;
+        user-select: none;
+    }
+    .menu-shops-directory-grid::-webkit-scrollbar {
+        display: none !important;
+    }
+    .menu-shops-directory-grid:active,
+    .menu-shops-directory-grid.is-dragging {
+        cursor: grabbing !important;
+    }
+    .menu-shops-directory-grid .menu-shop-card {
+        flex: 0 0 240px !important;
+        width: 240px !important;
+        min-width: 240px !important;
+        max-width: 240px !important;
+        scroll-snap-align: start !important;
+        user-select: none;
     }
 }
 
@@ -6881,6 +6902,227 @@ body.dark-mode .store-review-filter-btn.active {
     border-color: #b3261e !important;
     color: #ffffff !important;
 }
+
+/* ==========================================================================
+   MOBILE VIEW FIXES (Screen 3 & 6 Reference):
+   Compact storefront header, sleek floating checkout bar, zero screen jamming
+   ========================================================================== */
+@media (max-width: 768px) {
+    .storefront-header {
+        padding: 12px 14px !important;
+        background: #ffffff !important;
+        border-bottom: 1px solid #eaecf0 !important;
+    }
+    .store-breadcrumb {
+        display: none !important;
+    }
+    .storefront-overview {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 12px !important;
+    }
+    .store-logo-tile {
+        width: 48px !important;
+        height: 48px !important;
+        min-width: 48px !important;
+        min-height: 48px !important;
+        max-width: 48px !important;
+        max-height: 48px !important;
+        border-radius: 12px !important;
+        box-shadow: 0 2px 6px rgba(16, 24, 40, 0.08) !important;
+        flex-shrink: 0 !important;
+    }
+    .store-logo-initials {
+        font-size: 1.15rem !important;
+    }
+    .storefront-copy h1 {
+        font-size: 1.15rem !important;
+        font-weight: 800 !important;
+        line-height: 1.25 !important;
+        margin: 0 !important;
+        color: #101828 !important;
+    }
+    .storefront-categories {
+        font-size: 0.68rem !important;
+        color: #b3261e !important;
+        margin: 0 0 2px 0 !important;
+        font-weight: 700 !important;
+    }
+    .storefront-subtitle {
+        display: none !important;
+    }
+    .storefront-meta-row {
+        gap: 4px 8px !important;
+        font-size: 0.70rem !important;
+        margin-top: 4px !important;
+    }
+    .storefront-meta-row span,
+    .storefront-meta-row-secondary a {
+        font-size: 0.70rem !important;
+        padding: 2px 6px !important;
+        background: #f8fafc !important;
+        border: 1px solid #eaecf0 !important;
+        border-radius: 999px !important;
+    }
+    .menu-shops-showcase-section {
+        margin-bottom: 20px !important;
+    }
+    .menu-shops-showcase-section > div {
+        padding: 16px 14px !important;
+        border-radius: 16px !important;
+    }
+    .menu-shops-showcase-section h2 {
+        font-size: 1.25rem !important;
+    }
+    .menu-shops-directory-grid {
+        grid-template-columns: 1fr !important;
+        gap: 14px !important;
+    }
+    
+    /* Sleek Floating Quick Order Bar */
+    .mobile-quick-order {
+        display: none !important;
+    }
+    .mobile-quick-order.has-items {
+        display: block !important;
+        position: fixed !important;
+        left: 14px !important;
+        right: 14px !important;
+        bottom: 84px !important;
+        z-index: 1240 !important;
+    }
+    .mobile-quick-order-inner {
+        background: rgba(255, 255, 255, 0.94) !important;
+        backdrop-filter: blur(18px) !important;
+        -webkit-backdrop-filter: blur(18px) !important;
+        border: 1px solid rgba(234, 236, 240, 0.85) !important;
+        border-radius: 999px !important;
+        box-shadow: 0 10px 32px rgba(16, 24, 40, 0.15) !important;
+        padding: 6px 10px 6px 18px !important;
+    }
+    .mobile-quick-order-top {
+        display: none !important;
+    }
+    .mobile-quick-order-bottom {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 12px !important;
+    }
+    .mobile-quick-order-meta {
+        font-size: 0.70rem !important;
+        color: #64748b !important;
+        font-weight: 600 !important;
+        margin: 0 !important;
+    }
+    .mobile-quick-order-total {
+        font-size: 1.05rem !important;
+        font-weight: 800 !important;
+        color: #101828 !important;
+        line-height: 1.1 !important;
+    }
+    .mobile-quick-order-checkout {
+        background: #b3261e !important;
+        color: #ffffff !important;
+        font-weight: 800 !important;
+        font-size: 0.84rem !important;
+        padding: 10px 20px !important;
+        border-radius: 999px !important;
+        border: none !important;
+        box-shadow: 0 4px 12px rgba(179, 38, 30, 0.25) !important;
+        cursor: pointer !important;
+    }
+    .menu-items-grid {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+    }
+    .menu-item {
+        padding: 12px !important;
+        border-radius: 14px !important;
+    }
+    .menu-item .item-image {
+        width: 80px !important;
+        height: 80px !important;
+        min-width: 80px !important;
+        border-radius: 10px !important;
+    }
+    
+    
+    /* Product Preview Modal Mobile Fit (Ensures Add to Cart button is never cut off or covered) */
+    .preview-modal-content {
+        width: min(440px, 94vw) !important;
+        max-height: 86vh !important;
+        max-height: 86dvh !important;
+        display: flex !important;
+        flex-direction: column !important;
+        border-radius: 20px !important;
+        overflow: hidden !important;
+    }
+    .preview-image {
+        height: 160px !important;
+        min-height: 160px !important;
+        max-height: 160px !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        flex-shrink: 0 !important;
+    }
+    .preview-image img {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important;
+    }
+    .preview-body {
+        display: flex !important;
+        flex-direction: column !important;
+        flex: 1 !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+    .preview-details {
+        padding: 14px 16px 28px !important;
+        flex: none !important;
+        overflow: visible !important;
+        display: block !important;
+    }
+    .order-summary {
+        padding: 12px 14px !important;
+        margin-bottom: 12px !important;
+        border-radius: 12px !important;
+    }
+    .order-summary h4 {
+        font-size: 0.95rem !important;
+        margin-bottom: 8px !important;
+    }
+    .summary-details p {
+        margin-bottom: 4px !important;
+        font-size: 0.82rem !important;
+    }
+    .preview-actions-wrap {
+        margin-top: 12px !important;
+        margin-bottom: 24px !important;
+        padding-bottom: 20px !important;
+    }
+    .add-to-cart-confirm {
+        min-height: 48px !important;
+        font-size: 0.95rem !important;
+        font-weight: 800 !important;
+        border-radius: 12px !important;
+    }
+
+    /* Floating action button clutter suppression on mobile menu page */
+    .floating-order-btn,
+    #floatingOrderBtn {
+        display: none !important;
+    }
+    .floating-chat-btn,
+    #floatingChatBtn {
+        display: none !important;
+    }
+}
+
 </style>
 
 <?php include 'includes/footer.php'; ?>

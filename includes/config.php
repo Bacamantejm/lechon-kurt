@@ -72,6 +72,44 @@ if (!function_exists('appConfigBool')) {
     }
 }
 
+if (!function_exists('appBaseUrl')) {
+    function appBaseUrl($path = '') {
+        $configured_base = appConfigValue('APP_BASE_URL', '');
+        if ($configured_base !== '') {
+            $base = rtrim($configured_base, '/');
+            $path = ltrim((string)$path, '/');
+            return $path !== '' ? $base . '/' . $path : $base;
+        }
+
+        $is_https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+            || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')
+            || (isset($_SERVER['HTTP_CF_VISITOR']) && strpos((string)$_SERVER['HTTP_CF_VISITOR'], '"https"') !== false)
+            || (isset($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 443);
+        $scheme = $is_https ? 'https' : 'http';
+        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+
+        $subDir = '';
+        $docRoot = isset($_SERVER['DOCUMENT_ROOT']) ? str_replace('\\', '/', realpath($_SERVER['DOCUMENT_ROOT']) ?: $_SERVER['DOCUMENT_ROOT']) : '';
+        $projectRoot = str_replace('\\', '/', realpath(dirname(__DIR__)) ?: dirname(__DIR__));
+
+        if ($docRoot !== '' && strpos($projectRoot, $docRoot) === 0) {
+            $subDir = trim(substr($projectRoot, strlen($docRoot)), '/');
+        } elseif (isset($_SERVER['SCRIPT_NAME'])) {
+            $scriptDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME']));
+            $cleanScriptDir = preg_replace('#/(admin|super_admin|rider|employee|controllers|api|includes|thesis_revision)$#i', '', $scriptDir);
+            $subDir = trim($cleanScriptDir, '/');
+        }
+
+        $base = $scheme . '://' . $host;
+        if ($subDir !== '') {
+            $base .= '/' . $subDir;
+        }
+
+        $path = ltrim((string)$path, '/');
+        return $path !== '' ? $base . '/' . $path : $base;
+    }
+}
+
 // Database connection
 $host = appConfigValue('APP_DB_HOST', 'localhost');
 $user = appConfigValue('APP_DB_USER', 'root');

@@ -1304,110 +1304,412 @@ body.dark-mode .reg-choice-desc {
     100% { transform: translateY(-10px) scale(1.1); }
 }
 
+/* ==========================================================================
+   Food Delivery Mobile Reference UI/UX Engine (Screens 1 to 5)
+   ========================================================================== */
+
+/* Screen 1: Mobile Full-Bleed Welcome Splash */
+.ref-splash-screen {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    flex-direction: column;
+    justify-content: flex-end;
+    background: #000000;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    overflow: hidden;
+    touch-action: none;
+    transition: opacity 0.38s cubic-bezier(0.16, 1, 0.3, 1), transform 0.38s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ref-splash-screen.ref-splash-closing {
+    opacity: 0 !important;
+    transform: translateY(24px) scale(0.98) !important;
+    pointer-events: none !important;
+}
+
+.ref-splash-bg {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    transform: scale(1.05);
+    animation: splashZoom 8s ease-out infinite alternate;
+}
+
+@keyframes splashZoom {
+    0% { transform: scale(1.04); }
+    100% { transform: scale(1.12); }
+}
+
+.ref-splash-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.2) 0%, rgba(16, 24, 40, 0.5) 45%, rgba(16, 24, 40, 0.96) 85%, #101828 100%);
+}
+
+.ref-splash-top {
+    position: absolute;
+    top: max(20px, env(safe-area-inset-top));
+    left: 20px;
+    right: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 3;
+}
+
+.ref-splash-stepper {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.ref-splash-dot {
+    width: 28px;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.35);
+    transition: all 0.3s ease;
+}
+
+.ref-splash-dot.active {
+    background: #b3261e;
+    box-shadow: 0 0 10px rgba(179, 38, 30, 0.8);
+    width: 38px;
+}
+
+.ref-splash-skip {
+    background: rgba(255, 255, 255, 0.18);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+    font-size: 0.82rem;
+    font-weight: 700;
+    padding: 6px 14px;
+    border-radius: 999px;
+    cursor: pointer;
+}
+
+.ref-splash-card {
+    position: relative;
+    z-index: 3;
+    padding: 28px 24px max(34px, env(safe-area-inset-bottom)) 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.ref-splash-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 2.1rem;
+    font-weight: 800;
+    color: #ffffff;
+    line-height: 1.15;
+    margin: 0;
+    letter-spacing: -0.02em;
+}
+
+.ref-splash-desc {
+    font-size: 0.92rem;
+    color: rgba(255, 255, 255, 0.82);
+    line-height: 1.5;
+    margin: 0 0 10px 0;
+}
+
+.ref-splash-btn {
+    width: 100%;
+    min-height: 52px;
+    border-radius: 999px;
+    background: #b3261e;
+    color: #ffffff;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 1rem;
+    font-weight: 800;
+    border: none;
+    box-shadow: 0 8px 24px rgba(179, 38, 30, 0.45);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ref-splash-btn:active {
+    transform: scale(0.97);
+}
+
+/* Screen 2: Promo Banner & Categories Carousel */
+.m-ref-home-container {
+    display: none;
+}
+
+.m-ref-promo-banner {
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(234, 236, 240, 0.85);
+    border-radius: 22px;
+    padding: 18px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    box-shadow: 0 6px 20px -3px rgba(16, 24, 40, 0.05);
+}
+
+.m-ref-promo-left {
+    flex: 1;
+    min-width: 0;
+}
+
+.m-ref-promo-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    background: #fff1f0;
+    color: #b3261e;
+    font-size: 0.72rem;
+    font-weight: 800;
+    border-radius: 999px;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.m-ref-promo-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #101828;
+    line-height: 1.25;
+    margin: 0 0 12px 0;
+}
+
+.m-ref-promo-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 18px;
+    background: #b3261e;
+    color: #ffffff !important;
+    font-size: 0.82rem;
+    font-weight: 800;
+    border-radius: 999px;
+    text-decoration: none;
+    box-shadow: 0 4px 14px rgba(179, 38, 30, 0.35);
+}
+
+.m-ref-promo-right {
+    flex-shrink: 0;
+}
+
+.m-ref-promo-img-wrap {
+    width: 96px;
+    height: 96px;
+    border-radius: 18px;
+    overflow: hidden;
+    background: #f4f5f7;
+    box-shadow: 0 4px 12px rgba(16, 24, 40, 0.08);
+}
+
+.m-ref-promo-img-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Categories Row (Reference Screen 2 & 5) */
+.m-ref-section-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 18px 0 10px 0;
+}
+
+.m-ref-section-head h3 {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #101828;
+    margin: 0;
+}
+
+.m-ref-see-all {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #b3261e;
+    text-decoration: none;
+}
+
+.m-ref-categories-row {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 4px 2px 14px 2px;
+}
+
+.m-ref-categories-row::-webkit-scrollbar {
+    display: none;
+}
+
+.m-ref-cat-card {
+    flex: 0 0 74px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    text-decoration: none;
+    color: #344054;
+    transition: transform 0.18s ease;
+}
+
+.m-ref-cat-card:active {
+    transform: scale(0.92);
+}
+
+.m-ref-cat-icon {
+    width: 58px;
+    height: 58px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.88);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(234, 236, 240, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.35rem;
+    color: #b3261e;
+    box-shadow: 0 4px 12px rgba(16, 24, 40, 0.04);
+}
+
+.m-ref-cat-card span {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-align: center;
+    white-space: nowrap;
+}
+
+/* Dark Mode Overrides for Mobile Reference UI */
+body.dark-mode .m-ref-promo-banner,
+body.dark-mode .m-ref-cat-icon {
+    background: rgba(30, 41, 59, 0.88) !important;
+    border-color: rgba(51, 65, 85, 0.85) !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .m-ref-promo-title,
+body.dark-mode .m-ref-section-head h3,
+body.dark-mode .m-ref-cat-card span {
+    color: #f8fafc !important;
+}
+
+/* Comprehensive Responsive System for Viewports <= 768px */
 @media (max-width: 768px) {
     .market-home {
         padding-bottom: 140px !important;
     }
-    .panda-hero-banners {
-        grid-template-columns: 1fr !important;
-        gap: 14px !important;
+
+    .m-ref-home-container {
+        display: block !important;
+        margin-bottom: 12px;
     }
-    .panda-hero-card {
-        padding: 20px 18px !important;
-        border-radius: 18px !important;
-        min-height: auto !important;
-        position: relative !important;
-        overflow: hidden !important;
-        flex-direction: row !important;
-        align-items: center !important;
-        justify-content: space-between !important;
-        gap: 12px !important;
-    }
-    .panda-card-content {
-        flex: 1 1 0 !important;
-        min-width: 0 !important;
-        width: 100% !important;
-        max-width: 100% !important;
-        gap: 6px !important;
-        z-index: 2 !important;
-    }
-    .panda-card-title {
-        font-size: 1.25rem !important;
-        line-height: 1.2 !important;
-    }
-    .panda-card-desc {
-        font-size: 0.84rem !important;
-        line-height: 1.4 !important;
-    }
-    .panda-card-btn {
-        min-height: 36px !important;
-        padding: 0 16px !important;
-        font-size: 0.82rem !important;
-        margin-top: 4px !important;
-    }
-    .panda-card-arch,
-    .panda-card-heart-bg {
+
+    /* Hide redundant desktop promo banners on mobile */
+    .panda-welcome-banner,
+    .panda-hero-banners,
+    .user-promo-row {
         display: none !important;
     }
-    .panda-card-graphic,
-    .panda-card-graphic-cluster {
-        position: absolute !important;
-        right: 10px !important;
-        bottom: 0 !important;
-        margin: 0 !important;
-        flex: none !important;
-        width: 95px !important;
-        height: 95px !important;
-        opacity: 0.28 !important;
-        pointer-events: none !important;
-        z-index: 1 !important;
-    }
-    .panda-card-graphic img.panda-mascot-img {
-        height: 95px !important;
-        width: auto !important;
-        margin-bottom: 0 !important;
-    }
-    .user-promo-row {
-        grid-template-columns: 1fr !important;
-        gap: 12px !important;
-    }
-}
 
-@media (max-width: 480px) {
-    .panda-hero-card {
-        padding: 16px 14px !important;
-        border-radius: 16px !important;
+    /* Filters & Sort as clean rounded pill */
+    .market-sidebar-toggle-btn {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        border-radius: 999px !important;
+        padding: 8px 18px !important;
+        background: rgba(255, 255, 255, 0.88) !important;
+        backdrop-filter: blur(14px) !important;
+        -webkit-backdrop-filter: blur(14px) !important;
+        border: 1px solid rgba(234, 236, 240, 0.85) !important;
+        color: #344054 !important;
+        font-size: 0.82rem !important;
+        font-weight: 700 !important;
+        box-shadow: 0 2px 8px rgba(16, 24, 40, 0.04) !important;
+        margin-bottom: 16px !important;
+        cursor: pointer;
+        width: auto !important;
     }
-    .panda-card-title {
-        font-size: 1.15rem !important;
-    }
-    .panda-card-desc {
-        font-size: 0.8rem !important;
-    }
-    .panda-card-btn {
-        min-height: 34px !important;
-        padding: 0 14px !important;
-        font-size: 0.78rem !important;
-    }
-    .panda-card-graphic,
-    .panda-card-graphic-cluster {
-        width: 80px !important;
-        height: 80px !important;
-        right: 6px !important;
-        opacity: 0.22 !important;
-    }
-    .panda-card-graphic img.panda-mascot-img {
-        height: 80px !important;
-    }
-    .panda-welcome-banner {
-        padding: 18px 16px !important;
-        border-radius: 16px !important;
-    }
+
+    /* 2-Column Mobile Grid for Products & Stores (Reference Screen 2 & 5) */
+    .bestsellers-grid,
     .market-store-list,
     .store-list-grid,
     .store-list-rows {
-        grid-template-columns: 1fr !important;
-        gap: 14px !important;
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 12px !important;
+    }
+
+    /* Glassmorphic 2-Column Cards */
+    .bestseller-card,
+    .market-store-row {
+        border-radius: 18px !important;
+        background: rgba(255, 255, 255, 0.9) !important;
+        backdrop-filter: blur(14px) !important;
+        -webkit-backdrop-filter: blur(14px) !important;
+        border: 1px solid rgba(234, 236, 240, 0.85) !important;
+        overflow: hidden !important;
+        box-shadow: 0 4px 14px -2px rgba(16, 24, 40, 0.04) !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
+    .store-card-image-wrap {
+        height: auto !important;
+        aspect-ratio: 1/1 !important;
+        border-radius: 14px !important;
+        margin: 6px !important;
+        overflow: hidden !important;
+        position: relative !important;
+    }
+
+    .store-card-details {
+        padding: 8px 10px 10px 10px !important;
+        flex: 1 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: space-between !important;
+    }
+
+    .store-card-row-head h3 {
+        font-size: 0.86rem !important;
+        font-weight: 800 !important;
+        line-height: 1.25 !important;
+    }
+
+    .store-card-summary,
+    .panda-card-footer-line .panda-card-city {
+        font-size: 0.72rem !important;
+    }
+
+    .panda-card-price-text {
+        font-size: 0.9rem !important;
+        color: #b3261e !important;
+        font-weight: 800 !important;
+    }
+
+    body.dark-mode .bestseller-card,
+    body.dark-mode .market-store-row {
+        background: rgba(30, 41, 59, 0.88) !important;
+        border-color: rgba(51, 65, 85, 0.85) !important;
+        color: #f8fafc !important;
     }
 }
 
@@ -2396,22 +2698,36 @@ body.dark-mode .reg-choice-desc {
     }
 }
 
-/* Foodpanda Brands Carousel UI */
+/* Foodpanda Brands Carousel UI - Smooth Touch & Mouse Swipeable */
 .panda-brand-slider {
-    display: flex;
-    gap: 12px;
-    overflow-x: auto;
-    padding: 6px 2px 14px;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    gap: 12px !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-x !important;
+    scroll-snap-type: x proximity !important;
+    padding: 6px 4px 14px !important;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+    cursor: grab;
+    user-select: none;
+}
+
+.panda-brand-slider:active,
+.panda-brand-slider.is-dragging {
+    cursor: grabbing !important;
 }
 
 .panda-brand-slider::-webkit-scrollbar {
-    display: none;
+    display: none !important;
 }
 
 .panda-brand-item {
-    flex: 0 0 115px;
+    flex: 0 0 120px !important;
+    min-width: 120px !important;
+    max-width: 120px !important;
     background: #ffffff;
     border: 1px solid #f0e2d5;
     border-radius: 16px;
@@ -2424,6 +2740,8 @@ body.dark-mode .reg-choice-desc {
     color: #2a211d;
     box-shadow: 0 4px 10px rgba(74, 32, 20, 0.04);
     transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    scroll-snap-align: start !important;
+    user-select: none;
 }
 
 .panda-brand-item:hover {
@@ -3200,6 +3518,48 @@ body.dark-mode .deal-copy-btn {
 }
 </style>
 
+<!-- Mobile Welcome Splash Screen (Reference Screen 1) -->
+<div id="mobileGetStartedSplash" class="ref-splash-screen" style="display: none;">
+    <div class="ref-splash-bg" style="background-image: url('assets/images/promo_lechon.jpg');"></div>
+    <div class="ref-splash-overlay"></div>
+    <div class="ref-splash-top">
+        <div class="ref-splash-stepper">
+            <span class="ref-splash-dot active"></span>
+            <span class="ref-splash-dot"></span>
+            <span class="ref-splash-dot"></span>
+        </div>
+        <button type="button" class="ref-splash-skip" onclick="dismissMobileSplash()">Skip</button>
+    </div>
+    <div class="ref-splash-card">
+        <h1 class="ref-splash-title">Delight in Every Bite, Delivered Fast</h1>
+        <p class="ref-splash-desc">Fast delivery, fresh flavors—every bite is a delight at your doorstep. Enjoy your delicious meal.</p>
+        <button type="button" class="ref-splash-btn" onclick="dismissMobileSplash()">Get Started</button>
+    </div>
+</div>
+
+<script>
+function dismissMobileSplash() {
+    var splash = document.getElementById('mobileGetStartedSplash');
+    if (!splash) return;
+    splash.classList.add('ref-splash-closing');
+    try { localStorage.setItem('lechon_mobile_splash_seen', '1'); } catch(e) {}
+    setTimeout(function() {
+        splash.style.display = 'none';
+    }, 380);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    if (window.innerWidth <= 768) {
+        var seen = false;
+        try { seen = localStorage.getItem('lechon_mobile_splash_seen') === '1'; } catch(e) {}
+        var splash = document.getElementById('mobileGetStartedSplash');
+        if (splash && !seen) {
+            splash.style.display = 'flex';
+        }
+    }
+});
+</script>
+
 <div class="market-home">
     <section class="market-section" id="marketplaceStores">
         <div class="container">
@@ -3241,6 +3601,57 @@ body.dark-mode .deal-copy-btn {
                 </aside>
 
                 <div>
+
+                    <!-- Mobile-Only Hero Promo & Categories Carousel (Reference Screen 2) -->
+                    <div class="m-ref-home-container">
+                        <!-- Screen 2 Promo Banner -->
+                        <div class="m-ref-promo-banner">
+                            <div class="m-ref-promo-left">
+                                <span class="m-ref-promo-badge">Up to 35% offer</span>
+                                <h2 class="m-ref-promo-title">Enjoy our dinner offer of every day.</h2>
+                                <a href="shops.php" class="m-ref-promo-btn">Shop Now</a>
+                            </div>
+                            <div class="m-ref-promo-right">
+                                <div class="m-ref-promo-img-wrap">
+                                    <img src="assets/images/promo_lechon.jpg" alt="Special Lechon Offer" onerror="this.onerror=null;this.src='images/menu/lechon.jpg';">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Screen 2 Categories Horizontal Row -->
+                        <div class="m-ref-categories-section">
+                            <div class="m-ref-section-head">
+                                <h3>Categories</h3>
+                                <a href="menu.php" class="m-ref-see-all">See all</a>
+                            </div>
+                            <div class="m-ref-categories-row">
+                                <a href="menu.php?category=whole" class="m-ref-cat-card">
+                                    <div class="m-ref-cat-icon"><i class="fas fa-piggy-bank"></i></div>
+                                    <span>Whole Lechon</span>
+                                </a>
+                                <a href="menu.php?category=belly" class="m-ref-cat-card">
+                                    <div class="m-ref-cat-icon"><i class="fas fa-bacon"></i></div>
+                                    <span>Lechon Belly</span>
+                                </a>
+                                <a href="menu.php?category=sisig" class="m-ref-cat-card">
+                                    <div class="m-ref-cat-icon"><i class="fas fa-bowl-rice"></i></div>
+                                    <span>Sisig &amp; Rice</span>
+                                </a>
+                                <a href="menu.php?category=crispy" class="m-ref-cat-card">
+                                    <div class="m-ref-cat-icon"><i class="fas fa-fire-burner"></i></div>
+                                    <span>Crispy Fry</span>
+                                </a>
+                                <a href="preorder.php" class="m-ref-cat-card">
+                                    <div class="m-ref-cat-icon"><i class="fas fa-calendar-check"></i></div>
+                                    <span>Celebrations</span>
+                                </a>
+                                <a href="shops.php" class="m-ref-cat-card">
+                                    <div class="m-ref-cat-icon"><i class="fas fa-store"></i></div>
+                                    <span>All Stores</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
 
 
                     <?php if (empty($is_pickup_mode) && !empty($_SESSION['user_id'])): 
@@ -4437,6 +4848,33 @@ document.addEventListener('DOMContentLoaded', function () {
 .reg-choice-info { display:grid; gap:2px; }
 .reg-choice-title { font-weight:800; font-size:1.02rem; color:#171922; }
 .reg-choice-desc { font-size:.82rem; color:#667085; line-height:1.3; }
+
+@media (max-width: 768px) {
+    .bestsellers-grid {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        touch-action: pan-x !important;
+        scroll-snap-type: x mandatory !important;
+        gap: 12px !important;
+        padding-bottom: 12px !important;
+        scrollbar-width: none !important;
+        cursor: grab;
+    }
+    .bestsellers-grid::-webkit-scrollbar {
+        display: none !important;
+    }
+    .bestsellers-grid .bestseller-card {
+        flex: 0 0 180px !important;
+        width: 180px !important;
+        min-width: 180px !important;
+        max-width: 180px !important;
+        scroll-snap-align: start !important;
+    }
+}
+
 </style>
 
 <!-- Landing Page Login & Signup Popup Modal Markup -->

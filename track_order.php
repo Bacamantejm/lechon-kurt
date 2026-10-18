@@ -1185,18 +1185,19 @@ include 'includes/header.php';
 }
 
 /* ==========================================================================
-   Responsive Adaptations
+   Foodpanda & Reference App Glassmorphism & Mobile Responsive Adaptations
    ========================================================================== */
 @media (max-width: 992px) {
     .fp-tracking-grid {
         grid-template-columns: 1fr;
     }
     #map {
-        height: 420px;
+        height: 380px;
     }
     .fp-hero-header-row {
         flex-direction: column;
         align-items: flex-start;
+        gap: 14px;
     }
     .fp-hero-right {
         align-items: flex-start;
@@ -1206,21 +1207,249 @@ include 'includes/header.php';
         width: 100%;
         justify-content: space-between;
     }
+}
+
+@media (max-width: 768px) {
+    .fp-tracking-page {
+        padding: 14px 0 140px !important;
+        min-height: 100vh;
+    }
+
+    .fp-tracking-container {
+        padding: 0 12px !important;
+        max-width: 100% !important;
+    }
+
+    /* Glassmorphism Surface on Mobile */
+    .fp-status-hero-card,
+    .fp-map-card,
+    .fp-rider-card,
+    .fp-store-card,
+    .fp-timeline-card,
+    .fp-chat-card,
+    .fp-order-summary-card,
+    .fp-claim-pass-card {
+        background: rgba(255, 255, 255, 0.94) !important;
+        backdrop-filter: blur(16px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+        border: 1px solid rgba(234, 236, 240, 0.85) !important;
+        border-radius: 20px !important;
+        box-shadow: 0 4px 20px rgba(16, 24, 40, 0.04) !important;
+        padding: 16px !important;
+        margin-bottom: 14px !important;
+    }
+
+    body.dark-mode .fp-status-hero-card,
+    body.dark-mode .fp-map-card,
+    body.dark-mode .fp-rider-card,
+    body.dark-mode .fp-store-card,
+    body.dark-mode .fp-timeline-card,
+    body.dark-mode .fp-chat-card,
+    body.dark-mode .fp-order-summary-card,
+    body.dark-mode .fp-claim-pass-card {
+        background: rgba(30, 41, 59, 0.92) !important;
+        border-color: rgba(51, 65, 85, 0.8) !important;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4) !important;
+    }
+
+    /* Mobile Map Card */
+    #map {
+        height: 310px !important;
+        border-radius: 18px !important;
+    }
+
+    .fp-map-floating-bar {
+        top: 10px !important;
+        left: 10px !important;
+        right: 10px !important;
+    }
+
+    .fp-map-pill-stat {
+        padding: 6px 12px !important;
+        font-size: 0.76rem !important;
+        border-radius: 999px !important;
+        background: rgba(255, 255, 255, 0.92) !important;
+        backdrop-filter: blur(12px) !important;
+        -webkit-backdrop-filter: blur(12px) !important;
+        border: 1px solid rgba(234, 236, 240, 0.9) !important;
+    }
+
+    .fp-map-btn {
+        width: 34px !important;
+        height: 34px !important;
+        border-radius: 50% !important;
+    }
+
+    /* Hero Order Status Title & Subtitle */
+    .fp-hero-title {
+        font-size: 1.35rem !important;
+        margin-bottom: 4px !important;
+    }
+
+    .fp-hero-subtitle {
+        font-size: 0.85rem !important;
+    }
+
+    .fp-live-badge {
+        padding: 3px 10px !important;
+        font-size: 0.7rem !important;
+        margin-bottom: 8px !important;
+    }
+
+    .fp-eta-pill {
+        padding: 8px 12px !important;
+        border-radius: 12px !important;
+    }
+
+    .fp-eta-value {
+        font-size: 1.15rem !important;
+    }
+
+    /* Reference App Fluid Horizontal 4-Step Stepper */
+    .fp-stepper-wrapper {
+        padding: 6px 0 2px !important;
+        position: relative !important;
+        width: 100% !important;
+        overflow: hidden !important;
+    }
+
     .fp-stepper-steps {
-        overflow-x: auto;
+        display: flex !important;
+        justify-content: space-between !important;
+        width: 100% !important;
+        position: relative !important;
+        z-index: 3 !important;
     }
+
     .fp-step-item {
-        width: 75px;
+        width: auto !important;
+        flex: 1 1 0 !important;
+        max-width: none !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
     }
+
     .fp-step-icon-wrap {
-        width: 40px;
-        height: 40px;
-        font-size: 1rem;
+        width: 36px !important;
+        height: 36px !important;
+        font-size: 0.9rem !important;
+        border-width: 2px !important;
+        margin-bottom: 4px !important;
     }
-    .fp-stepper-track-bg, .fp-stepper-track-fill {
-        top: 28px;
-        left: 35px;
-        right: 35px;
+
+    .fp-step-label {
+        font-size: 0.68rem !important;
+        white-space: nowrap !important;
+        line-height: 1.2 !important;
+        letter-spacing: -0.01em !important;
+    }
+
+    .fp-step-sub {
+        display: none !important;
+    }
+
+    .fp-stepper-track-bg,
+    .fp-stepper-track-fill {
+        top: 22px !important;
+        left: 20px !important;
+        right: 20px !important;
+        height: 4px !important;
+        border-radius: 2px !important;
+    }
+
+    /* Rider Card (Reference Match) */
+    .fp-rider-row {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 12px !important;
+    }
+
+    .fp-rider-meta {
+        gap: 12px !important;
+    }
+
+    .fp-rider-avatar-wrap {
+        width: 48px !important;
+        height: 48px !important;
+        flex-shrink: 0 !important;
+    }
+
+    .fp-rider-avatar {
+        font-size: 1.2rem !important;
+    }
+
+    .fp-rider-info h4 {
+        font-size: 0.98rem !important;
+    }
+
+    .fp-rider-actions {
+        display: flex !important;
+        gap: 8px !important;
+        width: 100% !important;
+    }
+
+    .fp-rider-actions .fp-btn-directions,
+    .fp-rider-actions .fp-btn-call,
+    .fp-rider-actions a,
+    .fp-rider-actions button {
+        flex: 1 !important;
+        padding: 10px 12px !important;
+        font-size: 0.84rem !important;
+        border-radius: 12px !important;
+        justify-content: center !important;
+        min-height: 42px !important;
+    }
+
+    /* Order Items & Cost Breakdown */
+    .fp-order-item-row {
+        gap: 8px !important;
+    }
+
+    .fp-item-thumb {
+        width: 36px !important;
+        height: 36px !important;
+        border-radius: 10px !important;
+    }
+
+    .fp-item-name {
+        font-size: 0.84rem !important;
+    }
+
+    .fp-cost-row {
+        font-size: 0.82rem !important;
+    }
+
+    .fp-action-links {
+        flex-direction: column !important;
+        gap: 8px !important;
+    }
+
+    .fp-btn-link-sec {
+        width: 100% !important;
+        min-height: 42px !important;
+        border-radius: 12px !important;
+    }
+}
+
+@media (max-width: 420px) {
+    .fp-step-icon-wrap {
+        width: 32px !important;
+        height: 32px !important;
+        font-size: 0.8rem !important;
+    }
+    .fp-step-label {
+        font-size: 0.62rem !important;
+    }
+    .fp-stepper-track-bg,
+    .fp-stepper-track-fill {
+        top: 20px !important;
+        left: 16px !important;
+        right: 16px !important;
+        height: 3px !important;
+    }
+    #map {
+        height: 270px !important;
     }
 }
 </style>

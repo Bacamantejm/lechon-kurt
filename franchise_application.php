@@ -1432,18 +1432,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
                 ];
 
                 if ($is_incomplete_resubmission) {
-                    $success_msg = "Application revisions submitted successfully!<br>Your application number is: <strong>" . $application_number . "</strong><br>Your revised documents are now pending Super Admin review.<br><a href='my_account.php#franchise' style='color:#155724;text-decoration:underline;font-weight:600;'>View application status in My Account</a>";
+                    $success_msg = "Application revisions submitted successfully!<br>Your application number is: <strong>" . $application_number . "</strong><br>Your revised documents are now pending Super Admin review.<br><a href='my_account.php#franchise' style='color:#027a48;text-decoration:underline;font-weight:600;'>View application status in My Account</a>";
                     $swal_alert = [
                         'icon' => 'success',
                         'title' => 'Revisions Submitted',
-                        'text' => 'Your revised requirements were uploaded successfully and sent for review.'
+                        'text' => 'Your revised requirements were uploaded successfully and sent for review.',
+                        'redirect' => 'my_account.php#franchise'
                     ];
+                    $is_incomplete_resubmission = false;
+                    $incomplete_docs = [];
                 } else {
-                    $success_msg = "Business application submitted successfully!<br>Your application number is: <strong>" . $application_number . "</strong><br><a href='my_account.php#franchise' style='color:#155724;text-decoration:underline;font-weight:600;'>View application status in My Account</a>";
+                    $success_msg = "Business application submitted successfully!<br>Your application number is: <strong>" . $application_number . "</strong><br><a href='my_account.php#franchise' style='color:#027a48;text-decoration:underline;font-weight:600;'>View application status in My Account</a>";
                     $swal_alert = [
                         'icon' => 'success',
                         'title' => 'Application Submitted',
-                        'text' => 'Your application was sent successfully. The system owner has been notified.'
+                        'text' => 'Your application was sent successfully. The system owner has been notified.',
+                        'redirect' => 'my_account.php#franchise'
                     ];
                 }
                 $_POST = [];
@@ -1573,14 +1577,20 @@ include 'includes/header.php';
     <div class="container">
 
         <?php if ($success_msg): ?>
-        <div class="alert alert-success" style="background-color: #d4edda; border: 2px solid #28a745; border-radius: 12px; padding: 20px; color: #155724; font-size: 1.05rem; margin-bottom: 24px;">
-            <i class="fas fa-check-circle" style="color: #28a745; margin-right: 10px;"></i> <?php echo $success_msg; ?>
+        <div class="alert alert-success" style="background-color: #ecfdf3; border: 1px solid #abefc6; border-radius: 12px; padding: 18px 22px; color: #027a48; font-size: 0.98rem; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);">
+            <div style="display: flex; align-items: flex-start; gap: 12px;">
+                <i class="fas fa-check-circle" style="color: #027a48; font-size: 1.2rem; margin-top: 2px;"></i>
+                <div style="line-height: 1.5;"><?php echo $success_msg; ?></div>
+            </div>
         </div>
         <?php endif; ?>
 
         <?php if ($error_msg): ?>
-        <div class="alert alert-error" style="background-color: #f8d7da; border: 2px solid #dc3545; border-radius: 12px; padding: 20px; color: #721c24; font-size: 1.05rem; margin-bottom: 24px;">
-            <i class="fas fa-exclamation-circle" style="color: #dc3545; margin-right: 10px;"></i> <?php echo $error_msg; ?>
+        <div class="alert alert-error" style="background-color: #fff1f0; border: 1px solid #fee4e2; border-radius: 12px; padding: 18px 22px; color: #b3261e; font-size: 0.98rem; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);">
+            <div style="display: flex; align-items: flex-start; gap: 12px;">
+                <i class="fas fa-exclamation-circle" style="color: #b3261e; font-size: 1.2rem; margin-top: 2px;"></i>
+                <div style="line-height: 1.5;"><?php echo $error_msg; ?></div>
+            </div>
         </div>
         <?php endif; ?>
 
@@ -3285,14 +3295,18 @@ document.addEventListener('DOMContentLoaded', function() {
     const serverAlert = <?php echo $swal_alert ? json_encode($swal_alert) : 'null'; ?>;
     const prefillData = <?php echo json_encode($franchise_prefill); ?>;
     
-    if (serverAlert && serverAlert.text) {
+    if (serverAlert && (serverAlert.text || serverAlert.title)) {
         if (typeof Swal !== 'undefined' && Swal && typeof Swal.fire === 'function') {
             Swal.fire({
                 icon: serverAlert.icon || 'info',
                 title: serverAlert.title || 'Notice',
-                text: serverAlert.text,
+                text: serverAlert.text || '',
                 confirmButtonColor: '#b3261e',
                 confirmButtonText: 'OK'
+            }).then(() => {
+                if (serverAlert.redirect) {
+                    window.location.href = serverAlert.redirect;
+                }
             });
         }
     }

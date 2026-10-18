@@ -170,4 +170,18 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     });
+
+    // 7. Modern Tactile Click Micro-Feedback
+    document.addEventListener('pointerdown', function(e) {
+        const target = e.target.closest('.btn, .action-btn, .menu-item, .submenu-item, .sa-topbar-action-btn, .stat-card[onclick], .metric-card[onclick], .btn-rider-primary, .btn-rider-secondary');
+        if (!target) return;
+        target.classList.add('is-pressing');
+        const clearPress = () => {
+            target.classList.remove('is-pressing');
+            window.removeEventListener('pointerup', clearPress);
+            window.removeEventListener('pointercancel', clearPress);
+        };
+        window.addEventListener('pointerup', clearPress, { once: true });
+        window.addEventListener('pointercancel', clearPress, { once: true });
+    }, { passive: true });
 });

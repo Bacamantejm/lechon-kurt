@@ -656,10 +656,19 @@ body {
     overflow: hidden;
 }
 
+.menu-item {
+    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.18s ease, color 0.18s ease;
+}
+
 .menu-item:hover {
     background: #f8fafc;
     color: var(--text-main);
-    transform: none;
+    transform: translateX(4px);
+}
+
+.menu-item:active {
+    transform: translateX(2px) scale(0.985);
+    transition-duration: 0.08s;
 }
 
 .menu-item.active {
@@ -679,12 +688,12 @@ body {
     text-align: center;
     font-size: 15px;
     color: #667085;
-    transition: color 0.2s ease;
+    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), color 0.18s ease;
 }
 
 .menu-item:hover i {
-    color: var(--text-main);
-    transform: none;
+    color: var(--primary);
+    transform: scale(1.12) translateX(1px);
 }
 
 .menu-item.active i {
@@ -725,18 +734,29 @@ body {
     font-size: 13px;
     font-weight: 500;
     border-radius: var(--radius-sm);
-    transition: var(--transition);
+    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.18s ease, color 0.18s ease;
 }
 
 .submenu-item i {
     width: 16px;
     text-align: center;
     font-size: 13px;
+    transition: transform 0.18s ease;
 }
 
 .submenu-item:hover {
     background: var(--primary-light);
     color: var(--primary);
+    transform: translateX(3px);
+}
+
+.submenu-item:hover i {
+    transform: scale(1.1);
+}
+
+.submenu-item:active {
+    transform: scale(0.98);
+    transition-duration: 0.08s;
 }
 
 .submenu-item.active {
@@ -1056,9 +1076,15 @@ body {
 }
 
 .admin-profile-link:hover {
-    background: linear-gradient(135deg, var(--primary), #ff7a59);
+    background: #b3261e;
     color: #fff;
-    border-color: transparent;
+    border-color: #b3261e;
+    transform: translateY(-1px);
+}
+
+.admin-profile-link:active {
+    transform: scale(0.97);
+    transition-duration: 0.08s;
 }
 
 .topbar-content .admin-header-actions {
@@ -2813,10 +2839,15 @@ body.dark-mode .emp-btn-cancel:hover {
     }
 
     .admin-topbar {
-        padding: 8px 14px;
+        padding: 10px 14px;
         position: sticky;
         top: 0;
         z-index: 100;
+        background: rgba(255, 255, 255, 0.88) !important;
+        backdrop-filter: blur(18px);
+        -webkit-backdrop-filter: blur(18px);
+        border-bottom: 1px solid rgba(234, 236, 240, 0.8) !important;
+        box-shadow: 0 2px 10px rgba(16, 24, 40, 0.03);
     }
 
     .topbar-content {
@@ -2835,10 +2866,47 @@ body.dark-mode .emp-btn-cancel:hover {
     }
 
     .admin-main {
-        padding: 16px 12px 90px 12px !important;
+        padding: 16px 12px 100px 12px !important;
     }
     
     .stats-grid,
+    .dashboard-grid {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 10px !important;
+        margin-bottom: 16px;
+    }
+
+    .stat-card,
+    .metric-card {
+        padding: 14px 12px !important;
+        background: rgba(255, 255, 255, 0.92) !important;
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        border: 1px solid rgba(234, 236, 240, 0.85) !important;
+        border-radius: 16px !important;
+        box-shadow: 0 4px 14px -2px rgba(16, 24, 40, 0.04) !important;
+    }
+
+    .stat-card .stat-icon,
+    .metric-card .metric-icon {
+        width: 38px;
+        height: 38px;
+        font-size: 16px;
+        border-radius: 10px;
+    }
+
+    .stat-card .stat-content h3,
+    .metric-card .metric-value {
+        font-size: 1.25rem !important;
+        line-height: 1.2;
+    }
+
+    .stat-card .stat-content p,
+    .metric-card .metric-label {
+        font-size: 0.76rem !important;
+    }
+    
     .insight-grid,
     .modules-grid,
     .hr-recent {
@@ -3130,4 +3198,301 @@ body.dark-mode .pagination .page-item.active .page-link {
     background-color: #b3261e !important;
     border-color: #b3261e !important;
     color: #ffffff !important;
+}
+
+/* ==========================================================================
+   Modern UI/UX Micro-Interactions & Animation System (Admin & Shop Owner Portal)
+   ========================================================================== */
+
+/* Universal Interactive Transitions */
+button,
+.btn,
+.stat-card,
+.metric-card,
+.admin-card,
+.admin-table tbody tr,
+table.table tbody tr,
+.badge,
+.status-chip {
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Primary Action Buttons */
+.btn-primary,
+.btn-modal-primary,
+.emp-btn-primary,
+.btn-action-primary {
+    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+                background-color 0.18s ease,
+                border-color 0.18s ease !important;
+    user-select: none;
+    cursor: pointer;
+}
+
+.btn-primary:hover,
+.btn-modal-primary:hover,
+.emp-btn-primary:hover,
+.btn-action-primary:hover {
+    background-color: var(--primary-hover, #981b15) !important;
+    border-color: var(--primary-hover, #981b15) !important;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px -2px rgba(179, 38, 30, 0.28) !important;
+}
+
+.btn-primary:active,
+.btn-modal-primary:active,
+.emp-btn-primary:active,
+.btn-action-primary:active {
+    transform: translateY(1.5px) scale(0.975) !important;
+    box-shadow: 0 2px 4px rgba(179, 38, 30, 0.18) !important;
+    transition-duration: 0.08s !important;
+}
+
+/* Secondary, Neutral & Outline Action Buttons */
+.btn-secondary,
+.btn-outline-primary,
+.btn-outline-secondary,
+.btn-outline-danger,
+.btn-modal-cancel,
+.emp-btn-cancel,
+.btn-light,
+.btn-default {
+    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+                background-color 0.18s ease,
+                border-color 0.18s ease,
+                color 0.18s ease !important;
+    user-select: none;
+    cursor: pointer;
+}
+
+.btn-secondary:hover,
+.btn-outline-primary:hover,
+.btn-outline-secondary:hover,
+.btn-outline-danger:hover,
+.btn-modal-cancel:hover,
+.emp-btn-cancel:hover,
+.btn-light:hover,
+.btn-default:hover {
+    transform: translateY(-1.5px);
+    box-shadow: 0 4px 12px -2px rgba(16, 24, 40, 0.08);
+}
+
+.btn-secondary:active,
+.btn-outline-primary:active,
+.btn-outline-secondary:active,
+.btn-outline-danger:active,
+.btn-modal-cancel:active,
+.emp-btn-cancel:active,
+.btn-light:active,
+.btn-default:active {
+    transform: translateY(1px) scale(0.98) !important;
+    transition-duration: 0.08s !important;
+}
+
+/* Success & Danger Action Buttons */
+.btn-success,
+.btn-danger,
+.btn-warning,
+.btn-info {
+    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+                background-color 0.18s ease,
+                border-color 0.18s ease !important;
+    user-select: none;
+    cursor: pointer;
+}
+
+.btn-success:hover,
+.btn-danger:hover,
+.btn-warning:hover,
+.btn-info:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 14px -2px rgba(16, 24, 40, 0.18);
+}
+
+.btn-success:active,
+.btn-danger:active,
+.btn-warning:active,
+.btn-info:active {
+    transform: translateY(1.5px) scale(0.975) !important;
+    box-shadow: 0 2px 4px rgba(16, 24, 40, 0.14) !important;
+    transition-duration: 0.08s !important;
+}
+
+/* Compact Buttons & Action Icons */
+.btn-sm,
+.btn-action,
+.action-btn,
+.table-action-btn {
+    transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+                background-color 0.15s ease,
+                color 0.15s ease,
+                border-color 0.15s ease,
+                box-shadow 0.15s ease !important;
+}
+
+.btn-sm:hover,
+.btn-action:hover,
+.action-btn:hover,
+.table-action-btn:hover {
+    transform: translateY(-1px) scale(1.04);
+}
+
+.btn-sm:active,
+.btn-action:active,
+.action-btn:active,
+.table-action-btn:active {
+    transform: scale(0.94) !important;
+    transition-duration: 0.08s !important;
+}
+
+/* Topbar Toggle Controls */
+.topbar-content .sidebar-toggler,
+.admin-topbar .topbar-content > .theme-toggler,
+.topbar-right > .theme-toggler,
+.sa-topbar-action-btn {
+    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+                background-color 0.18s ease,
+                border-color 0.18s ease,
+                color 0.18s ease !important;
+}
+
+.topbar-content .sidebar-toggler:hover,
+.admin-topbar .topbar-content > .theme-toggler:hover,
+.topbar-right > .theme-toggler:hover,
+.sa-topbar-action-btn:hover {
+    transform: scale(1.08) !important;
+    color: var(--primary, #b3261e) !important;
+}
+
+.topbar-content .sidebar-toggler:active,
+.admin-topbar .topbar-content > .theme-toggler:active,
+.topbar-right > .theme-toggler:active,
+.sa-topbar-action-btn:active {
+    transform: scale(0.92) !important;
+    transition-duration: 0.08s !important;
+}
+
+/* Metric & Dashboard Cards Elevation */
+.stat-card,
+.metric-card,
+.dashboard-grid .stat-card,
+.stats-dashboard-grid .stat-card,
+.admin-card,
+.card,
+.form-section-card,
+.emp-section-card {
+    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+                border-color 0.2s ease !important;
+    will-change: transform, box-shadow;
+}
+
+.stat-card:hover,
+.metric-card:hover,
+.dashboard-grid .stat-card:hover,
+.stats-dashboard-grid .stat-card:hover,
+.admin-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px -4px rgba(16, 24, 40, 0.08), 0 4px 8px -2px rgba(16, 24, 40, 0.04) !important;
+    border-color: #d0d5dd !important;
+}
+
+.stat-card:hover i,
+.metric-card:hover i {
+    transform: scale(1.1) rotate(3deg);
+    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Clickable Cards */
+a.stat-card:active,
+a.metric-card:active,
+a.stat-card-link:active .stat-card,
+.card-clickable:active {
+    transform: translateY(-1px) scale(0.995) !important;
+    transition-duration: 0.08s !important;
+}
+
+/* Data Tables Row Hover Highlighting */
+.admin-table tbody tr,
+table.table tbody tr {
+    transition: background-color 0.15s ease !important;
+}
+
+.admin-table tbody tr:hover,
+table.table tbody tr:hover {
+    background-color: #f8fafc;
+}
+
+body.dark-mode .admin-table tbody tr:hover,
+body.dark-mode table.table tbody tr:hover {
+    background-color: rgba(255, 255, 255, 0.035) !important;
+}
+
+/* Table rows that have an onclick or link */
+.admin-table tbody tr[onclick],
+table.table tbody tr[onclick] {
+    cursor: pointer;
+}
+
+.admin-table tbody tr[onclick]:active,
+table.table tbody tr[onclick]:active {
+    background-color: #f1f5f9;
+}
+
+body.dark-mode .admin-table tbody tr[onclick]:active,
+body.dark-mode table.table tbody tr[onclick]:active {
+    background-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* Form Inputs Focus Ring Transition */
+.form-control,
+.form-select,
+.sidebar-search-input {
+    transition: border-color 0.18s ease,
+                box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+                background-color 0.18s ease !important;
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--primary, #b3261e) !important;
+    box-shadow: 0 0 0 3.5px rgba(179, 38, 30, 0.14) !important;
+    outline: none !important;
+}
+
+/* Status Chips and Badges */
+.badge,
+.status-chip,
+.sidebar-account-badge {
+    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s ease !important;
+}
+
+.badge:hover,
+.status-chip:hover {
+    transform: translateY(-1px);
+}
+
+/* Smooth Modals and Popovers Entrance */
+.modal.fade .modal-dialog {
+    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.22s ease !important;
+    transform: scale(0.96) translateY(-10px);
+}
+
+.modal.show .modal-dialog {
+    transform: scale(1) translateY(0) !important;
+}
+
+/* Accessibility: Respect Reduced Motion Preferences */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
 }

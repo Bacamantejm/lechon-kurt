@@ -1495,7 +1495,11 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
         /* Foodpanda Style Mobile Ready Layout */
         @media (max-width: 768px) {
             .site-header {
-                box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05) !important;
+                box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04) !important;
+                background: rgba(255, 255, 255, 0.88) !important;
+                backdrop-filter: blur(18px) !important;
+                -webkit-backdrop-filter: blur(18px) !important;
+                border-bottom: 1px solid rgba(234, 236, 240, 0.8) !important;
                 position: sticky !important;
                 top: 0 !important;
                 z-index: 1200 !important;
@@ -1542,10 +1546,12 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
             .market-address-trigger {
                 width: 100% !important;
                 max-width: 100% !important;
-                min-height: 36px !important;
-                padding: 0 10px !important;
-                background: #f8fafc !important;
-                border: 1px solid #e2e8f0 !important;
+                min-height: 38px !important;
+                padding: 0 12px !important;
+                background: rgba(244, 245, 247, 0.85) !important;
+                backdrop-filter: blur(12px) !important;
+                -webkit-backdrop-filter: blur(12px) !important;
+                border: 1px solid rgba(234, 236, 240, 0.85) !important;
                 border-radius: 999px !important;
                 font-size: 0.8rem !important;
                 font-weight: 700 !important;
@@ -1612,11 +1618,13 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
                 margin-top: 0 !important;
             }
             .market-home-search {
-                min-height: 40px !important;
-                background: #f1f5f9 !important;
-                border: 1px solid #e2e8f0 !important;
+                min-height: 42px !important;
+                background: rgba(244, 245, 247, 0.85) !important;
+                backdrop-filter: blur(12px) !important;
+                -webkit-backdrop-filter: blur(12px) !important;
+                border: 1px solid rgba(234, 236, 240, 0.85) !important;
                 border-radius: 999px !important;
-                padding: 0 14px !important;
+                padding: 0 16px !important;
             }
             .market-home-search input {
                 font-size: 0.88rem !important;
@@ -1648,20 +1656,7 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
             }
         }
 
-            /* Foodpanda Style Slide-in Drawer */
-            .mobile-menu {
-                left: -360px !important;
-                right: auto !important;
-                transition: left var(--motion-base) var(--motion-ease) !important;
-                width: min(320px, 86vw) !important;
-                border-right: 1px solid var(--line) !important;
-                border-left: none !important;
-                box-shadow: 14px 0 34px rgba(15, 23, 42, 0.18) !important;
-            }
-            .mobile-menu.active {
-                left: 0 !important;
-                right: auto !important;
-            }
+            /* Unified Slide-in Drawer defined below */
             .mobile-profile-card {
                 padding: 16px 14px;
                 background: #f8fafc;
@@ -1740,10 +1735,266 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
             .logo-title { font-size: 0.98rem; }
             .logo-sub { font-size: 0.58rem; }
         }
-    </style>
+    
+        /* Guaranteed Mobile Drawer & Glassmorphic Overlay (Reference Screen 8) */
+        .mobile-menu-overlay {
+            position: fixed !important;
+            inset: 0 !important;
+            background: rgba(16, 24, 40, 0.5) !important;
+            backdrop-filter: blur(8px) !important;
+            -webkit-backdrop-filter: blur(8px) !important;
+            z-index: 99998 !important;
+            opacity: 0 !important;
+            visibility: hidden !important;
+            transition: opacity 0.25s ease, visibility 0.25s ease !important;
+            pointer-events: none !important;
+        }
+        .mobile-menu-overlay.active {
+            opacity: 1 !important;
+            visibility: visible !important;
+            pointer-events: auto !important;
+        }
+        .mobile-menu {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            bottom: 0 !important;
+            right: auto !important;
+            width: min(320px, 86vw) !important;
+            height: 100vh !important;
+            height: 100dvh !important;
+            background: rgba(255, 255, 255, 0.98) !important;
+            backdrop-filter: blur(20px) !important;
+            -webkit-backdrop-filter: blur(20px) !important;
+            border-right: 1px solid rgba(234, 236, 240, 0.85) !important;
+            border-left: none !important;
+            box-shadow: 14px 0 40px rgba(16, 24, 40, 0.18) !important;
+            z-index: 99999 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            transform: translateX(-100%) !important;
+            transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;
+            overflow-y: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+        }
+        .mobile-menu.active {
+            transform: translateX(0) !important;
+            visibility: visible !important;
+        }
+        .mobile-menu-header {
+            padding: 18px 16px;
+            border-bottom: 1px solid rgba(234, 236, 240, 0.85);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .mobile-menu-close {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: 1px solid #eaecf0;
+            background: #ffffff;
+            color: #475467;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.18s ease;
+        }
+        .mobile-menu-close:active {
+            transform: scale(0.92);
+            background: #fff1f0;
+            color: #b3261e;
+        }
+        .mobile-nav {
+            margin: 0;
+            padding: 12px;
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .mobile-nav a {
+            text-decoration: none;
+            color: #1d2939;
+            font-size: 0.92rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 14px;
+            border-radius: 12px;
+            transition: all 0.18s ease;
+        }
+        .mobile-nav a i:not(.chevron-icon) {
+            width: 22px;
+            text-align: center;
+            color: #b3261e;
+            font-size: 1rem;
+        }
+        .mobile-nav a .chevron-icon {
+            margin-left: auto;
+            color: #98a2b3;
+            font-size: 0.75rem;
+        }
+        .mobile-nav a:hover,
+        .mobile-nav a.active {
+            background: #fff1f0;
+            color: #b3261e;
+        }
+        body.dark-mode .mobile-menu {
+            background: rgba(30, 41, 59, 0.98) !important;
+            border-color: rgba(51, 65, 85, 0.85) !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .mobile-menu-header {
+            border-bottom-color: rgba(51, 65, 85, 0.85) !important;
+        }
+        body.dark-mode .mobile-menu-close {
+            background: #1e293b !important;
+            border-color: #334155 !important;
+            color: #cbd5e1 !important;
+        }
+        body.dark-mode .mobile-nav a {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .mobile-nav a:hover,
+        body.dark-mode .mobile-nav a.active {
+            background: #334155 !important;
+            color: #ffffff !important;
+        }
+
+        /* Mobile Header Popover Placement & Active Order Banner Fix */
+        @media (max-width: 768px) {
+            .user-dropdown {
+                position: fixed !important;
+                top: 64px !important;
+                right: 14px !important;
+                left: auto !important;
+                width: min(300px, calc(100vw - 28px)) !important;
+                max-width: calc(100vw - 28px) !important;
+                margin-left: auto !important;
+                box-shadow: 0 14px 40px rgba(16, 24, 40, 0.22) !important;
+                border-radius: 18px !important;
+                z-index: 99999 !important;
+                max-height: calc(100vh - 120px) !important;
+                max-height: calc(100dvh - 120px) !important;
+                overflow-y: auto !important;
+                -webkit-overflow-scrolling: touch !important;
+            }
+            .notification-dropdown {
+                position: fixed !important;
+                top: 64px !important;
+                right: 14px !important;
+                left: auto !important;
+                width: min(300px, calc(100vw - 28px)) !important;
+                max-width: calc(100vw - 28px) !important;
+                margin-left: auto !important;
+                box-shadow: 0 14px 40px rgba(16, 24, 40, 0.22) !important;
+                border-radius: 18px !important;
+                z-index: 99999 !important;
+            }
+            .sticky-ongoing-widget {
+                bottom: 84px !important;
+                right: 14px !important;
+                left: 14px !important;
+                width: auto !important;
+                max-width: none !important;
+                z-index: 1240 !important;
+            }
+        }
+        .sticky-ongoing-close-btn {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #171922;
+            color: #ffffff;
+            border: 2px solid #ffffff;
+            font-size: 13px;
+            font-weight: 700;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            z-index: 10;
+        }
+
+</style>
     <!-- Leaflet Map CSS and JS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+<script>
+window.openMobileNavSidebar = function(e) {
+    if (e) {
+        if (typeof e.preventDefault === 'function') e.preventDefault();
+        if (typeof e.stopPropagation === 'function') e.stopPropagation();
+    }
+    var m = document.getElementById('mobileMenu');
+    var o = document.getElementById('mobileOverlay');
+    if (m) {
+        m.classList.add('active');
+        m.style.setProperty('display', 'flex', 'important');
+        m.style.setProperty('transform', 'translateX(0)', 'important');
+        m.style.setProperty('visibility', 'visible', 'important');
+        m.style.setProperty('pointer-events', 'auto', 'important');
+        m.style.setProperty('opacity', '1', 'important');
+        m.style.setProperty('left', '0', 'important');
+        m.style.setProperty('right', 'auto', 'important');
+        m.style.setProperty('z-index', '999999', 'important');
+    }
+    if (o) {
+        o.classList.add('active');
+        o.style.setProperty('display', 'block', 'important');
+        o.style.setProperty('opacity', '1', 'important');
+        o.style.setProperty('visibility', 'visible', 'important');
+        o.style.setProperty('pointer-events', 'auto', 'important');
+        o.style.setProperty('z-index', '999998', 'important');
+    }
+    document.body.style.overflow = 'hidden';
+};
+window.closeMobileNavSidebar = function(e) {
+    if (e) {
+        if (typeof e.preventDefault === 'function') e.preventDefault();
+        if (typeof e.stopPropagation === 'function') e.stopPropagation();
+    }
+    var m = document.getElementById('mobileMenu');
+    var o = document.getElementById('mobileOverlay');
+    if (m) {
+        m.classList.remove('active');
+        m.style.setProperty('transform', 'translateX(-100%)', 'important');
+        m.style.setProperty('pointer-events', 'none', 'important');
+    }
+    if (o) {
+        o.classList.remove('active');
+        o.style.setProperty('opacity', '0', 'important');
+        o.style.setProperty('pointer-events', 'none', 'important');
+        setTimeout(function() {
+            if (o && !o.classList.contains('active')) {
+                o.style.setProperty('display', 'none', 'important');
+            }
+        }, 280);
+    }
+    document.body.style.overflow = '';
+};
+document.addEventListener('click', function(e) {
+    var toggle = e.target.closest('#mobileToggle, #mobileToggle2, .mobile-toggle');
+    if (toggle) {
+        window.openMobileNavSidebar(e);
+        return;
+    }
+    var close = e.target.closest('#mobileMenuClose, .mobile-menu-close, #mobileOverlay');
+    if (close) {
+        window.closeMobileNavSidebar(e);
+    }
+}, true);
+</script>
+
 <body class="<?php echo $is_market_home_header ? 'market-body' : 'site-body'; ?><?php echo $is_initial_dark ? ' dark-mode' : ''; ?>">
 <script>(function(){if(document.documentElement.classList.contains('dark-mode')&&document.body){document.body.classList.add('dark-mode');}})();</script>
 <?php if ($is_market_home_header): ?>
@@ -1850,7 +2101,7 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
                 </div>
                 <?php endif; ?>
             <?php endif; ?>
-            <button class="icon-btn mobile-toggle" id="mobileToggle"><i class="fas fa-bars"></i></button>
+            <button type="button" class="icon-btn mobile-toggle" id="mobileToggle" onclick="openMobileNavSidebar(event)" aria-label="Open mobile menu"><i class="fas fa-bars"></i></button>
         </div>
     </div>
     
@@ -1897,42 +2148,82 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
     <?php endif; ?>
 
     <?php if ($ongoing_order_id > 0 && $current_page !== 'track_order'): ?>
-    <div id="stickyOngoingOrderWidget" class="sticky-ongoing-widget">
-        <a href="<?php echo $path_prefix; ?>track_order.php?order_id=<?php echo $ongoing_order_id; ?>" class="sticky-ongoing-link">
-            <div class="sticky-ongoing-icon">
-                <i class="fas fa-motorcycle"></i>
-                <span class="sticky-pulse-ring"></span>
-            </div>
-            <div class="sticky-ongoing-info">
-                <div class="sticky-ongoing-header">
-                    <strong style="font-weight:800; font-size:0.92rem; color:#171922;">Active Delivery Order</strong>
-                    <span class="sticky-live-tag">LIVE</span>
+    <div id="stickyOngoingOrderWidget" class="sticky-ongoing-widget" style="display: none;">
+        <div style="position: relative;">
+            <a href="<?php echo $path_prefix; ?>track_order.php?order_id=<?php echo $ongoing_order_id; ?>" class="sticky-ongoing-link" onclick="handleTrackOrderClick(<?php echo (int)$ongoing_order_id; ?>)">
+                <div class="sticky-ongoing-icon">
+                    <i class="fas fa-motorcycle"></i>
+                    <span class="sticky-pulse-ring"></span>
                 </div>
-                <div class="sticky-ongoing-status">
-                    #<?php echo htmlspecialchars($ongoing_order_number); ?> &bull; <span style="color:#b3261e; font-weight:700;"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $ongoing_order_status))); ?></span>
+                <div class="sticky-ongoing-info">
+                    <div class="sticky-ongoing-header">
+                        <strong style="font-weight:800; font-size:0.92rem; color:#171922;">Active Delivery Order</strong>
+                        <span class="sticky-live-tag">LIVE</span>
+                    </div>
+                    <div class="sticky-ongoing-status">
+                        #<?php echo htmlspecialchars($ongoing_order_number); ?> &bull; <span style="color:#b3261e; font-weight:700;"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $ongoing_order_status))); ?></span>
+                    </div>
                 </div>
-            </div>
-            <div class="sticky-ongoing-btn">
-                Track <i class="fas fa-arrow-right"></i>
-            </div>
-        </a>
+                <div class="sticky-ongoing-btn">
+                    Track <i class="fas fa-arrow-right"></i>
+                </div>
+            </a>
+            <button type="button" class="sticky-ongoing-close-btn" onclick="dismissStickyOngoingOrder(event, <?php echo (int)$ongoing_order_id; ?>)" aria-label="Dismiss">&times;</button>
+        </div>
     </div>
     <script>
     (function() {
+        var orderId = <?php echo (int)$ongoing_order_id; ?>;
+        var key = 'sticky_order_seen_' + orderId;
+        var stickyWidget = document.getElementById('stickyOngoingOrderWidget');
+        if (!stickyWidget) return;
+        
+        // Show once logic: if already seen or dismissed in this session, do NOT show again
+        if (sessionStorage.getItem(key) === '1' || sessionStorage.getItem('sticky_order_dismissed_' + orderId) === '1') {
+            stickyWidget.style.display = 'none';
+            return;
+        }
+        
+        // Mark as seen immediately so navigating away or clicking back won't show it again
+        sessionStorage.setItem(key, '1');
+        stickyWidget.style.display = 'block';
+        
+        // Auto fade out after 6 seconds
+        setTimeout(function() {
+            if (stickyWidget) {
+                stickyWidget.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+                stickyWidget.style.opacity = '0';
+                stickyWidget.style.transform = 'translateY(16px)';
+                setTimeout(function() {
+                    if (stickyWidget) stickyWidget.style.display = 'none';
+                }, 400);
+            }
+        }, 6000);
+    })();
+    
+    window.handleTrackOrderClick = function(orderId) {
+        try {
+            sessionStorage.setItem('sticky_order_seen_' + orderId, '1');
+            sessionStorage.setItem('sticky_order_dismissed_' + orderId, '1');
+        } catch(e) {}
+    };
+    
+    window.dismissStickyOngoingOrder = function(e, orderId) {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        try {
+            sessionStorage.setItem('sticky_order_seen_' + orderId, '1');
+            sessionStorage.setItem('sticky_order_dismissed_' + orderId, '1');
+        } catch(e) {}
         var stickyWidget = document.getElementById('stickyOngoingOrderWidget');
         if (stickyWidget) {
+            stickyWidget.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+            stickyWidget.style.opacity = '0';
+            stickyWidget.style.transform = 'translateY(16px)';
             setTimeout(function() {
-                stickyWidget.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
-                stickyWidget.style.opacity = '0';
-                stickyWidget.style.transform = 'translateY(20px)';
-                setTimeout(function() {
-                    if (stickyWidget && stickyWidget.parentNode) {
-                        stickyWidget.style.display = 'none';
-                    }
-                }, 500);
-            }, 5000);
+                if (stickyWidget) stickyWidget.style.display = 'none';
+            }, 300);
         }
-    })();
+    };
     </script>
     <?php endif; ?>
     
@@ -2039,21 +2330,21 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
             <?php if ($is_logged_in_user): ?>
             <button type="button" class="icon-btn market-theme-btn" id="marketThemeTogglerSiteLoggedIn" title="Toggle Theme" aria-label="Toggle Dark or Light Theme"><i class="fas fa-moon"></i></button>
             <?php endif; ?>
-            <button class="icon-btn mobile-toggle" id="mobileToggle"><i class="fas fa-bars"></i></button>
+            <button type="button" class="icon-btn mobile-toggle" id="mobileToggle2" onclick="openMobileNavSidebar(event)" aria-label="Open mobile menu"><i class="fas fa-bars"></i></button>
         </div>
         <?php endif; ?>
     </div>
 </header>
 <?php endif; ?>
 
-<div class="mobile-menu-overlay" id="mobileOverlay"></div>
+<div class="mobile-menu-overlay" id="mobileOverlay" onclick="closeMobileNavSidebar(event)"></div>
 <aside class="mobile-menu" id="mobileMenu">
     <div class="mobile-menu-header">
         <a href="<?php echo htmlspecialchars($nav_logo_href); ?>" class="logo-link" style="display:flex !important;">
             <span class="logo-icon" style="width:34px;height:34px;font-size:.88rem;"><img src="<?php echo $path_prefix; ?>assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block;"></span>
             <span class="logo-copy"><span class="logo-title" style="font-size:0.98rem;">Lechon Delights</span><span class="logo-sub" style="font-size:0.58rem;"><?php echo $is_rider_context ? 'Rider Portal' : 'Marketplace'; ?></span></span>
         </a>
-        <button class="mobile-menu-close" id="mobileMenuClose" aria-label="Close menu"><i class="fas fa-times"></i></button>
+        <button type="button" class="mobile-menu-close" id="mobileMenuClose" onclick="closeMobileNavSidebar(event)" aria-label="Close menu"><i class="fas fa-times"></i></button>
     </div>
     
     <?php if ($is_logged_in_user): ?>

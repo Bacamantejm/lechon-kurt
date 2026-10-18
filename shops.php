@@ -502,10 +502,42 @@ require_once 'includes/header.php';
         grid-template-columns: 1fr !important;
     }
     .market-sidebar {
+        display: none !important;
         position: static !important;
+        margin-bottom: 20px !important;
+        border-radius: 16px !important;
+    }
+    .market-sidebar.mobile-open {
+        display: block !important;
+        animation: fadeIn 0.2s ease-out;
+    }
+    .mobile-filter-bar {
+        display: flex !important;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 16px;
+    }
+    .mobile-filter-toggle-btn {
+        display: inline-flex !important;
+        align-items: center;
+        gap: 8px;
+        background: #ffffff;
+        border: 1px solid #eaecf0;
+        border-radius: 999px;
+        padding: 8px 16px;
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #101828;
+        cursor: pointer;
+        box-shadow: 0 1px 3px rgba(16, 24, 40, 0.05);
     }
     .market-home {
         padding-bottom: 140px !important;
+    }
+}
+@media (min-width: 992px) {
+    .mobile-filter-bar {
+        display: none !important;
     }
 }
 
@@ -738,6 +770,12 @@ body.dark-mode .leaflet-popup-content span {
             <div class="market-explorer">
                 
                 <!-- Left Sidebar Filters (Matching Delivery Page Layout) -->
+                <div class="mobile-filter-bar">
+                    <button type="button" class="mobile-filter-toggle-btn" onclick="document.querySelector('.market-sidebar').classList.toggle('mobile-open')">
+                        <i class="fas fa-sliders"></i> Filters &amp; Sort
+                    </button>
+                    <span style="font-size: 0.8rem; font-weight: 600; color: #64748b;" id="mobileShopsCountText"></span>
+                </div>
                 <aside class="market-sidebar">
                     <div class="market-sidebar-section">
                         <h3>Filters</h3>

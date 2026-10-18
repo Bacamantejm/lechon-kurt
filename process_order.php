@@ -1030,8 +1030,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'customer_name' => $full_name,
                     'customer_email' => $email,
                     'customer_phone' => $phone,
-                    'success_url' => 'http://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/lechonsystem/payment_success.php?order_id=' . $order_id,
-                    'cancel_url' => 'http://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/lechonsystem/payment_cancel.php?order_id=' . $order_id,
+                    'success_url' => appBaseUrl('payment_success.php?order_id=' . $order_id),
+                    'cancel_url' => appBaseUrl('payment_cancel.php?order_id=' . $order_id),
                     'payment_method' => $payment_method
                 ];
 

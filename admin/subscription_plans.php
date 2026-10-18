@@ -79,8 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         exit;
     }
 
-    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-    $base_url = $scheme . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/lechonsystem';
+    $base_url = function_exists('appBaseUrl') ? appBaseUrl() : (((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost'));
 
     $result = $monetizationService->createDirectSubscriptionPaymentSession(
         (int)$seller_scope_id,

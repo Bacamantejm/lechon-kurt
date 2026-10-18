@@ -1036,41 +1036,47 @@ include 'includes/header.php';
 .mobile-segmented-nav {
     display: none;
     position: sticky;
-    top: 70px;
-    z-index: 100;
-    background: rgba(255, 255, 255, 0.96);
-    backdrop-filter: blur(8px);
-    border: 1px solid var(--acc-border);
-    border-radius: 12px;
-    padding: 4px;
-    margin-bottom: 16px;
+    top: 68px;
+    z-index: 95;
+    background: rgba(255, 255, 255, 0.88);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(234, 236, 240, 0.85);
+    border-radius: 999px;
+    padding: 5px;
+    margin-bottom: 20px;
     gap: 4px;
+    box-shadow: 0 4px 16px rgba(16, 24, 40, 0.06);
 }
 
 .mobile-segment-btn {
     flex: 1;
     border: none;
     background: transparent;
-    padding: 8px;
-    font-size: 0.8rem;
+    padding: 9px 12px;
+    font-size: 0.82rem;
     font-weight: 700;
     color: #475467;
-    border-radius: 8px;
+    border-radius: 999px;
     cursor: pointer;
     text-align: center;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 6px;
-    transition: all 0.15s ease;
+    transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .mobile-segment-btn.active {
     background: var(--acc-primary);
     color: #ffffff;
+    box-shadow: 0 2px 8px rgba(179, 38, 30, 0.25);
 }
 
 @media (max-width: 992px) {
+    .account-page-v2 {
+        padding-bottom: 140px !important;
+    }
     .account-grid-v2 {
         grid-template-columns: 1fr;
     }
@@ -1087,15 +1093,34 @@ include 'includes/header.php';
         grid-column: span 1;
     }
     .account-hero-card {
+        background: rgba(255, 255, 255, 0.92);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(234, 236, 240, 0.85);
+        border-radius: 20px;
+        box-shadow: 0 4px 20px -2px rgba(16, 24, 40, 0.05);
         flex-direction: column;
         align-items: flex-start;
+        padding: 20px;
     }
     .account-hero-right {
         width: 100%;
+        margin-top: 8px;
     }
     .hero-action-btn {
         flex: 1;
         justify-content: center;
+        border-radius: 12px;
+        padding: 10px 14px;
+    }
+    .acc-panel-card {
+        background: rgba(255, 255, 255, 0.92);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        border: 1px solid rgba(234, 236, 240, 0.85);
+        border-radius: 20px;
+        padding: 18px 16px;
+        box-shadow: 0 4px 16px -2px rgba(16, 24, 40, 0.04);
     }
 }
 

@@ -429,26 +429,61 @@ if ($total_orders > 0) {
     // Get all order IDs for the current user that are delivered or completed and not archived
     $eligible_order_ids_query = "SELECT id FROM orders WHERE user_id = ? AND status IN ('delivered', 'completed') AND (is_archived IS NULL OR is_archived = 0)";
     $stmt_eligible_ids = mysqli_prepare($conn, $eligible_order_ids_query);
-    mysqli_stmt_bind_param($stmt_eligible_ids, "i", $user_id);
-    mysqli_stmt_execute($stmt_eligible_ids);
-    $eligible_order_ids_result = mysqli_stmt_get_result($stmt_eligible_ids);
-    $eligible_order_ids = array_column(mysqli_fetch_all($eligible_order_ids_result, MYSQLI_ASSOC), 'id');
-    mysqli_stmt_close($stmt_eligible_ids);
+    if ($stmt_eligible_ids) {
+        mysqli_stmt_bind_param($stmt_eligible_ids, "i", $user_id);
+        mysqli_stmt_execute($stmt_eligible_ids);
+        $eligible_order_ids_result = mysqli_stmt_get_result($stmt_eligible_ids);
+        $eligible_order_ids = array_column(mysqli_fetch_all($eligible_order_ids_result, MYSQLI_ASSOC), 'id');
+        mysqli_stmt_close($stmt_eligible_ids);
 
-    if (!empty($eligible_order_ids)) {
-        $placeholders = implode(',', array_fill(0, count($eligible_order_ids), '?'));
-        $types = str_repeat('i', count($eligible_order_ids));
+        if (!empty($eligible_order_ids)) {
+            $placeholders = implode(',', array_fill(0, count($eligible_order_ids), '?'));
+            $types = str_repeat('i', count($eligible_order_ids));
 
-        // Find order IDs that have at least one unreviewed item
-        $unreviewed_items_query = "SELECT DISTINCT order_id FROM order_items WHERE order_id IN ($placeholders) AND is_reviewed = 0";
-        $stmt_unreviewed = mysqli_prepare($conn, $unreviewed_items_query);
-        mysqli_stmt_bind_param($stmt_unreviewed, $types, ...$eligible_order_ids);
-        mysqli_stmt_execute($stmt_unreviewed);
-        $unreviewed_items_result = mysqli_stmt_get_result($stmt_unreviewed);
-        $orders_with_unreviewed_items = array_column(mysqli_fetch_all($unreviewed_items_result, MYSQLI_ASSOC), 'order_id');
-        mysqli_stmt_close($stmt_unreviewed);
+            // Find order IDs that have at least one unreviewed item
+            $unreviewed_items_query = "SELECT DISTINCT order_id FROM order_items WHERE order_id IN ($placeholders) AND is_reviewed = 0";
+            $stmt_unreviewed = mysqli_prepare($conn, $unreviewed_items_query);
+            if ($stmt_unreviewed) {
+                mysqli_stmt_bind_param($stmt_unreviewed, $types, ...$eligible_order_ids);
+                mysqli_stmt_execute($stmt_unreviewed);
+                $unreviewed_items_result = mysqli_stmt_get_result($stmt_unreviewed);
+                $orders_with_unreviewed_items = array_column(mysqli_fetch_all($unreviewed_items_result, MYSQLI_ASSOC), 'order_id');
+                mysqli_stmt_close($stmt_unreviewed);
+            }
+        }
     }
 }
+
+// Safely detect proof of delivery tables/columns before building query
+$has_pod_table = false;
+$has_dp_table = false;
+$has_lt_proof_col = false;
+
+$res_pod = mysqli_query($conn, "SHOW TABLES LIKE 'proof_of_delivery'");
+if ($res_pod && mysqli_num_rows($res_pod) > 0) {
+    $has_pod_table = true;
+}
+$res_dp = mysqli_query($conn, "SHOW TABLES LIKE 'delivery_proofs'");
+if ($res_dp && mysqli_num_rows($res_dp) > 0) {
+    $has_dp_table = true;
+}
+$res_lt = mysqli_query($conn, "SHOW COLUMNS FROM logistics_tracking LIKE 'proof_of_delivery_path'");
+if ($res_lt && mysqli_num_rows($res_lt) > 0) {
+    $has_lt_proof_col = true;
+}
+
+$proof_parts = [];
+if ($has_lt_proof_col) {
+    $proof_parts[] = "NULLIF(lt.proof_of_delivery_path, '')";
+}
+if ($has_pod_table) {
+    $proof_parts[] = "(SELECT photo_path FROM proof_of_delivery WHERE order_id = o.id AND photo_path IS NOT NULL AND photo_path != '' ORDER BY id DESC LIMIT 1)";
+}
+if ($has_dp_table) {
+    $proof_parts[] = "(SELECT photo_path FROM delivery_proofs WHERE order_id = o.id AND photo_path IS NOT NULL AND photo_path != '' ORDER BY id DESC LIMIT 1)";
+}
+$proof_parts[] = "''";
+$proof_photo_sql = "COALESCE(" . implode(", ", $proof_parts) . ") AS proof_photo";
 
 // Get active orders with order items
 $query = "
@@ -475,7 +510,7 @@ $query = "
         o.pickup_location,
         o.delivery_location,
         o.is_archived,
-        COALESCE(NULLIF(lt.proof_of_delivery_path, ''), (SELECT photo_path FROM proof_of_delivery WHERE order_id = o.id AND photo_path IS NOT NULL AND photo_path != '' ORDER BY id DESC LIMIT 1), (SELECT photo_path FROM delivery_proofs WHERE order_id = o.id AND photo_path IS NOT NULL AND photo_path != '' ORDER BY id DESC LIMIT 1), '') AS proof_photo,
+        {$proof_photo_sql},
         oi.product_name,
         oi.price,
         oi.quantity,
@@ -492,58 +527,62 @@ $query = "
     LIMIT ? OFFSET ?
 ";
 
-$stmt = mysqli_prepare($conn, $query);
-mysqli_stmt_bind_param($stmt, "iii", $user_id, $orders_per_page, $offset);
-mysqli_stmt_execute($stmt);
-$result = mysqli_stmt_get_result($stmt);
-
-// Group orders by order_id
 $orders = [];
-while ($row = mysqli_fetch_assoc($result)) {
-    $order_id = $row['id'];
-    
-    if (!isset($orders[$order_id])) {
-        $orders[$order_id] = [
-            'id' => $row['id'],
-            'order_number' => $row['order_number'],
-            'customer_name' => $row['customer_name'],
-            'customer_email' => $row['customer_email'],
-            'customer_phone' => $row['customer_phone'],
-            'delivery_address' => $row['delivery_address'],
-            'delivery_date' => $row['delivery_date'],
-            'delivery_time' => $row['delivery_time'],
-            'payment_method' => $row['payment_method'],
-            'subtotal' => $row['subtotal'],
-            'delivery_fee' => $row['delivery_fee'],
-            'voucher_code' => $row['voucher_code'] ?? '',
-            'voucher_discount' => $row['voucher_discount'] ?? 0,
-            'total_amount' => $row['total_amount'],
-            'status' => $row['status'],
-            'special_instructions' => $row['special_instructions'],
-            'created_at' => $row['created_at'],
-            'updated_at' => $row['updated_at'],
-            'delivery_option' => $row['delivery_option'],
-            'pickup_location' => $row['pickup_location'],
-            'delivery_location' => $row['delivery_location'],
-            'is_archived' => $row['is_archived'],
-            'proof_photo' => !empty($row['proof_photo']) ? ('uploads/proof_of_delivery/' . basename($row['proof_photo'])) : '',
-            'items' => []
-        ];
+$stmt = mysqli_prepare($conn, $query);
+if ($stmt) {
+    mysqli_stmt_bind_param($stmt, "iii", $user_id, $orders_per_page, $offset);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+
+    // Group orders by order_id
+    while ($row = mysqli_fetch_assoc($result)) {
+        $order_id = $row['id'];
+        
+        if (!isset($orders[$order_id])) {
+            $orders[$order_id] = [
+                'id' => $row['id'],
+                'order_number' => $row['order_number'],
+                'customer_name' => $row['customer_name'],
+                'customer_email' => $row['customer_email'],
+                'customer_phone' => $row['customer_phone'],
+                'delivery_address' => $row['delivery_address'],
+                'delivery_date' => $row['delivery_date'],
+                'delivery_time' => $row['delivery_time'],
+                'payment_method' => $row['payment_method'],
+                'subtotal' => $row['subtotal'],
+                'delivery_fee' => $row['delivery_fee'],
+                'voucher_code' => $row['voucher_code'] ?? '',
+                'voucher_discount' => $row['voucher_discount'] ?? 0,
+                'total_amount' => $row['total_amount'],
+                'status' => $row['status'],
+                'special_instructions' => $row['special_instructions'],
+                'created_at' => $row['created_at'],
+                'updated_at' => $row['updated_at'],
+                'delivery_option' => $row['delivery_option'],
+                'pickup_location' => $row['pickup_location'],
+                'delivery_location' => $row['delivery_location'],
+                'is_archived' => $row['is_archived'],
+                'proof_photo' => !empty($row['proof_photo']) ? ('uploads/proof_of_delivery/' . basename($row['proof_photo'])) : '',
+                'items' => []
+            ];
+        }
+        
+        if ($row['product_name']) {
+            $orders[$order_id]['items'][] = [
+                'product_name' => $row['product_name'],
+                'price' => $row['price'],
+                'quantity' => $row['quantity'],
+                'size' => $row['size'],
+                'addons' => $row['addons'],
+                'item_total' => $row['item_total'],
+                'product_image' => $row['product_image'] ?? ''
+            ];
+        }
     }
-    
-    if ($row['product_name']) {
-        $orders[$order_id]['items'][] = [
-            'product_name' => $row['product_name'],
-            'price' => $row['price'],
-            'quantity' => $row['quantity'],
-            'size' => $row['size'],
-            'addons' => $row['addons'],
-            'item_total' => $row['item_total'],
-            'product_image' => $row['product_image'] ?? ''
-        ];
-    }
+    mysqli_stmt_close($stmt);
+} else {
+    error_log("Failed to prepare my_orders active query: " . mysqli_error($conn));
 }
-mysqli_stmt_close($stmt);
 
 foreach ($orders as &$order) {
     $policy = popGetOrderPolicy($conn, (int)$order['id']);
@@ -1415,35 +1454,76 @@ unset($order);
 
 @media (max-width: 768px) {
     .orders-page-container {
-        padding: 16px 12px 140px 12px !important;
+        padding: 14px 10px 140px 10px !important;
     }
+
+    /* Glassmorphic Order Cards on Mobile */
+    .ecom-order-card,
+    .empty-orders-state {
+        background: rgba(255, 255, 255, 0.94) !important;
+        backdrop-filter: blur(14px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(14px) saturate(180%) !important;
+        border: 1px solid rgba(234, 236, 240, 0.85) !important;
+        border-radius: 20px !important;
+        box-shadow: 0 4px 18px rgba(16, 24, 40, 0.04) !important;
+        overflow: hidden;
+    }
+
+    body.dark-mode .ecom-order-card,
+    body.dark-mode .empty-orders-state {
+        background: rgba(30, 41, 59, 0.92) !important;
+        border-color: rgba(51, 65, 85, 0.8) !important;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35) !important;
+    }
+
     .orders-nav-tabs {
         overflow-x: auto;
         white-space: nowrap;
         -webkit-overflow-scrolling: touch;
         scrollbar-width: none;
-        gap: 20px;
-        padding-bottom: 4px;
-        margin-bottom: 16px;
+        gap: 16px;
+        padding: 4px 6px;
+        margin-bottom: 14px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.7);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(234, 236, 240, 0.8);
     }
     .orders-nav-tabs::-webkit-scrollbar {
         display: none;
     }
     .nav-tab-item {
         flex-shrink: 0;
-        font-size: 0.88rem;
-        padding: 10px 0;
+        font-size: 0.84rem;
+        padding: 8px 12px;
+        border-radius: 999px;
+        border-bottom: none !important;
+    }
+    .nav-tab-item.active {
+        background: #b3261e !important;
+        color: #ffffff !important;
+    }
+    .nav-tab-item.active .tab-count {
+        background: rgba(255, 255, 255, 0.25) !important;
+        color: #ffffff !important;
     }
     .ecom-card-top, .ecom-card-bottom, .actions-line {
         flex-direction: column;
         align-items: flex-start;
+        gap: 10px;
     }
     .action-buttons-group {
         width: 100%;
+        display: flex;
         flex-direction: column;
+        gap: 8px;
     }
     .btn-action-outline, .btn-action-primary {
         width: 100%;
+        min-height: 42px;
+        border-radius: 12px;
+        font-size: 0.86rem;
+        font-weight: 700;
         justify-content: center;
     }
     .timeline-stepper {
@@ -1453,11 +1533,14 @@ unset($order);
     }
     .timeline-stepper .line { display: none; }
     .item-row {
-        gap: 12px;
+        gap: 10px;
+        align-items: center;
     }
     .item-img {
-        width: 60px;
-        height: 60px;
+        width: 52px;
+        height: 52px;
+        border-radius: 12px;
+        background: #f4f5f7;
     }
 }
 

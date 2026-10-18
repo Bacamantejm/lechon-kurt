@@ -32,8 +32,8 @@ $checkoutData = [
     'customer_name' => $order['customer_name'],
     'customer_email' => $order['customer_email'],
     'customer_phone' => $order['customer_phone'],
-    'success_url' => 'http://' . $_SERVER['HTTP_HOST'] . '/lechonsystem/payment_success.php?order_id=' . $order['order_id'],
-    'cancel_url' => 'http://' . $_SERVER['HTTP_HOST'] . '/lechonsystem/payment_cancel.php?order_id=' . $order['order_id'],
+    'success_url' => appBaseUrl('payment_success.php?order_id=' . $order['order_id']),
+    'cancel_url' => appBaseUrl('payment_cancel.php?order_id=' . $order['order_id']),
     'payment_method' => $order['payment_method']
 ];
 

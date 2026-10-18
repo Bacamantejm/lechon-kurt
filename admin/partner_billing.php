@@ -69,8 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $action = strtolower(trim((string)($_POST['action'] ?? '')));
     $invoice_id = (int)($_POST['invoice_id'] ?? 0);
-    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-    $base_url = $scheme . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/lechonsystem';
+    $base_url = function_exists('appBaseUrl') ? appBaseUrl() : (((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost'));
 
     if ($action === 'start_invoice_payment') {
         $result = $monetizationService->createInvoicePaymentSession(

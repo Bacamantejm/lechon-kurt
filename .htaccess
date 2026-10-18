@@ -21,6 +21,12 @@ ServerSignature Off
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
+    # Transparently route /lechonsystem/ prefix to the root if deployed in web root (Hostinger)
+    RewriteCond %{REQUEST_URI} ^/lechonsystem/(.*)$ [NC]
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^lechonsystem/(.*)$ $1 [QSA,L]
+
     # Block direct requests to includes/
     RewriteRule ^includes/ - [F,L]
 

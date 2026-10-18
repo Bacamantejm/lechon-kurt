@@ -80,19 +80,31 @@ body {
 }
 
 .order-btn {
-    background-color: #c62828;
+    background-color: #b3261e;
     color: white !important;
     padding: 8px 20px;
-    border-radius: 4px;
-    transition: background-color 0.3s;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.18s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
 }
 
 .order-btn:hover {
-    background-color: #a71c1c;
+    background-color: #981b15;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(179, 38, 30, 0.28);
+}
+
+.order-btn:active {
+    transform: translateY(1px) scale(0.975);
+    box-shadow: 0 2px 4px rgba(179, 38, 30, 0.18);
 }
 
 .cart-count {
-    background-color: #c62828;
+    background-color: #b3261e;
     color: white;
     border-radius: 50%;
     padding: 2px 6px;
@@ -100,12 +112,23 @@ body {
     position: relative;
     top: -8px;
     left: -5px;
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .mobile-toggle {
     display: none;
     font-size: 1.5rem;
     cursor: pointer;
+    transition: transform 0.18s ease, color 0.18s ease;
+}
+
+.mobile-toggle:hover {
+    color: #b3261e;
+    transform: scale(1.08);
+}
+
+.mobile-toggle:active {
+    transform: scale(0.92);
 }
 
 /* Hero Section */
@@ -133,22 +156,30 @@ body {
 .btn-primary, .btn-secondary, .btn-outline {
     display: inline-block;
     padding: 12px 30px;
-    border-radius: 4px;
+    border-radius: 8px;
     text-decoration: none;
     font-weight: 600;
     margin: 0 10px;
-    transition: all 0.3s;
+    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+    cursor: pointer;
 }
 
 .btn-primary {
-    background-color: #c62828;
+    background-color: #b3261e;
     color: white;
-    border: 2px solid #c62828;
+    border: 2px solid #b3261e;
 }
 
 .btn-primary:hover {
-    background-color: #a71c1c;
-    border-color: #a71c1c;
+    background-color: #981b15;
+    border-color: #981b15;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px -2px rgba(179, 38, 30, 0.28);
+}
+
+.btn-primary:active {
+    transform: translateY(1px) scale(0.975);
+    box-shadow: 0 2px 4px rgba(179, 38, 30, 0.18);
 }
 
 .btn-secondary {
@@ -159,7 +190,13 @@ body {
 
 .btn-secondary:hover {
     background-color: white;
-    color: #333;
+    color: #101828;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2);
+}
+
+.btn-secondary:active {
+    transform: translateY(1px) scale(0.975);
 }
 
 /* Features */
@@ -778,18 +815,7 @@ body {
     }
     
     .mobile-menu {
-        display: none;
-        background-color: white;
-        position: fixed;
-        top: 70px;
-        left: 0;
-        width: 100%;
-        box-shadow: 0 5px 10px rgba(0,0,0,0.1);
-        z-index: 999;
-    }
-    
-    .mobile-menu.active {
-        display: block;
+        /* Styled via includes/header.php for modern left slide-in drawer */
     }
     
     .mobile-menu ul {
@@ -810,11 +836,21 @@ body {
     }
     
     .mobile-order-btn {
-        background-color: #c62828;
+        background-color: #b3261e;
         color: white !important;
         padding: 10px 20px;
-        border-radius: 4px;
+        border-radius: 8px;
         text-align: center;
+        font-weight: 600;
+        transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.18s ease;
+    }
+    
+    .mobile-order-btn:hover {
+        background-color: #981b15;
+    }
+
+    .mobile-order-btn:active {
+        transform: scale(0.97);
     }
     
     .hero-content h1 {
@@ -852,4 +888,602 @@ body.dark-mode a:hover {
 
 body.dark-mode hr {
     border-color: #334155 !important;
+}
+
+/* ==========================================================================
+   Modern UI/UX Micro-Interactions & Animations System (Storefront & User Portal)
+   ========================================================================== */
+
+/* Universal interactive transitions */
+button,
+a,
+input,
+select,
+textarea,
+.card,
+.product-card,
+.store-card,
+.food-card,
+.order-card,
+.feature-card,
+.category-item,
+.icon-btn,
+.badge,
+.tab-btn {
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Primary & Action Buttons Interactive Elevation & Active Compression */
+.btn,
+.btn-primary,
+.order-btn,
+.btn-checkout,
+.btn-action,
+.hero-btn,
+.add-to-cart,
+.order-now-btn,
+.view-store-btn {
+    position: relative;
+    cursor: pointer;
+    user-select: none;
+    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+                background-color 0.18s ease,
+                border-color 0.18s ease,
+                color 0.18s ease !important;
+}
+
+.btn:hover,
+.btn-primary:hover,
+.btn-checkout:hover,
+.btn-action:hover,
+.hero-btn:hover,
+.add-to-cart:hover,
+.order-now-btn:hover,
+.view-store-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px -2px rgba(179, 38, 30, 0.28);
+}
+
+.btn:active,
+.btn-primary:active,
+.order-btn:active,
+.btn-checkout:active,
+.btn-action:active,
+.hero-btn:active,
+.add-to-cart:active,
+.order-now-btn:active,
+.view-store-btn:active {
+    transform: translateY(1.5px) scale(0.975) !important;
+    box-shadow: 0 2px 4px rgba(179, 38, 30, 0.18) !important;
+    transition-duration: 0.08s !important;
+}
+
+/* Secondary & Outline Buttons */
+.btn-secondary,
+.btn-outline,
+.btn-outline-primary,
+.btn-outline-secondary,
+.btn-light,
+.btn-default,
+.btn-signin {
+    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+                background-color 0.18s ease,
+                border-color 0.18s ease,
+                color 0.18s ease !important;
+}
+
+.btn-secondary:hover,
+.btn-outline:hover,
+.btn-outline-primary:hover,
+.btn-outline-secondary:hover,
+.btn-light:hover,
+.btn-default:hover,
+.btn-signin:hover {
+    transform: translateY(-1.5px);
+    box-shadow: 0 4px 12px -2px rgba(16, 24, 40, 0.08);
+}
+
+.btn-secondary:active,
+.btn-outline:active,
+.btn-outline-primary:active,
+.btn-outline-secondary:active,
+.btn-light:active,
+.btn-default:active,
+.btn-signin:active {
+    transform: translateY(1px) scale(0.98) !important;
+    transition-duration: 0.08s !important;
+}
+
+/* Icon Buttons & Nav Controls */
+.icon-btn,
+.nav-icon,
+.quantity-btn,
+.qty-increase,
+.qty-decrease,
+.cart-close,
+.modal-close {
+    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+                background-color 0.18s ease,
+                color 0.18s ease,
+                border-color 0.18s ease !important;
+    cursor: pointer;
+}
+
+.icon-btn:hover,
+.nav-icon:hover,
+.quantity-btn:hover,
+.qty-increase:hover,
+.qty-decrease:hover {
+    transform: translateY(-1px) scale(1.06);
+}
+
+.icon-btn:active,
+.nav-icon:active,
+.quantity-btn:active,
+.qty-increase:active,
+.qty-decrease:active,
+.cart-close:active,
+.modal-close:active {
+    transform: scale(0.92) !important;
+    transition-duration: 0.08s !important;
+}
+
+/* Cards Elevation & Micro Lift */
+.card,
+.product-card,
+.store-card,
+.food-card,
+.order-card,
+.feature-card,
+.swimlane-item-card,
+.menu-item-card,
+.favorites-card,
+.checkout-card,
+.account-card,
+.help-card,
+.plan-card,
+.category-item,
+.milestone {
+    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+                border-color 0.2s ease !important;
+    will-change: transform, box-shadow;
+}
+
+.card:hover,
+.product-card:hover,
+.store-card:hover,
+.food-card:hover,
+.order-card:hover,
+.feature-card:hover,
+.swimlane-item-card:hover,
+.menu-item-card:hover,
+.favorites-card:hover,
+.category-item:hover,
+.milestone:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 14px 28px -4px rgba(16, 24, 40, 0.08), 0 4px 10px -2px rgba(16, 24, 40, 0.04) !important;
+    border-color: #d0d5dd;
+}
+
+/* Card Active Click Feedback */
+a.card:active,
+a.product-card:active,
+a.store-card:active,
+a.food-card:active,
+a.order-card:active,
+a.category-item:active,
+.card-clickable:active {
+    transform: translateY(-1px) scale(0.995) !important;
+    transition-duration: 0.08s !important;
+}
+
+/* Subtle image zoom inside card containers */
+.product-card .product-image img,
+.store-card .store-image img,
+.food-card img,
+.swimlane-item-card img,
+.menu-item-card img {
+    transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.product-card:hover .product-image img,
+.store-card:hover .store-image img,
+.food-card:hover img,
+.swimlane-item-card:hover img,
+.menu-item-card:hover img {
+    transform: scale(1.04);
+}
+
+/* Navigation Links */
+.nav-menu a,
+.nav-link,
+.market-home-link {
+    transition: color 0.18s ease, background-color 0.18s ease, transform 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.nav-menu a:hover,
+.nav-link:hover,
+.market-home-link:hover {
+    transform: translateY(-1px);
+}
+
+.nav-menu a:active,
+.nav-link:active,
+.market-home-link:active {
+    transform: scale(0.96) !important;
+}
+
+/* Form Inputs Focus Ring Transition */
+.form-control,
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="tel"],
+input[type="search"],
+select,
+textarea {
+    transition: border-color 0.18s ease, box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.18s ease !important;
+}
+
+.form-control:focus,
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+input[type="number"]:focus,
+input[type="tel"]:focus,
+input[type="search"]:focus,
+select:focus,
+textarea:focus {
+    border-color: #b3261e !important;
+    box-shadow: 0 0 0 3.5px rgba(179, 38, 30, 0.14) !important;
+    outline: none !important;
+}
+
+/* Table Rows Hover Highlighting */
+table tbody tr,
+.table tbody tr {
+    transition: background-color 0.15s ease !important;
+}
+
+table tbody tr:hover,
+.table tbody tr:hover {
+    background-color: #f8fafc;
+}
+
+body.dark-mode table tbody tr:hover,
+body.dark-mode .table tbody tr:hover {
+    background-color: rgba(255, 255, 255, 0.035) !important;
+}
+
+/* Badges & Status Chips */
+.badge,
+.status-badge,
+.cart-count {
+    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s ease !important;
+}
+
+.badge:hover,
+.status-badge:hover {
+    transform: translateY(-1px);
+}
+
+/* Modals & Dropdowns Smooth Entrance */
+@keyframes modernFadeScaleIn {
+    0% {
+        opacity: 0;
+        transform: scale(0.96) translateY(8px);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.modal.fade.show .modal-dialog,
+.user-dropdown.show,
+.notification-dropdown.show,
+.market-search-popover.show {
+    animation: modernFadeScaleIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+/* Accessibility: Respect Reduced Motion Preferences */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* ==========================================================================
+   Mobile View Glassmorphism & Modern E-Commerce Layout (Reference App Match)
+   ========================================================================== */
+@media (max-width: 768px) {
+    /* Prevent page horizontal scrolling and cutoffs */
+    html, body {
+        overflow-x: hidden !important;
+        max-width: 100vw !important;
+        width: 100% !important;
+    }
+
+    /* Glassmorphic Sticky Header */
+    .site-header,
+    .navbar {
+        background: rgba(255, 255, 255, 0.88) !important;
+        backdrop-filter: blur(18px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(18px) saturate(180%) !important;
+        border-bottom: 1px solid rgba(234, 236, 240, 0.75) !important;
+        box-shadow: 0 4px 20px rgba(16, 24, 40, 0.04) !important;
+    }
+
+    body.dark-mode .site-header,
+    body.dark-mode .navbar {
+        background: rgba(18, 24, 36, 0.88) !important;
+        border-color: rgba(51, 65, 85, 0.75) !important;
+    }
+
+    /* Pill Search Bar (Reference Match) */
+    .market-home-search,
+    .search-input-wrap,
+    .panda-menu-search-box {
+        background: rgba(244, 245, 247, 0.85) !important;
+        backdrop-filter: blur(12px) !important;
+        -webkit-backdrop-filter: blur(12px) !important;
+        border: 1px solid rgba(226, 232, 240, 0.9) !important;
+        border-radius: 999px !important;
+        padding: 0 16px !important;
+        min-height: 44px !important;
+        box-shadow: 0 2px 8px rgba(16, 24, 40, 0.03) !important;
+    }
+
+    /* Mobile 2-Column Product Grid (Reference Image Match) */
+    .market-product-grid,
+    .products-grid,
+    .menu-grid,
+    .store-products-grid {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 12px !important;
+        padding: 0 !important;
+    }
+
+    /* Mobile Glassmorphic Product Card Container (Reference Match) */
+    .market-product-card,
+    .product-card,
+    .food-card,
+    .item-card {
+        background: rgba(255, 255, 255, 0.95) !important;
+        backdrop-filter: blur(12px) !important;
+        -webkit-backdrop-filter: blur(12px) !important;
+        border: 1px solid rgba(234, 236, 240, 0.85) !important;
+        border-radius: 18px !important;
+        padding: 10px !important;
+        box-shadow: 0 4px 16px rgba(16, 24, 40, 0.04) !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: space-between !important;
+        overflow: hidden !important;
+        transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease !important;
+    }
+
+    body.dark-mode .market-product-card,
+    body.dark-mode .product-card,
+    body.dark-mode .food-card,
+    body.dark-mode .item-card {
+        background: rgba(30, 41, 59, 0.9) !important;
+        border-color: rgba(51, 65, 85, 0.8) !important;
+    }
+
+    /* Card Inner Image Box (Reference Match) */
+    .product-image-container,
+    .market-product-thumb-wrap,
+    .product-card .product-image,
+    .food-card .food-img-wrap {
+        background: #f4f5f7 !important;
+        border-radius: 14px !important;
+        overflow: hidden !important;
+        aspect-ratio: 1 / 1 !important;
+        width: 100% !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        margin-bottom: 8px !important;
+    }
+
+    body.dark-mode .product-image-container,
+    body.dark-mode .market-product-thumb-wrap,
+    body.dark-mode .product-card .product-image,
+    body.dark-mode .food-card .food-img-wrap {
+        background: #111827 !important;
+    }
+
+    .market-product-card img,
+    .product-card img,
+    .food-card img {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important;
+        border-radius: 14px !important;
+    }
+
+    /* Card Typography & Header with + button */
+    .market-product-title,
+    .product-card h3,
+    .food-card h4 {
+        font-family: 'Outfit', sans-serif !important;
+        font-size: 0.95rem !important;
+        font-weight: 800 !important;
+        color: #101828 !important;
+        margin: 0 0 2px 0 !important;
+        line-height: 1.25 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+
+    body.dark-mode .market-product-title,
+    body.dark-mode .product-card h3,
+    body.dark-mode .food-card h4 {
+        color: #f8fafc !important;
+    }
+
+    .market-product-desc,
+    .product-card p,
+    .food-card .desc {
+        font-size: 0.78rem !important;
+        color: #64748b !important;
+        line-height: 1.35 !important;
+        margin-bottom: 6px !important;
+        display: -webkit-box !important;
+        -webkit-line-clamp: 1 !important;
+        -webkit-box-orient: vertical !important;
+        overflow: hidden !important;
+    }
+
+    .market-product-price-row,
+    .product-price-row,
+    .food-price-row {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        margin-top: auto !important;
+        padding-top: 4px !important;
+    }
+
+    .market-price,
+    .product-price,
+    .price-current {
+        font-size: 1.05rem !important;
+        font-weight: 800 !important;
+        color: #b3261e !important;
+        font-family: 'Outfit', sans-serif !important;
+    }
+
+    .price-original,
+    .market-original-price {
+        font-size: 0.8rem !important;
+        color: #94a3b8 !important;
+        text-decoration: line-through !important;
+        margin-left: 4px !important;
+    }
+
+    /* Action Add button (+) */
+    .card-add-btn,
+    .product-add-btn,
+    .quick-add-btn {
+        width: 32px !important;
+        height: 32px !important;
+        border-radius: 50% !important;
+        background: #fff1f0 !important;
+        color: #b3261e !important;
+        border: 1px solid #fee4e2 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-size: 14px !important;
+        cursor: pointer !important;
+        transition: transform 0.15s ease, background-color 0.15s ease !important;
+    }
+
+    .card-add-btn:active,
+    .product-add-btn:active,
+    .quick-add-btn:active {
+        transform: scale(0.9) !important;
+        background: #b3261e !important;
+        color: #ffffff !important;
+    }
+
+    /* Mobile Categories Horizontal Scroll (Reference Match) */
+    .categories-scroll-row,
+    .category-pills-row,
+    .panda-cat-track {
+        display: flex !important;
+        overflow-x: auto !important;
+        scrollbar-width: none !important;
+        -webkit-overflow-scrolling: touch !important;
+        gap: 12px !important;
+        padding: 4px 2px 12px !important;
+    }
+
+    .categories-scroll-row::-webkit-scrollbar,
+    .category-pills-row::-webkit-scrollbar,
+    .panda-cat-track::-webkit-scrollbar {
+        display: none !important;
+    }
+
+    .category-pill-item,
+    .panda-cat-item {
+        flex-shrink: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        gap: 6px !important;
+        text-decoration: none !important;
+    }
+
+    .category-icon-box,
+    .panda-cat-icon {
+        width: 56px !important;
+        height: 56px !important;
+        border-radius: 18px !important;
+        background: rgba(255, 244, 238, 0.85) !important;
+        backdrop-filter: blur(8px) !important;
+        border: 1px solid rgba(254, 228, 226, 0.8) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-size: 1.4rem !important;
+        color: #b3261e !important;
+        transition: transform 0.18s ease !important;
+    }
+
+    .category-pill-item:active .category-icon-box,
+    .panda-cat-item:active .panda-cat-icon {
+        transform: scale(0.92) !important;
+    }
+
+    .category-pill-label,
+    .panda-cat-label {
+        font-size: 0.76rem !important;
+        font-weight: 700 !important;
+        color: #344054 !important;
+    }
+
+    /* Floating Glassmorphic Mobile Bottom Navigation Bar (Reference Match) */
+    .mobile-bottom-nav {
+        background: rgba(255, 255, 255, 0.88) !important;
+        backdrop-filter: blur(20px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+        border-top: 1px solid rgba(234, 236, 240, 0.8) !important;
+        box-shadow: 0 -4px 24px rgba(16, 24, 40, 0.08) !important;
+        height: 64px !important;
+    }
+
+    body.dark-mode .mobile-bottom-nav {
+        background: rgba(18, 24, 36, 0.88) !important;
+        border-color: rgba(51, 65, 85, 0.8) !important;
+    }
+
+    .mob-nav-item.active {
+        color: #b3261e !important;
+    }
+
+    .mob-nav-item.active .mob-nav-icon {
+        transform: translateY(-2px) scale(1.1) !important;
+    }
+
+    /* Floating Action Buttons & Chat Widgets */
+    .floating-chat-btn,
+    .floating-order-btn,
+    #backToTopBtn {
+        backdrop-filter: blur(12px) !important;
+        -webkit-backdrop-filter: blur(12px) !important;
+    }
 }

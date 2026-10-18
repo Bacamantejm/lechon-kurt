@@ -73,19 +73,18 @@
         </div>
     </footer>
 
-    <!-- Foodpanda Style Mobile Bottom Navigation Bar -->
+    <!-- Modern Mobile Glassmorphic Bottom Navigation Bar (Reference Screen 2) -->
     <nav class="mobile-bottom-nav" aria-label="Mobile Navigation">
         <a href="<?php echo $footer_path_prefix; ?>index.php" class="mob-nav-item <?php echo in_array($current_page ?? '', ['home', 'index', ''], true) ? 'active' : ''; ?>">
             <div class="mob-nav-icon"><i class="fas fa-house"></i></div>
             <span class="mob-nav-label">Home</span>
         </a>
-        <a href="<?php echo $footer_path_prefix; ?>menu.php" class="mob-nav-item <?php echo ($current_page ?? '') === 'menu' ? 'active' : ''; ?>">
-            <div class="mob-nav-icon"><i class="fas fa-utensils"></i></div>
-            <span class="mob-nav-label">Menu</span>
+        <a href="<?php echo $footer_path_prefix; ?>shops.php" class="mob-nav-item <?php echo ($current_page ?? '') === 'shops' ? 'active' : ''; ?>">
+            <div class="mob-nav-icon"><i class="fas fa-store"></i></div>
+            <span class="mob-nav-label">Stores</span>
         </a>
-        <a href="<?php echo $footer_path_prefix; ?>preorder.php" class="mob-nav-item <?php echo ($current_page ?? '') === 'preorder' ? 'active' : ''; ?>">
-            <div class="mob-nav-icon"><i class="fas fa-calendar-check"></i></div>
-            <span class="mob-nav-label">Pre-Order</span>
+        <a href="<?php echo $footer_path_prefix; ?>menu.php" class="mob-nav-item mob-center-action <?php echo ($current_page ?? '') === 'menu' ? 'active' : ''; ?>" title="Order Now">
+            <div class="mob-nav-icon"><i class="fas fa-utensils"></i></div>
         </a>
         <a href="<?php echo $footer_path_prefix; ?><?php echo $is_customer_user_footer ? 'my_orders.php' : 'register.php?mode=login'; ?>" class="mob-nav-item <?php echo in_array($current_page ?? '', ['my_orders', 'orders'], true) ? 'active' : ''; ?>">
             <div class="mob-nav-icon">
@@ -103,19 +102,22 @@
     </nav>
 
     <style>
-    /* Foodpanda Style Mobile Bottom Navigation Styles */
+    /* Reference Screen 2 Mobile Floating Glassmorphic Nav */
     .mobile-bottom-nav {
         display: none;
         position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        height: 60px;
-        background: #ffffff;
-        border-top: 1px solid #eaecf0;
+        bottom: 12px;
+        left: 14px;
+        right: 14px;
+        height: 64px;
+        background: rgba(255, 255, 255, 0.88) !important;
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(234, 236, 240, 0.85);
+        border-radius: 999px;
         z-index: 1250;
-        box-shadow: 0 -4px 16px rgba(16, 24, 40, 0.06);
-        padding: 4px 8px max(4px, env(safe-area-inset-bottom));
+        box-shadow: 0 10px 32px rgba(16, 24, 40, 0.12);
+        padding: 4px 12px;
         justify-content: space-around;
         align-items: center;
     }
@@ -130,7 +132,7 @@
         font-family: 'Plus Jakarta Sans', sans-serif;
         padding: 4px 0;
         gap: 2px;
-        transition: color 0.2s ease, transform 0.2s ease;
+        transition: color 0.18s cubic-bezier(0.16, 1, 0.3, 1), transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
         -webkit-tap-highlight-color: transparent;
         position: relative;
     }
@@ -151,7 +153,28 @@
         color: #b3261e;
     }
     .mob-nav-item.active .mob-nav-icon {
-        transform: scale(1.08);
+        transform: scale(1.1);
+    }
+    /* Floating Center Highlight Button (Screen 2 Reference) */
+    .mob-nav-item.mob-center-action {
+        width: 48px;
+        height: 48px;
+        flex: 0 0 48px;
+        background: linear-gradient(135deg, #b3261e 0%, #981b15 100%);
+        border-radius: 50%;
+        color: #ffffff !important;
+        box-shadow: 0 6px 20px rgba(179, 38, 30, 0.45);
+        transform: translateY(-8px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .mob-nav-item.mob-center-action:active {
+        transform: translateY(-6px) scale(0.94);
+    }
+    .mob-nav-item.mob-center-action .mob-nav-icon {
+        font-size: 1.25rem;
+        color: #ffffff;
     }
     .mob-nav-dot {
         position: absolute;
@@ -163,18 +186,37 @@
         border-radius: 50%;
         border: 1.5px solid #ffffff;
     }
+    body.dark-mode .mobile-bottom-nav {
+        background: rgba(30, 41, 59, 0.88) !important;
+        border-color: rgba(51, 65, 85, 0.85) !important;
+    }
     @media (max-width: 768px) {
         .mobile-bottom-nav {
             display: flex;
         }
         .site-main, main, .main-content {
-            padding-bottom: 84px !important;
+            padding-bottom: 96px !important;
         }
-        .floating-chat-btn, .floating-order-btn, #backToTopBtn {
-            bottom: 72px !important;
+        .floating-chat-btn {
+            bottom: 88px !important;
+            right: 14px !important;
+            width: 44px !important;
+            height: 44px !important;
+            font-size: 17px !important;
+            z-index: 1200 !important;
+        }
+        .floating-order-btn {
+            display: none !important;
+        }
+        #backToTopBtn {
+            bottom: 198px !important;
+            right: 14px !important;
+            width: 40px !important;
+            height: 40px !important;
+            z-index: 1199 !important;
         }
         .footer {
-            padding-bottom: 90px !important;
+            padding-bottom: 100px !important;
         }
     }
     </style>
@@ -1096,6 +1138,14 @@
             transform: translateY(-5px);
             color: #fff;
             box-shadow: 0 16px 28px rgba(12, 18, 28, 0.33);
+        }
+
+        #backToTopBtn:active,
+        .floating-cart-btn:active,
+        .floating-order-btn:active,
+        .floating-chat-btn:active {
+            transform: scale(0.92) !important;
+            transition-duration: 0.08s !important;
         }
 
         .floating-chat-btn.with-timestamp {
