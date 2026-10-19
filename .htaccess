@@ -38,6 +38,10 @@ ServerSignature Off
 
     # Block direct requests to tmp/
     RewriteRule ^tmp/ - [F,L]
+
+    # Clean store orders route: /store/orders/:id -> store/orders.php?id=$1
+    RewriteRule ^store/orders/([0-9]+)/?$ store/orders.php?id=$1 [QSA,L]
+    RewriteRule ^store/orders/?$ store/orders.php [QSA,L]
 </IfModule>
 
 # ─── Security headers ─────────────────────────────────────────────────────────

@@ -239,6 +239,15 @@ try {
                 // Commit transaction
                 mysqli_commit($conn);
 
+                // Automated multi-tenant revenue splitting record
+                try {
+                    require_once __DIR__ . '/includes/CommissionAndWalletService.php';
+                    $wallet_svc = new CommissionAndWalletService($conn);
+                    $wallet_svc->recordOrUpdateSplit((int)$order_id, false);
+                } catch (\Throwable $split_ex) {
+                    error_log('Payment success split sync warning: ' . $split_ex->getMessage());
+                }
+
                 // Notify admins that payment is verified and order is ready for fulfillment workflow.
                 if (function_exists('getAdminUserIds') && function_exists('createNotification')) {
                     $admin_ids = getAdminUserIds($conn);

@@ -173,7 +173,7 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
             color: #f8fafc !important;
         }
 
-        :root { --ink:#171922; --muted:#667085; --line:#efddcd; --rose:#b3261e; --bg:#f8f9fa; --card:#fff; --shadow:0 12px 30px rgba(15,23,42,.1); --primary-color:#b3261e; --primary-dark:#8f261a; --motion-ease:cubic-bezier(.22,1,.36,1); --motion-fast:.22s; --motion-base:.28s; --transition-fast:all var(--motion-fast) var(--motion-ease); --transition-fade:opacity var(--motion-fast) var(--motion-ease), visibility var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease); --transition-lift:transform var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease); }
+        :root { --ink:#171922; --muted:#667085; --line:#efddcd; --rose:#b3261e; --bg:#f8f9fa; --card:#fff; --shadow:0 12px 30px rgba(15,23,42,.1); --primary-color:#b3261e; --primary-dark:#8f261a; --motion-ease:cubic-bezier(0.16, 1, 0.3, 1); --motion-fast:0.2s; --motion-base:0.24s; --transition-fast:all var(--motion-fast) var(--motion-ease); --transition-fade:opacity var(--motion-fast) var(--motion-ease), visibility var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease); --transition-lift:transform var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease); }
         [data-theme="dark"], body.dark-mode { --ink:#f8fafc; --muted:#94a3b8; --line:#334155; --rose:#b3261e; --bg:#121824; --card:#1e293b; --shadow:0 12px 30px rgba(0,0,0,.45); --primary-color:#b3261e; --primary-dark:#981b15; }
         
         * { box-sizing:border-box; }
@@ -1525,8 +1525,42 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
                 align-items: center !important;
                 justify-content: center !important;
             }
-            .market-header-top .logo-link {
+            .market-header-top.has-address-bar .logo-link {
                 display: none !important;
+            }
+            .market-header-top.no-address-bar .logo-link,
+            .market-header-top:not(:has(.market-address-wrap)) .logo-link {
+                display: inline-flex !important;
+                align-items: center !important;
+                gap: 8px !important;
+                min-width: 0 !important;
+                flex-shrink: 1 !important;
+            }
+            .market-header-top.no-address-bar .logo-copy,
+            .market-header-top:not(:has(.market-address-wrap)) .logo-copy {
+                display: flex !important;
+                flex-direction: column !important;
+                min-width: 0 !important;
+            }
+            .market-header-top.no-address-bar .logo-title,
+            .market-header-top:not(:has(.market-address-wrap)) .logo-title {
+                font-size: 0.92rem !important;
+                font-weight: 800 !important;
+                white-space: nowrap !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+                line-height: 1.2 !important;
+            }
+            .market-header-top.no-address-bar .logo-sub,
+            .market-header-top:not(:has(.market-address-wrap)) .logo-sub {
+                display: none !important;
+            }
+            .market-header-top.no-address-bar .logo-icon,
+            .market-header-top:not(:has(.market-address-wrap)) .logo-icon {
+                width: 32px !important;
+                height: 32px !important;
+                border-radius: 8px !important;
+                flex-shrink: 0 !important;
             }
             .standard-top .logo-link {
                 display: inline-flex !important;
@@ -1734,6 +1768,38 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
         @media (max-width: 480px) {
             .logo-title { font-size: 0.98rem; }
             .logo-sub { font-size: 0.58rem; }
+        }
+        @media (max-width: 360px) {
+            .market-header-top {
+                padding: 8px 10px !important;
+                gap: 6px !important;
+            }
+            .header-actions {
+                gap: 4px !important;
+            }
+            .header-actions .icon-btn,
+            .header-actions .mobile-toggle {
+                width: 32px !important;
+                height: 32px !important;
+                min-width: 32px !important;
+                font-size: 0.78rem !important;
+                border-radius: 8px !important;
+            }
+            .user-avatar-btn .user-avatar-initial,
+            .user-avatar-btn .user-avatar-thumb {
+                width: 28px !important;
+                height: 28px !important;
+                font-size: 0.78rem !important;
+            }
+            .market-header-top.no-address-bar .logo-title,
+            .market-header-top:not(:has(.market-address-wrap)) .logo-title {
+                font-size: 0.84rem !important;
+            }
+            .market-header-top.no-address-bar .logo-icon,
+            .market-header-top:not(:has(.market-address-wrap)) .logo-icon {
+                width: 28px !important;
+                height: 28px !important;
+            }
         }
     
         /* Guaranteed Mobile Drawer & Glassmorphic Overlay (Reference Screen 8) */
@@ -1999,7 +2065,7 @@ document.addEventListener('click', function(e) {
 <script>(function(){if(document.documentElement.classList.contains('dark-mode')&&document.body){document.body.classList.add('dark-mode');}})();</script>
 <?php if ($is_market_home_header): ?>
 <header class="site-header market-main-header">
-    <div class="market-header-top">
+    <div class="market-header-top <?php echo in_array($current_page, ['index', 'home', 'pickup'], true) ? 'has-address-bar' : 'no-address-bar'; ?>">
         <a href="<?php echo htmlspecialchars($nav_logo_href); ?>" class="logo-link">
             <span class="logo-icon"><img src="<?php echo $path_prefix; ?>assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block;"></span>
             <span class="logo-copy"><span class="logo-title">Lechon Delights</span><span class="logo-sub">Marketplace</span></span>

@@ -1075,7 +1075,7 @@ include 'includes/header.php';
 
 @media (max-width: 992px) {
     .account-page-v2 {
-        padding-bottom: 140px !important;
+        padding-bottom: 200px !important;
     }
     .account-grid-v2 {
         grid-template-columns: 1fr;

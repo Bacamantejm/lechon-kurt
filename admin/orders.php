@@ -171,6 +171,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
                         mysqli_stmt_close($sync_stmt);
                     }
 
+                    // Auto-settle commission and wallet ledger on delivered
+                    if ($new_status === 'delivered') {
+                        require_once dirname(__DIR__) . '/includes/CommissionAndWalletService.php';
+                        $walletService = CommissionAndWalletService::getInstance($conn);
+                        $walletService->recordOrUpdateSplit((int)$order_id, true);
+                    }
+
                     mysqli_commit($conn);
                     $status_updated = true;
                 } catch (Throwable $e) {

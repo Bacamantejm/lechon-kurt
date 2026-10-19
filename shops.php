@@ -542,24 +542,53 @@ require_once 'includes/header.php';
 }
 
 @media (max-width: 768px) {
-    .market-store-list,
-    .store-list-grid {
-        grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr)) !important;
-        gap: 20px 16px !important;
+    #nearbyShopsGrid {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
+        touch-action: pan-x pan-y !important;
+        scroll-snap-type: x mandatory !important;
+        scroll-behavior: smooth !important;
+        gap: 14px !important;
+        padding: 4px 4px 14px 4px !important;
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+        user-select: none;
+    }
+    #nearbyShopsGrid::-webkit-scrollbar {
+        display: none !important;
+    }
+    #nearbyShopsGrid .market-store-row {
+        flex: 0 0 clamp(230px, 72vw, 275px) !important;
+        width: clamp(230px, 72vw, 275px) !important;
+        min-width: clamp(230px, 72vw, 275px) !important;
+        max-width: clamp(230px, 72vw, 275px) !important;
+        scroll-snap-align: start !important;
+        scroll-snap-stop: normal !important;
+        touch-action: pan-x pan-y !important;
+    }
+    .market-store-list:not(#nearbyShopsGrid),
+    .store-list-grid:not(#nearbyShopsGrid) {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 12px !important;
     }
     .store-card-image-wrap {
-        height: 150px !important;
+        height: 120px !important;
+        border-radius: 14px !important;
     }
 }
 
 @media (max-width: 480px) {
-    .market-store-list,
-    .store-list-grid {
-        grid-template-columns: 1fr !important;
-        gap: 16px !important;
+    .market-store-list:not(#nearbyShopsGrid),
+    .store-list-grid:not(#nearbyShopsGrid) {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 10px !important;
     }
     .store-card-image-wrap {
-        height: 160px !important;
+        height: 110px !important;
     }
 }
 
@@ -1626,6 +1655,51 @@ document.addEventListener('DOMContentLoaded', function () {
     });
     window.addEventListener('marketAddressChanged', syncLocationUpdate);
     window.addEventListener('marketAddressUpdated', syncLocationUpdate);
+
+    // Smooth touch & mouse swipe support for nearby shops carousel
+    const nearbyGrid = document.getElementById('nearbyShopsGrid');
+    if (nearbyGrid) {
+        let isDown = false;
+        let startX = 0;
+        let scrollLeft = 0;
+        let hasMoved = false;
+
+        nearbyGrid.addEventListener('mousedown', function (e) {
+            isDown = true;
+            hasMoved = false;
+            nearbyGrid.style.cursor = 'grabbing';
+            startX = e.pageX - nearbyGrid.offsetLeft;
+            scrollLeft = nearbyGrid.scrollLeft;
+        });
+
+        nearbyGrid.addEventListener('mouseleave', function () {
+            isDown = false;
+            nearbyGrid.style.cursor = '';
+        });
+
+        nearbyGrid.addEventListener('mouseup', function () {
+            isDown = false;
+            nearbyGrid.style.cursor = '';
+        });
+
+        nearbyGrid.addEventListener('mousemove', function (e) {
+            if (!isDown) return;
+            e.preventDefault();
+            const x = e.pageX - nearbyGrid.offsetLeft;
+            const walk = (x - startX) * 1.5;
+            if (Math.abs(walk) > 5) {
+                hasMoved = true;
+            }
+            nearbyGrid.scrollLeft = scrollLeft - walk;
+        });
+
+        nearbyGrid.addEventListener('click', function (e) {
+            if (hasMoved) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        }, true);
+    }
 });
 </script>
 

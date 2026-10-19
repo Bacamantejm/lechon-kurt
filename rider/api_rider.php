@@ -138,11 +138,18 @@ if ($action === 'update_location') {
     }
 
     // Also update any active delivery tracking row
-    $del = getRiderActiveDelivery((int)$rider['id'], $emp_id);
-    if ($del) {
-        $tr_id = (int)$del['id'];
-        mysqli_query($conn, "UPDATE logistics_tracking SET current_latitude = $lat, current_longitude = $lng, last_location_update = NOW() WHERE id = $tr_id");
-    }
+    $r_id = (int)$rider['id'];
+    $where_driver = ($emp_id > 0) ? "(lt.driver_id = $r_id OR lt.driver_id = $emp_id OR o.rider_id = $r_id)" : "(lt.driver_id = $r_id OR o.rider_id = $r_id)";
+    mysqli_query($conn, "
+        UPDATE logistics_tracking lt
+        JOIN orders o ON lt.order_id = o.id
+        SET lt.current_latitude = $lat,
+            lt.current_longitude = $lng,
+            lt.last_location_update = NOW(),
+            lt.updated_at = NOW()
+        WHERE $where_driver
+          AND lt.current_status IN ('assigned', 'arrived_at_restaurant', 'picked_up', 'on_the_way', 'arriving')
+    ");
 
     jsonRes(['success' => true, 'latitude' => $lat, 'longitude' => $lng]);
 }
@@ -410,6 +417,9 @@ if ($action === 'advance_step') {
     // Also update order status if delivered
     if ($target_step === 'delivered' || $target_step === 'completed') {
         mysqli_query($conn, "UPDATE orders SET status = 'delivered', actual_delivery_time = NOW() WHERE id = $order_id");
+        require_once dirname(__DIR__) . '/includes/CommissionAndWalletService.php';
+        $walletService = CommissionAndWalletService::getInstance($conn);
+        $walletService->recordOrUpdateSplit((int)$order_id, true);
     }
 
     // Log history
@@ -681,6 +691,9 @@ if ($action === 'complete_delivery') {
 
     // 4. Mark orders delivered
     mysqli_query($conn, "UPDATE orders SET status = 'delivered', has_proof_of_delivery = 1, actual_delivery_time = NOW(), updated_at = NOW() WHERE id = $order_id");
+    require_once dirname(__DIR__) . '/includes/CommissionAndWalletService.php';
+    $walletService = CommissionAndWalletService::getInstance($conn);
+    $walletService->recordOrUpdateSplit((int)$order_id, true);
 
     // 5. Update rider delivery stats and duty status back to online
     mysqli_query($conn, "

@@ -102,27 +102,31 @@
     </nav>
 
     <style>
-    /* Reference Screen 2 Mobile Floating Glassmorphic Nav */
+    /* Universal Floating Glassmorphic Mobile Bottom Nav Pill */
     .mobile-bottom-nav {
         display: none;
         position: fixed;
-        bottom: 12px;
-        left: 14px;
-        right: 14px;
+        bottom: 16px;
+        left: 16px;
+        right: 16px;
         height: 64px;
-        background: rgba(255, 255, 255, 0.88) !important;
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
+        background: rgba(255, 255, 255, 0.85) !important;
+        backdrop-filter: blur(16px) saturate(180%);
+        -webkit-backdrop-filter: blur(16px) saturate(180%);
         border: 1px solid rgba(234, 236, 240, 0.85);
-        border-radius: 999px;
+        border-radius: 26px;
         z-index: 1250;
-        box-shadow: 0 10px 32px rgba(16, 24, 40, 0.12);
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.08);
         padding: 4px 12px;
         justify-content: space-around;
         align-items: center;
+        transform: translate3d(0, 0, 0);
+        will-change: transform;
     }
     .mob-nav-item {
         flex: 1;
+        min-height: 44px;
+        min-width: 44px;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -132,9 +136,13 @@
         font-family: 'Plus Jakarta Sans', sans-serif;
         padding: 4px 0;
         gap: 2px;
-        transition: color 0.18s cubic-bezier(0.16, 1, 0.3, 1), transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+        transition: color 0.15s ease-out, transform 0.15s ease-out;
         -webkit-tap-highlight-color: transparent;
         position: relative;
+    }
+    .mob-nav-item:active {
+        transform: scale(0.97);
+        transition-duration: 0.15s;
     }
     .mob-nav-icon {
         position: relative;
@@ -155,22 +163,27 @@
     .mob-nav-item.active .mob-nav-icon {
         transform: scale(1.1);
     }
-    /* Floating Center Highlight Button (Screen 2 Reference) */
+    /* Floating Center Highlight Action Button */
     .mob-nav-item.mob-center-action {
-        width: 48px;
-        height: 48px;
-        flex: 0 0 48px;
-        background: linear-gradient(135deg, #b3261e 0%, #981b15 100%);
+        width: 50px;
+        height: 50px;
+        flex: 0 0 50px;
+        min-height: 50px;
+        min-width: 50px;
+        background: #b3261e !important;
         border-radius: 50%;
         color: #ffffff !important;
-        box-shadow: 0 6px 20px rgba(179, 38, 30, 0.45);
-        transform: translateY(-8px);
+        box-shadow: 0 6px 20px rgba(179, 38, 30, 0.38);
+        transform: translateY(-8px) translate3d(0, 0, 0);
         display: flex;
         align-items: center;
         justify-content: center;
+        border: 2.5px solid #ffffff;
+        transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
     }
     .mob-nav-item.mob-center-action:active {
-        transform: translateY(-6px) scale(0.94);
+        transform: translateY(-6px) scale(0.97) !important;
+        transition-duration: 0.15s;
     }
     .mob-nav-item.mob-center-action .mob-nav-icon {
         font-size: 1.25rem;
@@ -187,8 +200,12 @@
         border: 1.5px solid #ffffff;
     }
     body.dark-mode .mobile-bottom-nav {
-        background: rgba(30, 41, 59, 0.88) !important;
-        border-color: rgba(51, 65, 85, 0.85) !important;
+        background: rgba(30, 41, 59, 0.85) !important;
+        border-color: rgba(51, 65, 85, 0.8) !important;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.35);
+    }
+    body.dark-mode .mob-nav-item.mob-center-action {
+        border-color: #1e293b !important;
     }
     @media (max-width: 768px) {
         .mobile-bottom-nav {
@@ -1227,18 +1244,23 @@
                 align-items: flex-start;
             }
 
-            #backToTopBtn,
+            #backToTopBtn {
+                bottom: 92px !important;
+                right: 14px !important;
+                width: 42px !important;
+                height: 42px !important;
+                font-size: 16px !important;
+                z-index: 1190 !important;
+                box-shadow: 0 4px 14px rgba(16, 24, 40, 0.18) !important;
+            }
+
             .floating-cart-btn,
             .floating-order-btn,
             .floating-chat-btn {
                 right: 16px;
-                width: 56px;
-                height: 56px;
-                font-size: 20px;
-            }
-
-            #backToTopBtn {
-                bottom: 14px;
+                width: 52px;
+                height: 52px;
+                font-size: 19px;
             }
 
             .floating-chat-btn {
@@ -1543,8 +1565,11 @@
                         ? `<div class="ongoing-order-driver"><i class="fas fa-box-open"></i> ${itemSummary}</div>`
                         : '<div class="ongoing-order-driver"><i class="fas fa-calendar-check"></i> Pre-order update in progress</div>';
                 } else {
+                    const driverRatingHtml = (order.driver_rating && parseFloat(order.driver_rating) > 0)
+                        ? ` <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:700;color:#f59e0b;background:#fffbeb;padding:1px 6px;border-radius:4px;border:1px solid #fef3c7;margin-left:4px;"><i class="fas fa-star" style="font-size:10px;"></i> ${parseFloat(order.driver_rating).toFixed(1)}</span>`
+                        : '';
                     driver = order.driver_name
-                        ? `<div class="ongoing-order-driver"><i class="fas fa-user"></i> Driver: ${escapeOrderHtml(order.driver_name)}</div>`
+                        ? `<div class="ongoing-order-driver"><i class="fas fa-user"></i> Driver: ${escapeOrderHtml(order.driver_name)}${driverRatingHtml}</div>`
                         : '<div class="ongoing-order-driver"><i class="fas fa-user-clock"></i> Driver assignment in progress</div>';
                 }
                 const total = formatOrderCurrency(order.total_amount);

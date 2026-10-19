@@ -38,6 +38,24 @@ if ($recent_res) {
     }
 }
 
+// Recent Customer Reviews for this rider
+$rider_reviews = [];
+$rev_query = mysqli_query($conn, "
+    SELECT dr.rating, dr.comment, dr.created_at, o.order_number, u.full_name AS customer_name
+    FROM delivery_reviews dr
+    JOIN logistics_tracking lt ON dr.order_id = lt.order_id
+    JOIN orders o ON dr.order_id = o.id
+    LEFT JOIN users u ON dr.user_id = u.id
+    WHERE lt.driver_id = $rider_pk
+    ORDER BY dr.id DESC
+    LIMIT 3
+");
+if ($rev_query) {
+    while ($rev = mysqli_fetch_assoc($rev_query)) {
+        $rider_reviews[] = $rev;
+    }
+}
+
 // Available Unassigned Orders Pool (Open Deliveries)
 $initial_available_orders = [];
 $avail_store_filter = "";
@@ -184,6 +202,51 @@ if ($init_avail_res) {
                         <i class="fas fa-chevron-right text-muted small"></i>
                     </a>
                 </div>
+            </div>
+
+            <!-- Customer Rating & Reviews Card -->
+            <div class="rider-card mb-3">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <h6 class="fw-bold mb-0 text-muted text-uppercase" style="font-size: 11px;">
+                        <i class="fas fa-star text-warning me-1"></i> Customer Ratings
+                    </h6>
+                    <span class="badge" style="background:#fffaeb; color:#b54708; border:1px solid #fedf89; font-size:11px; font-weight:700;">
+                        ★ <?php echo number_format((float)($rider['rating'] ?? 5.0), 1); ?> / 5.0
+                    </span>
+                </div>
+
+                <?php if (!empty($rider_reviews)): ?>
+                    <div class="d-flex flex-column gap-2 mt-2">
+                        <?php foreach ($rider_reviews as $r_rev): ?>
+                            <div class="p-2 rounded" style="background: #f8fafc; border: 1px solid var(--border-neutral); font-size: 11.5px;">
+                                <div class="d-flex align-items-center justify-content-between mb-1">
+                                    <span class="fw-bold" style="color: var(--primary-ink);">
+                                        #<?php echo htmlspecialchars($r_rev['order_number'] ?? ''); ?>
+                                    </span>
+                                    <span class="text-warning">
+                                        <?php for ($s = 1; $s <= 5; $s++): ?>
+                                            <i class="<?php echo $s <= (int)$r_rev['rating'] ? 'fas' : 'far'; ?> fa-star" style="font-size: 10px;"></i>
+                                        <?php endfor; ?>
+                                    </span>
+                                </div>
+                                <?php if (!empty($r_rev['comment'])): ?>
+                                    <div class="text-muted" style="font-style: italic; line-height: 1.3;">
+                                        "<?php echo htmlspecialchars($r_rev['comment']); ?>"
+                                    </div>
+                                <?php else: ?>
+                                    <div class="text-muted" style="font-size: 10.5px;">Customer gave a <?php echo (int)$r_rev['rating']; ?>-star rating.</div>
+                                <?php endif; ?>
+                                <div class="text-muted mt-1" style="font-size: 9.5px;">
+                                    <?php echo date('M d, Y', strtotime($r_rev['created_at'])); ?>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php else: ?>
+                    <p class="small text-muted mb-0 mt-1" style="font-size: 11.5px;">
+                        No customer reviews yet. Deliver orders on time with great service to receive 5-star ratings!
+                    </p>
+                <?php endif; ?>
             </div>
 
             <!-- Quick Action / Status Tips -->

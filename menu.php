@@ -3305,8 +3305,11 @@ document.addEventListener('click', function(e) {
 .panda-cat-strip-wrap {
     flex: 1 !important;
     overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-x pan-y !important;
     scroll-behavior: smooth !important;
     scrollbar-width: none !important;
+    scroll-snap-type: x proximity !important;
 }
 
 .panda-cat-strip-wrap::-webkit-scrollbar {
@@ -3332,6 +3335,9 @@ document.addEventListener('click', function(e) {
     border-bottom: 3px solid transparent !important;
     transition: all 0.2s ease !important;
     cursor: pointer !important;
+    flex-shrink: 0 !important;
+    scroll-snap-align: center !important;
+    touch-action: pan-x pan-y !important;
 }
 
 .panda-cat-tab:hover {
@@ -4778,6 +4784,37 @@ document.addEventListener('click', function(e) {
         grid-template-columns: 1fr;
     }
 
+    .menu-shops-directory-grid {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
+        touch-action: pan-x pan-y !important;
+        scroll-snap-type: x mandatory !important;
+        scroll-behavior: smooth !important;
+        gap: 14px !important;
+        padding: 4px 4px 16px 4px !important;
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    .menu-shops-directory-grid::-webkit-scrollbar {
+        display: none !important;
+    }
+
+    .menu-shops-directory-grid .menu-shop-card {
+        flex: 0 0 clamp(220px, 72vw, 270px) !important;
+        width: clamp(220px, 72vw, 270px) !important;
+        min-width: clamp(220px, 72vw, 270px) !important;
+        max-width: clamp(220px, 72vw, 270px) !important;
+        scroll-snap-align: start !important;
+        box-sizing: border-box !important;
+    }
+
     .menu-filter-bar {
         flex-direction: column;
         align-items: stretch;
@@ -5351,9 +5388,54 @@ body {
 }
 
 @media (max-width: 768px) {
+    .preview-modal-content {
+        width: 100% !important;
+        max-width: 100% !important;
+        height: 100% !important;
+        max-height: 100vh !important;
+        max-height: 100dvh !important;
+        border-radius: 0 !important;
+        top: 0 !important;
+        left: 0 !important;
+        transform: none !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+    .product-preview-modal.active .preview-modal-content {
+        transform: none !important;
+    }
     .preview-body {
-        flex-direction: column;
-        overflow-y: auto;
+        flex: 1 1 auto !important;
+        flex-direction: column !important;
+        overflow-y: auto !important;
+        max-height: none !important;
+        padding-bottom: 90px !important;
+    }
+    .preview-image {
+        min-width: 0 !important;
+        width: 100% !important;
+        height: 230px !important;
+        flex: 0 0 230px !important;
+    }
+    .preview-details {
+        padding: 16px 18px !important;
+    }
+    .preview-details h3 {
+        font-size: 1.25rem !important;
+    }
+    .preview-actions-wrap {
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        background: rgba(255, 255, 255, 0.98) !important;
+        backdrop-filter: blur(12px) !important;
+        -webkit-backdrop-filter: blur(12px) !important;
+        border-top: 1px solid #eaecf0 !important;
+        padding: 12px 16px !important;
+        margin: 0 !important;
+        z-index: 100 !important;
+        box-shadow: 0 -4px 16px rgba(16, 24, 40, 0.08) !important;
     }
 }
 
@@ -6319,14 +6401,73 @@ body {
 }
 @media (max-width: 768px) {
     .menu-section {
-        padding-bottom: 140px !important;
+        padding-bottom: 200px !important;
     }
     .menu-items-grid {
         grid-template-columns: 1fr !important;
-        gap: 16px !important;
+        gap: 12px !important;
+    }
+    .menu-item {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        padding: 10px 12px !important;
+        gap: 12px !important;
+        border-radius: 16px !important;
+        background: #ffffff !important;
+        border: 1px solid #eaecf0 !important;
+    }
+    .menu-item .item-image {
+        width: 88px !important;
+        height: 88px !important;
+        flex: 0 0 88px !important;
+        border-radius: 12px !important;
+        margin: 0 !important;
+        overflow: hidden !important;
+    }
+    .menu-item .item-content {
+        padding: 0 !important;
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+    }
+    .menu-item .item-title {
+        font-size: 0.94rem !important;
+        line-height: 1.25 !important;
+        margin: 0 0 3px 0 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+    .menu-item .item-description {
+        display: -webkit-box !important;
+        -webkit-line-clamp: 2 !important;
+        -webkit-box-orient: vertical !important;
+        overflow: hidden !important;
+        font-size: 0.76rem !important;
+        margin-bottom: 6px !important;
+        line-height: 1.35 !important;
+        color: #667085 !important;
+    }
+    .menu-item .item-card-bottom {
+        margin-top: 4px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+    }
+    .menu-item .panda-price-pill {
+        font-size: 0.88rem !important;
+        font-weight: 800 !important;
+        padding: 3px 8px !important;
+    }
+    .menu-item .panda-quick-add-btn {
+        width: 32px !important;
+        height: 32px !important;
+        padding: 0 !important;
+        font-size: 0.82rem !important;
+        border-radius: 8px !important;
     }
     .storefront-copy h1 {
-        font-size: 1.8rem !important;
+        font-size: 1.5rem !important;
     }
 }
 @media (max-width: 480px) {
@@ -6976,8 +7117,32 @@ body.dark-mode .store-review-filter-btn.active {
         font-size: 1.25rem !important;
     }
     .menu-shops-directory-grid {
-        grid-template-columns: 1fr !important;
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
+        touch-action: pan-x pan-y !important;
+        scroll-snap-type: x mandatory !important;
+        scroll-behavior: smooth !important;
         gap: 14px !important;
+        padding: 4px 4px 14px 4px !important;
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+        user-select: none;
+    }
+    .menu-shops-directory-grid::-webkit-scrollbar {
+        display: none !important;
+    }
+    .menu-shops-directory-grid .menu-shop-card {
+        flex: 0 0 clamp(225px, 70vw, 265px) !important;
+        width: clamp(225px, 70vw, 265px) !important;
+        min-width: clamp(225px, 70vw, 265px) !important;
+        max-width: clamp(225px, 70vw, 265px) !important;
+        scroll-snap-align: start !important;
+        scroll-snap-stop: normal !important;
+        touch-action: pan-x pan-y !important;
     }
     
     /* Sleek Floating Quick Order Bar */

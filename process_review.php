@@ -72,6 +72,31 @@ try {
             mysqli_stmt_bind_param($delivery_stmt, "iiis", $order_id, $user_id, $delivery_rating, $delivery_comment);
             mysqli_stmt_execute($delivery_stmt);
             mysqli_stmt_close($delivery_stmt);
+
+            // Sync driver's rating in riders table
+            $drv_stmt = mysqli_prepare($conn, "SELECT driver_id FROM logistics_tracking WHERE order_id = ? LIMIT 1");
+            if ($drv_stmt) {
+                mysqli_stmt_bind_param($drv_stmt, "i", $order_id);
+                mysqli_stmt_execute($drv_stmt);
+                $drv_res = mysqli_stmt_get_result($drv_stmt);
+                if ($drv_row = mysqli_fetch_assoc($drv_res)) {
+                    $d_id = (int)($drv_row['driver_id'] ?? 0);
+                    if ($d_id > 0) {
+                        $avg_q = mysqli_query($conn, "
+                            SELECT AVG(dr.rating) AS avg_rating 
+                            FROM delivery_reviews dr 
+                            INNER JOIN logistics_tracking lt ON dr.order_id = lt.order_id 
+                            WHERE lt.driver_id = $d_id
+                        ");
+                        if ($avg_q && $avg_data = mysqli_fetch_assoc($avg_q)) {
+                            $new_avg = round((float)($avg_data['avg_rating'] ?? 5.0), 2);
+                            mysqli_query($conn, "UPDATE riders SET rating = $new_avg WHERE id = $d_id");
+                            mysqli_query($conn, "UPDATE driver_delivery_stats SET avg_rating = $new_avg WHERE driver_id = $d_id");
+                        }
+                    }
+                }
+                mysqli_stmt_close($drv_stmt);
+            }
         }
     }
 

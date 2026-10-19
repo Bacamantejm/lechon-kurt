@@ -2695,7 +2695,7 @@ body.dark-mode .leaflet-container {
                         <div class="form-group" style="margin-bottom: 20px;">
                             <label for="loginEmail" style="display:block; margin-bottom:8px; color:#333; font-weight:600; font-size:0.95rem;">Email Address *</label>
                             <div class="input-with-icon" style="position: relative;">
-                                <input type="email" id="loginEmail" name="email" class="form-control" required placeholder="Enter your email address" autocomplete="email" style="padding-left: 44px;">
+                                <input type="email" id="loginEmail" name="email" class="form-control" required placeholder="Enter your email address" autocomplete="email" style="padding-left: 44px;" value="<?php echo htmlspecialchars($_COOKIE['remember_email'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
                                 <i class="fas fa-envelope" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: #94a3b8;"></i>
                             </div>
                         </div>
@@ -2716,7 +2716,7 @@ body.dark-mode .leaflet-container {
 
                         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:24px;">
                             <label style="display:flex; align-items:center; gap:8px; font-size:0.9rem; color:#475467; cursor:pointer; margin:0;">
-                                <input type="checkbox" name="remember" value="1" style="accent-color:#b3261e; width:16px; height:16px;">
+                                <input type="checkbox" name="remember" value="1" style="accent-color:#b3261e; width:16px; height:16px;" <?php echo !empty($_COOKIE['remember_email']) ? 'checked' : ''; ?>>
                                 <span>Remember me</span>
                             </label>
                         </div>

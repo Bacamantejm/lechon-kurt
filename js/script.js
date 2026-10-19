@@ -30,7 +30,13 @@ document.addEventListener('DOMContentLoaded', function() {
             '.menu-shops-directory-grid',
             '.panda-cat-strip-wrap',
             '.bestsellers-grid',
-            '.mobile-cat-carousel'
+            '.mobile-cat-carousel',
+            '.m-ref-categories-row',
+            '.m-ref-popular-chips-row',
+            '.top-shops-swipe-grid',
+            '.partner-store-deals-grid',
+            '.first-user-deals-grid',
+            '.market-store-list.store-list-grid'
         ];
         
         sliderSelectors.forEach(function(selector) {

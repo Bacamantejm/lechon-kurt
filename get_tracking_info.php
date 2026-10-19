@@ -46,12 +46,15 @@ $tracking_info = $logisticsService->getTrackingByOrderId($order_id);
 // Check if a delivery review has already been submitted for this order
 $delivery_review_exists = false;
 $review_check_stmt = $conn->prepare("SELECT id FROM delivery_reviews WHERE order_id = ? LIMIT 1");
-$review_check_stmt->bind_param("i", $order_id);
-$review_check_stmt->execute();
-if ($review_check_stmt->get_result()->num_rows > 0) {
-    $delivery_review_exists = true;
+if ($review_check_stmt) {
+    $review_check_stmt->bind_param("i", $order_id);
+    $review_check_stmt->execute();
+    $res_rev = $review_check_stmt->get_result();
+    if ($res_rev && $res_rev->num_rows > 0) {
+        $delivery_review_exists = true;
+    }
+    $review_check_stmt->close();
 }
-$review_check_stmt->close();
 
 if ($tracking_info) {
     $driver_latitude = null;
@@ -66,17 +69,17 @@ if ($tracking_info) {
         $driver_longitude = (float)$tracking_info['current_longitude'];
     }
 
-    // Check latest coordinates from riders table
+    // Check latest coordinates from riders and employees_geo_tracking tables
     if (!empty($tracking_info['driver_id'])) {
         $driver_id = (int)$tracking_info['driver_id'];
 
-        $rider_geo_stmt = $conn->prepare("SELECT current_latitude, current_longitude, last_location_update FROM riders WHERE id = ? LIMIT 1");
+        $rider_geo_stmt = $conn->prepare("SELECT current_latitude, current_longitude, last_location_update FROM riders WHERE id = ? OR employee_id = ? OR user_id = ? ORDER BY last_location_update DESC LIMIT 1");
         if ($rider_geo_stmt) {
-            $rider_geo_stmt->bind_param("i", $driver_id);
+            $rider_geo_stmt->bind_param("iii", $driver_id, $driver_id, $driver_id);
             $rider_geo_stmt->execute();
             $r_geo_row = $rider_geo_stmt->get_result()->fetch_assoc();
             $rider_geo_stmt->close();
-            if ($r_geo_row && isset($r_geo_row['current_latitude']) && is_numeric($r_geo_row['current_latitude'])) {
+            if ($r_geo_row && isset($r_geo_row['current_latitude']) && is_numeric($r_geo_row['current_latitude']) && (float)$r_geo_row['current_latitude'] != 0) {
                 $r_time = !empty($r_geo_row['last_location_update']) ? strtotime($r_geo_row['last_location_update']) : 0;
                 $lt_time = !empty($location_updated_at) ? strtotime($location_updated_at) : 0;
                 if ($driver_latitude === null || $r_time >= $lt_time) {
@@ -88,30 +91,26 @@ if ($tracking_info) {
             }
         }
 
-        if ($driver_latitude === null || $driver_longitude === null) {
-            $geo_stmt = $conn->prepare(
-                "SELECT current_latitude, current_longitude, last_update
-                 FROM employees_geo_tracking
-                 WHERE employee_id = ?
-                 LIMIT 1"
-            );
-            if ($geo_stmt) {
-                $geo_stmt->bind_param("i", $driver_id);
-                $geo_stmt->execute();
-                $geo_row = $geo_stmt->get_result()->fetch_assoc();
-                $geo_stmt->close();
+        $geo_stmt = $conn->prepare(
+            "SELECT current_latitude, current_longitude, last_update
+             FROM employees_geo_tracking
+             WHERE employee_id = ? OR employee_id IN (SELECT employee_id FROM riders WHERE id = ? OR user_id = ?)
+             ORDER BY last_update DESC LIMIT 1"
+        );
+        if ($geo_stmt) {
+            $geo_stmt->bind_param("iii", $driver_id, $driver_id, $driver_id);
+            $geo_stmt->execute();
+            $geo_row = $geo_stmt->get_result()->fetch_assoc();
+            $geo_stmt->close();
 
-                if ($geo_row) {
-                    if (isset($geo_row['current_latitude']) && is_numeric($geo_row['current_latitude'])) {
-                        $driver_latitude = (float)$geo_row['current_latitude'];
-                    }
-                    if (isset($geo_row['current_longitude']) && is_numeric($geo_row['current_longitude'])) {
-                        $driver_longitude = (float)$geo_row['current_longitude'];
-                    }
-                    if (!empty($geo_row['last_update'])) {
-                        $location_updated_at = $geo_row['last_update'];
-                        $location_source = 'employees_geo_tracking';
-                    }
+            if ($geo_row && isset($geo_row['current_latitude']) && is_numeric($geo_row['current_latitude']) && (float)$geo_row['current_latitude'] != 0) {
+                $eg_time = !empty($geo_row['last_update']) ? strtotime($geo_row['last_update']) : 0;
+                $cur_time = !empty($location_updated_at) ? strtotime($location_updated_at) : 0;
+                if ($driver_latitude === null || $eg_time >= $cur_time) {
+                    $driver_latitude = (float)$geo_row['current_latitude'];
+                    $driver_longitude = (float)$geo_row['current_longitude'];
+                    $location_updated_at = $geo_row['last_update'];
+                    $location_source = 'employees_geo_tracking';
                 }
             }
         }
@@ -218,6 +217,7 @@ if ($tracking_info) {
         'driver_name' => $has_driver ? ($tracking_info['driver_name'] ?: 'Assigned Rider') : null,
         'driver_phone' => $has_driver ? ($tracking_info['driver_phone'] ?? null) : null,
         'driver_vehicle' => $has_driver ? ($tracking_info['driver_vehicle'] ?? 'Motorcycle') : null,
+        'driver_rating' => $has_driver ? (isset($tracking_info['driver_rating']) && is_numeric($tracking_info['driver_rating']) ? number_format((float)$tracking_info['driver_rating'], 1) : '5.0') : '5.0',
         'driver_id' => $has_driver ? intval($tracking_info['driver_id'] ?? 0) : 0,
         'tracking_id' => intval($tracking_info['id'] ?? 0),
         'latitude' => $driver_latitude,

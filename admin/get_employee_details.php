@@ -16,9 +16,14 @@ if (hrIsPartnerScopeEnabled($conn) && !hrEmployeeIdInScope($conn, $employee_id))
     die("Employee not found");
 }
 
-$query = "SELECT e.*, d.department_name, COALESCE(jp.position_title, e.position) AS position_label FROM employees e
+$query = "SELECT e.*, d.department_name, u.user_type, u.email as user_email, u.profile_image as user_profile_image,
+                 r.name as role_name,
+                 COALESCE(jp.position_title, e.position) AS position_label 
+          FROM employees e
           LEFT JOIN departments d ON e.department_id = d.id
           LEFT JOIN job_positions jp ON jp.id = e.position_id
+          LEFT JOIN users u ON e.user_id = u.id
+          LEFT JOIN roles r ON u.role_id = r.id
           WHERE e.id = ?";
 $stmt = mysqli_prepare($conn, $query);
 mysqli_stmt_bind_param($stmt, "i", $employee_id);
@@ -36,9 +41,32 @@ if (isset($_GET['json'])) {
     echo json_encode($employee);
     exit;
 }
+
+$photo_src = !empty($employee['photo']) ? '../' . ltrim($employee['photo'], '/') : (!empty($employee['user_profile_image']) ? '../' . ltrim($employee['user_profile_image'], '/') : '');
+$role_display = !empty($employee['role_name']) ? (function_exists('getRoleDisplayName') ? getRoleDisplayName($employee['role_name']) : ucwords(str_replace('_', ' ', $employee['role_name']))) : 'No Login Account';
+$role_display = preg_replace('/\s*\(.*\)\s*/', '', (string)$role_display);
+$initials = strtoupper(substr($employee['first_name'] ?? 'E', 0, 1) . substr($employee['last_name'] ?? '', 0, 1));
 ?>
 
 <div class="employee-details-wrap">
+    <!-- Header Avatar Profile Banner -->
+    <div class="d-flex align-items-center gap-3 p-3 mb-3 rounded" style="background: #ffffff; border: 1px solid #eaecf0; box-shadow: 0 1px 3px rgba(16,24,40,0.04);">
+        <?php if (!empty($photo_src) && file_exists(dirname(__DIR__) . '/' . ltrim($photo_src, '../'))): ?>
+            <img src="<?php echo htmlspecialchars($photo_src); ?>" alt="Photo" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 3px solid #f2f4f7;">
+        <?php else: ?>
+            <div style="width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, #b3261e, #d93829); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 22px; border: 3px solid #f2f4f7;">
+                <?php echo htmlspecialchars($initials); ?>
+            </div>
+        <?php endif; ?>
+        <div class="flex-grow-1">
+            <h5 class="fw-bold mb-0 text-dark"><?php echo htmlspecialchars(formatEmployeeFullName($employee['first_name'] ?? '', $employee['middle_initial'] ?? '', $employee['last_name'] ?? '', $employee['suffix'] ?? '')); ?></h5>
+            <p class="text-muted small mb-1"><?php echo htmlspecialchars($employee['position_label']); ?> &bull; <?php echo htmlspecialchars($employee['department_name'] ?? 'Unassigned'); ?></p>
+            <span class="badge" style="background: <?php echo !empty($employee['role_name']) ? '#eff8ff' : '#f8f9fa'; ?>; color: <?php echo !empty($employee['role_name']) ? '#175cd3' : '#667085'; ?>; border: 1px solid <?php echo !empty($employee['role_name']) ? '#b2ddff' : '#eaecf0'; ?>; font-size: 11px; padding: 2px 8px; border-radius: 10px;">
+                <i class="fas fa-shield-alt me-1"></i> System Role: <?php echo htmlspecialchars($role_display); ?>
+            </span>
+        </div>
+    </div>
+
     <!-- Section 1: Identity & Role -->
     <div class="form-section-card mb-3">
         <div class="form-section-head">

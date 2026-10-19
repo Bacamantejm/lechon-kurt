@@ -505,6 +505,7 @@ if (!function_exists('getFranchiseScopedOrderExistsSql')) {
             WHERE o_scope.id = {$order_id_expr}
               AND (
                   o_scope.seller_id = {$owner_id}
+                  OR o_scope.store_id IN (SELECT store_id FROM store_locations WHERE owner_user_id = {$owner_id})
                   OR o_scope.pickup_location IN (SELECT store_id FROM store_locations WHERE owner_user_id = {$owner_id})
                   OR (
                       o_scope.special_instructions IS NOT NULL 
@@ -530,12 +531,14 @@ if (!function_exists('getFranchiseScopedPreOrderExistsSql')) {
             return '1=0';
         }
 
-        $seller_scope_condition = getFranchiseSellerScopeConditionSql($conn, 'p_scope.seller_id', $seller_scope_owner_id);
-        if ($seller_scope_condition === '1=0') {
+        $owner_id = (int)$seller_scope_owner_id;
+        if ($owner_id <= 0) {
             return '1=0';
         }
 
-        return "EXISTS (
+        $seller_scope_condition = getFranchiseSellerScopeConditionSql($conn, 'p_scope.seller_id', $owner_id);
+
+        return "((EXISTS (
             SELECT 1
             FROM pre_orders po_scope
             INNER JOIN products p_scope
@@ -546,7 +549,20 @@ if (!function_exists('getFranchiseScopedPreOrderExistsSql')) {
                 )
             WHERE po_scope.id = {$pre_order_id_expr}
               AND {$seller_scope_condition}
-        )";
+        )) OR (EXISTS (
+            SELECT 1
+            FROM pre_orders po_scope
+            WHERE po_scope.id = {$pre_order_id_expr}
+              AND EXISTS (
+                  SELECT 1 FROM store_locations sl
+                  WHERE sl.owner_user_id = {$owner_id}
+                    AND (
+                        po_scope.pickup_location LIKE CONCAT('%', sl.store_name, '%')
+                        OR po_scope.pickup_location LIKE CONCAT('%', sl.city, '%')
+                        OR (po_scope.special_instructions IS NOT NULL AND po_scope.special_instructions LIKE CONCAT('%', sl.store_name, '%'))
+                    )
+              )
+        )))";
     }
 }
 

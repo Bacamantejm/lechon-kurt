@@ -918,21 +918,22 @@ body {
 .admin-profile {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    padding: 0;
-    width: 38px;
-    height: 38px;
-    min-width: 38px;
+    justify-content: flex-end;
+    padding: 3px 6px 3px 12px;
+    width: auto;
+    min-width: unset;
+    height: auto;
     background: transparent;
-    border-radius: 50%;
-    border: none;
+    border-radius: 24px;
+    border: 1px solid transparent;
     box-shadow: none;
     position: relative;
     cursor: pointer;
-    transition: transform 0.2s ease;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+    flex-shrink: 0;
 }
 
-.admin-profile > span:not(.admin-profile-avatar),
+.admin-profile > span:not(.admin-profile-avatar):not(.admin-profile-meta-wrap *),
 .admin-profile-name,
 .admin-profile-caret,
 .admin-profile > i:not(.admin-profile-dropdown i) {
@@ -941,7 +942,9 @@ body {
 
 .admin-profile:hover {
     box-shadow: none;
-    transform: scale(1.05);
+    transform: none;
+    background: rgba(0, 0, 0, 0.04);
+    border-color: #eaecf0;
 }
 
 .admin-profile.open {
@@ -2838,68 +2841,111 @@ body.dark-mode .emp-btn-cancel:hover {
         min-width: 0;
     }
 
+    /* Mobile Top App Bar with Frosted Glass */
     .admin-topbar {
         padding: 10px 14px;
         position: sticky;
         top: 0;
         z-index: 100;
-        background: rgba(255, 255, 255, 0.88) !important;
-        backdrop-filter: blur(18px);
-        -webkit-backdrop-filter: blur(18px);
-        border-bottom: 1px solid rgba(234, 236, 240, 0.8) !important;
-        box-shadow: 0 2px 10px rgba(16, 24, 40, 0.03);
+        background: rgba(255, 255, 255, 0.85) !important;
+        backdrop-filter: blur(16px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+        border-bottom: 1px solid rgba(234, 236, 240, 0.85) !important;
+        box-shadow: 0 4px 20px rgba(16, 24, 40, 0.04);
+        transform: translate3d(0, 0, 0);
+    }
+
+    body.dark-mode .admin-topbar {
+        background: rgba(30, 41, 59, 0.85) !important;
+        border-bottom-color: rgba(51, 65, 85, 0.8) !important;
     }
 
     .topbar-content {
         gap: 8px;
+        display: flex;
+        align-items: center;
+        min-height: 44px;
     }
 
     .topbar-content h1 {
         font-size: 1.05rem;
         flex: 1 1 auto;
         min-width: 0;
+        font-weight: 700;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     .topbar-right {
         margin-left: auto;
         gap: 6px;
+        display: flex;
+        align-items: center;
     }
 
     .admin-main {
-        padding: 16px 12px 100px 12px !important;
+        padding: 16px 12px 110px 12px !important;
     }
     
+    /* 1. Glassmorphism Design System (Surfaces & Cards) */
+    .stat-card,
+    .metric-card,
+    .card,
+    .summary-card,
+    .section-header,
+    .hr-workspace-bar {
+        background: rgba(255, 255, 255, 0.85) !important;
+        backdrop-filter: blur(16px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+        border: 1px solid rgba(234, 236, 240, 0.85) !important;
+        border-radius: 20px !important;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.06) !important;
+        transform: translate3d(0, 0, 0);
+    }
+
+    body.dark-mode .stat-card,
+    body.dark-mode .metric-card,
+    body.dark-mode .card,
+    body.dark-mode .summary-card,
+    body.dark-mode .section-header,
+    body.dark-mode .hr-workspace-bar {
+        background: rgba(30, 41, 59, 0.85) !important;
+        border-color: rgba(51, 65, 85, 0.8) !important;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.35) !important;
+    }
+
     .stats-grid,
     .dashboard-grid {
         display: grid !important;
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-        gap: 10px !important;
+        gap: 12px !important;
         margin-bottom: 16px;
     }
 
     .stat-card,
     .metric-card {
         padding: 14px 12px !important;
-        background: rgba(255, 255, 255, 0.92) !important;
-        backdrop-filter: blur(14px);
-        -webkit-backdrop-filter: blur(14px);
-        border: 1px solid rgba(234, 236, 240, 0.85) !important;
-        border-radius: 16px !important;
-        box-shadow: 0 4px 14px -2px rgba(16, 24, 40, 0.04) !important;
+    }
+
+    .stat-card:active,
+    .metric-card:active {
+        transform: scale(0.97) !important;
     }
 
     .stat-card .stat-icon,
     .metric-card .metric-icon {
-        width: 38px;
-        height: 38px;
-        font-size: 16px;
-        border-radius: 10px;
+        width: 40px;
+        height: 40px;
+        font-size: 17px;
+        border-radius: 12px;
     }
 
     .stat-card .stat-content h3,
     .metric-card .metric-value {
         font-size: 1.25rem !important;
         line-height: 1.2;
+        font-variant-numeric: tabular-nums !important;
     }
 
     .stat-card .stat-content p,
@@ -2927,6 +2973,7 @@ body.dark-mode .emp-btn-cancel:hover {
         flex-direction: column;
         align-items: stretch;
         gap: 12px;
+        padding: 16px !important;
     }
 
     .section-header .header-actions,
@@ -2940,21 +2987,23 @@ body.dark-mode .emp-btn-cancel:hover {
     .section-header .header-actions > *,
     .section-header .btn-group > * {
         flex: 1 1 auto;
+        min-height: 44px;
     }
     
     .filter-form {
         width: 100%;
         grid-template-columns: 1fr;
-        gap: 8px;
+        gap: 10px;
     }
 
     .filter-form .form-control,
     .filter-form .form-select,
     .filter-form .btn {
         width: 100%;
+        min-height: 44px;
     }
 
-    /* Table Responsiveness */
+    /* Table Responsiveness & Glass Wrappers */
     .table-responsive,
     .admin-table-wrapper,
     .card-body:has(> table),
@@ -2963,6 +3012,7 @@ body.dark-mode .emp-btn-cancel:hover {
         overflow-x: auto !important;
         -webkit-overflow-scrolling: touch;
         margin-bottom: 12px;
+        border-radius: 16px;
     }
 
     .admin-table,
@@ -2970,32 +3020,102 @@ body.dark-mode .emp-btn-cancel:hover {
         min-width: 580px;
     }
 
-    /* Cards & Modals */
-    .card {
-        margin-bottom: 14px;
-        border-radius: 12px;
+    /* 2. Detail Bottom Sheets for Admin Modals */
+    .modal.fade .modal-dialog {
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        margin: 0 !important;
+        max-width: 100vw !important;
+        width: 100% !important;
+        border-radius: 32px 32px 0 0 !important;
+        transform: translate3d(0, 100%, 0) !important;
+        transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        will-change: transform !important;
+        z-index: 1300 !important;
     }
 
-    .card-header {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 10px;
-        padding: 12px 14px;
+    .modal.fade.show .modal-dialog {
+        transform: translate3d(0, 0, 0) !important;
     }
 
-    .card-body {
-        padding: 14px;
+    .modal.fade .modal-content {
+        background: rgba(255, 255, 255, 0.94) !important;
+        backdrop-filter: blur(20px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+        border: 1px solid rgba(234, 236, 240, 0.85) !important;
+        border-bottom: none !important;
+        border-radius: 32px 32px 0 0 !important;
+        box-shadow: 0 -8px 32px 0 rgba(0, 0, 0, 0.12) !important;
+        max-height: 86vh !important;
+        overflow-y: auto !important;
     }
 
-    .modal-dialog {
-        max-width: 94vw !important;
-        margin: 12px auto !important;
+    body.dark-mode .modal.fade .modal-content {
+        background: rgba(30, 41, 59, 0.94) !important;
+        border-color: rgba(51, 65, 85, 0.85) !important;
     }
 
-    .sp-minimal-grid {
-        grid-template-columns: 1fr !important;
-        padding: 0 !important;
-        gap: 16px !important;
+    .modal.fade .modal-header {
+        position: relative;
+        padding-top: 24px;
+    }
+
+    .modal.fade .modal-header::before {
+        content: "";
+        position: absolute;
+        top: 8px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 40px;
+        height: 5px;
+        border-radius: 999px;
+        background: rgba(16, 24, 40, 0.2);
+    }
+
+    body.dark-mode .modal.fade .modal-header::before {
+        background: rgba(255, 255, 255, 0.25);
+    }
+
+    .modal-footer {
+        position: sticky;
+        bottom: 0;
+        background: rgba(255, 255, 255, 0.9) !important;
+        backdrop-filter: blur(16px) !important;
+        -webkit-backdrop-filter: blur(16px) !important;
+        border-top: 1px solid rgba(234, 236, 240, 0.85) !important;
+    }
+
+    body.dark-mode .modal-footer {
+        background: rgba(30, 41, 59, 0.9) !important;
+        border-top-color: rgba(51, 65, 85, 0.8) !important;
+    }
+
+    /* 3. Mobile UX & Ergonomics: 44px min tap targets & active:scale-[0.97] */
+    .admin-container button,
+    .admin-container .btn,
+    .admin-container .btn-primary,
+    .admin-container .btn-secondary,
+    .admin-container .btn-icon,
+    .admin-container .action-btn,
+    .admin-container .form-control,
+    .admin-container .form-select,
+    .admin-container .page-link {
+        min-height: 44px;
+        touch-action: manipulation;
+    }
+
+    .admin-container button:active,
+    .admin-container .btn:active,
+    .admin-container .btn-primary:active,
+    .admin-container .btn-secondary:active,
+    .admin-container .btn-icon:active,
+    .admin-container .action-btn:active,
+    .admin-container .status-badge:active,
+    .admin-container .page-link:active {
+        transform: scale(0.97) translate3d(0, 0, 0) !important;
+        transition: transform 0.15s ease-out !important;
     }
 }
 
@@ -3005,24 +3125,33 @@ body.dark-mode .emp-btn-cancel:hover {
     }
 
     .admin-main {
-        padding: 12px 8px 90px 8px !important;
+        padding: 12px 10px 140px 10px !important;
+    }
+
+    .topbar-content {
+        gap: 8px;
     }
 
     .topbar-content .sidebar-toggler,
     .admin-topbar .topbar-content > .theme-toggler,
     .topbar-right > .theme-toggler {
-        width: 34px;
-        height: 34px;
+        width: 32px;
+        height: 32px;
+        min-width: 32px;
         border-radius: 8px;
         font-size: 13px;
     }
 
     .topbar-content h1 {
         font-size: 0.95rem;
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     .admin-profile {
-        padding: 5px 8px;
+        padding: 4px 6px;
         font-size: 12px;
     }
 
@@ -3597,3 +3726,326 @@ body.dark-mode table.table tbody tr[onclick]:active {
         scroll-behavior: auto !important;
     }
 }
+
+/* ==========================================================================
+   Admin Workspace: Bento Architecture, Pipeline/Kanban, Scannability & Motion
+   ========================================================================== */
+
+/* Modern Admin Bento & Metric Architecture */
+.admin-bento-grid {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.admin-bento-col-12 { grid-column: span 12; }
+.admin-bento-col-8  { grid-column: span 8; }
+.admin-bento-col-6  { grid-column: span 6; }
+.admin-bento-col-4  { grid-column: span 4; }
+.admin-bento-col-3  { grid-column: span 3; }
+
+@media (max-width: 992px) {
+    .admin-bento-col-8,
+    .admin-bento-col-6,
+    .admin-bento-col-4,
+    .admin-bento-col-3 {
+        grid-column: span 12;
+    }
+}
+
+.stat-card,
+.summary-card,
+.metric-summary-box {
+    border-radius: 12px;
+    border: 1px solid var(--border, #eaecf0);
+    background: #ffffff;
+    padding: clamp(16px, 2vw, 22px);
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+                border-color 0.2s ease;
+    will-change: transform, box-shadow;
+}
+
+.stat-card:hover,
+.summary-card:hover,
+.metric-summary-box:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 22px -3px rgba(16, 24, 40, 0.08), 0 3px 6px -2px rgba(16, 24, 40, 0.03);
+    border-color: #d0d5dd;
+}
+
+/* Pipeline & Kanban Boards */
+.kanban-board {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    padding-bottom: 16px;
+    align-items: flex-start;
+    -webkit-overflow-scrolling: touch;
+}
+
+.kanban-column {
+    flex: 0 0 300px;
+    min-width: 300px;
+    background: #f8fafc;
+    border: 1px solid var(--border, #eaecf0);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    transition: background-color 0.18s ease, border-color 0.18s ease;
+}
+
+.kanban-col-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #edf1f6;
+}
+
+.kanban-col-title {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--text-main, #101828);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.kanban-count-badge {
+    font-size: 0.72rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #ffffff;
+    border: 1px solid var(--border, #eaecf0);
+    color: var(--text-light, #475467);
+}
+
+.kanban-dropzone {
+    min-height: 100px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border-radius: 8px;
+    transition: background-color 0.18s ease, border-color 0.18s ease;
+}
+
+.kanban-dropzone.dragover {
+    background: #eff8ff;
+    border: 2px dashed #b2ddff;
+}
+
+.kanban-card {
+    background: #ffffff;
+    border: 1px solid var(--border, #eaecf0);
+    border-radius: 10px;
+    padding: 14px;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+    cursor: grab;
+    user-select: none;
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+                border-color 0.2s ease;
+    will-change: transform, box-shadow;
+}
+
+.kanban-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px -2px rgba(16, 24, 40, 0.08);
+    border-color: #cbd5e1;
+}
+
+.kanban-card:active {
+    cursor: grabbing;
+    transform: translateY(1px) scale(0.98);
+}
+
+/* Task Feeds & Event Timelines */
+.task-feed {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.task-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 14px;
+    background: #ffffff;
+    border: 1px solid var(--border, #eaecf0);
+    border-radius: 10px;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.03);
+    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.task-item:hover {
+    transform: translateY(-1.5px);
+    box-shadow: 0 4px 10px rgba(16, 24, 40, 0.06);
+}
+
+.task-feed-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 0.85rem;
+}
+
+.task-feed-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.task-feed-content h6 {
+    margin: 0 0 2px 0;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--text-main, #101828);
+}
+
+.task-feed-content p {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--text-light, #475467);
+}
+
+.task-feed-time {
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted, #667085);
+    white-space: nowrap;
+}
+
+/* Information Density & Scannability: Tabular Alignments */
+.admin-table td.col-amount,
+.admin-table th.col-amount,
+.admin-table td.col-price,
+.admin-table th.col-price,
+.admin-table td.col-num,
+.admin-table th.col-num,
+.admin-table td.col-qty,
+.admin-table th.col-qty,
+.admin-table td.text-end,
+.admin-table th.text-end,
+.table td.col-amount,
+.table th.col-amount,
+.table td.col-price,
+.table th.col-price,
+.table td.text-end,
+.table th.text-end,
+.tabular-nums,
+.tabular-num,
+.stat-content h3,
+.metric-value {
+    font-variant-numeric: tabular-nums !important;
+    font-feature-settings: "tnum" 1 !important;
+}
+
+.admin-table td.col-amount,
+.admin-table th.col-amount,
+.admin-table td.col-price,
+.admin-table th.col-price,
+.admin-table td.col-num,
+.admin-table th.col-num,
+.admin-table td.col-qty,
+.admin-table th.col-qty,
+.admin-table td.text-end,
+.admin-table th.text-end,
+.table td.col-amount,
+.table th.col-amount,
+.table td.col-price,
+.table th.col-price,
+.table td.text-end,
+.table th.text-end {
+    text-align: right !important;
+}
+
+.admin-table td:first-child,
+.admin-table th:first-child,
+.table td:first-child,
+.table th:first-child {
+    text-align: left !important;
+}
+
+/* Tactile Micro-Interactions (scale 0.98 active downscale) */
+.admin-container .btn:active,
+.admin-container .btn-primary:active,
+.admin-container .btn-secondary:active,
+.admin-container .btn-outline:active,
+.admin-container .btn-icon:active,
+.admin-container .action-btn:active,
+.admin-container .btn-modal-primary:active,
+.admin-container .btn-modal-cancel:active,
+.admin-container .page-link:active,
+.admin-container .nav-tabs .nav-link:active,
+.admin-container .status-badge:active,
+.admin-container .sidebar-search-btn:active {
+    transform: translateY(1px) scale(0.98) !important;
+    transition: transform 0.08s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+/* State Transitions & Slide-and-Fade Panels */
+.modal.fade .modal-dialog {
+    transform: scale(0.96) translateY(8px);
+    opacity: 0;
+    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    will-change: transform, opacity;
+}
+
+.modal.fade.show .modal-dialog {
+    transform: scale(1) translateY(0) !important;
+    opacity: 1 !important;
+}
+
+.filter-shelf,
+.slide-drawer,
+.admin-drawer {
+    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+                opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+                visibility 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: transform, opacity;
+}
+
+/* Dark Mode Harmonization */
+body.dark-mode .kanban-column {
+    background: #1b212b !important;
+    border-color: #313948 !important;
+}
+
+body.dark-mode .kanban-col-title {
+    color: #e8edf5 !important;
+}
+
+body.dark-mode .kanban-count-badge {
+    background: #252d3a !important;
+    border-color: #3b4557 !important;
+    color: #b6bfce !important;
+}
+
+body.dark-mode .kanban-card,
+body.dark-mode .task-item {
+    background: #1f2530 !important;
+    border-color: #313948 !important;
+    color: #e8edf5 !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25) !important;
+}
+
+body.dark-mode .task-feed-content h6 {
+    color: #e8edf5 !important;
+}
+
+body.dark-mode .task-feed-content p {
+    color: #b6bfce !important;
+}
+

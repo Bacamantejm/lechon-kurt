@@ -610,14 +610,17 @@ unset($order);
         <div class="orders-nav-tabs">
             <a href="my_orders.php?tab=orders" class="nav-tab-item <?php echo $current_tab === 'orders' ? 'active' : ''; ?>">
                 <i class="fas fa-shopping-bag"></i>
-                <span>Regular Orders</span>
+                <span class="tab-label-text">
+                    <span class="tab-text-full">Regular Orders</span>
+                    <span class="tab-text-short">Regular</span>
+                </span>
                 <?php if (!empty($orders_stats['total_orders'])): ?>
                     <span class="tab-count"><?php echo (int)$orders_stats['total_orders']; ?></span>
                 <?php endif; ?>
             </a>
             <a href="my_orders.php?tab=preorders" class="nav-tab-item <?php echo $current_tab === 'preorders' ? 'active' : ''; ?>">
                 <i class="fas fa-calendar-alt"></i>
-                <span>Pre-Orders</span>
+                <span class="tab-label-text">Pre-Orders</span>
             </a>
         </div>
         
@@ -683,20 +686,24 @@ unset($order);
                     <div class="ecom-order-card" data-status="<?php echo htmlspecialchars($status_key); ?>">
                         <!-- Card Top Bar: Shop Name, Order #, Status -->
                         <div class="ecom-card-top">
-                            <div class="ecom-shop-info">
-                                <i class="fas fa-store shop-icon"></i>
-                                <span class="shop-name">Lechon Delights</span>
-                                <span class="divider">&bull;</span>
-                                <span class="order-number">#<?php echo htmlspecialchars($order['order_number']); ?></span>
-                                <span class="divider">&bull;</span>
-                                <span class="order-date"><?php echo date('M j, Y', strtotime($order['created_at'])); ?></span>
-                                <span class="type-badge type-<?php echo htmlspecialchars($delivery_option); ?>">
-                                    <?php echo ucfirst($delivery_option); ?>
-                                </span>
+                            <div class="card-top-row main-row">
+                                <div class="shop-brand">
+                                    <i class="fas fa-store shop-icon"></i>
+                                    <span class="shop-name">Lechon Delights</span>
+                                </div>
+                                <div class="ecom-status-label status-<?php echo htmlspecialchars($status_key); ?>">
+                                    <span class="status-dot"></span>
+                                    <span><?php echo htmlspecialchars($status_display_text); ?></span>
+                                </div>
                             </div>
-                            <div class="ecom-status-label status-<?php echo htmlspecialchars($status_key); ?>">
-                                <span class="status-dot"></span>
-                                <?php echo htmlspecialchars($status_display_text); ?>
+                            <div class="card-top-row meta-row">
+                                <span class="order-number">#<?php echo htmlspecialchars($order['order_number']); ?></span>
+                                <div class="meta-right">
+                                    <span class="order-date"><?php echo date('M j, Y', strtotime($order['created_at'])); ?></span>
+                                    <span class="type-badge type-<?php echo htmlspecialchars($delivery_option); ?>">
+                                        <?php echo ucfirst($delivery_option); ?>
+                                    </span>
+                                </div>
                             </div>
                         </div>
 
@@ -1085,25 +1092,39 @@ unset($order);
     padding: 14px 20px;
     border-bottom: 1px solid #f2f4f7;
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 10px;
+    flex-direction: column;
+    gap: 8px;
     background: #ffffff;
 }
-.ecom-shop-info {
+.card-top-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 10px;
+}
+.card-top-row.main-row .shop-brand {
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 0.88rem;
-    color: #475467;
-    flex-wrap: wrap;
+    min-width: 0;
 }
-.shop-icon { color: #b3261e; font-size: 0.95rem; }
-.shop-name { font-weight: 700; color: #101828; }
-.divider { color: #d0d5dd; }
+.shop-icon { color: #b3261e; font-size: 0.95rem; flex-shrink: 0; }
+.shop-name { font-weight: 700; color: #101828; font-size: 0.95rem; }
+.card-top-row.meta-row {
+    font-size: 0.82rem;
+    color: #667085;
+    border-top: 1px dashed #f2f4f7;
+    padding-top: 6px;
+}
 .order-number { font-family: monospace; font-weight: 600; color: #344054; }
-.order-date { color: #667085; font-size: 0.84rem; }
+.meta-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+.order-date { color: #667085; font-size: 0.82rem; }
 .type-badge {
     font-size: 0.75rem;
     font-weight: 600;
@@ -1140,12 +1161,12 @@ unset($order);
 }
 .ecom-item-row {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 14px;
 }
 .item-img {
-    width: 72px;
-    height: 72px;
+    width: 68px;
+    height: 68px;
     border-radius: 8px;
     object-fit: cover;
     border: 1px solid #f2f4f7;
@@ -1153,17 +1174,20 @@ unset($order);
     background: #f8fafc;
 }
 .item-details {
-    flex: 1;
+    flex: 1 1 auto;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     gap: 4px;
 }
 .item-name {
-    font-size: 0.98rem;
+    font-size: 0.96rem;
     font-weight: 700;
     color: #101828;
     margin: 0;
     line-height: 1.3;
+    word-break: break-word;
+    overflow-wrap: break-word;
 }
 .item-meta {
     display: flex;
@@ -1171,6 +1195,7 @@ unset($order);
     gap: 8px;
     font-size: 0.82rem;
     color: #667085;
+    flex-wrap: wrap;
 }
 .meta-tag {
     background: #f2f4f7;
@@ -1183,6 +1208,9 @@ unset($order);
     font-weight: 700;
     color: #101828;
     text-align: right;
+    flex-shrink: 0;
+    white-space: nowrap;
+    margin-left: 8px;
 }
 
 /* Card Bottom Footer */
@@ -1454,7 +1482,7 @@ unset($order);
 
 @media (max-width: 768px) {
     .orders-page-container {
-        padding: 14px 10px 140px 10px !important;
+        padding: 14px 10px 220px 10px !important;
     }
 
     /* Glassmorphic Order Cards on Mobile */
@@ -1464,7 +1492,7 @@ unset($order);
         backdrop-filter: blur(14px) saturate(180%) !important;
         -webkit-backdrop-filter: blur(14px) saturate(180%) !important;
         border: 1px solid rgba(234, 236, 240, 0.85) !important;
-        border-radius: 20px !important;
+        border-radius: 16px !important;
         box-shadow: 0 4px 18px rgba(16, 24, 40, 0.04) !important;
         overflow: hidden;
     }
@@ -1477,27 +1505,50 @@ unset($order);
     }
 
     .orders-nav-tabs {
-        overflow-x: auto;
-        white-space: nowrap;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;
-        gap: 16px;
-        padding: 4px 6px;
-        margin-bottom: 14px;
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.7);
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(234, 236, 240, 0.8);
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 6px !important;
+        padding: 4px !important;
+        margin-bottom: 14px !important;
+        border-radius: 999px !important;
+        background: rgba(255, 255, 255, 0.8) !important;
+        backdrop-filter: blur(10px) !important;
+        border: 1px solid rgba(234, 236, 240, 0.9) !important;
+        overflow: visible !important;
+        white-space: normal !important;
+        width: 100% !important;
     }
     .orders-nav-tabs::-webkit-scrollbar {
         display: none;
     }
     .nav-tab-item {
-        flex-shrink: 0;
-        font-size: 0.84rem;
-        padding: 8px 12px;
-        border-radius: 999px;
+        flex: 1 1 50% !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        font-size: 0.82rem !important;
+        padding: 8px 6px !important;
+        border-radius: 999px !important;
         border-bottom: none !important;
+        justify-content: center !important;
+        text-align: center !important;
+        gap: 6px !important;
+    }
+    .nav-tab-item i {
+        font-size: 0.82rem !important;
+        flex-shrink: 0 !important;
+    }
+    .tab-label-text {
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+    .tab-text-short {
+        display: none;
+    }
+    .tab-count {
+        font-size: 0.72rem !important;
+        padding: 1px 6px !important;
+        flex-shrink: 0 !important;
     }
     .nav-tab-item.active {
         background: #b3261e !important;
@@ -1507,40 +1558,216 @@ unset($order);
         background: rgba(255, 255, 255, 0.25) !important;
         color: #ffffff !important;
     }
-    .ecom-card-top, .ecom-card-bottom, .actions-line {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 10px;
+
+    /* Structured 2-Row Card Top */
+    .ecom-card-top {
+        padding: 12px 14px !important;
+        gap: 8px !important;
+    }
+    .card-top-row {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        width: 100% !important;
+        gap: 8px !important;
+    }
+    .card-top-row.main-row .shop-brand {
+        display: flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+        min-width: 0 !important;
+    }
+    .shop-name {
+        font-size: 0.88rem !important;
+        font-weight: 700 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+    .ecom-status-label {
+        font-size: 0.72rem !important;
+        padding: 3px 8px !important;
+        border-radius: 6px !important;
+        background: rgba(0, 0, 0, 0.04) !important;
+        flex-shrink: 0 !important;
+        white-space: nowrap !important;
+    }
+    .card-top-row.meta-row {
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        width: 100% !important;
+        font-size: 0.76rem !important;
+        color: #667085 !important;
+        border-top: 1px dashed #f2f4f7 !important;
+        padding-top: 6px !important;
+    }
+    .order-number {
+        font-size: 0.76rem !important;
+        font-family: monospace !important;
+        font-weight: 600 !important;
+        color: #475467 !important;
+    }
+    .meta-right {
+        display: flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+        flex-shrink: 0 !important;
+    }
+    .order-date {
+        font-size: 0.75rem !important;
+        color: #667085 !important;
+    }
+    .type-badge {
+        font-size: 0.7rem !important;
+        padding: 1px 6px !important;
+    }
+
+    /* Item Row Layout */
+    .ecom-card-middle {
+        padding: 12px 14px !important;
+        gap: 10px !important;
+    }
+    .ecom-item-row {
+        display: flex !important;
+        align-items: flex-start !important;
+        gap: 10px !important;
+        width: 100% !important;
+    }
+    .item-img {
+        width: 52px !important;
+        height: 52px !important;
+        border-radius: 8px !important;
+        flex-shrink: 0 !important;
+        background: #f4f5f7 !important;
+    }
+    .item-details {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 2px !important;
+    }
+    .item-name {
+        font-size: 0.88rem !important;
+        line-height: 1.25 !important;
+        word-break: break-word !important;
+        overflow-wrap: break-word !important;
+    }
+    .item-meta {
+        font-size: 0.76rem !important;
+        gap: 4px !important;
+        flex-wrap: wrap !important;
+    }
+    .item-price {
+        flex-shrink: 0 !important;
+        font-size: 0.92rem !important;
+        font-weight: 700 !important;
+        white-space: nowrap !important;
+        text-align: right !important;
+        margin-left: 6px !important;
+    }
+
+    /* Summary & Total Line */
+    .ecom-card-bottom {
+        padding: 12px 14px !important;
+        gap: 10px !important;
+    }
+    .summary-line {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 6px !important;
+        width: 100% !important;
+    }
+    .payment-method {
+        font-size: 0.78rem !important;
+        color: #667085 !important;
+    }
+    .total-wrap {
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: baseline !important;
+        width: 100% !important;
+        border-top: 1px dashed #eaecf0 !important;
+        padding-top: 6px !important;
+    }
+    .total-label {
+        font-size: 0.8rem !important;
+        color: #475467 !important;
+    }
+    .total-amount {
+        font-size: 1.05rem !important;
+        font-weight: 800 !important;
+        color: #b3261e !important;
+    }
+
+    /* Actions Grid */
+    .actions-line {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 8px !important;
+        width: 100% !important;
+        padding-top: 2px !important;
+    }
+    .btn-toggle-drawer {
+        width: 100% !important;
+        justify-content: center !important;
+        padding: 4px 0 !important;
     }
     .action-buttons-group {
-        width: 100%;
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
+        width: 100% !important;
+        display: grid !important;
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 6px !important;
+    }
+    .action-buttons-group form {
+        display: contents !important;
     }
     .btn-action-outline, .btn-action-primary {
-        width: 100%;
-        min-height: 42px;
-        border-radius: 12px;
-        font-size: 0.86rem;
-        font-weight: 700;
-        justify-content: center;
+        width: 100% !important;
+        min-height: 38px !important;
+        height: auto !important;
+        padding: 6px 8px !important;
+        font-size: 0.8rem !important;
+        font-weight: 600 !important;
+        border-radius: 8px !important;
+        text-align: center !important;
+        justify-content: center !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
     }
+    .btn-action-primary {
+        grid-column: 1 / -1 !important;
+        min-height: 42px !important;
+        font-size: 0.88rem !important;
+        font-weight: 700 !important;
+    }
+    .btn-action-outline.btn-archive {
+        grid-column: span 1 !important;
+    }
+
     .timeline-stepper {
         flex-direction: column;
         align-items: flex-start;
         gap: 8px;
     }
     .timeline-stepper .line { display: none; }
-    .item-row {
-        gap: 10px;
-        align-items: center;
+}
+
+@media (max-width: 360px) {
+    .nav-tab-item {
+        font-size: 0.75rem !important;
+        padding: 6px 2px !important;
+        gap: 4px !important;
     }
-    .item-img {
-        width: 52px;
-        height: 52px;
-        border-radius: 12px;
-        background: #f4f5f7;
+    .tab-text-full {
+        display: none !important;
+    }
+    .tab-text-short {
+        display: inline !important;
     }
 }
 

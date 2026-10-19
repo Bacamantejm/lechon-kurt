@@ -222,6 +222,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['error'] = "No employees or department selected for bulk assignment.";
         }
     }
+    if (isset($_POST['reassign_user_role'])) {
+        if (!$is_partner_scoped_hr) {
+            requirePermission('users.edit');
+        }
+        $emp_id = intval($_POST['employee_id']);
+        $new_role_id = intval($_POST['role_id']);
+        if ($is_partner_scoped_hr && !hrEmployeeIdInScope($conn, $emp_id)) {
+            $_SESSION['error'] = "Selected employee is outside your partner HR scope.";
+            header("Location: employees.php");
+            exit();
+        }
+        if ($is_partner_scoped_hr && !employeesRoleInPartnerScope($conn, $new_role_id, $partner_scope_owner_id)) {
+            $_SESSION['error'] = "Selected role is outside your partner scope.";
+            header("Location: employees.php");
+            exit();
+        }
+
+        $lookup = mysqli_query($conn, "SELECT user_id, first_name, last_name FROM employees WHERE id = $emp_id LIMIT 1");
+        if ($lookup && ($row = mysqli_fetch_assoc($lookup)) && !empty($row['user_id'])) {
+            $user_id_to_update = (int)$row['user_id'];
+            $up_stmt = mysqli_prepare($conn, "UPDATE users SET role_id = ? WHERE id = ?");
+            if ($up_stmt) {
+                mysqli_stmt_bind_param($up_stmt, "ii", $new_role_id, $user_id_to_update);
+                if (mysqli_stmt_execute($up_stmt)) {
+                    $r_name_res = mysqli_query($conn, "SELECT name FROM roles WHERE id = $new_role_id LIMIT 1");
+                    $r_name = ($r_name_res && $rn = mysqli_fetch_assoc($r_name_res)) ? (function_exists('getRoleDisplayName') ? getRoleDisplayName($rn['name']) : $rn['name']) : 'New Role';
+                    $_SESSION['success'] = "Role updated to {$r_name} for " . htmlspecialchars($row['first_name'] . ' ' . $row['last_name']) . " successfully!";
+                } else {
+                    $_SESSION['error'] = "Failed to update role: " . mysqli_error($conn);
+                }
+                mysqli_stmt_close($up_stmt);
+            }
+        } else {
+            $_SESSION['error'] = "Employee does not have a linked user account.";
+        }
+        header("Location: employees.php");
+        exit();
+    }
+
     if (isset($_POST['link_user_account'])) {
         // Enforce action-level permission to create a user account
         if (!$is_partner_scoped_hr) {
@@ -436,15 +475,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
+            // Handle optional photo upload
+            $photo_db_path = null;
+            if (!empty($_FILES['employee_photo']['name']) && $_FILES['employee_photo']['error'] === UPLOAD_ERR_OK) {
+                $allowed_exts = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+                $file_ext = strtolower(pathinfo($_FILES['employee_photo']['name'], PATHINFO_EXTENSION));
+                if (in_array($file_ext, $allowed_exts)) {
+                    $photo_filename = 'emp_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $file_ext;
+                    $target_dir = dirname(__DIR__) . '/uploads/employees';
+                    if (!is_dir($target_dir)) {
+                        @mkdir($target_dir, 0777, true);
+                    }
+                    $target_dest = $target_dir . '/' . $photo_filename;
+                    if (move_uploaded_file($_FILES['employee_photo']['tmp_name'], $target_dest)) {
+                        $photo_db_path = 'uploads/employees/' . $photo_filename;
+                    }
+                }
+            }
+
             // Now insert the employee record, linking to the user_id if created or found
-            $query = "INSERT INTO employees (employee_id, first_name, middle_initial, last_name, suffix, email, user_id, phone, sss_number, philhealth_number, pagibig_number, tin_number, department_id, position_id, position, hire_date, employment_type, employment_basis, salary, daily_rate, status)
-                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?,0), ?, ?, ?, ?, ?, ?, ?, 'active')";
+            $query = "INSERT INTO employees (employee_id, first_name, middle_initial, last_name, suffix, email, user_id, phone, sss_number, philhealth_number, pagibig_number, tin_number, department_id, position_id, position, hire_date, employment_type, employment_basis, salary, daily_rate, photo, status)
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?,0), ?, ?, ?, ?, ?, ?, ?, ?, 'active')";
             $stmt = mysqli_prepare($conn, $query);
-            mysqli_stmt_bind_param($stmt, "ssssssisssssiissssdd", $employee_id, $first_name, $middle_initial, $last_name, $suffix, $email, $user_id_for_employee, $phone, $sss, $philhealth, $pagibig, $tin, $department_id, $position_id, $position, $hire_date, $employment_type, $employment_basis, $salary, $daily_rate);
+            mysqli_stmt_bind_param($stmt, "ssssssisssssiissssdds", $employee_id, $first_name, $middle_initial, $last_name, $suffix, $email, $user_id_for_employee, $phone, $sss, $philhealth, $pagibig, $tin, $department_id, $position_id, $position, $hire_date, $employment_type, $employment_basis, $salary, $daily_rate, $photo_db_path);
 
             if ($stmt && mysqli_stmt_execute($stmt)) {
                 $new_emp_pk = mysqli_insert_id($conn);
                 if ($user_id_for_employee && $user_id_for_employee > 0) {
+                    if ($photo_db_path) {
+                        mysqli_query($conn, "UPDATE users SET profile_image = '" . mysqli_real_escape_string($conn, $photo_db_path) . "' WHERE id = " . (int)$user_id_for_employee);
+                    }
                     require_once __DIR__ . '/../includes/rider_helper.php';
                     isDeliveryDriverUser($conn, $user_id_for_employee);
                 }
@@ -525,6 +585,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         mysqli_stmt_bind_param($stmt, "ssssssiissssddssssi", $first_name, $middle_initial, $last_name, $suffix, $email, $phone, $department_id, $position_id, $position, $hire_date, $employment_type, $employment_basis, $salary, $daily_rate, $sss, $philhealth, $pagibig, $tin, $id);
 
         if ($stmt && mysqli_stmt_execute($stmt)) {
+            // Handle optional photo upload
+            if (!empty($_FILES['employee_photo']['name']) && $_FILES['employee_photo']['error'] === UPLOAD_ERR_OK) {
+                $allowed_exts = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+                $file_ext = strtolower(pathinfo($_FILES['employee_photo']['name'], PATHINFO_EXTENSION));
+                if (in_array($file_ext, $allowed_exts)) {
+                    $photo_filename = 'emp_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $file_ext;
+                    $target_dir = dirname(__DIR__) . '/uploads/employees';
+                    if (!is_dir($target_dir)) {
+                        @mkdir($target_dir, 0777, true);
+                    }
+                    $target_dest = $target_dir . '/' . $photo_filename;
+                    if (move_uploaded_file($_FILES['employee_photo']['tmp_name'], $target_dest)) {
+                        $photo_db_path = 'uploads/employees/' . $photo_filename;
+                        $photo_stmt = mysqli_prepare($conn, "UPDATE employees SET photo = ? WHERE id = ?");
+                        if ($photo_stmt) {
+                            mysqli_stmt_bind_param($photo_stmt, "si", $photo_db_path, $id);
+                            mysqli_stmt_execute($photo_stmt);
+                            mysqli_stmt_close($photo_stmt);
+                        }
+                    }
+                }
+            }
+
             // Find or link user_id if employee has a user account with matching email
             $emp_u_chk = mysqli_query($conn, "SELECT user_id, email FROM employees WHERE id = " . (int)$id . " LIMIT 1");
             $sync_user_id = 0;
@@ -681,16 +764,19 @@ if ($is_partner_scoped_hr) {
 
 $where_clause = count($where_clauses) > 0 ? "WHERE " . implode(" AND ", $where_clauses) : "";
 
-$employees_query = "SELECT e.*, d.department_name, u.user_type, u.email as user_email,
+$employees_query = "SELECT e.*, d.department_name, u.user_type, u.email as user_email, u.profile_image as user_profile_image,
+                           r.name as system_role_name, r.id as system_role_id,
                            COALESCE(jp.position_title, e.position) AS position_label
                     FROM employees e
                     LEFT JOIN departments d ON e.department_id = d.id
                     LEFT JOIN job_positions jp ON jp.id = e.position_id
                     LEFT JOIN users u ON e.user_id = u.id
+                    LEFT JOIN roles r ON u.role_id = r.id
                     $where_clause
                     ORDER BY e.first_name ASC";
 
 $employees_stmt = mysqli_prepare($conn, $employees_query);
+$employees_list = [];
 if ($employees_stmt === false) {
     $_SESSION['error'] = "Unable to load employees.";
     $employees_result = false;
@@ -705,6 +791,31 @@ if ($employees_stmt === false) {
 
     mysqli_stmt_execute($employees_stmt);
     $employees_result = mysqli_stmt_get_result($employees_stmt);
+    if ($employees_result) {
+        while ($emp_row = mysqli_fetch_assoc($employees_result)) {
+            $employees_list[] = $emp_row;
+        }
+    }
+}
+$total_employees_count = count($employees_list);
+
+if (!function_exists('getEmployeeAvatarGradient')) {
+    function getEmployeeAvatarGradient($name) {
+        $gradients = [
+            'linear-gradient(135deg, #f43f5e, #fb7185)',
+            'linear-gradient(135deg, #6366f1, #818cf8)',
+            'linear-gradient(135deg, #0ea5e9, #38bdf8)',
+            'linear-gradient(135deg, #10b981, #34d399)',
+            'linear-gradient(135deg, #f59e0b, #fbbf24)',
+            'linear-gradient(135deg, #8b5cf6, #a78bfa)',
+            'linear-gradient(135deg, #ec4899, #f472b6)',
+            'linear-gradient(135deg, #14b8a6, #2dd4bf)',
+            'linear-gradient(135deg, #3b82f6, #60a5fa)',
+            'linear-gradient(135deg, #d97706, #f59e0b)'
+        ];
+        $idx = abs(crc32((string)$name)) % count($gradients);
+        return $gradients[$idx];
+    }
 }
 
 // Centralized department and position catalogs.
@@ -1201,6 +1312,375 @@ if ($roles_query) while ($r = mysqli_fetch_assoc($roles_query)) {
         body.dark-mode .emp-btn-cancel:hover {
             background: #2a3444 !important;
         }
+
+        /* =========================================================
+           TIIMI-STYLE MODERN EMPLOYEE CARD DIRECTORY STYLES
+           ========================================================= */
+        .emp-directory-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 14px;
+            margin-bottom: 20px;
+        }
+
+        .emp-directory-title {
+            font-size: 1.6rem;
+            font-weight: 800;
+            color: #101828;
+            margin: 0;
+            letter-spacing: -0.02em;
+        }
+
+        body.dark-mode .emp-directory-title {
+            color: #f8fafc;
+        }
+
+        .emp-card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+
+        @media (min-width: 1200px) {
+            .emp-card-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+
+        .emp-card {
+            background: #ffffff;
+            border: 1px solid #eaecf0;
+            border-radius: 16px;
+            padding: 18px 16px 14px 16px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04), 0 1px 2px rgba(16, 24, 40, 0.02);
+            transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .emp-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px -4px rgba(16, 24, 40, 0.08), 0 4px 6px -2px rgba(16, 24, 40, 0.03);
+            border-color: #d0d5dd;
+        }
+
+        body.dark-mode .emp-card {
+            background: #181d26 !important;
+            border-color: #27303f !important;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+        }
+
+        body.dark-mode .emp-card:hover {
+            border-color: #3b4758 !important;
+            box-shadow: 0 12px 24px -4px rgba(0, 0, 0, 0.4);
+        }
+
+        .emp-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .emp-card-check {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            border-radius: 4px;
+            border: 1.5px solid #d0d5dd;
+        }
+
+        .emp-card-badge-wrap {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .emp-status-pill {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 10px;
+            border-radius: 20px;
+            display: inline-flex;
+            align-items: center;
+            line-height: 1.2;
+        }
+
+        .emp-status-pill.active {
+            background: #ecfdf3;
+            color: #027a48;
+            border: 1px solid #abefc6;
+        }
+
+        .emp-status-pill.inactive {
+            background: #fff1f0;
+            color: #b3261e;
+            border: 1px solid #fee4e2;
+        }
+
+        .emp-status-pill.on_leave {
+            background: #fffaeb;
+            color: #b54708;
+            border: 1px solid #fedf89;
+        }
+
+        .emp-status-pill.terminated {
+            background: #f2f4f7;
+            color: #344054;
+            border: 1px solid #eaecf0;
+        }
+
+        .emp-more-btn {
+            background: transparent;
+            border: none;
+            color: #98a2b3;
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            padding: 0;
+        }
+
+        .emp-more-btn:hover {
+            background: #f2f4f7;
+            color: #344054;
+        }
+
+        body.dark-mode .emp-more-btn:hover {
+            background: #27303f;
+            color: #f8fafc;
+        }
+
+        .emp-avatar-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            margin-bottom: 10px;
+        }
+
+        .emp-avatar-circle {
+            width: 76px;
+            height: 76px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
+            border: 3px solid #ffffff;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        body.dark-mode .emp-avatar-circle {
+            border-color: #27303f;
+        }
+
+        .emp-avatar-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .emp-avatar-initials {
+            font-size: 26px;
+            font-weight: 800;
+            color: #ffffff;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+            user-select: none;
+        }
+
+        .emp-new-hire-tag {
+            background: #0f172a;
+            color: #ffffff;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 12px;
+            margin-top: -10px;
+            z-index: 2;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+        }
+
+        .emp-card-name {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: #101828;
+            text-align: center;
+            margin: 4px 0 2px 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            width: 100%;
+        }
+
+        body.dark-mode .emp-card-name {
+            color: #f8fafc;
+        }
+
+        .emp-card-role {
+            font-size: 0.84rem;
+            color: #667085;
+            text-align: center;
+            font-weight: 500;
+            margin-bottom: 12px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            width: 100%;
+        }
+
+        body.dark-mode .emp-card-role {
+            color: #94a3b8;
+        }
+
+        .emp-meta-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            background: #f8f9fa;
+            border: 1px solid #eaecf0;
+            border-radius: 10px;
+            padding: 9px 12px;
+            margin-bottom: 12px;
+        }
+
+        body.dark-mode .emp-meta-container {
+            background: #13171f !important;
+            border-color: #27303f !important;
+        }
+
+        .emp-meta-col {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .emp-meta-label {
+            font-size: 11px;
+            color: #667085;
+            margin-bottom: 2px;
+            text-transform: capitalize;
+            font-weight: 500;
+        }
+
+        body.dark-mode .emp-meta-label {
+            color: #94a3b8;
+        }
+
+        .emp-meta-val {
+            font-size: 12.5px;
+            font-weight: 600;
+            color: #1d2939;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        body.dark-mode .emp-meta-val {
+            color: #e2e8f0;
+        }
+
+        .emp-contact-list {
+            margin-bottom: 10px;
+            flex-grow: 1;
+        }
+
+        .emp-contact-item {
+            display: flex;
+            align-items: center;
+            font-size: 12px;
+            color: #475467;
+            margin-bottom: 5px;
+            overflow: hidden;
+        }
+
+        body.dark-mode .emp-contact-item {
+            color: #94a3b8;
+        }
+
+        .emp-contact-item i {
+            width: 14px;
+            margin-right: 8px;
+            color: #98a2b3;
+            flex-shrink: 0;
+            text-align: center;
+        }
+
+        .emp-contact-item span {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .emp-account-strip {
+            margin-top: auto;
+            padding-top: 10px;
+            border-top: 1px solid #f2f4f7;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        body.dark-mode .emp-account-strip {
+            border-top-color: #27303f;
+        }
+
+        .emp-role-tag {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 6px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .emp-role-tag.linked {
+            background: #eff8ff;
+            color: #175cd3;
+            border: 1px solid #b2ddff;
+        }
+
+        body.dark-mode .emp-role-tag.linked {
+            background: #172554;
+            color: #93c5fd;
+            border-color: #1e3a8a;
+        }
+
+        .emp-role-tag.unlinked {
+            background: #f8f9fa;
+            color: #667085;
+            border: 1px dashed #d0d5dd;
+            cursor: pointer;
+        }
+
+        body.dark-mode .emp-role-tag.unlinked {
+            background: #1e2430;
+            color: #94a3b8;
+            border-color: #3b4758;
+        }
+
+        .emp-role-tag.unlinked:hover {
+            color: #b3261e;
+            border-color: #b3261e;
+        }
     </style>
 </head>
 <body class="hr-theme">
@@ -1212,28 +1692,77 @@ if ($roles_query) while ($r = mysqli_fetch_assoc($roles_query)) {
                 <div class="topbar-content">
                     <button class="sidebar-toggler" id="sidebarToggler"><i class="fas fa-bars"></i></button>
                     <h1>Employees Management</h1>
-                    <button class="theme-toggler" id="themeToggler" title="Toggle Theme" style="margin-left: auto;">
-                        <i class="fas fa-moon"></i>
-                    </button>
-                    <div class="admin-profile">
-                        <span><?php echo htmlspecialchars($admin_info['full_name']); ?></span>
-                        <i class="fas fa-user-circle"></i>
+                    <div class="topbar-right">
+                        <button class="theme-toggler" id="themeToggler" title="Toggle Theme">
+                            <i class="fas fa-moon"></i>
+                        </button>
+                        <div class="admin-profile">
+                            <span><?php echo htmlspecialchars($admin_info['full_name']); ?></span>
+                            <i class="fas fa-user-circle"></i>
+                        </div>
                     </div>
                 </div>
             </div>
             
             <div class="admin-main">
                 
-                <div class="section-header">
-                    <h2>Employee List</h2>
-                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addEmployeeModal">
-                        <i class="fas fa-plus"></i> Add Employee
-                    </button>
+                <div class="emp-directory-toolbar">
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <h2 class="emp-directory-title"><?php echo $total_employees_count; ?> Employees</h2>
+                        <?php
+                        $recent_hire_count = 0;
+                        $now_ts = time();
+                        foreach ($employees_list as $e_check) {
+                            if (!empty($e_check['hire_date']) && ($now_ts - strtotime($e_check['hire_date'])) <= (45 * 86400)) {
+                                $recent_hire_count++;
+                            }
+                        }
+                        if ($recent_hire_count > 0):
+                        ?>
+                            <span class="badge" style="background: #f1f5f9; color: #334155; font-size: 11px; font-weight: 700; padding: 5px 10px; border-radius: 20px; border: 1px solid #cbd5e1;">
+                                +<?php echo $recent_hire_count; ?> New Hire
+                            </span>
+                        <?php endif; ?>
+                    </div>
+
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <!-- Filter Toggle Button -->
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="toggleFilterBtn" onclick="toggleHrFilters()" style="background: #fff; border: 1px solid #d0d5dd; color: #344054; border-radius: 8px; font-weight: 600; padding: 7px 14px;">
+                            <i class="fas fa-filter me-1" style="color: #667085;"></i> Filter
+                            <?php if ($search !== '' || $department_filter !== '' || $status_filter !== ''): ?>
+                                <span class="badge bg-danger rounded-pill ms-1" style="font-size: 9px;">Active</span>
+                            <?php endif; ?>
+                        </button>
+
+                        <!-- Selected Counter Badge -->
+                        <div id="selectionBadge" class="d-none align-items-center gap-2 px-3 py-1 rounded" style="background: #f8f9fa; border: 1px solid #eaecf0; font-size: 13px; font-weight: 600; color: #344054;">
+                            <span id="selectedCountNumber">0</span> Selected
+                            <button type="button" class="btn btn-sm p-0 text-muted ms-1" onclick="clearSelectedEmployees()" title="Clear Selection">
+                                <i class="fas fa-times-circle"></i>
+                            </button>
+                        </div>
+
+                        <!-- View Switcher (Cards / Table) -->
+                        <div class="btn-group" role="group" aria-label="View switch" style="border: 1px solid #d0d5dd; border-radius: 8px; overflow: hidden; background: #fff;">
+                            <button type="button" class="btn btn-sm" id="viewModeCards" onclick="switchEmployeeView('cards')" title="Card Grid View" style="padding: 7px 13px; border: none; background: #f2f4f7; color: #101828;">
+                                <i class="fas fa-th-large"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm" id="viewModeTable" onclick="switchEmployeeView('table')" title="Table Spreadsheet View" style="padding: 7px 13px; border: none; background: transparent; color: #667085;">
+                                <i class="fas fa-list"></i>
+                            </button>
+                        </div>
+
+                        <!-- Add Employee Primary CTA -->
+                        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addEmployeeModal" style="background: #b3261e; border-color: #b3261e; border-radius: 8px; font-weight: 600; padding: 7px 16px;">
+                            <i class="fas fa-plus me-1"></i> Add Employee
+                        </button>
+                    </div>
                 </div>
 
                 <?php include 'hr_workspace_nav.php'; ?>
 
-                <div class="card hr-filter-panel mb-3">
+                <!-- Filter Panel -->
+                <div class="card hr-filter-panel mb-3 <?php echo ($search === '' && $department_filter === '' && $status_filter === '') ? 'd-none' : ''; ?>" id="hrFilterPanel">
                     <div class="card-body">
                     <form method="GET" class="row g-2 align-items-end">
                         <div class="col-md-4">
@@ -1261,8 +1790,11 @@ if ($roles_query) while ($r = mysqli_fetch_assoc($roles_query)) {
                                 <option value="terminated" <?php echo $status_filter === 'terminated' ? 'selected' : ''; ?>>Terminated</option>
                             </select>
                         </div>
-                        <div class="col-md-2">
-                            <button type="submit" class="btn btn-primary w-100"><i class="fas fa-search"></i> Search</button>
+                        <div class="col-md-2 d-flex gap-2">
+                            <button type="submit" class="btn btn-primary w-100" style="background: #b3261e; border-color: #b3261e;"><i class="fas fa-search"></i> Filter</button>
+                            <?php if ($search !== '' || $department_filter !== '' || $status_filter !== ''): ?>
+                                <a href="employees.php" class="btn btn-outline-secondary" title="Reset Filters"><i class="fas fa-undo"></i></a>
+                            <?php endif; ?>
                         </div>
                     </form>
                     </div>
@@ -1271,107 +1803,307 @@ if ($roles_query) while ($r = mysqli_fetch_assoc($roles_query)) {
                 <form method="POST" id="bulkActionForm">
                     <input type="hidden" name="action" id="bulkActionInput">
                     <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
-                    <div class="d-flex gap-2 mb-3 align-items-center">
-                        <select name="bulk_action" class="form-select" style="width: 200px;">
-                            <option value="">Bulk Actions</option>
+
+                    <!-- Bulk Action Floating Bar -->
+                    <div id="bulkActionBar" class="d-none align-items-center gap-2 mb-3 p-2 px-3 rounded" style="background: #eff8ff; border: 1px solid #b2ddff;">
+                        <span class="text-primary fw-semibold" style="font-size: 13px;"><i class="fas fa-check-square me-1"></i> Bulk Action:</span>
+                        <select name="bulk_action" class="form-select form-select-sm" style="width: 220px; border-radius: 6px;">
+                            <option value="">Select Action</option>
                             <option value="assign_department">Assign to Department</option>
                         </select>
-                        <button type="button" id="applyBulkAction" class="btn btn-outline-primary">Apply</button>
+                        <button type="button" id="applyBulkAction" class="btn btn-primary btn-sm" style="background: #b3261e; border-color: #b3261e; border-radius: 6px; font-weight: 600;">Apply</button>
                     </div>
 
-                <div class="table-responsive">
-                    <table class="admin-table">
-                        <thead>
-                            <tr>
-                                <th><input type="checkbox" class="form-check-input" id="selectAll"></th>
-                                <th>Employee ID</th>
-                                <th>Name</th>
-                                <th>Email</th>
-                                <th>Department</th>
-                                <th>Position</th>
-                                <th>Salary</th>
-                                <th>Status</th>
-                                <th>User Account</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php
-                            if ($employees_result && mysqli_num_rows($employees_result) > 0) {
-                                while ($emp = mysqli_fetch_assoc($employees_result)) {
-                                    $status_class = 'badge-' . str_replace('_', '-', $emp['status']);
-                                    $dept_name = isset($emp['department_name']) ? $emp['department_name'] : 'Unassigned';
-                                    $user_account_status = 'No Account';
-                                    $user_account_class = 'badge-secondary';
-                                    $employee_name_safe = htmlspecialchars(formatEmployeeFullName($emp['first_name'] ?? '', $emp['middle_initial'] ?? '', $emp['last_name'] ?? '', $emp['suffix'] ?? ''));
-                                    $employee_email_safe = htmlspecialchars((string)($emp['email'] ?? ''));
-                                    $department_name_safe = htmlspecialchars((string)$dept_name);
-                                    $position_label_safe = htmlspecialchars((string)($emp['position_label'] ?? ''));
-                                    $employee_id_safe = htmlspecialchars((string)($emp['employee_id'] ?? ''));
-                                    $employee_name_js = htmlspecialchars(json_encode(formatEmployeeFullName($emp['first_name'] ?? '', $emp['middle_initial'] ?? '', $emp['last_name'] ?? '', $emp['suffix'] ?? ''), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES);
-                                    $employee_email_js = htmlspecialchars(json_encode((string)($emp['email'] ?? ''), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES);
-                                    if ($emp['user_id'] && $emp['user_type']) {
-                                        $user_account_status = ucfirst($emp['user_type']);
-                                        $user_account_class = 'badge-primary';
-                                    }
-                                    echo "
-                                    <tr>
-                                        <td><input type='checkbox' class='form-check-input employee-checkbox' name='employee_ids[]' value='{$emp['id']}'></td>
-                                        <td><strong>{$employee_id_safe}</strong></td>
-                                        <td>{$employee_name_safe}</td>
-                                        <td>{$employee_email_safe}</td>
-                                        <td>{$department_name_safe}</td>
-                                        <td>{$position_label_safe}</td>
-                                        <td>&#8369;" . number_format($emp['salary'] > 0 ? $emp['salary'] : $emp['daily_rate'], 2) . "</td>
-                                        <td id='employeeStatusCell{$emp['id']}'><span class='status-badge $status_class'>" . ucfirst(str_replace('_', ' ', $emp['status'])) . "</span></td>
-                                        <td><span class='status-badge $user_account_class'>$user_account_status</span></td>
-                                        <td>
-                                            <button type='button' class='btn-icon' data-bs-toggle='modal' data-bs-target='#employeeModal' onclick='loadEmployeeDetails({$emp['id']})' title='View Details'>
-                                                <i class='fas fa-eye'></i>
-                                            </button>
-                                            <button type='button' class='btn-icon' onclick='editEmployee({$emp['id']})' title='Edit Employee'>
-                                                <i class='fas fa-edit'></i>
-                                            </button>
-                                            <a href='attendance.php?employee_id={$emp['id']}&date_from=" . date('Y-m-d') . "&date_to=" . date('Y-m-d') . "' class='btn-icon' title='View Attendance'>
-                                                <i class='fas fa-calendar-check'></i>
-                                            </a>
-                                            <a href='schedules.php?employee_id={$emp['id']}' class='btn-icon' title='View Schedules'>
-                                                <i class='fas fa-clock'></i>
-                                            </a>
-                                            <a href='leave_requests.php?employee_id={$emp['id']}' class='btn-icon' title='View Leave Requests'>
-                                                <i class='fas fa-calendar-minus'></i>
-                                            </a>
-                                            <a href='payroll.php?employee_id={$emp['id']}' class='btn-icon' title='Run Payroll'>
-                                                <i class='fas fa-money-check-alt'></i>
-                                            </a>
-                                            <form method='POST' id='statusForm{$emp['id']}' style='display:inline;'>
-                                                <input type='hidden' name='employee_id' value='{$emp['id']}'>
-                                                <input type='hidden' name='csrf_token' value='{$_SESSION['csrf_token']}'>
-                                                <select name='new_status' class='form-select-sm' data-current-status='{$emp['status']}' onchange='confirmStatusChange(this, {$emp['id']})'>
-                                                    <option value=''>Change Status</option>
-                                                    <option value='active'" . ($emp['status'] === 'active' ? " selected" : "") . ">Active</option>
-                                                    <option value='inactive'" . ($emp['status'] === 'inactive' ? " selected" : "") . ">Inactive</option>
-                                                    <option value='on_leave'" . ($emp['status'] === 'on_leave' ? " selected" : "") . ">On Leave</option>
-                                                    <option value='terminated'" . ($emp['status'] === 'terminated' ? " selected" : "") . ">Terminated</option>
-                                                </select>
-                                                <input type='hidden' name='update_status' value='1'>
-                                            </form>";
-                                    if (!$emp['user_id']) {
-                                        echo "<button type='button' class='btn-icon' onclick='openLinkUserModal({$emp['id']}, {$employee_name_js}, {$employee_email_js})' title='Link User Account'>
-                                                  <i class='fas fa-user-plus'></i>
-                                              </button>";
-                                    }
-                                    echo "</td>
-                                    </tr>
-                                    ";
-                                }
-                            } else {
-                                echo "<tr><td colspan='10' class='text-center text-muted'>No employees found</td></tr>";
-                            }
+                    <!-- ==========================================
+                         CARDS GRID VIEW (Matching Tiimi Mockup)
+                         ========================================== -->
+                    <div id="employeesCardGrid" class="emp-card-grid">
+                        <?php if (empty($employees_list)): ?>
+                            <div class="col-12 text-center py-5" style="grid-column: 1 / -1; background: #ffffff; border-radius: 16px; border: 1px dashed #d0d5dd;">
+                                <i class="fas fa-users-slash fa-3x mb-3 text-muted" style="opacity: 0.5;"></i>
+                                <h5 class="fw-bold text-dark">No employees found</h5>
+                                <p class="text-muted mb-0">Try adjusting your filters or click "+ Add Employee" to create a new profile.</p>
+                            </div>
+                        <?php else: ?>
+                            <?php foreach ($employees_list as $emp): 
+                                $emp_id = (int)$emp['id'];
+                                $emp_status = $emp['status'] ?? 'active';
+                                $status_pill_class = match($emp_status) {
+                                    'active' => 'active',
+                                    'inactive' => 'inactive',
+                                    'on_leave' => 'on_leave',
+                                    'terminated' => 'terminated',
+                                    default => 'active'
+                                };
+                                $status_label = ucwords(str_replace('_', ' ', $emp_status));
+
+                                // Name & Position
+                                $full_name = formatEmployeeFullName($emp['first_name'] ?? '', $emp['middle_initial'] ?? '', $emp['last_name'] ?? '', $emp['suffix'] ?? '');
+                                $full_name_safe = htmlspecialchars($full_name);
+                                $position_title = !empty($emp['position_label']) ? $emp['position_label'] : (!empty($emp['position']) ? $emp['position'] : 'Staff');
+                                $department_title = !empty($emp['department_name']) ? $emp['department_name'] : 'Unassigned';
+
+                                // Hire Date formatting (d/m/Y like reference screenshot)
+                                $hire_date_raw = $emp['hire_date'] ?? '';
+                                $hire_date_formatted = !empty($hire_date_raw) ? date('d/m/Y', strtotime($hire_date_raw)) : 'N/A';
+                                $is_new_hire = (!empty($hire_date_raw) && (time() - strtotime($hire_date_raw)) <= (45 * 86400));
+
+                                // Photo / Avatar
+                                $photo_path = !empty($emp['photo']) ? '../' . ltrim($emp['photo'], '/') : (!empty($emp['user_profile_image']) ? '../' . ltrim($emp['user_profile_image'], '/') : '');
+                                $has_real_photo = !empty($photo_path) && file_exists(dirname(__DIR__) . '/' . ltrim($photo_path, '../'));
+                                $avatar_gradient = getEmployeeAvatarGradient($full_name);
+                                $initials = strtoupper(substr($emp['first_name'] ?? 'E', 0, 1) . substr($emp['last_name'] ?? '', 0, 1));
+
+                                // Contact info
+                                $email_clean = htmlspecialchars((string)($emp['email'] ?? ''));
+                                $phone_clean = htmlspecialchars((string)($emp['phone'] ?? ''));
+
+                                // System Role Info
+                                $has_user_account = !empty($emp['user_id']);
+                                $system_role_name = !empty($emp['system_role_name']) ? getRoleDisplayName($emp['system_role_name']) : (!empty($emp['user_type']) ? ucfirst($emp['user_type']) : '');
+                                $system_role_name = preg_replace('/\s*\(.*\)\s*/', '', (string)$system_role_name);
+
+                                $emp_name_js = htmlspecialchars(json_encode($full_name, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES);
+                                $emp_email_js = htmlspecialchars(json_encode((string)($emp['email'] ?? ''), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES);
+                                $system_role_id = (int)($emp['system_role_id'] ?? 0);
                             ?>
-                        </tbody>
-                    </table>
-                </div>
+                            <div class="emp-card" id="empCard_<?php echo $emp_id; ?>">
+                                <div class="emp-card-header">
+                                    <input type="checkbox" class="form-check-input emp-card-check employee-checkbox" name="employee_ids[]" value="<?php echo $emp_id; ?>" onchange="updateSelectedCount()">
+                                    <div class="emp-card-badge-wrap">
+                                        <span class="emp-status-pill <?php echo $status_pill_class; ?>" id="cardStatusPill_<?php echo $emp_id; ?>">
+                                            <?php echo $status_label; ?>
+                                        </span>
+                                        <div class="dropdown">
+                                            <button type="button" class="emp-more-btn" data-bs-toggle="dropdown" aria-expanded="false" title="More Actions">
+                                                <i class="fas fa-ellipsis-h"></i>
+                                            </button>
+                                            <ul class="dropdown-menu dropdown-menu-end shadow-sm" style="border-radius: 10px; border: 1px solid #eaecf0; font-size: 13px; min-width: 175px;">
+                                                <li>
+                                                    <a class="dropdown-item py-2" href="javascript:void(0)" onclick="loadEmployeeDetails(<?php echo $emp_id; ?>)" data-bs-toggle="modal" data-bs-target="#employeeModal">
+                                                        <i class="fas fa-eye text-muted me-2"></i> View Profile
+                                                    </a>
+                                                </li>
+                                                <li>
+                                                    <a class="dropdown-item py-2" href="javascript:void(0)" onclick="editEmployee(<?php echo $emp_id; ?>)">
+                                                        <i class="fas fa-edit text-muted me-2"></i> Edit Details
+                                                    </a>
+                                                </li>
+                                                <?php if ($has_user_account): ?>
+                                                <li>
+                                                    <a class="dropdown-item py-2 text-primary" href="javascript:void(0)" onclick="openReassignRoleModal(<?php echo $emp_id; ?>, <?php echo $emp_name_js; ?>, <?php echo $system_role_id; ?>)">
+                                                        <i class="fas fa-user-shield me-2"></i> Reassign Role
+                                                    </a>
+                                                </li>
+                                                <?php else: ?>
+                                                <li>
+                                                    <a class="dropdown-item py-2 text-primary" href="javascript:void(0)" onclick="openLinkUserModal(<?php echo $emp_id; ?>, <?php echo $emp_name_js; ?>, <?php echo $emp_email_js; ?>)">
+                                                        <i class="fas fa-user-plus me-2"></i> Create Login
+                                                    </a>
+                                                </li>
+                                                <?php endif; ?>
+                                                <li><hr class="dropdown-divider my-1"></li>
+                                                <li>
+                                                    <a class="dropdown-item py-1 text-muted" href="attendance.php?employee_id=<?php echo $emp_id; ?>">
+                                                        <i class="fas fa-calendar-check me-2"></i> Attendance
+                                                    </a>
+                                                </li>
+                                                <li>
+                                                    <a class="dropdown-item py-1 text-muted" href="schedules.php?employee_id=<?php echo $emp_id; ?>">
+                                                        <i class="fas fa-clock me-2"></i> Schedules
+                                                    </a>
+                                                </li>
+                                                <li>
+                                                    <a class="dropdown-item py-1 text-muted" href="payroll.php?employee_id=<?php echo $emp_id; ?>">
+                                                        <i class="fas fa-money-check-alt me-2"></i> Payroll
+                                                    </a>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Circular Avatar Section -->
+                                <div class="emp-avatar-section">
+                                    <div class="emp-avatar-circle" style="<?php echo !$has_real_photo ? 'background: ' . $avatar_gradient . ';' : ''; ?>">
+                                        <?php if ($has_real_photo): ?>
+                                            <img src="<?php echo htmlspecialchars($photo_path); ?>" alt="<?php echo $full_name_safe; ?>" class="emp-avatar-img">
+                                        <?php else: ?>
+                                            <span class="emp-avatar-initials"><?php echo htmlspecialchars($initials); ?></span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <?php if ($is_new_hire): ?>
+                                        <span class="emp-new-hire-tag"><i class="fas fa-sparkles"></i> 1 New hire</span>
+                                    <?php endif; ?>
+                                </div>
+
+                                <!-- Full Name & Position Title -->
+                                <h3 class="emp-card-name" title="<?php echo $full_name_safe; ?>" onclick="loadEmployeeDetails(<?php echo $emp_id; ?>)" data-bs-toggle="modal" data-bs-target="#employeeModal" style="cursor: pointer;">
+                                    <?php echo $full_name_safe; ?>
+                                </h3>
+                                <div class="emp-card-role" title="<?php echo htmlspecialchars($position_title); ?>">
+                                    <?php echo htmlspecialchars($position_title); ?>
+                                </div>
+
+                                <!-- 2-Column Rounded Box (Department & Date Hired) -->
+                                <div class="emp-meta-container">
+                                    <div class="emp-meta-col">
+                                        <span class="emp-meta-label">Department</span>
+                                        <span class="emp-meta-val" title="<?php echo htmlspecialchars($department_title); ?>">
+                                            <?php echo htmlspecialchars($department_title); ?>
+                                        </span>
+                                    </div>
+                                    <div class="emp-meta-col">
+                                        <span class="emp-meta-label">Date Hired</span>
+                                        <span class="emp-meta-val"><?php echo $hire_date_formatted; ?></span>
+                                    </div>
+                                </div>
+
+                                <!-- Contact Info Rows -->
+                                <div class="emp-contact-list">
+                                    <div class="emp-contact-item" title="<?php echo $email_clean; ?>">
+                                        <i class="far fa-envelope"></i>
+                                        <span><?php echo $email_clean !== '' ? $email_clean : 'No email'; ?></span>
+                                    </div>
+                                    <div class="emp-contact-item" title="<?php echo $phone_clean; ?>">
+                                        <i class="fas fa-phone-alt"></i>
+                                        <span><?php echo $phone_clean !== '' ? $phone_clean : 'No phone'; ?></span>
+                                    </div>
+                                </div>
+
+                                <!-- User Account Role Strip -->
+                                <div class="emp-account-strip">
+                                    <?php if ($has_user_account): ?>
+                                        <span class="emp-role-tag linked" title="Assigned Role: <?php echo htmlspecialchars($system_role_name); ?> (Click to reassign)" onclick="openReassignRoleModal(<?php echo $emp_id; ?>, <?php echo $emp_name_js; ?>, <?php echo $system_role_id; ?>)">
+                                            <i class="fas fa-shield-alt"></i> Role: <?php echo htmlspecialchars($system_role_name); ?>
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="emp-role-tag unlinked" title="Click to assign system role & create login" onclick="openLinkUserModal(<?php echo $emp_id; ?>, <?php echo $emp_name_js; ?>, <?php echo $emp_email_js; ?>)">
+                                            <i class="fas fa-plus-circle"></i> Assign Role
+                                        </span>
+                                    <?php endif; ?>
+                                    
+                                    <form method="POST" id="statusForm<?php echo $emp_id; ?>" style="display:inline; margin: 0;">
+                                        <input type="hidden" name="employee_id" value="<?php echo $emp_id; ?>">
+                                        <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+                                        <select name="new_status" class="form-select form-select-sm" data-current-status="<?php echo $emp_status; ?>" onchange="confirmStatusChange(this, <?php echo $emp_id; ?>)" style="font-size: 11px; padding: 2px 6px; width: auto; border-radius: 6px; border-color: #eaecf0;">
+                                            <option value="">Status</option>
+                                            <option value="active" <?php echo $emp_status === 'active' ? 'selected' : ''; ?>>Active</option>
+                                            <option value="inactive" <?php echo $emp_status === 'inactive' ? 'selected' : ''; ?>>Inactive</option>
+                                            <option value="on_leave" <?php echo $emp_status === 'on_leave' ? 'selected' : ''; ?>>On Leave</option>
+                                            <option value="terminated" <?php echo $emp_status === 'terminated' ? 'selected' : ''; ?>>Terminated</option>
+                                        </select>
+                                        <input type="hidden" name="update_status" value="1">
+                                    </form>
+                                </div>
+                            </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- ==========================================
+                         TABLE VIEW (Alternative Spreadsheet View)
+                         ========================================== -->
+                    <div id="employeesTableView" class="table-responsive d-none">
+                        <table class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th><input type="checkbox" class="form-check-input" id="selectAll" onchange="toggleSelectAllEmployees(this)"></th>
+                                    <th>Employee</th>
+                                    <th>Position</th>
+                                    <th>Department</th>
+                                    <th>Contact</th>
+                                    <th>Date Hired</th>
+                                    <th>Status</th>
+                                    <th>Assigned Role</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php if (empty($employees_list)): ?>
+                                    <tr><td colspan="9" class="text-center text-muted py-4">No employees found</td></tr>
+                                <?php else: ?>
+                                    <?php foreach ($employees_list as $emp): 
+                                        $emp_id = (int)$emp['id'];
+                                        $emp_status = $emp['status'] ?? 'active';
+                                        $status_class = 'badge-' . str_replace('_', '-', $emp_status);
+                                        $full_name = formatEmployeeFullName($emp['first_name'] ?? '', $emp['middle_initial'] ?? '', $emp['last_name'] ?? '', $emp['suffix'] ?? '');
+                                        $full_name_safe = htmlspecialchars($full_name);
+                                        $position_title = !empty($emp['position_label']) ? $emp['position_label'] : (!empty($emp['position']) ? $emp['position'] : 'Staff');
+                                        $dept_name = !empty($emp['department_name']) ? $emp['department_name'] : 'Unassigned';
+                                        
+                                        $photo_path = !empty($emp['photo']) ? '../' . ltrim($emp['photo'], '/') : (!empty($emp['user_profile_image']) ? '../' . ltrim($emp['user_profile_image'], '/') : '');
+                                        $has_real_photo = !empty($photo_path) && file_exists(dirname(__DIR__) . '/' . ltrim($photo_path, '../'));
+                                        $avatar_gradient = getEmployeeAvatarGradient($full_name);
+                                        $initials = strtoupper(substr($emp['first_name'] ?? 'E', 0, 1) . substr($emp['last_name'] ?? '', 0, 1));
+                                        
+                                        $has_user_account = !empty($emp['user_id']);
+                                        $system_role_name = !empty($emp['system_role_name']) ? getRoleDisplayName($emp['system_role_name']) : (!empty($emp['user_type']) ? ucfirst($emp['user_type']) : '');
+                                        $system_role_name = preg_replace('/\s*\(.*\)\s*/', '', (string)$system_role_name);
+                                        $system_role_id = (int)($emp['system_role_id'] ?? 0);
+                                        $emp_name_js = htmlspecialchars(json_encode($full_name, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES);
+                                        $emp_email_js = htmlspecialchars(json_encode((string)($emp['email'] ?? ''), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES);
+                                    ?>
+                                    <tr>
+                                        <td><input type="checkbox" class="form-check-input employee-checkbox" name="employee_ids[]" value="<?php echo $emp_id; ?>" onchange="updateSelectedCount()"></td>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <div style="width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; <?php echo !$has_real_photo ? 'background: ' . $avatar_gradient . ';' : ''; ?>">
+                                                    <?php if ($has_real_photo): ?>
+                                                        <img src="<?php echo htmlspecialchars($photo_path); ?>" alt="<?php echo $full_name_safe; ?>" style="width: 100%; height: 100%; object-fit: cover;">
+                                                    <?php else: ?>
+                                                        <span style="color: #fff; font-weight: 700; font-size: 13px;"><?php echo htmlspecialchars($initials); ?></span>
+                                                    <?php endif; ?>
+                                                </div>
+                                                <div>
+                                                    <div class="fw-bold text-dark" style="font-size: 13.5px;"><?php echo $full_name_safe; ?></div>
+                                                    <small class="text-muted"><?php echo htmlspecialchars((string)($emp['employee_id'] ?? '')); ?></small>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td><?php echo htmlspecialchars($position_title); ?></td>
+                                        <td><?php echo htmlspecialchars($dept_name); ?></td>
+                                        <td>
+                                            <div style="font-size: 12px;"><?php echo htmlspecialchars((string)($emp['email'] ?? '')); ?></div>
+                                            <small class="text-muted"><?php echo htmlspecialchars((string)($emp['phone'] ?? '')); ?></small>
+                                        </td>
+                                        <td><?php echo !empty($emp['hire_date']) ? date('d/m/Y', strtotime($emp['hire_date'])) : 'N/A'; ?></td>
+                                        <td id="employeeStatusCell<?php echo $emp_id; ?>">
+                                            <span class="status-badge <?php echo $status_class; ?>"><?php echo ucwords(str_replace('_', ' ', $emp_status)); ?></span>
+                                        </td>
+                                        <td>
+                                            <?php if ($has_user_account): ?>
+                                                <span class="emp-role-tag linked" onclick="openReassignRoleModal(<?php echo $emp_id; ?>, <?php echo $emp_name_js; ?>, <?php echo $system_role_id; ?>)">
+                                                    <i class="fas fa-shield-alt"></i> Role: <?php echo htmlspecialchars($system_role_name); ?>
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="emp-role-tag unlinked" onclick="openLinkUserModal(<?php echo $emp_id; ?>, <?php echo $emp_name_js; ?>, <?php echo $emp_email_js; ?>)">
+                                                    <i class="fas fa-plus-circle"></i> Assign Role
+                                                </span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-1">
+                                                <button type="button" class="btn-icon" data-bs-toggle="modal" data-bs-target="#employeeModal" onclick="loadEmployeeDetails(<?php echo $emp_id; ?>)" title="View Details">
+                                                    <i class="fas fa-eye"></i>
+                                                </button>
+                                                <button type="button" class="btn-icon" onclick="editEmployee(<?php echo $emp_id; ?>)" title="Edit Employee">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
+                                                <a href="attendance.php?employee_id=<?php echo $emp_id; ?>&date_from=<?php echo date('Y-m-d'); ?>&date_to=<?php echo date('Y-m-d'); ?>" class="btn-icon" title="View Attendance">
+                                                    <i class="fas fa-calendar-check"></i>
+                                                </a>
+                                                <a href="payroll.php?employee_id=<?php echo $emp_id; ?>" class="btn-icon" title="Run Payroll">
+                                                    <i class="fas fa-money-check-alt"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
                 </form>
             </div>
         </div>
@@ -1391,7 +2123,7 @@ if ($roles_query) while ($r = mysqli_fetch_assoc($roles_query)) {
                     </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <form method="POST">
+                <form method="POST" enctype="multipart/form-data">
                     <div class="modal-body">
                         <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
                         
@@ -1402,6 +2134,15 @@ if ($roles_query) while ($r = mysqli_fetch_assoc($roles_query)) {
                                 <span class="emp-req-pill">Required</span>
                             </div>
                             <div class="row g-3">
+                                <div class="col-md-12">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">Employee Photo <span class="text-muted fw-normal" style="font-size: 11px;">(Optional &bull; JPG, PNG, WebP &bull; Max 5MB)</span></label>
+                                        <div class="emp-input-wrap">
+                                            <i class="fas fa-camera emp-input-icon"></i>
+                                            <input type="file" name="employee_photo" class="form-control" accept="image/jpeg,image/png,image/webp,image/jpg">
+                                        </div>
+                                    </div>
+                                </div>
                                 <div class="col-md-4">
                                     <div class="emp-form-group">
                                         <label class="emp-label">First Name <span class="emp-req-star">*</span></label>
@@ -1667,7 +2408,7 @@ if ($roles_query) while ($r = mysqli_fetch_assoc($roles_query)) {
                     </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <form method="POST">
+                <form method="POST" enctype="multipart/form-data">
                     <div class="modal-body">
                         <input type="hidden" name="update_employee" value="1">
                         <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
@@ -1680,6 +2421,21 @@ if ($roles_query) while ($r = mysqli_fetch_assoc($roles_query)) {
                                 <span class="emp-req-pill">Required</span>
                             </div>
                             <div class="row g-3">
+                                <div class="col-md-12">
+                                    <div class="emp-form-group">
+                                        <label class="emp-label">Employee Photo <span class="text-muted fw-normal" style="font-size: 11px;">(Optional &bull; JPG, PNG, WebP)</span></label>
+                                        <div class="d-flex align-items-center gap-3">
+                                            <div id="edit_photo_preview_wrap" style="width: 52px; height: 52px; border-radius: 50%; overflow: hidden; border: 2px solid #eaecf0; flex-shrink: 0; background: #f2f4f7; display: flex; align-items: center; justify-content: center;">
+                                                <img id="edit_photo_preview" src="" alt="Photo" style="width: 100%; height: 100%; object-fit: cover; display: none;">
+                                                <i id="edit_photo_placeholder" class="fas fa-user text-muted" style="font-size: 22px;"></i>
+                                            </div>
+                                            <div class="emp-input-wrap flex-grow-1">
+                                                <i class="fas fa-camera emp-input-icon"></i>
+                                                <input type="file" name="employee_photo" class="form-control" accept="image/jpeg,image/png,image/webp,image/jpg" onchange="previewEditEmployeePhoto(this)">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                                 <div class="col-md-4">
                                     <div class="emp-form-group">
                                         <label class="emp-label">First Name <span class="emp-req-star">*</span></label>
@@ -1938,6 +2694,57 @@ if ($roles_query) while ($r = mysqli_fetch_assoc($roles_query)) {
         </div>
     </div>
     
+    <!-- Reassign System Role Modal -->
+    <div class="modal fade emp-modal" id="reassignRoleModal" tabindex="-1" aria-labelledby="reassignRoleModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="modal-header-icon">
+                        <i class="fas fa-user-shield"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title" id="reassignRoleModalLabel">Assign / Change System Role</h5>
+                        <p class="modal-subtitle">Update system access permissions for this staff member.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form method="POST">
+                    <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+                    <input type="hidden" name="action" value="reassign_user_role">
+                    <input type="hidden" name="employee_id" id="reassign_employee_id">
+                    <div class="modal-body" style="padding: 24px; background: #ffffff;">
+                        <div class="mb-3">
+                            <label class="emp-label">Employee</label>
+                            <input type="text" id="reassign_employee_name" class="form-control" readonly style="background: #f8f9fa; font-weight: 600;">
+                        </div>
+                        <div class="mb-3">
+                            <label class="emp-label">Select System Role <span class="emp-req-star">*</span></label>
+                            <select name="new_role_id" id="reassign_role_id" class="form-select" required>
+                                <option value="">Select Role</option>
+                                <?php foreach ($roles as $r_item): 
+                                    $r_disp = !empty($r_item['department_name']) 
+                                        ? getRoleDisplayName($r_item['name']) . " (" . $r_item['department_name'] . ")"
+                                        : getRoleDisplayName($r_item['name']);
+                                ?>
+                                    <option value="<?php echo (int)$r_item['id']; ?>"><?php echo htmlspecialchars($r_disp); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="emp-helper-text mt-2" style="font-size: 12px; color: #475467;">
+                                <i class="fas fa-info-circle text-primary"></i> Once assigned, the employee's dashboard and topbar will immediately reflect their assigned role (e.g. <strong>Role: Finance Manager</strong>).
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="emp-btn-cancel" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="emp-btn-primary">
+                            <i class="fas fa-check"></i> Save Role Assignment
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
     <script src="../js/jquery-3.7.1.min.js"></script>
     <script src="../js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -2074,6 +2881,17 @@ if ($roles_query) while ($r = mysqli_fetch_assoc($roles_query)) {
             });
         }
 
+        function previewEditEmployeePhoto(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    $('#edit_photo_preview').attr('src', e.target.result).show();
+                    $('#edit_photo_placeholder').hide();
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
         function editEmployee(employeeId) {
             $.ajax({
                 url: 'get_employee_details.php',
@@ -2103,6 +2921,18 @@ if ($roles_query) while ($r = mysqli_fetch_assoc($roles_query)) {
                     
                     let rate = data.employment_basis === 'monthly' ? data.salary : data.daily_rate;
                     $('#edit_base_salary').val(rate);
+
+                    // Photo preview
+                    if (data.photo) {
+                        $('#edit_photo_preview').attr('src', '../' + data.photo.replace(/^\/+/, '')).show();
+                        $('#edit_photo_placeholder').hide();
+                    } else if (data.user_profile_image) {
+                        $('#edit_photo_preview').attr('src', '../' + data.user_profile_image.replace(/^\/+/, '')).show();
+                        $('#edit_photo_placeholder').hide();
+                    } else {
+                        $('#edit_photo_preview').attr('src', '').hide();
+                        $('#edit_photo_placeholder').show();
+                    }
                     
                     var editModal = new bootstrap.Modal(document.getElementById('editEmployeeModal'));
                     editModal.show();
@@ -2182,7 +3012,107 @@ if ($roles_query) while ($r = mysqli_fetch_assoc($roles_query)) {
             linkModal.show();
         }
 
+        function openReassignRoleModal(employeeId, employeeName, currentRoleId) {
+            document.getElementById('reassign_employee_id').value = employeeId;
+            document.getElementById('reassign_employee_name').value = employeeName;
+            const roleSelect = document.getElementById('reassign_role_id');
+            if (roleSelect) {
+                roleSelect.value = currentRoleId || '';
+            }
+            var reassignModal = new bootstrap.Modal(document.getElementById('reassignRoleModal'));
+            reassignModal.show();
+        }
+
+        function switchEmployeeView(mode) {
+            const cardGrid = document.getElementById('employeesCardGrid');
+            const tableView = document.getElementById('employeesTableView');
+            const btnCards = document.getElementById('viewModeCards');
+            const btnTable = document.getElementById('viewModeTable');
+
+            if (!cardGrid || !tableView) return;
+
+            if (mode === 'table') {
+                cardGrid.classList.add('d-none');
+                tableView.classList.remove('d-none');
+                if (btnCards) {
+                    btnCards.style.background = 'transparent';
+                    btnCards.style.color = '#667085';
+                }
+                if (btnTable) {
+                    btnTable.style.background = '#f2f4f7';
+                    btnTable.style.color = '#101828';
+                }
+                localStorage.setItem('employee_directory_view', 'table');
+            } else {
+                cardGrid.classList.remove('d-none');
+                tableView.classList.add('d-none');
+                if (btnCards) {
+                    btnCards.style.background = '#f2f4f7';
+                    btnCards.style.color = '#101828';
+                }
+                if (btnTable) {
+                    btnTable.style.background = 'transparent';
+                    btnTable.style.color = '#667085';
+                }
+                localStorage.setItem('employee_directory_view', 'cards');
+            }
+        }
+
+        function toggleHrFilters() {
+            const panel = document.getElementById('hrFilterPanel');
+            if (panel) {
+                panel.classList.toggle('d-none');
+            }
+        }
+
+        function updateSelectedCount() {
+            const checkedCount = document.querySelectorAll('.employee-checkbox:checked').length;
+            const badge = document.getElementById('selectionBadge');
+            const countNum = document.getElementById('selectedCountNumber');
+            const bulkBar = document.getElementById('bulkActionBar');
+
+            if (countNum) countNum.textContent = checkedCount;
+
+            if (checkedCount > 0) {
+                if (badge) {
+                    badge.classList.remove('d-none');
+                    badge.classList.add('d-flex');
+                }
+                if (bulkBar) {
+                    bulkBar.classList.remove('d-none');
+                    bulkBar.classList.add('d-flex');
+                }
+            } else {
+                if (badge) {
+                    badge.classList.add('d-none');
+                    badge.classList.remove('d-flex');
+                }
+                if (bulkBar) {
+                    bulkBar.classList.add('d-none');
+                    bulkBar.classList.remove('d-flex');
+                }
+            }
+        }
+
+        function toggleSelectAllEmployees(source) {
+            const checkboxes = document.querySelectorAll('.employee-checkbox');
+            checkboxes.forEach(cb => cb.checked = source.checked);
+            updateSelectedCount();
+        }
+
+        function clearSelectedEmployees() {
+            const checkboxes = document.querySelectorAll('.employee-checkbox');
+            checkboxes.forEach(cb => cb.checked = false);
+            const selectAll = document.getElementById('selectAll');
+            if (selectAll) selectAll.checked = false;
+            updateSelectedCount();
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
+            // Restore active view (cards or table)
+            const savedView = localStorage.getItem('employee_directory_view') || 'cards';
+            switchEmployeeView(savedView);
+
             <?php if (!empty($_SESSION['success'])): ?>
             Swal.fire({
                 title: 'Success',
@@ -2205,6 +3135,7 @@ if ($roles_query) while ($r = mysqli_fetch_assoc($roles_query)) {
         // Bulk Actions
         $('#selectAll').on('click', function() {
             $('.employee-checkbox').prop('checked', this.checked);
+            updateSelectedCount();
         });
 
         $('#applyBulkAction').on('click', function() {

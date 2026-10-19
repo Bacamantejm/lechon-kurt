@@ -87,8 +87,16 @@ if (!$context) {
 $customer_user_id = intval($context['customer_user_id'] ?? 0);
 $driver_user_id = intval($context['driver_user_id'] ?? 0);
 
+$is_rider_session = (!empty($_SESSION['is_driver']) || !empty($_SESSION['rider_id']));
+$session_rider_id = intval($_SESSION['rider_id'] ?? 0);
+$tracking_driver_id = intval($context['driver_id'] ?? 0);
+
 $can_customer_access = $customer_user_id > 0 && $customer_user_id === $user_id;
-$can_driver_access = ($driver_user_id > 0 && $driver_user_id === $user_id) || ($is_admin_or_staff && !empty($context['tracking_id']));
+$can_driver_access = (
+    ($driver_user_id > 0 && $driver_user_id === $user_id) ||
+    ($is_rider_session && $session_rider_id > 0 && ($session_rider_id === $tracking_driver_id || $session_rider_id === intval($context['rider_id'] ?? 0))) ||
+    ($is_admin_or_staff && !empty($context['tracking_id']))
+);
 
 if (!$can_customer_access && !$can_driver_access) {
     jsonErrorResponse(403, 'You do not have access to this delivery chat.');
@@ -112,17 +120,24 @@ if ($chat_available) {
 if ($method === 'GET') {
     $after_id = max(0, intval($_GET['after_id'] ?? 0));
     $limit = max(1, min(100, intval($_GET['limit'] ?? 50)));
+    $peek_unread = !empty($_GET['peek_unread']);
 
     $messages = [];
+    $unread_count = 0;
     if ($chat_available && $conversation_id > 0) {
         $messages = $chatService->getMessages($conversation_id, $limit, 0, null, $after_id > 0 ? $after_id : null);
         if ($messages === false) {
             jsonErrorResponse(500, $chatService->getLastError() ?: 'Unable to load messages.');
         }
-        $chatService->markMessagesAsRead($conversation_id, $user_id);
+        if (!$peek_unread) {
+            $chatService->markMessagesAsRead($conversation_id, $user_id);
+        }
         foreach ($messages as &$message) {
             $message['sender_role'] = (($message['sender_type'] ?? '') === 'rider') ? 'driver' : 'customer';
             $message['message'] = $message['message_text'] ?? '';
+            if (empty($message['is_read']) && (int)($message['sender_id'] ?? 0) !== $user_id) {
+                $unread_count++;
+            }
         }
         unset($message);
     }
@@ -147,6 +162,7 @@ if ($method === 'GET') {
             'driver_phone' => $context['driver_phone'] ?? null
         ],
         'messages' => $messages,
+        'unread_count' => $unread_count,
         'last_message_id' => $last_message_id
     ]);
     exit;

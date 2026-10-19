@@ -536,6 +536,151 @@ function suRunSchemaUpdates(mysqli $conn): array {
         suAddResult($results, 'hr_position_access_schema', 'error', $e->getMessage());
     }
 
+    // --- 11. Delivery Reviews Schema ---
+    try {
+        suEnsureTable(
+            $conn,
+            'delivery_reviews',
+            "CREATE TABLE IF NOT EXISTS `delivery_reviews` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `order_id` INT NOT NULL,
+                `user_id` INT NOT NULL,
+                `rating` TINYINT(1) NOT NULL,
+                `comment` TEXT NULL,
+                `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY `user_order` (`user_id`, `order_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci",
+            $results,
+            'delivery_reviews_schema'
+        );
+    } catch (Throwable $e) {
+        $has_errors = true;
+        suAddResult($results, 'delivery_reviews_schema', 'error', $e->getMessage());
+    }
+
+    // --- 12. Commission Splitting, Store & Rider Wallets Schema ---
+    try {
+        suEnsureColumn($conn, 'orders', 'store_id', "ALTER TABLE `orders` ADD COLUMN `store_id` INT NULL AFTER `seller_id`", $results, 'wallet_commission_schema');
+        suEnsureIndex($conn, 'orders', 'idx_orders_store_id', "ALTER TABLE `orders` ADD INDEX `idx_orders_store_id` (`store_id`)", $results, 'wallet_commission_schema');
+        suEnsureColumn($conn, 'orders', 'rider_id', "ALTER TABLE `orders` ADD COLUMN `rider_id` INT NULL AFTER `store_id`", $results, 'wallet_commission_schema');
+        suEnsureIndex($conn, 'orders', 'idx_orders_rider_id', "ALTER TABLE `orders` ADD INDEX `idx_orders_rider_id` (`rider_id`)", $results, 'wallet_commission_schema');
+
+        suEnsureTable(
+            $conn,
+            'order_payout_splits',
+            "CREATE TABLE IF NOT EXISTS `order_payout_splits` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `order_id` INT NOT NULL,
+                `store_id` INT NOT NULL,
+                `rider_id` INT NULL,
+                `food_subtotal` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `platform_commission_rate` DECIMAL(5,2) NOT NULL DEFAULT 15.00,
+                `platform_commission_amount` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `platform_service_fee` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `platform_cut` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `store_net_cut` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `base_delivery_fee` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `distance_surcharge` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `customer_tip` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `delivery_fee` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `rider_net_cut` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `total_bill` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `payment_method` ENUM('cod', 'online') NOT NULL DEFAULT 'cod',
+                `split_status` ENUM('pending', 'settled', 'cancelled', 'refunded') NOT NULL DEFAULT 'pending',
+                `settled_at` DATETIME NULL,
+                `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY `uniq_order_split` (`order_id`),
+                INDEX `idx_store_splits` (`store_id`, `split_status`),
+                INDEX `idx_rider_splits` (`rider_id`, `split_status`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci",
+            $results,
+            'wallet_commission_schema'
+        );
+
+        suEnsureTable(
+            $conn,
+            'store_wallets',
+            "CREATE TABLE IF NOT EXISTS `store_wallets` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `store_id` INT NOT NULL,
+                `balance` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `pending_balance` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `total_earned` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `total_commission_paid` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `total_withdrawn` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `payout_method` VARCHAR(50) NOT NULL DEFAULT 'manual',
+                `payout_details` TEXT NULL,
+                `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY `uniq_store_wallet` (`store_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci",
+            $results,
+            'wallet_commission_schema'
+        );
+
+        suEnsureTable(
+            $conn,
+            'store_transactions',
+            "CREATE TABLE IF NOT EXISTS `store_transactions` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `store_id` INT NOT NULL,
+                `order_id` INT NULL,
+                `transaction_type` ENUM('order_earning', 'payout', 'commission_deduction', 'adjustment', 'refund') NOT NULL,
+                `amount` DECIMAL(12,2) NOT NULL,
+                `balance_after` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `description` VARCHAR(255) NOT NULL,
+                `reference_code` VARCHAR(100) NULL,
+                `status` ENUM('completed', 'pending', 'rejected') NOT NULL DEFAULT 'completed',
+                `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                INDEX `idx_store_tx_history` (`store_id`, `created_at`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci",
+            $results,
+            'wallet_commission_schema'
+        );
+
+        suEnsureTable(
+            $conn,
+            'rider_wallets',
+            "CREATE TABLE IF NOT EXISTS `rider_wallets` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `rider_id` INT NOT NULL,
+                `cash_collected_on_hand` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `delivery_earnings_balance` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `total_tips` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `total_deliveries_completed` INT NOT NULL DEFAULT 0,
+                `remittance_status` ENUM('normal', 'warning', 'locked') NOT NULL DEFAULT 'normal',
+                `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY `uniq_rider_wallet` (`rider_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci",
+            $results,
+            'wallet_commission_schema'
+        );
+
+        suEnsureTable(
+            $conn,
+            'rider_transactions',
+            "CREATE TABLE IF NOT EXISTS `rider_transactions` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `rider_id` INT NOT NULL,
+                `order_id` INT NULL,
+                `type` ENUM('delivery_fee_earned', 'tip_earned', 'cod_cash_collected', 'cash_remitted_to_admin', 'payout', 'adjustment') NOT NULL,
+                `amount` DECIMAL(12,2) NOT NULL,
+                `balance_after` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `cash_on_hand_after` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `note` VARCHAR(255) NULL,
+                `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                INDEX `idx_rider_tx_history` (`rider_id`, `created_at`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci",
+            $results,
+            'wallet_commission_schema'
+        );
+    } catch (Throwable $e) {
+        $has_errors = true;
+        suAddResult($results, 'wallet_commission_schema', 'error', $e->getMessage());
+    }
+
     return ['results' => $results, 'has_errors' => $has_errors];
 }
 

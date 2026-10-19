@@ -559,10 +559,8 @@ $remaining = $total - $downpayment;
                     <div class="checkout-flow-step" data-step="2" style="cursor: pointer;"><span>2</span>Address</div>
                     <div class="checkout-flow-step" data-step="3" style="cursor: pointer;"><span>3</span>Payment</div>
                 </div>
-                <div class="progress-container" style="width: 100%; height: 6px; background: #efddcd; border-radius: 3px; margin-top: 15px; margin-bottom: 24px; overflow: visible; position: relative;">
-                    <div class="progress-bar" id="checkoutProgressBar" style="position: absolute; left: 0; top: 0; height: 100%; width: 33.33%; background: #b3261e; transition: width 0.3s ease; display: block !important; overflow: visible;">
-                        <div class="running-pig" style="position: absolute; right: -14px; top: -20px; font-size: 22px; user-select: none; line-height: 1; animation: pigRun 0.4s infinite alternate ease-in-out;">🐖</div>
-                    </div>
+                <div class="progress-container" style="width: 100%; height: 6px; background: #eaecf0; border-radius: 999px; margin-top: 14px; margin-bottom: 24px; overflow: hidden; position: relative;">
+                    <div class="progress-bar" id="checkoutProgressBar" style="position: absolute; left: 0; top: 0; height: 100%; width: 33.33%; background: #b3261e; border-radius: 999px; transition: width 0.3s ease; display: block !important;"></div>
                 </div>
 
                 <div class="checkout-type-switch" aria-label="Checkout Type">
@@ -2331,43 +2329,58 @@ body {
 }
 
 @media (max-width: 700px) {
-    .checkout-summary-kpis,
+    .checkout-summary-kpis {
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 8px !important;
+    }
+
+    .checkout-kpi {
+        padding: 8px 6px !important;
+        border-radius: 10px !important;
+        text-align: center !important;
+    }
+
     .checkout-flow {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 6px !important;
     }
 
     .checkout-flow-step {
-        justify-content: flex-start;
-        padding: 0 12px;
+        justify-content: center !important;
+        padding: 6px 4px !important;
+        font-size: 0.74rem !important;
+        min-height: 36px !important;
+    }
+
+    .checkout-flow-step span {
+        width: 18px !important;
+        height: 18px !important;
+        font-size: 0.68rem !important;
     }
 
     .checkout-mode-sticky {
-        display: block;
-        position: fixed;
-        left: 12px;
-        right: 12px;
-        bottom: 78px;
-        z-index: 998;
-        background: rgba(255, 255, 255, 0.98);
-        border: 1px solid #f0ddd0;
-        border-radius: 12px;
-        box-shadow: 0 10px 22px rgba(0, 0, 0, 0.12);
-        padding: 10px;
-        backdrop-filter: blur(4px);
+        display: none !important;
     }
 
-    .checkout-mode-sticky-actions {
-        width: 100%;
-        display: grid;
-        grid-template-columns: 1fr 1fr;
+    .checkout-section {
+        padding: 20px 0 160px !important;
     }
 
-    .checkout-mode-sticky .checkout-mode-btn {
-        justify-content: center;
+    .checkout-form,
+    .checkout-summary {
+        padding: 20px 14px !important;
+        border-radius: 16px !important;
     }
 
-    .checkout-form {
-        padding-bottom: 140px;
+    .co-address-card,
+    .co-delivery-map-card,
+    .voucher-section {
+        padding: 16px 12px !important;
+        border-radius: 14px !important;
+    }
+
+    .custom-payment-method-card {
+        padding: 12px 14px !important;
     }
 }
 
@@ -2606,10 +2619,10 @@ body {
         gap: 24px;
     }
     .checkout-form {
-        order: 2;
+        order: 1 !important;
     }
     .checkout-summary {
-        order: 1;
+        order: 2 !important;
     }
 }
 /* ==========================================================================

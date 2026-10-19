@@ -779,6 +779,13 @@ body.dark-mode .sidebar-menu .menu-item.active i {
                 </li>
             <?php endif; ?>
 
+            <li>
+                <a href="store_wallet.php" class="menu-item <?php echo ($current_page === 'store_wallet.php') ? 'active' : ''; ?>">
+                    <i class="fas fa-wallet"></i>
+                    <span>Store Wallet &amp; Ledger</span>
+                </a>
+            </li>
+
             <?php if ($can_expenses): ?>
                 <li>
                     <a href="expenses.php" class="menu-item <?php echo ($current_page === 'expenses.php') ? 'active' : ''; ?>">
@@ -1311,14 +1318,59 @@ body.dark-mode .sidebar-menu .menu-item.active i {
     }
 
     @media (max-width: 576px) {
-        .admin-topbar .topbar-right .theme-toggler,
-        .admin-topbar .topbar-right .notification-btn {
-            width: 36px;
-            height: 36px;
+        .admin-topbar {
+            padding: 8px 10px;
         }
-
+        .admin-topbar .topbar-content {
+            gap: 8px;
+        }
+        .admin-topbar .topbar-content h1 {
+            font-size: 0.95rem;
+            min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .admin-topbar .topbar-right {
+            gap: 6px;
+            margin-left: auto;
+        }
+        .admin-topbar .topbar-right .theme-toggler,
+        .admin-topbar .topbar-right .notification-btn,
+        .admin-topbar .sidebar-toggler {
+            width: 32px;
+            min-width: 32px;
+            height: 32px;
+            font-size: 13px;
+        }
+        .admin-header-actions {
+            gap: 6px;
+        }
         .admin-topbar .topbar-right .admin-profile span {
             display: none;
+        }
+        .admin-topbar .topbar-right .admin-profile-avatar {
+            width: 30px !important;
+            height: 30px !important;
+            font-size: 11px !important;
+        }
+    }
+
+    @media (max-width: 360px) {
+        .admin-topbar {
+            padding: 6px 8px;
+        }
+        .admin-topbar .topbar-content {
+            gap: 6px;
+        }
+        .admin-topbar .topbar-content h1 {
+            font-size: 0.9rem;
+        }
+        .admin-topbar .topbar-right {
+            gap: 4px;
+        }
+        .admin-topbar .topbar-right .theme-toggler {
+            display: none !important;
         }
     }
 
@@ -1590,28 +1642,81 @@ body.dark-mode .sidebar-menu .menu-item.active i {
     }
 
     .admin-profile {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        padding: 0;
-        width: 38px;
-        height: 38px;
-        min-width: 38px;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: flex-end !important;
+        padding: 3px 6px 3px 12px !important;
+        width: auto !important;
+        min-width: unset !important;
+        height: auto !important;
         background: transparent;
-        border-radius: 50%;
-        border: none;
+        border-radius: 24px;
+        border: 1px solid transparent;
         box-shadow: none;
         position: relative;
         cursor: pointer;
-        transition: transform 0.2s ease;
+        transition: all 0.2s ease;
+        flex-shrink: 0;
     }
 
     .admin-profile:hover {
-        transform: scale(1.05);
+        background: rgba(0, 0, 0, 0.04);
+        border-color: #eaecf0;
     }
 
-    .admin-profile > span:not(.admin-profile-avatar),
-    .admin-profile-name,
+    body.dark-mode .admin-profile:hover {
+        background: rgba(255, 255, 255, 0.06);
+        border-color: #27303f;
+    }
+
+    .admin-profile-meta-wrap {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        margin-right: 10px;
+        line-height: 1.25;
+        max-width: 220px;
+        overflow: hidden;
+        flex-shrink: 0;
+    }
+
+    .admin-profile-meta-name {
+        font-size: 13px;
+        font-weight: 700;
+        color: #101828;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+        display: block;
+    }
+
+    body.dark-mode .admin-profile-meta-name {
+        color: #f8fafc;
+    }
+
+    .admin-profile-meta-role {
+        font-size: 10.5px;
+        font-weight: 600;
+        background: #eff8ff;
+        color: #175cd3;
+        border: 1px solid #b2ddff;
+        border-radius: 10px;
+        padding: 1px 7px;
+        margin-top: 2px;
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        white-space: nowrap;
+    }
+
+    body.dark-mode .admin-profile-meta-role {
+        background: #172554;
+        color: #93c5fd;
+        border-color: #1e3a8a;
+    }
+
+    .admin-profile > span:not(.admin-profile-avatar):not(.admin-profile-meta-wrap *),
     .admin-profile-caret,
     .admin-profile > i:not(.admin-profile-dropdown i) {
         display: none !important;
@@ -2150,13 +2255,23 @@ body.dark-mode .sidebar-menu .menu-item.active i {
                 adminProfile.setAttribute('title', safeProfileName + ' (' + safeRoleInfo + ')');
 
                 // Remove legacy static text / icons from PHP template
-                adminProfile.querySelectorAll('span:not(.admin-profile-avatar), i').forEach(el => el.remove());
+                adminProfile.querySelectorAll(':scope > span:not(.admin-profile-avatar):not(.admin-profile-meta-wrap):not(.admin-profile-meta-wrap *), :scope > i').forEach(el => el.remove());
+
+                if (!adminProfile.querySelector('.admin-profile-meta-wrap')) {
+                    const metaWrap = `
+                        <div class="admin-profile-meta-wrap d-none d-sm-flex">
+                            <span class="admin-profile-meta-name">${escapeInlineHtml(safeProfileName)}</span>
+                            <span class="admin-profile-meta-role"><i class="fas fa-shield-alt" style="font-size:8px;"></i>${safeRoleInfo}</span>
+                        </div>
+                    `;
+                    adminProfile.insertAdjacentHTML('afterbegin', metaWrap);
+                }
 
                 if (!adminProfile.querySelector('.admin-profile-avatar')) {
                     const avatarMarkup = topbarProfile.avatar
                         ? `<img src="${escapeInlineHtml(topbarProfile.avatar)}" alt="${escapeInlineHtml(safeProfileName)} avatar" class="admin-profile-avatar">`
                         : `<span class="admin-profile-avatar admin-profile-fallback">${safeProfileInitials}</span>`;
-                    adminProfile.insertAdjacentHTML('afterbegin', avatarMarkup);
+                    adminProfile.insertAdjacentHTML('beforeend', avatarMarkup);
                 }
 
                 if (!adminProfile.querySelector('.admin-profile-dropdown')) {
@@ -2678,6 +2793,29 @@ body.dark-mode .sidebar-menu .menu-item.active i {
     margin-top: 2px;
     font-weight: 600;
     display: block;
+}
+
+@media (max-width: 576px) {
+    .admin-floating-chat-btn,
+    .admin-floating-chat-btn.with-timestamp {
+        bottom: 16px;
+        right: 14px;
+        width: 44px;
+        height: 44px;
+        font-size: 18px;
+        padding: 0;
+        box-shadow: 0 4px 12px rgba(179, 38, 30, 0.28);
+    }
+    .admin-floating-chat-timestamp {
+        display: none !important;
+    }
+    .admin-floating-chat-btn .badge {
+        width: 18px;
+        height: 18px;
+        font-size: 10px;
+        top: -3px;
+        right: -3px;
+    }
 }
 
 /* Admin Chat Widget Window */
