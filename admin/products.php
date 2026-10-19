@@ -466,6 +466,35 @@ if (empty($product_decisions)) {
             --border-color-dark: #404040;
         }
 
+        .weight-info-label {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .weight-info-optional {
+            color: #667085;
+            font-size: 0.72rem;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        body.dark-mode .weight-info-optional {
+            color: #98a2b3;
+        }
+
+        @media (max-width: 480px) {
+            .weight-info-label {
+                align-items: flex-start;
+                flex-wrap: wrap;
+            }
+
+            .weight-info-optional {
+                white-space: normal;
+            }
+        }
+
         body.dark-mode {
             background-color: var(--bg-color-dark) !important;
             color: var(--text-color-dark) !important;
@@ -1101,7 +1130,10 @@ if (empty($product_decisions)) {
                             <div class="row g-3">
                                 <div class="col-md-6">
                                     <div class="form-group-modern">
-                                        <label for="weight_info" class="form-label-modern">Weight / Serving Info</label>
+                                        <label for="weight_info" class="form-label-modern weight-info-label">
+                                            <span>Weight / Serving Info</span>
+                                            <span class="weight-info-optional">Optional — can be blank</span>
+                                        </label>
                                         <div class="form-input-wrap">
                                             <i class="fas fa-weight-hanging form-input-icon"></i>
                                             <input type="text" class="form-control" id="weight_info" name="weight_info" placeholder="e.g., 1 kg, 500g">
@@ -1250,7 +1282,10 @@ if (empty($product_decisions)) {
                             <div class="row g-3">
                                 <div class="col-md-6">
                                     <div class="form-group-modern">
-                                        <label for="edit_weight_info" class="form-label-modern">Weight Info</label>
+                                        <label for="edit_weight_info" class="form-label-modern weight-info-label">
+                                            <span>Weight Info</span>
+                                            <span class="weight-info-optional">Optional — can be blank</span>
+                                        </label>
                                         <div class="form-input-wrap">
                                             <i class="fas fa-weight-hanging form-input-icon"></i>
                                             <input type="text" class="form-control" id="edit_weight_info" name="weight_info">

@@ -3062,6 +3062,107 @@ body.dark-mode .emp-btn-cancel:hover {
     }
 }
 
+@media (max-width: 768px) {
+    .admin-container,
+    .admin-content,
+    .admin-main,
+    .admin-main > *,
+    .admin-main .row,
+    .admin-main [class*="col-"],
+    .admin-main .card,
+    .admin-main .section-header {
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    .admin-content {
+        overflow-x: hidden !important;
+    }
+
+    .admin-main {
+        overflow-x: hidden !important;
+    }
+
+    .admin-main h1,
+    .admin-main h2,
+    .admin-main h3,
+    .admin-main h4,
+    .admin-main h5,
+    .admin-main h6,
+    .admin-main p,
+    .admin-main label,
+    .admin-main .card-title {
+        overflow-wrap: anywhere;
+    }
+
+    .section-header,
+    .card-header,
+    .topbar-content,
+    .admin-main .d-flex {
+        flex-wrap: wrap !important;
+    }
+
+    .section-header > *,
+    .card-header > *,
+    .admin-main .d-flex > * {
+        min-width: 0 !important;
+        max-width: 100% !important;
+    }
+
+    .stats-grid,
+    .dashboard-grid,
+    .insight-grid,
+    .modules-grid,
+    .charts-grid,
+    .calc-grid,
+    .order-info-grid,
+    .user-info-grid {
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    .stats-grid > *,
+    .dashboard-grid > *,
+    .insight-grid > *,
+    .modules-grid > *,
+    .charts-grid > *,
+    .calc-grid > *,
+    .order-info-grid > *,
+    .user-info-grid > * {
+        min-width: 0 !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    .table-responsive,
+    .admin-table-wrapper,
+    .reviews-table-wrap,
+    .card-body:has(> table),
+    .card-body:has(> .admin-table) {
+        max-width: 100% !important;
+        min-width: 0 !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        overscroll-behavior-x: contain !important;
+    }
+
+    .form-control,
+    .form-select,
+    .input-group,
+    .input-group > *,
+    textarea {
+        max-width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    .modal-dialog {
+        width: calc(100% - 20px) !important;
+        max-width: calc(100% - 20px) !important;
+    }
+}
+
 /* ==========================================================================
    UNIVERSAL ADMIN DARK MODE ENGINE
    ========================================================================== */

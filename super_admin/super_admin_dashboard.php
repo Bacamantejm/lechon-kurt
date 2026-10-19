@@ -2303,6 +2303,154 @@ if ($dashboard_flash_payload === false) {
                 grid-template-columns: 1fr;
             }
         }
+
+        @media (max-width: 768px) {
+            .admin-container,
+            .admin-content,
+            .admin-main,
+            .super-owner-page,
+            .super-owner-page > *,
+            .owner-section,
+            .owner-card {
+                width: 100% !important;
+                min-width: 0 !important;
+                max-width: 100% !important;
+                box-sizing: border-box !important;
+            }
+
+            .admin-content {
+                overflow-x: hidden !important;
+            }
+
+            .admin-main.super-owner-page {
+                padding: 14px 10px 120px !important;
+                gap: 14px !important;
+                overflow-x: hidden !important;
+            }
+
+            .owner-hero {
+                padding: 18px 16px !important;
+                border-radius: 18px !important;
+                overflow: hidden !important;
+            }
+
+            .owner-hero h2 {
+                max-width: 100% !important;
+                font-size: clamp(1.45rem, 7vw, 2rem) !important;
+                line-height: 1.15 !important;
+                overflow-wrap: anywhere !important;
+            }
+
+            .owner-hero p {
+                max-width: 100% !important;
+                font-size: 0.9rem !important;
+                overflow-wrap: anywhere !important;
+            }
+
+            .owner-hero-meta {
+                max-width: 100% !important;
+                flex-wrap: nowrap !important;
+                overflow-x: auto !important;
+                overflow-y: hidden !important;
+                padding-bottom: 4px !important;
+                scrollbar-width: none !important;
+                -webkit-overflow-scrolling: touch !important;
+                touch-action: pan-x !important;
+                overscroll-behavior-x: contain !important;
+            }
+
+            .owner-hero-meta::-webkit-scrollbar {
+                display: none !important;
+            }
+
+            .owner-hero-meta span {
+                flex: 0 0 auto !important;
+                max-width: 84vw !important;
+                padding: 8px 11px !important;
+                font-size: 0.78rem !important;
+                white-space: nowrap !important;
+            }
+
+            .owner-section-head {
+                align-items: flex-start !important;
+                flex-direction: column !important;
+                gap: 8px !important;
+            }
+
+            .owner-section-head > div,
+            .owner-section-head h3,
+            .owner-section-head p {
+                max-width: 100% !important;
+                min-width: 0 !important;
+                overflow-wrap: anywhere !important;
+            }
+
+            .owner-two-col {
+                width: 100% !important;
+                min-width: 0 !important;
+            }
+
+            .admin-content .owner-metric-grid,
+            .admin-content .owner-priority-grid,
+            .admin-content .owner-module-health-grid,
+            .admin-content .owner-action-grid,
+            .admin-content .owner-business-grid {
+                display: flex !important;
+                flex-wrap: nowrap !important;
+                overflow-x: auto !important;
+                overflow-y: hidden !important;
+                -webkit-overflow-scrolling: touch !important;
+                touch-action: pan-x !important;
+                overscroll-behavior-x: contain !important;
+                scroll-snap-type: x proximity !important;
+                gap: 12px !important;
+                padding: 2px 2px 12px !important;
+                scrollbar-width: none !important;
+            }
+
+            .admin-content .owner-metric-grid::-webkit-scrollbar,
+            .admin-content .owner-priority-grid::-webkit-scrollbar,
+            .admin-content .owner-module-health-grid::-webkit-scrollbar,
+            .admin-content .owner-action-grid::-webkit-scrollbar,
+            .admin-content .owner-business-grid::-webkit-scrollbar {
+                display: none !important;
+            }
+
+            .admin-content .owner-metric-grid > *,
+            .admin-content .owner-priority-grid > *,
+            .admin-content .owner-module-health-grid > *,
+            .admin-content .owner-action-grid > *,
+            .admin-content .owner-business-grid > * {
+                flex: 0 0 min(82vw, 300px) !important;
+                min-width: min(82vw, 300px) !important;
+                max-width: min(82vw, 300px) !important;
+                box-sizing: border-box !important;
+                scroll-snap-align: start !important;
+            }
+
+            .admin-content .owner-list,
+            .admin-content .owner-queue-list,
+            .admin-content .owner-business-stats,
+            .admin-content .owner-business-finance {
+                min-width: 0 !important;
+                max-width: 100% !important;
+            }
+
+            .admin-content .owner-list-item,
+            .admin-content .owner-queue-item {
+                min-width: 0 !important;
+                max-width: 100% !important;
+                overflow-wrap: anywhere !important;
+            }
+
+            .admin-content .owner-queue-item {
+                flex-wrap: wrap !important;
+            }
+
+            .admin-content .owner-queue-time {
+                white-space: normal !important;
+            }
+        }
     </style>
 </head>
 <body>

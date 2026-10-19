@@ -4850,13 +4850,145 @@ document.addEventListener('DOMContentLoaded', function () {
 .reg-choice-desc { font-size:.82rem; color:#667085; line-height:1.3; }
 
 @media (max-width: 768px) {
+    .market-home,
+    .market-home .container,
+    .market-explorer,
+    .market-explorer > div,
+    .market-mini-section,
+    .first-user-deals-section,
+    .store-promos-section,
+    .partner-ads-section,
+    .bestsellers-section {
+        min-width: 0 !important;
+        max-width: 100% !important;
+    }
+
+    .market-head {
+        align-items: flex-start !important;
+        gap: 8px !important;
+    }
+
+    .market-head > div {
+        min-width: 0 !important;
+        max-width: 100% !important;
+    }
+
+    .market-head h2,
+    .market-head p {
+        overflow-wrap: anywhere !important;
+    }
+
+    .m-ref-categories-row {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        overscroll-behavior-x: contain !important;
+        touch-action: pan-x !important;
+    }
+
+    .first-user-deals-grid,
+    .store-promos-section > div:last-child,
+    .partner-ads-grid {
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
+        touch-action: pan-x !important;
+        scroll-snap-type: x proximity !important;
+        gap: 12px !important;
+        padding: 2px 2px 12px !important;
+        scrollbar-width: none !important;
+    }
+
+    .first-user-deals-grid::-webkit-scrollbar,
+    .store-promos-section > div:last-child::-webkit-scrollbar,
+    .partner-ads-grid::-webkit-scrollbar {
+        display: none !important;
+    }
+
+    .first-user-deals-grid > .deal-card,
+    .store-promos-section > div:last-child > .deal-card,
+    .partner-ads-grid > .partner-ad-card {
+        flex: 0 0 min(78vw, 270px) !important;
+        width: min(78vw, 270px) !important;
+        min-width: min(78vw, 270px) !important;
+        max-width: min(78vw, 270px) !important;
+        scroll-snap-align: start !important;
+        box-sizing: border-box !important;
+    }
+
+    .first-user-deals-grid .deal-card,
+    .store-promos-section .deal-card {
+        padding: 14px !important;
+    }
+
+    .partner-ads-grid .partner-ad-card {
+        min-height: 190px !important;
+    }
+
+    .panda-brand-slider,
+    .market-product-grid,
+    .market-mini-grid,
+    .market-dishes,
+    .market-branches {
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
+        touch-action: pan-x !important;
+        overscroll-behavior-x: contain !important;
+        scroll-snap-type: x proximity !important;
+        gap: 12px !important;
+        padding-bottom: 12px !important;
+        scrollbar-width: none !important;
+    }
+
+    .panda-brand-slider::-webkit-scrollbar,
+    .market-product-grid::-webkit-scrollbar,
+    .market-mini-grid::-webkit-scrollbar,
+    .market-dishes::-webkit-scrollbar,
+    .market-branches::-webkit-scrollbar {
+        display: none !important;
+    }
+
+    .market-product-grid > *,
+    .market-mini-grid > *,
+    .market-dishes > *,
+    .market-branches > * {
+        flex: 0 0 min(82vw, 260px) !important;
+        min-width: min(82vw, 260px) !important;
+        scroll-snap-align: start !important;
+    }
+
+    .panda-brand-slider > * {
+        flex: 0 0 120px !important;
+        min-width: 120px !important;
+        max-width: 120px !important;
+        scroll-snap-align: start !important;
+    }
+
+    .market-product-grid > *,
+    .market-mini-grid > *,
+    .market-dishes > *,
+    .market-branches > * {
+        box-sizing: border-box !important;
+        max-width: min(82vw, 260px) !important;
+    }
+
     .bestsellers-grid {
         display: flex !important;
         flex-direction: row !important;
         flex-wrap: nowrap !important;
         overflow-x: auto !important;
+        overflow-y: hidden !important;
         -webkit-overflow-scrolling: touch !important;
         touch-action: pan-x !important;
+        overscroll-behavior-x: contain !important;
         scroll-snap-type: x mandatory !important;
         gap: 12px !important;
         padding-bottom: 12px !important;
@@ -5351,5 +5483,3 @@ function claimAndUseWelcomeDeal(code, targetUrl) {
 }
 </script>
 <?php include 'includes/footer.php'; ?>
-
-

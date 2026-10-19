@@ -181,6 +181,7 @@ $reviews_result = mysqli_query($conn, $reviews_query);
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Manage Reviews - Admin</title>
     <link rel="stylesheet" href="../font_awesome/css/all.css">
     <link rel="stylesheet" href="../css/bootstrap.min.css">
@@ -210,7 +211,7 @@ $reviews_result = mysqli_query($conn, $reviews_query);
                     <div class="alert alert-danger"><?php echo htmlspecialchars($_SESSION['error']); ?></div>
                     <?php unset($_SESSION['error']); ?>
                 <?php endif; ?>
-                <div class="table-responsive">
+                <div class="table-responsive reviews-table-wrap">
                     <table class="admin-table">
                         <thead>
                             <tr>
@@ -334,4 +335,3 @@ $reviews_result = mysqli_query($conn, $reviews_query);
     </script>
 </body>
 </html>
-

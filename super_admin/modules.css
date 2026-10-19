@@ -411,6 +411,98 @@ body.dark-mode .module-table td {
     }
 }
 
+@media (max-width: 768px) {
+    .admin-container,
+    .admin-content,
+    .admin-main,
+    .admin-main > *,
+    .module-section,
+    .module-section > *,
+    .module-section-header,
+    .module-section-header > * {
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    .admin-content,
+    .admin-main {
+        overflow-x: hidden !important;
+    }
+
+    .module-section {
+        padding: 14px 12px !important;
+        overflow: hidden !important;
+    }
+
+    .module-section-header {
+        align-items: flex-start !important;
+        flex-direction: column !important;
+        gap: 10px !important;
+    }
+
+    .module-section h2,
+    .module-section h3,
+    .module-subtext,
+    .note-box,
+    .compact-text {
+        overflow-wrap: anywhere !important;
+    }
+
+    .metrics-grid {
+        width: 100% !important;
+        min-width: 0 !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 10px !important;
+    }
+
+    .metrics-grid > *,
+    .module-form-grid > *,
+    .ops-grid-2 > *,
+    .ops-grid-3 > * {
+        min-width: 0 !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    .module-inline-actions,
+    .ops-toolbar,
+    .ops-table-actions {
+        max-width: 100% !important;
+        flex-wrap: wrap !important;
+    }
+
+    .module-inline-actions > *,
+    .module-inline-actions form,
+    .ops-toolbar > * {
+        min-width: 0 !important;
+        max-width: 100% !important;
+    }
+
+    .table-wrap {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        overflow-x: auto !important;
+        overscroll-behavior-x: contain;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .module-table {
+        width: max-content !important;
+        min-width: 650px !important;
+    }
+
+    [style*="min-width:260px"],
+    [style*="min-width: 260px"],
+    [style*="min-width:220px"],
+    [style*="min-width: 220px"] {
+        min-width: 0 !important;
+        max-width: 100% !important;
+    }
+}
+
 body.dark-mode .live-indicator {
     background: #0f172a !important;
     border-color: #134e4a !important;
@@ -1000,5 +1092,4 @@ body.dark-mode .module-table tbody tr:hover {
         color: #f8fafc !important;
     }
 }
-
 

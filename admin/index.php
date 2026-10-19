@@ -346,6 +346,34 @@ if ($seller_scope_id !== null) {
             color: #b0b0b0 !important;
         }
 
+        @media (max-width: 768px) {
+            .admin-main .stats-grid,
+            .admin-main .dashboard-hub-grid {
+                display: flex !important;
+                flex-wrap: nowrap !important;
+                overflow-x: auto !important;
+                overflow-y: hidden !important;
+                -webkit-overflow-scrolling: touch !important;
+                touch-action: pan-x !important;
+                scroll-snap-type: x proximity !important;
+                gap: 12px !important;
+                padding: 2px 2px 12px !important;
+                scrollbar-width: none !important;
+            }
+
+            .admin-main .stats-grid::-webkit-scrollbar,
+            .admin-main .dashboard-hub-grid::-webkit-scrollbar {
+                display: none !important;
+            }
+
+            .admin-main .stats-grid > *,
+            .admin-main .dashboard-hub-grid > * {
+                flex: 0 0 min(82vw, 280px) !important;
+                min-width: min(82vw, 280px) !important;
+                scroll-snap-align: start !important;
+            }
+        }
+
         .franchise-priority-card {
             grid-column: 1 / -1;
             display: flex;
