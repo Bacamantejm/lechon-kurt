@@ -2113,8 +2113,13 @@ document.addEventListener('click', function(e) {
 
         <div class="header-actions">
             <?php if ($is_logged_in_user): ?>
+            <button class="icon-btn cart-btn" id="cartToggle" onclick="location.href='<?php echo $path_prefix; ?>cart.php'"><i class="fas fa-shopping-cart"></i><span class="badge" id="cartBadge"><?php echo (int)$cart_count; ?></span></button>
+            <div class="notification-wrapper">
+                <button class="icon-btn"><i class="fas fa-bell"></i><span class="badge" id="notificationBadge" style="display:none;">0</span></button>
+                <div class="notification-dropdown" id="notificationDropdown"><div class="notification-header">Notifications</div><div class="notification-empty">No new notifications yet.</div></div>
+            </div>
             <div class="user-menu-wrapper">
-                <button class="icon-btn user-avatar-btn" aria-label="Open user menu" title="<?php echo htmlspecialchars($viewer_name !== '' ? $viewer_name : 'My Account'); ?>">
+                <button class="icon-btn user-avatar-btn" aria-label="Open user menu" title="<?php echo htmlspecialchars($viewer_name !== '' ? $viewer_name : 'Profile Settings'); ?>">
                     <?php if ($viewer_profile_image_url !== ''): ?>
                     <img src="<?php echo htmlspecialchars($viewer_profile_image_url); ?>" alt="Profile picture" class="user-avatar-thumb">
                     <?php else: ?>
@@ -2123,17 +2128,16 @@ document.addEventListener('click', function(e) {
                 </button>
                 <div class="user-dropdown">
                     <div class="user-dropdown-header"><div class="user-name"><?php echo htmlspecialchars($viewer_name !== '' ? $viewer_name : $viewer_first_name); ?></div><?php if ($viewer_email !== ''): ?><div class="user-email"><?php echo htmlspecialchars($viewer_email); ?></div><?php endif; ?></div>
-                    <a href="<?php echo $path_prefix; ?>my_account.php" class="user-dropdown-item"><i class="fas fa-user"></i> My Profile</a>
-                    <a href="<?php echo $path_prefix; ?>my_account.php#addresses" class="user-dropdown-item"><i class="fas fa-address-book"></i> Address Book</a>
-                    <a href="<?php echo $path_prefix; ?>my_orders.php" class="user-dropdown-item"><i class="fas fa-shopping-bag"></i> My Orders</a>
-                    <a href="<?php echo $path_prefix; ?>help_center.php" class="user-dropdown-item"><i class="fas fa-life-ring"></i> Help Center</a>
-                    <a href="javascript:void(0);" onclick="openCustomerTutorial(true)" class="user-dropdown-item"><i class="fas fa-compass"></i> Customer Guide</a>
+                    <a href="<?php echo $path_prefix; ?>my_account.php" class="user-dropdown-item"><i class="fas fa-user-gear"></i> Profile Settings</a>
+                    <a href="<?php echo $path_prefix; ?>my_orders.php" class="user-dropdown-item"><i class="fas fa-shopping-bag"></i> Orders</a>
                     <?php if ($favorites_feature_enabled): ?>
-                    <a href="<?php echo $favorites_page_href; ?>" class="user-dropdown-item"><i class="fas fa-heart"></i> My Favorites</a>
+                    <a href="<?php echo $favorites_page_href; ?>" class="user-dropdown-item"><i class="fas fa-heart"></i> Favorites</a>
                     <?php endif; ?>
                     <?php if (!$is_shop_owner_or_partner): ?>
                     <a href="<?php echo $path_prefix; ?>franchise_application.php" class="user-dropdown-item"><i class="fas fa-store"></i> Apply for Business</a>
                     <?php endif; ?>
+                    <a href="javascript:void(0);" onclick="openCustomerTutorial(true)" class="user-dropdown-item"><i class="fas fa-compass"></i> Customer Guide</a>
+                    <a href="<?php echo $path_prefix; ?>help_center.php" class="user-dropdown-item"><i class="fas fa-life-ring"></i> Help Center</a>
                     <?php if (isset($_SESSION['account_type']) && $_SESSION['account_type'] === 'organization'): ?>
                     <a href="<?php echo $path_prefix; ?>subscription_plans.php" class="user-dropdown-item"><i class="fas fa-layer-group"></i> Subscription Plans</a>
                     <a href="<?php echo $path_prefix; ?>seller_products.php" class="user-dropdown-item"><i class="fas fa-box"></i> My Products</a>
@@ -2146,18 +2150,6 @@ document.addEventListener('click', function(e) {
                     <a href="javascript:void(0);" onclick="confirmLogout()" class="user-dropdown-item logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
                 </div>
             </div>
-            <?php if ($favorites_feature_enabled): ?>
-            <a class="icon-btn" id="favoritesToggle" href="<?php echo $favorites_page_href; ?>" title="Favorites"><i class="far fa-heart"></i><span class="badge" id="favoritesBadge" style="display:none;">0</span></a>
-            <?php endif; ?>
-            <?php if ($is_customer_user): ?>
-            <button class="icon-btn" id="chatBtn" onclick="location.href='<?php echo $path_prefix; ?>help_center.php'" title="Help Center"><i class="fas fa-comment-dots"></i><span class="badge" id="chatBadge" style="display:none;">0</span></button>
-            <?php endif; ?>
-            <div class="notification-wrapper">
-                <button class="icon-btn"><i class="fas fa-bell"></i><span class="badge" id="notificationBadge" style="display:none;">0</span></button>
-                <div class="notification-dropdown" id="notificationDropdown"><div class="notification-header">Notifications</div><div class="notification-empty">No new notifications yet.</div></div>
-            </div>
-            <button class="icon-btn cart-btn" id="cartToggle" onclick="location.href='<?php echo $path_prefix; ?>cart.php'"><i class="fas fa-shopping-cart"></i><span class="badge" id="cartBadge"><?php echo (int)$cart_count; ?></span></button>
-            <button type="button" class="icon-btn market-theme-btn" id="marketThemeToggler" title="Toggle Theme" aria-label="Toggle Dark or Light Theme"><i class="fas fa-moon"></i></button>
             <?php else: ?>
                 <button type="button" class="icon-btn market-theme-btn" id="marketThemeToggler" title="Toggle Theme" aria-label="Toggle Dark or Light Theme"><i class="fas fa-moon"></i></button>
                 <?php if ($current_page !== 'register' && $current_page !== 'login'): ?>
@@ -2342,8 +2334,13 @@ document.addEventListener('click', function(e) {
         </nav>
         <div class="header-actions">
             <?php if ($is_logged_in_user): ?>
+            <button class="icon-btn cart-btn" id="cartToggle" onclick="location.href='<?php echo $path_prefix; ?>cart.php'"><i class="fas fa-shopping-cart"></i><span class="badge" id="cartBadge"><?php echo (int)$cart_count; ?></span></button>
+            <div class="notification-wrapper">
+                <button class="icon-btn"><i class="fas fa-bell"></i><span class="badge" id="notificationBadge" style="display:none;">0</span></button>
+                <div class="notification-dropdown" id="notificationDropdown"><div class="notification-header">Notifications</div><div class="notification-empty">No new notifications yet.</div></div>
+            </div>
             <div class="user-menu-wrapper">
-                <button class="icon-btn user-avatar-btn" aria-label="Open user menu" title="<?php echo htmlspecialchars($viewer_name !== '' ? $viewer_name : 'My Account'); ?>">
+                <button class="icon-btn user-avatar-btn" aria-label="Open user menu" title="<?php echo htmlspecialchars($viewer_name !== '' ? $viewer_name : 'Profile Settings'); ?>">
                     <?php if ($viewer_profile_image_url !== ''): ?>
                     <img src="<?php echo htmlspecialchars($viewer_profile_image_url); ?>" alt="Profile picture" class="user-avatar-thumb">
                     <?php else: ?>
@@ -2355,17 +2352,16 @@ document.addEventListener('click', function(e) {
                     <?php if ($is_rider_context): ?>
                     <a href="<?php echo $path_prefix; ?>admin/logistics.php" class="user-dropdown-item" style="color:#b3261e; font-weight:700;"><i class="fas fa-motorcycle"></i> Delivery Rider Dashboard</a>
                     <?php endif; ?>
-                    <a href="<?php echo $path_prefix; ?>my_account.php<?php echo $is_rider_context ? '?from=logistics' : ''; ?>" class="user-dropdown-item"><i class="fas fa-user"></i> My Profile</a>
-                    <a href="<?php echo $path_prefix; ?>my_account.php#addresses" class="user-dropdown-item"><i class="fas fa-address-book"></i> Address Book</a>
-                    <a href="<?php echo $path_prefix; ?>my_orders.php" class="user-dropdown-item"><i class="fas fa-shopping-bag"></i> My Orders</a>
-                    <a href="<?php echo $path_prefix; ?>help_center.php" class="user-dropdown-item"><i class="fas fa-life-ring"></i> Help Center</a>
-                    <a href="javascript:void(0);" onclick="openCustomerTutorial(true)" class="user-dropdown-item"><i class="fas fa-compass"></i> Customer Guide</a>
+                    <a href="<?php echo $path_prefix; ?>my_account.php<?php echo $is_rider_context ? '?from=logistics' : ''; ?>" class="user-dropdown-item"><i class="fas fa-user-gear"></i> Profile Settings</a>
+                    <a href="<?php echo $path_prefix; ?>my_orders.php" class="user-dropdown-item"><i class="fas fa-shopping-bag"></i> Orders</a>
                     <?php if ($favorites_feature_enabled): ?>
-                    <a href="<?php echo $favorites_page_href; ?>" class="user-dropdown-item"><i class="fas fa-heart"></i> My Favorites</a>
+                    <a href="<?php echo $favorites_page_href; ?>" class="user-dropdown-item"><i class="fas fa-heart"></i> Favorites</a>
                     <?php endif; ?>
                     <?php if (!$is_shop_owner_or_partner): ?>
                     <a href="<?php echo $path_prefix; ?>franchise_application.php" class="user-dropdown-item"><i class="fas fa-store"></i> Apply for Business</a>
                     <?php endif; ?>
+                    <a href="javascript:void(0);" onclick="openCustomerTutorial(true)" class="user-dropdown-item"><i class="fas fa-compass"></i> Customer Guide</a>
+                    <a href="<?php echo $path_prefix; ?>help_center.php" class="user-dropdown-item"><i class="fas fa-life-ring"></i> Help Center</a>
                     <?php if (isset($_SESSION['account_type']) && $_SESSION['account_type'] === 'organization'): ?>
                     <a href="<?php echo $path_prefix; ?>subscription_plans.php" class="user-dropdown-item"><i class="fas fa-layer-group"></i> Subscription Plans</a>
                     <a href="<?php echo $path_prefix; ?>seller_products.php" class="user-dropdown-item"><i class="fas fa-box"></i> My Products</a>
@@ -2385,16 +2381,6 @@ document.addEventListener('click', function(e) {
                     <a href="<?php echo $path_prefix; ?>register.php?mode=register#register" class="btn-register">Create account</a>
                 </div>
                 <?php endif; ?>
-            <?php endif; ?>
-            <?php if ($favorites_feature_enabled): ?>
-            <a class="icon-btn" id="favoritesToggle" href="<?php echo $favorites_page_href; ?>" title="Favorites"><i class="far fa-heart"></i><span class="badge" id="favoritesBadge" style="display:none;">0</span></a>
-            <?php endif; ?>
-            <?php if ($is_customer_user): ?>
-            <button class="icon-btn" id="chatBtn" onclick="location.href='<?php echo $path_prefix; ?>help_center.php'" title="Help Center"><i class="fas fa-comment-dots"></i><span class="badge" id="chatBadge" style="display:none;">0</span></button>
-            <?php endif; ?>
-            <button class="icon-btn cart-btn" id="cartToggle" onclick="location.href='<?php echo $path_prefix; ?>cart.php'"><i class="fas fa-shopping-cart"></i><span class="badge" id="cartBadge"><?php echo (int)$cart_count; ?></span></button>
-            <?php if ($is_logged_in_user): ?>
-            <button type="button" class="icon-btn market-theme-btn" id="marketThemeTogglerSiteLoggedIn" title="Toggle Theme" aria-label="Toggle Dark or Light Theme"><i class="fas fa-moon"></i></button>
             <?php endif; ?>
             <button type="button" class="icon-btn mobile-toggle" id="mobileToggle2" onclick="openMobileNavSidebar(event)" aria-label="Open mobile menu"><i class="fas fa-bars"></i></button>
         </div>
@@ -2439,17 +2425,16 @@ document.addEventListener('click', function(e) {
         <li><a href="<?php echo $path_prefix; ?>about.php" class="<?php echo $current_page === 'about' ? 'active' : ''; ?>"><i class="fas fa-book-open"></i> Our Story</a></li>
         <li><a href="<?php echo $path_prefix; ?>faq.php" class="<?php echo $current_page === 'faq' ? 'active' : ''; ?>"><i class="fas fa-circle-question"></i> FAQ</a></li>
         <?php if ($is_logged_in_user): ?>
-        <li><a href="<?php echo $path_prefix; ?>my_account.php"><i class="fas fa-user-circle"></i> My Profile</a></li>
-        <li><a href="<?php echo $path_prefix; ?>my_account.php#addresses"><i class="fas fa-address-book"></i> Address Book</a></li>
-        <li><a href="<?php echo $path_prefix; ?>my_orders.php"><i class="fas fa-bag-shopping"></i> My Orders</a></li>
+        <li><a href="<?php echo $path_prefix; ?>my_account.php"><i class="fas fa-user-gear"></i> Profile Settings</a></li>
+        <li><a href="<?php echo $path_prefix; ?>my_orders.php"><i class="fas fa-bag-shopping"></i> Orders</a></li>
         <?php if ($favorites_feature_enabled): ?>
-        <li><a href="<?php echo $favorites_page_href; ?>"><i class="fas fa-heart"></i> My Favorites</a></li>
+        <li><a href="<?php echo $favorites_page_href; ?>"><i class="fas fa-heart"></i> Favorites</a></li>
         <?php endif; ?>
-        <li><a href="<?php echo $path_prefix; ?>help_center.php"><i class="fas fa-life-ring"></i> Help Center</a></li>
-        <li><a href="javascript:void(0);" onclick="openCustomerTutorial(true)"><i class="fas fa-compass"></i> Customer Guide</a></li>
         <?php if (!$is_shop_owner_or_partner): ?>
-        <li><a href="<?php echo $path_prefix; ?>franchise_application.php"><i class="fas fa-briefcase"></i> Partner with Us</a></li>
+        <li><a href="<?php echo $path_prefix; ?>franchise_application.php"><i class="fas fa-store"></i> Apply for Business</a></li>
         <?php endif; ?>
+        <li><a href="javascript:void(0);" onclick="openCustomerTutorial(true)"><i class="fas fa-compass"></i> Customer Guide</a></li>
+        <li><a href="<?php echo $path_prefix; ?>help_center.php"><i class="fas fa-life-ring"></i> Help Center</a></li>
         <?php if (isset($_SESSION['account_type']) && $_SESSION['account_type'] === 'organization'): ?>
         <li><a href="<?php echo $path_prefix; ?>subscription_plans.php" class="<?php echo $current_page === 'subscription_plans' ? 'active' : ''; ?>"><i class="fas fa-layer-group"></i> Subscription Plans</a></li>
         <li><a href="<?php echo $path_prefix; ?>seller_products.php"><i class="fas fa-box"></i> My Products</a></li>
@@ -3597,7 +3582,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 marketLocateMeBtn.disabled = false;
                 marketLocateMeBtn.innerHTML = originalBtnHtml;
 
-                const finalPayload = resolvedPayload || { street_address: 'General Trias, Cavite', city: 'General Trias', postal_code: '' };
+                if (!resolvedPayload) {
+                    if (marketQuickStreetInput) {
+                        marketQuickStreetInput.focus();
+                        marketQuickStreetInput.placeholder = 'Please enter your address manually...';
+                    }
+                    return;
+                }
+
+                const finalPayload = resolvedPayload;
                 if (marketQuickStreetInput) {
                     marketQuickStreetInput.value = finalPayload.street_address;
                 }
@@ -3608,12 +3601,10 @@ document.addEventListener('DOMContentLoaded', function () {
             }).catch(function (error) {
                 marketLocateMeBtn.disabled = false;
                 marketLocateMeBtn.innerHTML = originalBtnHtml;
-                const defaultPayload = { street_address: 'General Trias, Cavite', city: 'General Trias', postal_code: '' };
-                if (marketQuickStreetInput) marketQuickStreetInput.value = defaultPayload.street_address;
-                fillMarketAddressInputs(defaultPayload, { includeMapFields: true });
-                const storedPayload = persistMarketAddressPayload(defaultPayload);
-                renderMarketAddressDisplay(storedPayload);
-                closeAddressPopover();
+                if (marketQuickStreetInput) {
+                    marketQuickStreetInput.focus();
+                    marketQuickStreetInput.placeholder = 'Location access denied. Type address manually...';
+                }
             });
         });
     }

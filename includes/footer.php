@@ -810,21 +810,21 @@
         .footer-container {
             max-width: 1280px;
             margin: 0 auto;
-            padding: 28px 24px 16px;
+            padding: 18px 24px 12px;
             box-sizing: border-box;
         }
 
         .footer-grid {
             display: grid;
             grid-template-columns: 1.3fr 1fr 1fr 1fr;
-            gap: 24px;
+            gap: 18px;
         }
 
         .footer-col h4 {
             color: #ffffff;
-            font-size: 0.86rem;
+            font-size: 0.82rem;
             font-weight: 800;
-            margin: 0 0 10px;
+            margin: 0 0 8px;
             letter-spacing: 0.02em;
             text-transform: uppercase;
         }
@@ -932,13 +932,13 @@
         }
 
         .footer-bottom {
-            margin-top: 20px;
-            padding-top: 14px;
+            margin-top: 14px;
+            padding-top: 10px;
             border-top: 1px solid #232734;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            gap: 14px;
+            gap: 10px;
             flex-wrap: wrap;
         }
 

@@ -1020,12 +1020,12 @@ body.dark-mode .reg-choice-desc {
 }
 
 html, body {
-    overflow-x: hidden !important;
+    overflow-x: clip !important;
     max-width: 100vw !important;
 }
 
 .market-home {
-    overflow-x: hidden !important;
+    overflow-x: clip !important;
     width: 100% !important;
     max-width: 100% !important;
     box-sizing: border-box !important;
@@ -5079,9 +5079,44 @@ document.addEventListener('DOMContentLoaded', function () {
         return false;
     }
 
-    // Immediate initial DSS calculation on load: use stored address or default Cavite center
+    function resetToDefaultCaviteScope() {
+        locationReady = false;
+        rows.forEach(function (row) {
+            const timeLabel = row.querySelector('[data-role="time-label"]');
+            const etaText = row.querySelector('[data-role="eta-text"]');
+            const distanceText = row.querySelector('[data-role="distance-text"]');
+            const storeCity = row.dataset.city || 'Cavite';
+            const isOpen = row.dataset.open === '1';
+
+            row.dataset.distance = '999';
+            row.dataset.minutes = '25';
+
+            if (timeLabel) {
+                timeLabel.innerHTML = isOpen 
+                    ? '<i class="fas fa-truck-fast"></i> 20-30 min &bull; ' + storeCity 
+                    : '<i class="fas fa-store-slash"></i> Closed &bull; ' + storeCity;
+            }
+            if (etaText) {
+                etaText.textContent = '20-30 min';
+            }
+            if (distanceText) {
+                distanceText.textContent = storeCity;
+            }
+        });
+
+        if (detectNearestStatus) {
+            detectNearestStatus.textContent = 'Allow location access or set your address to calculate exact delivery distances.';
+        }
+        if (distanceSummary) {
+            distanceSummary.textContent = 'Showing Cavite stores. Set your address for exact distances and delivery times.';
+        }
+        sortRows();
+        applyFilters(heroSearch || gridSearch, { preservePagination: true });
+    }
+
+    // Immediate initial DSS calculation on load: use stored address if valid, otherwise avoid showing false location
     if (!checkStoredAddressOnIndex()) {
-        updateNearest(14.3294, 120.9367, false);
+        resetToDefaultCaviteScope();
     }
 
     // Try auto-detecting user location silently if permission was previously granted
