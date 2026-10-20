@@ -2151,7 +2151,6 @@ document.addEventListener('click', function(e) {
                 </div>
             </div>
             <?php else: ?>
-                <button type="button" class="icon-btn market-theme-btn" id="marketThemeToggler" title="Toggle Theme" aria-label="Toggle Dark or Light Theme"><i class="fas fa-moon"></i></button>
                 <?php if ($current_page !== 'register' && $current_page !== 'login'): ?>
                 <div class="auth-buttons">
                     <a href="<?php echo $path_prefix; ?>register.php?mode=login#login" class="btn-signin">Log in</a>
@@ -2374,7 +2373,6 @@ document.addEventListener('click', function(e) {
                 </div>
             </div>
             <?php else: ?>
-                <button type="button" class="icon-btn market-theme-btn" id="marketThemeTogglerSite" title="Toggle Theme" aria-label="Toggle Dark or Light Theme"><i class="fas fa-moon"></i></button>
                 <?php if ($current_page !== 'register' && $current_page !== 'login'): ?>
                 <div class="auth-buttons">
                     <a href="<?php echo $path_prefix; ?>register.php?mode=login#login" class="btn-signin">Log in</a>
