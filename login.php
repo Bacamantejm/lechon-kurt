@@ -1208,7 +1208,7 @@ body.dark-mode .floating-pig {
                 <div id="loginViewContainer" class="auth-panel-view">
                     <div class="login-header" style="text-align: center; margin-bottom: 24px;">
                         <div style="display: inline-flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 12px;">
-                            <img src="assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 48px; height: 48px; object-fit: cover; border-radius: 12px; display: block; border: 1px solid #efddcd; box-shadow: 0 4px 12px rgba(0,0,0,0.06);">
+                            <img src="assets/images/logo.png?v=lechon2" alt="Lechon Delight Logo" style="width: 48px; height: 48px; object-fit: contain; display: block; border: none; box-shadow: none;">
                             <span style="font-size: 1.6rem; font-weight: 800; color: #171922; font-family: 'Outfit', sans-serif;">Lechon Delights</span>
                         </div>
                         <h2>Welcome Back!</h2>

@@ -763,7 +763,8 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
         }
         .header-shell { max-width:1320px; margin:0 auto; padding:0 22px; width:100%; }
         .logo-link { display:inline-flex; gap:10px; align-items:center; text-decoration:none; flex-shrink:0; }
-        .logo-icon { width:36px; height:36px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; color:#fff; background:linear-gradient(135deg,#b3261e,#ef6b2e); box-shadow:0 6px 16px rgba(179,38,30,.2); font-size:.95rem; }
+        .logo-icon { width:36px; height:36px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; background:transparent !important; box-shadow:none !important; border:none !important; font-size:.95rem; overflow:hidden; }
+        .logo-icon img { width:100%; height:100%; object-fit:contain !important; display:block; border-radius:inherit; }
         .logo-copy { display:grid; gap:1px; }
         .logo-title { font-size:1.15rem; font-weight:800; color:var(--ink); line-height:1; }
         .logo-sub { font-size:.65rem; text-transform:uppercase; letter-spacing:.12em; color:#7f879a; font-weight:700; }
@@ -2171,7 +2172,7 @@ document.addEventListener('pointerdown', function(e) {
 <header class="site-header market-main-header">
     <div class="market-header-top <?php echo in_array($current_page, ['index', 'home', 'pickup'], true) ? 'has-address-bar' : 'no-address-bar'; ?>">
         <a href="<?php echo htmlspecialchars($nav_logo_href); ?>" class="logo-link">
-            <span class="logo-icon"><img src="<?php echo $path_prefix; ?>assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block;"></span>
+            <span class="logo-icon"><img src="<?php echo $path_prefix; ?>assets/images/logo.png?v=lechon2" alt="Lechon Delight Logo" style="width: 100%; height: 100%; object-fit: contain; display: block;"></span>
             <span class="logo-copy"><span class="logo-title">Lechon Delights</span><span class="logo-sub">Marketplace</span></span>
         </a>
 
@@ -2420,7 +2421,7 @@ document.addEventListener('pointerdown', function(e) {
 <header class="site-header standard-header">
     <div class="header-shell standard-top">
         <a href="<?php echo htmlspecialchars($nav_logo_href); ?>" class="logo-link">
-            <span class="logo-icon"><img src="<?php echo $path_prefix; ?>assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block;"></span>
+            <span class="logo-icon"><img src="<?php echo $path_prefix; ?>assets/images/logo.png?v=lechon2" alt="Lechon Delight Logo" style="width: 100%; height: 100%; object-fit: contain; display: block;"></span>
             <span class="logo-copy"><span class="logo-title">Lechon Delights</span><span class="logo-sub"><?php echo $is_rider_context ? 'Rider Portal' : 'Marketplace'; ?></span></span>
         </a>
         <?php if (!$is_auth_page): ?>
@@ -2495,7 +2496,7 @@ document.addEventListener('pointerdown', function(e) {
 <aside class="mobile-menu" id="mobileMenu">
     <div class="mobile-menu-header">
         <a href="<?php echo htmlspecialchars($nav_logo_href); ?>" class="logo-link" style="display:flex !important;">
-            <span class="logo-icon" style="width:34px;height:34px;font-size:.88rem;"><img src="<?php echo $path_prefix; ?>assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block;"></span>
+            <span class="logo-icon" style="width:34px;height:34px;font-size:.88rem;"><img src="<?php echo $path_prefix; ?>assets/images/logo.png?v=lechon2" alt="Lechon Delight Logo" style="width: 100%; height: 100%; object-fit: contain; display: block;"></span>
             <span class="logo-copy"><span class="logo-title" style="font-size:0.98rem;">Lechon Delights</span><span class="logo-sub" style="font-size:0.58rem;"><?php echo $is_rider_context ? 'Rider Portal' : 'Marketplace'; ?></span></span>
         </a>
         <button type="button" class="mobile-menu-close" id="mobileMenuClose" onclick="closeMobileNavSidebar(event)" aria-label="Close menu"><i class="fas fa-times"></i></button>
