@@ -3,6 +3,8 @@ session_start();
 
 header('Content-Type: application/json');
 
+require_once __DIR__ . '/includes/config.php';
+require_once __DIR__ . '/includes/partner_voucher_helper.php';
 require_once __DIR__ . '/includes/delivery_pricing_helper.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -17,8 +19,17 @@ if (!in_array($delivery_option, ['pickup', 'delivery'], true)) {
 }
 
 $_SESSION['delivery_option'] = $delivery_option;
-$stores = $_SESSION['store_locations'] ?? [];
+$_SESSION['delivery_option_explicit'] = true;
+$stores = dpFetchActiveStoresFromDb($conn);
+$_SESSION['store_locations'] = $stores;
+
 $preferred_owner_user_id = (int)($_SESSION['storefront_seller_id'] ?? 0);
+if ($preferred_owner_user_id <= 0 && !empty($_SESSION['cart']) && function_exists('pvGetCheckoutTenantScope')) {
+    $cart_scope = pvGetCheckoutTenantScope($conn, $_SESSION['cart']);
+    if (!empty($cart_scope['is_valid']) && !empty($cart_scope['seller_id'])) {
+        $preferred_owner_user_id = (int)$cart_scope['seller_id'];
+    }
+}
 
 $response = [
     'success' => true,
@@ -30,7 +41,10 @@ $response = [
     'distance_km' => null,
     'nearest_store_id' => null,
     'nearest_store_name' => null,
+    'nearest_store_address' => '',
     'estimated_delivery_text' => '',
+    'customer_lat' => null,
+    'customer_lng' => null,
 ];
 
 if ($delivery_option === 'pickup') {
@@ -56,20 +70,34 @@ if ($delivery_option === 'pickup') {
 
 unset($_SESSION['pickup_location']);
 
-$latitude = isset($_POST['latitude']) && is_numeric($_POST['latitude']) ? (float)$_POST['latitude'] : null;
-$longitude = isset($_POST['longitude']) && is_numeric($_POST['longitude']) ? (float)$_POST['longitude'] : null;
+$rawLat = $_POST['latitude'] ?? null;
+$rawLng = $_POST['longitude'] ?? null;
+$coords = dpSanitizeCoordinates($rawLat, $rawLng);
 
-if ($latitude !== null && $longitude !== null) {
-    $quote = dpBuildDeliveryQuote($stores, $latitude, $longitude, $preferred_owner_user_id);
+$delivery_address = trim((string)($_POST['delivery_address'] ?? $_POST['address'] ?? ''));
+if ($coords === null && $delivery_address !== '') {
+    $coords = dpResolveCoordinatesFromAddress($delivery_address);
+}
+
+if ($coords !== null) {
+    $latitude = (float)($coords['lat'] ?? $coords['latitude'] ?? 0);
+    $longitude = (float)($coords['lng'] ?? $coords['longitude'] ?? 0);
+    $quote = dpBuildDeliveryQuote($stores, $latitude, $longitude, $preferred_owner_user_id, [], $delivery_address);
+
     if (!empty($quote['success'])) {
         $_SESSION['current_delivery_quote'] = $quote;
+        $resolved_store_id = (int)($quote['nearest_store_id'] ?? 1);
+        $_SESSION['pickup_location'] = $resolved_store_id;
+        $response['pickup_location'] = $resolved_store_id;
         $response['delivery_fee'] = (float)($quote['fee'] ?? 0);
         $response['delivery_details'] = (string)($quote['delivery_details'] ?? 'Delivery fee calculated from the nearest store.');
         $response['distance_km'] = (float)($quote['distance_km'] ?? 0);
-        $response['nearest_store_id'] = (int)($quote['nearest_store_id'] ?? 0);
+        $response['nearest_store_id'] = $resolved_store_id;
         $response['nearest_store_name'] = (string)($quote['nearest_store_name'] ?? '');
         $response['nearest_store_address'] = (string)($quote['nearest_store_address'] ?? '');
         $response['estimated_delivery_text'] = (string)($quote['estimated_delivery_text'] ?? '');
+        $response['customer_lat'] = $latitude;
+        $response['customer_lng'] = $longitude;
     } else {
         unset($_SESSION['current_delivery_quote']);
         $response['success'] = false;
@@ -81,4 +109,5 @@ if ($latitude !== null && $longitude !== null) {
 }
 
 echo json_encode($response);
+
 

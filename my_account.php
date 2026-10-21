@@ -482,6 +482,57 @@ if (function_exists('caFetchUserSavedAddresses')) {
     }
 }
 
+// Fetch latest franchise application for status display
+$franchise_app = null;
+$franchise_app_docs = [];
+$fa_has_inc = false;
+if (myAccountTableExists($conn, 'franchise_applications')) {
+    $fa_cols = 'id, application_number, business_name, business_type, status, created_at, reviewed_at, admin_notes';
+    // Check if incomplete_documents column exists
+    $fa_inc_check = mysqli_query($conn, "SHOW COLUMNS FROM franchise_applications LIKE 'incomplete_documents'");
+    $fa_has_inc = $fa_inc_check && mysqli_num_rows($fa_inc_check) > 0;
+    if ($fa_has_inc) {
+        $fa_cols .= ', incomplete_documents';
+    }
+    $fa_resubmit_check = mysqli_query($conn, "SHOW COLUMNS FROM franchise_applications LIKE 'resubmitted_at'");
+    $fa_has_resubmit = $fa_resubmit_check && mysqli_num_rows($fa_resubmit_check) > 0;
+    if ($fa_has_resubmit) {
+        $fa_cols .= ', resubmitted_at';
+    }
+
+    $fa_sql = "SELECT {$fa_cols} FROM franchise_applications WHERE user_id = ? ORDER BY created_at DESC LIMIT 1";
+    $fa_stmt = mysqli_prepare($conn, $fa_sql);
+    if ($fa_stmt) {
+        mysqli_stmt_bind_param($fa_stmt, "i", $user_id);
+        mysqli_stmt_execute($fa_stmt);
+        $fa_result = mysqli_stmt_get_result($fa_stmt);
+        $franchise_app = $fa_result ? mysqli_fetch_assoc($fa_result) : null;
+        mysqli_stmt_close($fa_stmt);
+    }
+
+    // Fetch associated uploaded documents if application exists
+    if ($franchise_app && myAccountTableExists($conn, 'franchise_documents')) {
+        $fd_sql = "SELECT document_type, file_path, status, admin_remarks, uploaded_at FROM franchise_documents WHERE application_id = ? ORDER BY uploaded_at ASC";
+        $fd_stmt = mysqli_prepare($conn, $fd_sql);
+        if ($fd_stmt) {
+            mysqli_stmt_bind_param($fd_stmt, "i", $franchise_app['id']);
+            mysqli_stmt_execute($fd_stmt);
+            $fd_result = mysqli_stmt_get_result($fd_stmt);
+            while ($fd_result && ($fd_row = mysqli_fetch_assoc($fd_result))) {
+                $franchise_app_docs[] = $fd_row;
+            }
+            mysqli_stmt_close($fd_stmt);
+        }
+    }
+}
+$has_franchise_app = !empty($franchise_app);
+$fa_status = $has_franchise_app ? strtolower(trim((string)($franchise_app['status'] ?? ''))) : '';
+$fa_incomplete_docs = [];
+if ($has_franchise_app && $fa_has_inc && !empty($franchise_app['incomplete_documents'])) {
+    $fa_incomplete_docs = json_decode((string)$franchise_app['incomplete_documents'], true);
+    if (!is_array($fa_incomplete_docs)) $fa_incomplete_docs = [];
+}
+
 $profile_image_relative_path = '';
 if ($avatar_column_exists_for_account) {
     $profile_image_relative_path = myAccountNormalizeAvatarPath($user[$avatar_column_for_account] ?? '');
@@ -502,6 +553,8 @@ if (!empty($name_parts[1])) $avatar_initials .= strtoupper(substr($name_parts[1]
 if ($avatar_initials === '') $avatar_initials = 'U';
 
 $page_title = "My Account | Lechon Delights";
+require_once __DIR__ . '/includes/rider_helper.php';
+$is_rider_context = isRiderSessionActive($conn);
 include 'includes/header.php';
 ?>
 
@@ -983,41 +1036,47 @@ include 'includes/header.php';
 .mobile-segmented-nav {
     display: none;
     position: sticky;
-    top: 70px;
-    z-index: 100;
-    background: rgba(255, 255, 255, 0.96);
-    backdrop-filter: blur(8px);
-    border: 1px solid var(--acc-border);
-    border-radius: 12px;
-    padding: 4px;
-    margin-bottom: 16px;
+    top: 68px;
+    z-index: 95;
+    background: rgba(255, 255, 255, 0.88);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(234, 236, 240, 0.85);
+    border-radius: 999px;
+    padding: 5px;
+    margin-bottom: 20px;
     gap: 4px;
+    box-shadow: 0 4px 16px rgba(16, 24, 40, 0.06);
 }
 
 .mobile-segment-btn {
     flex: 1;
     border: none;
     background: transparent;
-    padding: 8px;
-    font-size: 0.8rem;
+    padding: 9px 12px;
+    font-size: 0.82rem;
     font-weight: 700;
     color: #475467;
-    border-radius: 8px;
+    border-radius: 999px;
     cursor: pointer;
     text-align: center;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 6px;
-    transition: all 0.15s ease;
+    transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .mobile-segment-btn.active {
     background: var(--acc-primary);
     color: #ffffff;
+    box-shadow: 0 2px 8px rgba(179, 38, 30, 0.25);
 }
 
 @media (max-width: 992px) {
+    .account-page-v2 {
+        padding-bottom: 200px !important;
+    }
     .account-grid-v2 {
         grid-template-columns: 1fr;
     }
@@ -1034,22 +1093,177 @@ include 'includes/header.php';
         grid-column: span 1;
     }
     .account-hero-card {
+        background: rgba(255, 255, 255, 0.92);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(234, 236, 240, 0.85);
+        border-radius: 20px;
+        box-shadow: 0 4px 20px -2px rgba(16, 24, 40, 0.05);
         flex-direction: column;
         align-items: flex-start;
+        padding: 20px;
     }
     .account-hero-right {
         width: 100%;
+        margin-top: 8px;
     }
     .hero-action-btn {
         flex: 1;
         justify-content: center;
+        border-radius: 12px;
+        padding: 10px 14px;
     }
+    .acc-panel-card {
+        background: rgba(255, 255, 255, 0.92);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        border: 1px solid rgba(234, 236, 240, 0.85);
+        border-radius: 20px;
+        padding: 18px 16px;
+        box-shadow: 0 4px 16px -2px rgba(16, 24, 40, 0.04);
+    }
+
+    /* Mobile Uncluttering: hide repetitive panel captions */
+    .acc-panel-head p {
+        display: none !important;
+    }
+    .acc-panel-head h3 {
+        font-size: 1.05rem !important;
+        margin: 0 !important;
+    }
+    .acc-panel-head {
+        margin-bottom: 12px !important;
+        padding-bottom: 8px !important;
+    }
+}
+
+/* ==========================================================================
+   MY ACCOUNT PAGE DARK THEME ENGINE
+   ========================================================================== */
+body.dark-mode .account-page-v2 {
+    background: #0f172a !important;
+}
+
+body.dark-mode .account-hero-card,
+body.dark-mode .account-sidebar-v2,
+body.dark-mode .account-card-v2,
+body.dark-mode .account-panel-v2 {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+body.dark-mode .hero-user-details h2,
+body.dark-mode .panel-head-v2 h3 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .panel-head-v2 p,
+body.dark-mode .acc-form-hint {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .hero-tag.type-tag,
+body.dark-mode .hero-action-btn {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .hero-action-btn:hover {
+    background: #334155 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .acc-nav-item {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .acc-nav-item:hover {
+    background: #111827 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .acc-nav-item.active {
+    background: rgba(179, 38, 30, 0.15) !important;
+    color: #ef4444 !important;
+}
+
+body.dark-mode .acc-form-label {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .acc-form-input,
+body.dark-mode .acc-form-select,
+body.dark-mode .acc-form-textarea {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .acc-form-input:focus,
+body.dark-mode .acc-form-select:focus,
+body.dark-mode .acc-form-textarea:focus {
+    border-color: #b3261e !important;
+    background: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .acc-form-input:disabled {
+    background: #111827 !important;
+    color: #64748b !important;
+}
+
+body.dark-mode .primary-address-snippet {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .address-snippet-left strong {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .address-snippet-left p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .btn-switch-tab {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #ef4444 !important;
+}
+
+body.dark-mode .btn-switch-tab:hover {
+    background: rgba(179, 38, 30, 0.2) !important;
+}
+
+body.dark-mode .mobile-segmented-nav {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .mobile-segment-btn {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .mobile-segment-btn.active {
+    background: #b3261e !important;
+    color: #ffffff !important;
 }
 </style>
 
 <div class="account-page-v2">
     <div class="account-container-v2">
         
+        <?php if ($is_rider_context): ?>
+        <div class="mb-3">
+            <a href="admin/logistics.php" class="btn" style="background:#ffffff; color:#b3261e; border:1.5px solid #fee4e2; font-weight:700; border-radius:10px; padding:9px 18px; display:inline-flex; align-items:center; gap:8px; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.05); text-decoration:none;">
+                <i class="fas fa-arrow-left"></i> Back to Delivery Rider Dashboard
+            </a>
+        </div>
+        <?php endif; ?>
+
         <!-- Top Profile Summary Banner (Hierarchy Level 1) -->
         <div class="account-hero-card">
             <div class="account-hero-left">
@@ -1070,7 +1284,7 @@ include 'includes/header.php';
                     <h2><?php echo htmlspecialchars($user['full_name'] ?? 'My Account'); ?></h2>
                     <div class="hero-user-tags">
                         <span class="hero-tag type-tag">
-                            <i class="fas fa-user-tag"></i> <?php echo $is_organization_account ? 'Store Partner' : 'Customer Account'; ?>
+                            <i class="fas fa-user-tag"></i> <?php echo $is_rider_context ? 'Delivery Rider' : ($is_organization_account ? 'Store Partner' : 'Customer Account'); ?>
                         </span>
                         <?php if ($partner_subscription): ?>
                         <a href="subscription_plans.php" class="hero-tag" style="background:#b3261e;color:#fff;border:1px solid #b3261e;text-decoration:none;font-weight:800;" title="Active Partner Plan: <?php echo htmlspecialchars($partner_subscription['plan_name']); ?>">
@@ -1088,15 +1302,15 @@ include 'includes/header.php';
             </div>
 
             <div class="account-hero-right">
-                <a href="my_orders.php" class="hero-action-btn">
-                    <i class="fas fa-bag-shopping"></i> My Orders
+                <?php if ($is_rider_context): ?>
+                <a href="admin/logistics.php" class="hero-action-btn" style="background:#b3261e; color:#ffffff; border-color:#b3261e; font-weight:700;">
+                    <i class="fas fa-motorcycle"></i> Rider Dashboard
                 </a>
-                <a href="favorites.php" class="hero-action-btn">
-                    <i class="fas fa-heart"></i> Favorites
-                </a>
-                <a href="help_center.php" class="hero-action-btn">
-                    <i class="fas fa-headset"></i> Help Center
-                </a>
+                <?php endif; ?>
+                <button type="button" class="hero-action-btn market-theme-btn" id="accountHeroThemeBtn" title="Toggle Theme" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;background:#ffffff;border:1px solid #d0d5dd;border-radius:10px;padding:8px 16px;font-size:0.86rem;font-weight:700;color:#344054;">
+                    <i class="fas fa-moon"></i>
+                    <span id="accountHeroThemeText">Theme Mode</span>
+                </button>
             </div>
         </div>
 
@@ -1111,6 +1325,11 @@ include 'includes/header.php';
             <button type="button" class="mobile-segment-btn" data-tab="password">
                 <i class="fas fa-lock"></i> Security
             </button>
+            <?php if ($has_franchise_app): ?>
+            <button type="button" class="mobile-segment-btn" data-tab="franchise">
+                <i class="fas fa-store"></i> Application
+            </button>
+            <?php endif; ?>
         </nav>
 
         <!-- Main Account 2-Column Grid -->
@@ -1131,6 +1350,21 @@ include 'includes/header.php';
                     <i class="fas fa-shield-halved"></i>
                     <span>Password & Security</span>
                 </button>
+                <?php if ($has_franchise_app): ?>
+                <button type="button" class="acc-tab-nav-btn" data-tab="franchise">
+                    <i class="fas fa-store"></i>
+                    <span>Application Status</span>
+                    <?php
+                        $fa_badge_bg = '#f2f4f7'; $fa_badge_color = '#344054';
+                        $fa_badge_label = ucfirst($fa_status);
+                        if ($fa_status === 'pending') { $fa_badge_bg = '#fffaeb'; $fa_badge_color = '#b54708'; $fa_badge_label = 'Pending'; }
+                        elseif ($fa_status === 'approved') { $fa_badge_bg = '#ecfdf3'; $fa_badge_color = '#027a48'; $fa_badge_label = 'Approved'; }
+                        elseif ($fa_status === 'rejected') { $fa_badge_bg = '#fff1f0'; $fa_badge_color = '#b3261e'; $fa_badge_label = 'Rejected'; }
+                        elseif ($fa_status === 'incomplete') { $fa_badge_bg = '#fffaeb'; $fa_badge_color = '#b54708'; $fa_badge_label = 'Incomplete'; }
+                    ?>
+                    <span class="nav-badge" style="background:<?php echo $fa_badge_bg; ?>;color:<?php echo $fa_badge_color; ?>;font-weight:800;border:1px solid currentColor;"><?php echo htmlspecialchars($fa_badge_label); ?></span>
+                </button>
+                <?php endif; ?>
                 <?php if ($is_organization_account || $partner_subscription): ?>
                 <a href="subscription_plans.php" class="acc-tab-nav-btn" style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:10px;">
                     <i class="fas fa-crown" style="color:#b3261e;"></i>
@@ -1258,6 +1492,31 @@ include 'includes/header.php';
                             </div>
                         </form>
                     </div>
+
+                    <!-- Display & Theme Preferences Card -->
+                    <div class="acc-panel-card" style="margin-top: 20px;">
+                        <div class="acc-panel-head">
+                            <div>
+                                <h3>Appearance &amp; Theme</h3>
+                                <p>Choose between light and dark theme modes for your account interface.</p>
+                            </div>
+                        </div>
+                        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 4px;flex-wrap:wrap;gap:14px;">
+                            <div style="display:flex;align-items:center;gap:14px;">
+                                <div style="width:44px;height:44px;border-radius:12px;background:#fff1f0;color:#b3261e;display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0;">
+                                    <i class="fas fa-circle-half-stroke"></i>
+                                </div>
+                                <div>
+                                    <strong style="display:block;font-size:0.95rem;color:var(--ink);" id="accountDisplayThemeTitle">Interface Theme</strong>
+                                    <span style="font-size:0.82rem;color:var(--muted);" id="accountDisplayThemeSub">Switch to dark mode for comfortable low-light viewing.</span>
+                                </div>
+                            </div>
+                            <button type="button" class="acc-btn-secondary market-theme-btn" id="accountSettingsThemeToggler" style="min-height:38px;padding:0 16px;border-radius:10px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:8px;">
+                                <i class="fas fa-moon"></i>
+                                <span id="accountSettingsThemeBtnLabel">Toggle Dark Mode</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- 2. Address Book & Map Pin Tab -->
@@ -1327,6 +1586,178 @@ include 'includes/header.php';
                         </form>
                     </div>
                 </div>
+
+                <!-- 4. Franchise Application Status Tab -->
+                <?php if ($has_franchise_app): ?>
+                <div class="acc-tab-pane" id="franchise">
+                    <?php
+                        // Status config for display
+                        $fa_status_config = [
+                            'pending'    => ['icon' => 'fa-clock',       'label' => 'Under Review',           'bg' => '#fffaeb', 'color' => '#b54708', 'border' => '#fedf89', 'desc' => 'Your business application is currently being reviewed by the admin team. You will be notified once a decision is made.'],
+                            'approved'   => ['icon' => 'fa-circle-check','label' => 'Approved',               'bg' => '#ecfdf3', 'color' => '#027a48', 'border' => '#abefc6', 'desc' => 'Your franchise application has been approved. Welcome aboard as a platform partner!'],
+                            'rejected'   => ['icon' => 'fa-circle-xmark','label' => 'Rejected',               'bg' => '#fff1f0', 'color' => '#b3261e', 'border' => '#fee4e2', 'desc' => 'Unfortunately, your application was not approved. Please review the admin feedback below.'],
+                            'incomplete' => ['icon' => 'fa-triangle-exclamation', 'label' => 'Incomplete Requirements', 'bg' => '#fffaeb', 'color' => '#b54708', 'border' => '#fedf89', 'desc' => 'Your application requires additional documents or revisions. Please go to the application form to re-upload the flagged items.'],
+                        ];
+                        $fa_cfg = $fa_status_config[$fa_status] ?? ['icon' => 'fa-circle-question', 'label' => ucfirst($fa_status), 'bg' => '#f8f9fa', 'color' => '#344054', 'border' => '#eaecf0', 'desc' => 'Application status information.'];
+                    ?>
+
+                    <!-- Status Banner -->
+                    <div style="background:<?php echo $fa_cfg['bg']; ?>;border:1px solid <?php echo $fa_cfg['border']; ?>;border-radius:14px;padding:18px 22px;margin-bottom:20px;display:flex;align-items:flex-start;gap:14px;">
+                        <div style="width:44px;height:44px;border-radius:12px;background:<?php echo $fa_cfg['bg']; ?>;color:<?php echo $fa_cfg['color']; ?>;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0;border:1px solid <?php echo $fa_cfg['border']; ?>;">
+                            <i class="fas <?php echo $fa_cfg['icon']; ?>"></i>
+                        </div>
+                        <div>
+                            <div style="font-weight:800;font-size:1rem;color:<?php echo $fa_cfg['color']; ?>;margin-bottom:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                                <?php echo htmlspecialchars($fa_cfg['label']); ?>
+                                <span style="background:<?php echo $fa_cfg['bg']; ?>;color:<?php echo $fa_cfg['color']; ?>;font-size:0.72rem;padding:2px 8px;border-radius:999px;border:1px solid <?php echo $fa_cfg['border']; ?>;font-weight:800;text-transform:uppercase;"><?php echo htmlspecialchars($fa_status); ?></span>
+                            </div>
+                            <p style="margin:0;font-size:0.86rem;color:#475467;line-height:1.5;"><?php echo htmlspecialchars($fa_cfg['desc']); ?></p>
+                        </div>
+                    </div>
+
+                    <!-- Application Details Card -->
+                    <div class="acc-panel-card">
+                        <div class="acc-panel-head">
+                            <div>
+                                <h3>Application Details</h3>
+                                <p>Overview of your submitted business franchise application.</p>
+                            </div>
+                        </div>
+
+                        <div class="acc-form-grid">
+                            <div class="acc-form-group">
+                                <label><span>Application Number</span></label>
+                                <input type="text" class="acc-form-input" value="<?php echo htmlspecialchars($franchise_app['application_number'] ?? 'N/A'); ?>" disabled>
+                            </div>
+                            <div class="acc-form-group">
+                                <label><span>Business Name</span></label>
+                                <input type="text" class="acc-form-input" value="<?php echo htmlspecialchars($franchise_app['business_name'] ?? 'N/A'); ?>" disabled>
+                            </div>
+                            <div class="acc-form-group">
+                                <label><span>Business Type</span></label>
+                                <input type="text" class="acc-form-input" value="<?php echo htmlspecialchars($franchise_app['business_type'] ?? 'N/A'); ?>" disabled>
+                            </div>
+                            <div class="acc-form-group">
+                                <label><span>Status</span></label>
+                                <div style="padding:10px 14px;border:1px solid <?php echo $fa_cfg['border']; ?>;border-radius:10px;background:<?php echo $fa_cfg['bg']; ?>;color:<?php echo $fa_cfg['color']; ?>;font-weight:700;font-size:0.9rem;display:flex;align-items:center;gap:8px;">
+                                    <i class="fas <?php echo $fa_cfg['icon']; ?>"></i>
+                                    <?php echo htmlspecialchars($fa_cfg['label']); ?>
+                                </div>
+                            </div>
+                            <div class="acc-form-group">
+                                <label><span>Date Submitted</span></label>
+                                <input type="text" class="acc-form-input" value="<?php echo !empty($franchise_app['created_at']) ? date('F j, Y g:i A', strtotime((string)$franchise_app['created_at'])) : 'N/A'; ?>" disabled>
+                            </div>
+                            <div class="acc-form-group">
+                                <label><span>Date Reviewed</span></label>
+                                <input type="text" class="acc-form-input" value="<?php echo !empty($franchise_app['reviewed_at']) ? date('F j, Y g:i A', strtotime((string)$franchise_app['reviewed_at'])) : 'Awaiting review'; ?>" disabled>
+                            </div>
+                        </div>
+
+                        <?php if (!empty($franchise_app['admin_notes'])): ?>
+                        <div style="margin-top:16px;">
+                            <label style="font-size:0.86rem;font-weight:700;color:#344054;display:block;margin-bottom:6px;">Admin Feedback / Notes</label>
+                            <div style="background:#f8f9fa;border:1px solid #eaecf0;border-radius:10px;padding:14px 16px;font-size:0.88rem;color:#475467;line-height:1.6;white-space:pre-wrap;"><?php echo htmlspecialchars($franchise_app['admin_notes']); ?></div>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+
+                    <?php if ($fa_status === 'incomplete' && !empty($fa_incomplete_docs)): ?>
+                    <!-- Incomplete Documents Breakdown -->
+                    <div class="acc-panel-card">
+                        <div class="acc-panel-head">
+                            <div>
+                                <h3>Flagged Documents</h3>
+                                <p>The following documents need to be revised and re-uploaded.</p>
+                            </div>
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:10px;">
+                            <?php foreach ($fa_incomplete_docs as $doc_key => $doc_info): ?>
+                            <?php
+                                $doc_label = is_array($doc_info) ? ($doc_info['label'] ?? $doc_key) : (string)$doc_info;
+                                $doc_reason = is_array($doc_info) ? ($doc_info['reason'] ?? 'Please re-upload this document.') : 'Please re-upload this document.';
+                            ?>
+                            <div style="background:#fffaeb;border:1px solid #fedf89;border-radius:10px;padding:12px 16px;display:flex;align-items:flex-start;gap:10px;">
+                                <i class="fas fa-triangle-exclamation" style="color:#b54708;margin-top:2px;flex-shrink:0;"></i>
+                                <div>
+                                    <strong style="font-size:0.88rem;color:#101828;"><?php echo htmlspecialchars($doc_label); ?></strong>
+                                    <p style="margin:2px 0 0;font-size:0.82rem;color:#b54708;"><?php echo htmlspecialchars($doc_reason); ?></p>
+                                </div>
+                            </div>
+                            <?php endforeach; ?>
+                        </div>
+
+                        <div style="margin-top:18px;">
+                            <a href="franchise_application.php" class="acc-btn-primary" style="text-decoration:none;">
+                                <i class="fas fa-arrow-rotate-right"></i> Resubmit Flagged Documents
+                            </a>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+
+                    <?php if (!empty($franchise_app_docs)): ?>
+                    <!-- Uploaded Documents List -->
+                    <div class="acc-panel-card">
+                        <div class="acc-panel-head">
+                            <div>
+                                <h3>Uploaded Documents</h3>
+                                <p>Documents you submitted with your franchise application.</p>
+                            </div>
+                        </div>
+                        <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(260px, 1fr));gap:12px;">
+                            <?php
+                            $doc_type_labels = [
+                                'valid_id' => 'Valid ID',
+                                'business_logo' => 'Business Logo',
+                                'dti_doc' => 'DTI/SEC Registration',
+                                'bir_doc' => 'BIR Registration',
+                                'address_proof' => 'Proof of Address',
+                                'mayors_permit' => "Mayor's Permit",
+                                'sanitary_permit' => 'Sanitary Permit',
+                                'fire_safety' => 'Fire Safety Certificate',
+                            ];
+                            foreach ($franchise_app_docs as $doc_row):
+                                $dtype = (string)($doc_row['document_type'] ?? '');
+                                $dlabel = $doc_type_labels[$dtype] ?? ucwords(str_replace('_', ' ', $dtype));
+                                $dstatus = strtolower(trim((string)($doc_row['status'] ?? 'pending')));
+                                $dstatus_cfg = [
+                                    'approved' => ['bg' => '#ecfdf3', 'color' => '#027a48', 'border' => '#abefc6', 'icon' => 'fa-circle-check'],
+                                    'rejected' => ['bg' => '#fff1f0', 'color' => '#b3261e', 'border' => '#fee4e2', 'icon' => 'fa-circle-xmark'],
+                                    'pending'  => ['bg' => '#f8f9fa', 'color' => '#344054', 'border' => '#eaecf0', 'icon' => 'fa-clock'],
+                                    'flagged'  => ['bg' => '#fffaeb', 'color' => '#b54708', 'border' => '#fedf89', 'icon' => 'fa-triangle-exclamation'],
+                                ];
+                                $dcfg = $dstatus_cfg[$dstatus] ?? $dstatus_cfg['pending'];
+                            ?>
+                            <div style="background:#ffffff;border:1px solid <?php echo $dcfg['border']; ?>;border-radius:12px;padding:14px;display:flex;align-items:center;gap:12px;">
+                                <div style="width:36px;height:36px;border-radius:8px;background:<?php echo $dcfg['bg']; ?>;color:<?php echo $dcfg['color']; ?>;display:flex;align-items:center;justify-content:center;font-size:0.95rem;flex-shrink:0;">
+                                    <i class="fas fa-file-alt"></i>
+                                </div>
+                                <div style="min-width:0;flex:1;">
+                                    <div style="font-weight:700;font-size:0.84rem;color:#101828;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><?php echo htmlspecialchars($dlabel); ?></div>
+                                    <div style="display:flex;align-items:center;gap:6px;margin-top:3px;">
+                                        <span style="font-size:0.72rem;font-weight:700;padding:2px 7px;border-radius:999px;background:<?php echo $dcfg['bg']; ?>;color:<?php echo $dcfg['color']; ?>;border:1px solid <?php echo $dcfg['border']; ?>;display:inline-flex;align-items:center;gap:4px;">
+                                            <i class="fas <?php echo $dcfg['icon']; ?>" style="font-size:0.65rem;"></i>
+                                            <?php echo ucfirst($dstatus); ?>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+
+                    <!-- Quick Actions -->
+                    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                        <a href="franchise_application.php" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:#ffffff;border:1px solid #eaecf0;border-radius:10px;font-size:0.86rem;font-weight:700;color:#344054;text-decoration:none;transition:all 0.15s ease;" onmouseover="this.style.background='#f8f9fa';this.style.borderColor='#d0d5dd';" onmouseout="this.style.background='#ffffff';this.style.borderColor='#eaecf0';">
+                            <i class="fas fa-file-lines"></i> View Application Form
+                        </a>
+                        <a href="help_center.php" style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:#ffffff;border:1px solid #eaecf0;border-radius:10px;font-size:0.86rem;font-weight:700;color:#344054;text-decoration:none;transition:all 0.15s ease;" onmouseover="this.style.background='#f8f9fa';this.style.borderColor='#d0d5dd';" onmouseout="this.style.background='#ffffff';this.style.borderColor='#eaecf0';">
+                            <i class="fas fa-headset"></i> Contact Support
+                        </a>
+                    </div>
+                </div>
+                <?php endif; ?>
 
             </main>
         </div>
@@ -1431,6 +1862,22 @@ document.addEventListener('DOMContentLoaded', function() {
             if (form) form.submit();
         }
     };
+
+    function updateAccountThemeUI(isDark) {
+        const heroText = document.getElementById('accountHeroThemeText');
+        const title = document.getElementById('accountDisplayThemeTitle');
+        const sub = document.getElementById('accountDisplayThemeSub');
+        const btnLabel = document.getElementById('accountSettingsThemeBtnLabel');
+        if (heroText) heroText.textContent = isDark ? 'Light Mode' : 'Dark Mode';
+        if (title) title.textContent = isDark ? 'Dark Mode (Active)' : 'Light Mode (Active)';
+        if (sub) sub.textContent = isDark ? 'Dark theme is active across the system.' : 'Light theme is active across the system.';
+        if (btnLabel) btnLabel.textContent = isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode';
+    }
+    window.addEventListener('themeChanged', function(e) {
+        updateAccountThemeUI(e.detail && e.detail.isDark);
+    });
+    const isDarkInitial = document.documentElement.classList.contains('dark-mode') || document.body.classList.contains('dark-mode');
+    updateAccountThemeUI(isDarkInitial);
 });
 </script>
 

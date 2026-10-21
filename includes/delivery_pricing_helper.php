@@ -10,6 +10,203 @@ function dpGetDeliveryPricingConfig(): array
     ];
 }
 
+/**
+ * Fetch all active stores from the database.
+ */
+function dpFetchActiveStoresFromDb($conn = null): array
+{
+    if (!$conn) {
+        global $conn;
+    }
+    if ($conn instanceof mysqli) {
+        $query = "SELECT store_id AS id, store_id, owner_user_id, store_name AS name, store_name, 
+                         address, city, province, phone, opening_hours AS hours, opening_hours, 
+                         latitude, longitude 
+                  FROM store_locations 
+                  WHERE is_active = 1 
+                  ORDER BY store_id ASC";
+        $res = @mysqli_query($conn, $query);
+        if ($res) {
+            $stores = [];
+            while ($row = mysqli_fetch_assoc($res)) {
+                $stores[] = $row;
+            }
+            return $stores;
+        }
+    }
+    return [];
+}
+
+/**
+ * Validates geographic coordinates to ensure they fall within the operational area
+ * (Cavite, CALABARZON, and Metro Manila) and are not corrupted (such as 120.0000000).
+ */
+function dpSanitizeCoordinates($lat, $lng): ?array
+{
+    if ($lat === null || $lng === null) {
+        return null;
+    }
+    if (!is_numeric((string)$lat) || !is_numeric((string)$lng)) {
+        return null;
+    }
+    $lat = (float)$lat;
+    $lng = (float)$lng;
+
+    // Reject Null Island or uninitialized (0, 0)
+    if (abs($lat) < 0.0001 && abs($lng) < 0.0001) {
+        return null;
+    }
+
+    // Reject corrupted integer-truncated longitude 120.0000000
+    if ($lng >= 119.999 && $lng <= 120.001) {
+        return null;
+    }
+
+    // Cavite / CALABARZON / Metro Manila bounds check:
+    // Latitude: ~14.0 to ~14.8
+    // Longitude: ~120.55 to ~121.25
+    if ($lat < 13.5 || $lat > 15.5 || $lng < 120.50 || $lng > 121.50) {
+        return null;
+    }
+
+    return [
+        'lat' => $lat,
+        'lng' => $lng,
+        'latitude' => $lat,
+        'longitude' => $lng,
+    ];
+}
+
+
+/**
+ * Resolve realistic coordinates based on address text / city keywords.
+ */
+function dpResolveCoordinatesFromAddress(string $address, string $cityName = '', string $provinceName = ''): ?array
+{
+    $res = dpResolveCoordinatesRaw($address, $cityName, $provinceName);
+    if ($res !== null) {
+        $res['latitude'] = (float)$res['lat'];
+        $res['longitude'] = (float)$res['lng'];
+    }
+    return $res;
+}
+
+function dpResolveCoordinatesRaw(string $address, string $cityName = '', string $provinceName = ''): ?array
+{
+    $combined = strtolower(trim($address . ' ' . $cityName . ' ' . $provinceName));
+    if ($combined === '') {
+        return null;
+    }
+
+    // Salawag / San Marino / El Salvador / Japan St / Dasmariñas East
+    if (strpos($combined, 'salawag') !== false || strpos($combined, 'el salvador') !== false || strpos($combined, 'san marino') !== false || strpos($combined, 'japan st') !== false) {
+        return ['lat' => 14.3248, 'lng' => 120.9806, 'city' => 'Dasmariñas (Salawag)'];
+    }
+
+    // Dasmariñas Central / Governor's Drive / Sampaloc
+    if (strpos($combined, 'dasmar') !== false) {
+        return ['lat' => 14.3294, 'lng' => 120.9367, 'city' => 'Dasmariñas'];
+    }
+    // Bacoor / Talaba / Tirona / Habay / Molino
+    if (strpos($combined, 'molino') !== false) {
+        return ['lat' => 14.3853, 'lng' => 120.9822, 'city' => 'Bacoor (Molino)'];
+    }
+    if (strpos($combined, 'bacoor') !== false) {
+        return ['lat' => 14.4445, 'lng' => 120.9439, 'city' => 'Bacoor'];
+    }
+    // Imus / Nueno / Poblacion
+    if (strpos($combined, 'imus') !== false) {
+        return ['lat' => 14.4297, 'lng' => 120.9367, 'city' => 'Imus'];
+    }
+    // General Trias / Manggahan / Arnaldo / San Francisco
+    if (strpos($combined, 'trias') !== false) {
+        return ['lat' => 14.3869, 'lng' => 120.8809, 'city' => 'General Trias'];
+    }
+    // Silang / Biga / J.P. Rizal
+    if (strpos($combined, 'silang') !== false) {
+        return ['lat' => 14.2307, 'lng' => 120.9749, 'city' => 'Silang'];
+    }
+    // Tagaytay / Maharlika / Silang Junction
+    if (strpos($combined, 'tagaytay') !== false) {
+        return ['lat' => 14.1153, 'lng' => 120.9621, 'city' => 'Tagaytay'];
+    }
+    // Kawit
+    if (strpos($combined, 'kawit') !== false) {
+        return ['lat' => 14.4445, 'lng' => 120.9039, 'city' => 'Kawit'];
+    }
+    // Trece Martires
+    if (strpos($combined, 'trece') !== false) {
+        return ['lat' => 14.2831, 'lng' => 120.8672, 'city' => 'Trece Martires'];
+    }
+    // Tanza
+    if (strpos($combined, 'tanza') !== false) {
+        return ['lat' => 14.3944, 'lng' => 120.8544, 'city' => 'Tanza'];
+    }
+    // Naic
+    if (strpos($combined, 'naic') !== false) {
+        return ['lat' => 14.3167, 'lng' => 120.7667, 'city' => 'Naic'];
+    }
+    // Carmona
+    if (strpos($combined, 'carmona') !== false) {
+        return ['lat' => 14.3142, 'lng' => 121.0583, 'city' => 'Carmona'];
+    }
+    // GMA / General Mariano Alvarez
+    if (strpos($combined, 'gma') !== false || strpos($combined, 'mariano alvarez') !== false) {
+        return ['lat' => 14.3000, 'lng' => 121.0000, 'city' => 'General Mariano Alvarez'];
+    }
+    // Rosario
+    if (strpos($combined, 'rosario') !== false) {
+        return ['lat' => 14.4167, 'lng' => 120.8500, 'city' => 'Rosario'];
+    }
+    // Noveleta
+    if (strpos($combined, 'noveleta') !== false) {
+        return ['lat' => 14.4278, 'lng' => 120.8797, 'city' => 'Noveleta'];
+    }
+    // Cavite City
+    if (strpos($combined, 'cavite city') !== false) {
+        return ['lat' => 14.4833, 'lng' => 120.9000, 'city' => 'Cavite City'];
+    }
+    // Alfonso
+    if (strpos($combined, 'alfonso') !== false) {
+        return ['lat' => 14.1333, 'lng' => 120.8500, 'city' => 'Alfonso'];
+    }
+    // Amadeo
+    if (strpos($combined, 'amadeo') !== false) {
+        return ['lat' => 14.1700, 'lng' => 120.9200, 'city' => 'Amadeo'];
+    }
+    // Indang
+    if (strpos($combined, 'indang') !== false) {
+        return ['lat' => 14.1950, 'lng' => 120.8750, 'city' => 'Indang'];
+    }
+    // Mendez
+    if (strpos($combined, 'mendez') !== false) {
+        return ['lat' => 14.1289, 'lng' => 120.9033, 'city' => 'Mendez'];
+    }
+    // Maragondon
+    if (strpos($combined, 'maragondon') !== false) {
+        return ['lat' => 14.2750, 'lng' => 120.7389, 'city' => 'Maragondon'];
+    }
+    // Ternate
+    if (strpos($combined, 'ternate') !== false) {
+        return ['lat' => 14.2889, 'lng' => 120.7167, 'city' => 'Ternate'];
+    }
+    // Magallanes
+    if (strpos($combined, 'magallanes') !== false) {
+        return ['lat' => 14.1878, 'lng' => 120.7583, 'city' => 'Magallanes'];
+    }
+    // Bailen
+    if (strpos($combined, 'bailen') !== false || strpos($combined, 'aguinaldo') !== false) {
+        return ['lat' => 14.1833, 'lng' => 120.7958, 'city' => 'Gen. Emilio Aguinaldo'];
+    }
+
+    // Default Cavite center
+    if (strpos($combined, 'cavite') !== false) {
+        return ['lat' => 14.3294, 'lng' => 120.9367, 'city' => 'Cavite'];
+    }
+
+    return null;
+}
+
 function dpNormalizeStoreRows(array $stores): array
 {
     $normalized = [];
@@ -56,7 +253,9 @@ function dpGetCandidateStores(array $stores, int $preferredOwnerUserId = 0): arr
     $withCoords = array_values(array_filter($normalized, static function ($store) {
         return isset($store['latitude'], $store['longitude'])
             && $store['latitude'] !== null
-            && $store['longitude'] !== null;
+            && $store['longitude'] !== null
+            && abs((float)$store['latitude']) > 0.0001
+            && abs((float)$store['longitude']) > 0.0001;
     }));
 
     if ($preferredOwnerUserId > 0) {
@@ -124,13 +323,48 @@ function dpCalculateDeliveryFeeFromDistance(float $distanceKm, array $config = [
     return max(0.0, ceil($baseFee + ($distanceKm * $perKmRate)));
 }
 
-require_once __DIR__ . '/LalamoveService.php';
+if (file_exists(__DIR__ . '/LalamoveService.php')) {
+    require_once __DIR__ . '/LalamoveService.php';
+}
 
-function dpBuildDeliveryQuote(array $stores, float $customerLat, float $customerLng, int $preferredOwnerUserId = 0, array $config = []): array
+function dpBuildDeliveryQuote(array $stores, ?float $customerLat = null, ?float $customerLng = null, int $preferredOwnerUserId = 0, array $config = [], string $addressFallback = ''): array
 {
     global $conn;
     $config = array_merge(dpGetDeliveryPricingConfig(), $config);
+
+    // Fallback to DB query if store list is empty
+    if (empty($stores)) {
+        $stores = dpFetchActiveStoresFromDb($conn);
+    }
+
+    // Sanitize customer coordinates
+    $sanitized = ($customerLat !== null && $customerLng !== null)
+        ? dpSanitizeCoordinates($customerLat, $customerLng)
+        : null;
+
+    if ($sanitized === null) {
+        if ($addressFallback !== '') {
+            $resolved = dpResolveCoordinatesFromAddress($addressFallback);
+            if ($resolved) {
+                $customerLat = (float)($resolved['lat'] ?? $resolved['latitude']);
+                $customerLng = (float)($resolved['lng'] ?? $resolved['longitude']);
+            } else {
+                // Fallback to Dasmariñas center
+                $customerLat = 14.3294;
+                $customerLng = 120.9367;
+            }
+        } else {
+            // Default to Dasmariñas center
+            $customerLat = 14.3294;
+            $customerLng = 120.9367;
+        }
+    } else {
+        $customerLat = (float)($sanitized['lat'] ?? $sanitized['latitude']);
+        $customerLng = (float)($sanitized['lng'] ?? $sanitized['longitude']);
+    }
+
     $nearestStore = dpFindNearestStore($stores, $customerLat, $customerLng, $preferredOwnerUserId);
+
 
     if (!$nearestStore) {
         return [
@@ -145,8 +379,10 @@ function dpBuildDeliveryQuote(array $stores, float $customerLat, float $customer
     $serviceType = 'MOTORCYCLE';
 
     // 1. Try Lalamove Real-Time API Quote if enabled in DB
-    if ($conn instanceof mysqli) {
-        $lalamoveQuery = "SELECT api_key, api_secret, partner_id, is_active, sandbox_mode FROM food_delivery_integrations WHERE platform_name = 'Lalamove' AND is_active = 1 LIMIT 1";
+    if ($conn instanceof mysqli && class_exists('LalamoveService')) {
+        $lalamoveQuery = "SELECT api_key, api_secret, partner_id, is_active, sandbox_mode 
+                          FROM food_delivery_integrations 
+                          WHERE platform_name = 'Lalamove' AND is_active = 1 LIMIT 1";
         $lalamoveRes = @mysqli_query($conn, $lalamoveQuery);
         if ($lalamoveRes && $lalamoveRow = mysqli_fetch_assoc($lalamoveRes)) {
             $apiKey = trim((string)($lalamoveRow['api_key'] ?? ''));
@@ -183,7 +419,7 @@ function dpBuildDeliveryQuote(array $stores, float $customerLat, float $customer
         }
     }
 
-    // 2. Fallback to distance-based calculation if Lalamove API is inactive or unavailable
+    // 2. Fallback to distance-based calculation
     if ($fee === null) {
         $fee = dpCalculateDeliveryFeeFromDistance($distanceKm, $config);
     }
@@ -195,6 +431,8 @@ function dpBuildDeliveryQuote(array $stores, float $customerLat, float $customer
         'success' => true,
         'fee' => $fee,
         'distance_km' => $distanceKm,
+        'customer_lat' => $customerLat,
+        'customer_lng' => $customerLng,
         'lalamove_used' => $lalamoveUsed,
         'nearest_store_id' => (int)($nearestStore['id'] ?? 0),
         'nearest_store_name' => (string)($nearestStore['name'] ?? 'Nearest Store'),
@@ -210,4 +448,3 @@ function dpBuildDeliveryQuote(array $stores, float $customerLat, float $customer
         'config' => $config,
     ];
 }
-

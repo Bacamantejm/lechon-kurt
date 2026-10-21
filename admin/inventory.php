@@ -1002,14 +1002,14 @@ $where_clause = count($where_clauses) > 0 ? "WHERE " . implode(" AND ", $where_c
 $having_clause = count($having_clauses) > 0 ? "HAVING " . implode(" AND ", $having_clauses) : "";
 
 $inventory_query = "SELECT p.id, p.product_id, p.name, p.price, p.category, 
-                           COALESCE(i.current_stock, 0) as daily_stock,
-                           COALESCE(i.min_stock_level, 5) as min_stock_level,
-                           i.last_updated,
-                           i.id IS NOT NULL as has_inventory
+                           COALESCE(MAX(i.current_stock), 0) as daily_stock,
+                           COALESCE(MAX(i.min_stock_level), 5) as min_stock_level,
+                           MAX(i.last_updated) as last_updated,
+                           MAX(CASE WHEN i.id IS NOT NULL THEN 1 ELSE 0 END) as has_inventory
                     FROM products p
                     LEFT JOIN inventory i ON p.id = i.product_id AND i.inventory_date = ? AND i.is_archived = 0
                     $where_clause
-                    GROUP BY p.id
+                    GROUP BY p.id, p.product_id, p.name, p.price, p.category
                     $having_clause
                     ORDER BY p.name ASC";
 
@@ -1166,8 +1166,8 @@ $planning_sql = "
     SELECT
         p.id,
         p.name,
-        COALESCE(i.current_stock, 0) AS stock,
-        COALESCE(i.min_stock_level, 5) AS min_stock,
+        COALESCE(MAX(i.current_stock), 0) AS stock,
+        COALESCE(MAX(i.min_stock_level), 5) AS min_stock,
         COALESCE(SUM(po.quantity), 0) AS preorder_demand
     FROM products p
     LEFT JOIN inventory i
@@ -1179,7 +1179,7 @@ $planning_sql = "
        AND po.preferred_pickup_date = ?
        AND po.reservation_status NOT IN ('completed', 'cancelled')
     WHERE p.is_archived = 0" . ($seller_scope_id !== null ? " AND p.seller_id = ?" : "") . "
-    GROUP BY p.id, p.name, i.current_stock, i.min_stock_level
+    GROUP BY p.id, p.name
     ORDER BY p.name ASC
 ";
 $planning_stmt = mysqli_prepare($conn, $planning_sql);
@@ -1892,12 +1892,18 @@ $forecast_summary = safeInventoryDssCall(function () use ($insights_service) {
     </template>
     
     <!-- Inventory Adjustment Modal -->
-    <div class="modal fade" id="inventoryModal" tabindex="-1">
-        <div class="modal-dialog">
+    <div class="modal fade modern-form-modal" id="inventoryModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Adjust Inventory</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <div class="modal-header-icon">
+                        <i class="fas fa-warehouse"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title">Adjust Inventory</h5>
+                        <p class="modal-subtitle">Record stock changes, received batches, or write off losses.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body" id="inventoryDetails">
                     <!-- Loaded via JS -->
@@ -1907,53 +1913,93 @@ $forecast_summary = safeInventoryDssCall(function () use ($insights_service) {
     </div>
     
     <!-- Create Inventory Modal -->
-    <div class="modal fade" id="createInventoryModal" tabindex="-1">
-        <div class="modal-dialog">
+    <div class="modal fade modern-form-modal" id="createInventoryModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Create Inventory Record</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <div class="modal-header-icon">
+                        <i class="fas fa-boxes"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title">Create Inventory Record</h5>
+                        <p class="modal-subtitle">Initialize daily stock allotment and minimum safety thresholds.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <form method="POST">
                     <div class="modal-body">
                         <input type="hidden" name="create_inventory" value="1">
                         <input type="hidden" name="inventory_date" value="<?php echo $selected_date; ?>">
                         <input type="hidden" name="auto_topup_existing" value="0">
-                        <div class="form-group mb-3">
-                            <label>Product *</label>
-                            <select name="product_id" id="createProductId" class="form-select" required>
-                                <option value="">Select product</option>
-                                <?php foreach ($all_products as $prod): ?>
-                                    <?php $has_existing_row = !empty($products_with_inventory_lookup[(int)$prod['id']]); ?>
-                                    <option value="<?php echo $prod['id']; ?>">
-                                        <?php echo htmlspecialchars($prod['name']); ?><?php echo $has_existing_row ? ' (has inventory row)' : ' (new row)'; ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                            <small class="text-muted">If inventory already exists for this date, submit will auto top-up stock.</small>
+                        
+                        <!-- Section 1: Product Selection -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-box"></i> Product Selection</span>
+                                <span class="form-req-pill">Required</span>
+                            </div>
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Product Item <span class="form-req-star">*</span></label>
+                                <div class="form-input-wrap">
+                                    <i class="fas fa-tag form-input-icon"></i>
+                                    <select name="product_id" id="createProductId" class="form-select" required>
+                                        <option value="">Select product</option>
+                                        <?php foreach ($all_products as $prod): ?>
+                                            <?php $has_existing_row = !empty($products_with_inventory_lookup[(int)$prod['id']]); ?>
+                                            <option value="<?php echo $prod['id']; ?>">
+                                                <?php echo htmlspecialchars($prod['name']); ?><?php echo $has_existing_row ? ' (has inventory row)' : ' (new row)'; ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="form-helper-text"><i class="fas fa-info-circle"></i> If inventory already exists for this date, submit will auto top-up stock.</div>
+                            </div>
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Inventory Date</label>
+                                <div class="form-input-wrap">
+                                    <i class="fas fa-calendar-day form-input-icon"></i>
+                                    <input type="date" class="form-control" value="<?php echo $selected_date; ?>" disabled>
+                                </div>
+                            </div>
                         </div>
-                        <div class="form-group mb-3">
-                            <label>Date</label>
-                            <input type="date" class="form-control" value="<?php echo $selected_date; ?>" disabled>
-                        </div>
-                        <div class="form-group mb-3">
-                            <label>Initial Stock *</label>
-                            <input type="number" name="initial_stock" class="form-control" min="0" value="<?php echo (int)$default_inventory_seed_stock; ?>" required>
-                        </div>
-                        <div class="form-group mb-3">
-                            <label>Minimum Stock Level</label>
-                            <input type="number" name="min_stock_level" class="form-control" min="1" value="5" required>
-                        </div>
-                        <div class="form-check mb-2">
-                            <input class="form-check-input" type="checkbox" id="autoTopupExisting" name="auto_topup_existing" value="1" checked>
-                            <label class="form-check-label" for="autoTopupExisting">
-                                Auto top-up existing row (+<?php echo (int)$default_inventory_seed_stock; ?>)
-                            </label>
+
+                        <!-- Section 2: Stock Levels -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-cubes"></i> Stock Quantities</span>
+                                <span class="form-req-pill">Required</span>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Initial Stock <span class="form-req-star">*</span></label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-layer-group form-input-icon"></i>
+                                            <input type="number" name="initial_stock" class="form-control" min="0" value="<?php echo (int)$default_inventory_seed_stock; ?>" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Minimum Safety Level <span class="form-req-star">*</span></label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-bell form-input-icon"></i>
+                                            <input type="number" name="min_stock_level" class="form-control" min="1" value="5" required>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="checkbox" id="autoTopupExisting" name="auto_topup_existing" value="1" checked>
+                                <label class="form-check-label" for="autoTopupExisting" style="font-size: 13px; color: #344054;">
+                                    Auto top-up existing row (+<?php echo (int)$default_inventory_seed_stock; ?>)
+                                </label>
+                            </div>
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-success">Create Inventory</button>
+                        <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn-modal-primary"><i class="fas fa-plus"></i> Create Inventory</button>
                     </div>
                 </form>
             </div>
@@ -1961,26 +2007,41 @@ $forecast_summary = safeInventoryDssCall(function () use ($insights_service) {
     </div>
     
     <!-- Update Min Stock Modal -->
-    <div class="modal fade" id="minStockModal" tabindex="-1">
-        <div class="modal-dialog">
+    <div class="modal fade modern-form-modal" id="minStockModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Update Minimum Stock Level</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <div class="modal-header-icon">
+                        <i class="fas fa-sliders-h"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title">Update Minimum Stock Level</h5>
+                        <p class="modal-subtitle">Set threshold quantity to trigger automated reorder notifications.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <form method="POST">
                     <div class="modal-body">
                         <input type="hidden" name="update_min_stock" value="1">
                         <input type="hidden" name="product_id" id="minStockProductId">
-                        <div class="form-group mb-3">
-                            <label>Minimum Stock Level *</label>
-                            <input type="number" name="min_stock_level" id="minStockValue" class="form-control" min="1" required>
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-bell"></i> Threshold Limit</span>
+                                <span class="form-req-pill">Required</span>
+                            </div>
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Minimum Stock Quantity <span class="form-req-star">*</span></label>
+                                <div class="form-input-wrap">
+                                    <i class="fas fa-sort-numeric-up-alt form-input-icon"></i>
+                                    <input type="number" name="min_stock_level" id="minStockValue" class="form-control" min="1" required>
+                                </div>
+                                <div class="form-helper-text"><i class="fas fa-info-circle"></i> An alert will appear on the dashboard whenever stock dips to or below this level.</div>
+                            </div>
                         </div>
-                        <p class="text-muted small">Set the minimum quantity that should trigger reorder notifications</p>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Update Min Stock</button>
+                        <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn-modal-primary"><i class="fas fa-save"></i> Update Min Stock</button>
                     </div>
                 </form>
             </div>

@@ -1,4 +1,6 @@
 <?php
+global $conn;
+
 $current_page = basename($_SERVER['PHP_SELF']);
 $user_id = $_SESSION['user_id'] ?? 0;
 $is_partner_scoped_admin = false;
@@ -88,7 +90,7 @@ $can_products = $canPermission('products.view') || $canModule('products');
 $can_inventory = $canPermission('inventory.view') || $canModule('inventory');
 $can_mrp = $canPermission('mrp.view') || $canModule('mrp');
 $show_inventory = $can_products || $can_inventory || $can_mrp;
-$can_vouchers = false;
+$can_vouchers = $is_partner_scoped_admin || $canPermission('products.edit') || $canModule('products');
 
 $can_finance = $canPermission('finance.view') || $canModule('finance');
 $can_expenses = $canPermission('expenses.view') || $canModule('finance');
@@ -158,13 +160,27 @@ if ($can_operations_modules) {
     $show_admin = true;
 }
 
-if ($is_partner_scoped_admin) {
-    // Only partner owners get full operational visibility by default.
-    // Partner staff must follow explicit RBAC permissions.
+require_once __DIR__ . '/../includes/SubscriptionAccessService.php';
+$sidebar_sub_details = SubscriptionAccessService::getShopSubscriptionDetails($conn, (int)$user_id);
+$sidebar_tier = $sidebar_sub_details['tier']; // 'none', 'starter', 'growth', 'pro'
+$sidebar_tier_name = $sidebar_sub_details['tier_name'];
+$sidebar_active_plan_name = $sidebar_sub_details['is_active'] ? $sidebar_sub_details['plan_name'] : '';
+
+if (!$is_super_admin_user) {
+    // Determine feature allowances from SubscriptionAccessService
+    $partner_can_hr = !empty($sidebar_sub_details['can_access_hr']);
+    $partner_can_inventory_mrp = !empty($sidebar_sub_details['can_access_inventory_mrp']);
+    $partner_can_forecasting = !empty($sidebar_sub_details['can_access_forecasting']);
+    $partner_can_dss = !empty($sidebar_sub_details['can_access_dss_reports']);
+    $partner_can_rbac = !empty($sidebar_sub_details['can_access_custom_rbac']);
+    $partner_can_store_settings = !empty($sidebar_sub_details['can_access_store_settings']);
+    $partner_can_expenses = !empty($sidebar_sub_details['can_access_expenses']);
+    $partner_can_receipt_banking = !empty($sidebar_sub_details['can_access_receipt_banking']);
+
     if ($is_partner_owner_admin) {
         $can_dashboard = true;
         $can_products = true;
-        $can_vouchers = true;
+        $can_vouchers = ($sidebar_tier !== 'none');
 
         $can_orders = true;
         $can_preorders = true;
@@ -174,45 +190,99 @@ if ($is_partner_scoped_admin) {
         $can_chat = true;
         $show_sales_logistics = true;
 
-        $can_inventory = true;
-        $can_mrp = true;
-        $show_inventory = true;
+        $can_inventory = $partner_can_inventory_mrp;
+        $can_mrp = $partner_can_inventory_mrp;
+        $show_inventory = $can_products || $can_inventory || $can_mrp;
 
-        $can_hr_overview = true;
-        $can_employees = true;
-        $can_departments = true;
-        $can_attendance = true;
-        $can_schedules = true;
-        $can_leave = true;
-        $can_payroll = true;
-        $can_payslips = true;
-        $can_performance = true;
-        $can_recruitment = true;
-        $can_candidates = true;
-        $can_turnover = true;
-        $can_hr_reports = true;
+        $can_hr_overview = $partner_can_hr;
+        $can_employees = $partner_can_hr;
+        $can_departments = $partner_can_hr;
+        $can_attendance = $partner_can_hr;
+        $can_schedules = $partner_can_hr;
+        $can_leave = $partner_can_hr;
+        $can_payroll = $partner_can_hr;
+        $can_payslips = $partner_can_hr;
+        $can_performance = $partner_can_hr;
+        $can_recruitment = $partner_can_hr;
+        $can_candidates = $partner_can_hr;
+        $can_turnover = $partner_can_hr;
+        $can_hr_reports = $partner_can_hr;
         $can_hr_db_checker = false;
-        $show_hr = true;
+        $show_hr = $partner_can_hr;
+    } else {
+        // Enforce tier capabilities as upper bounds for all other non-super-admin accounts
+        if (!$partner_can_hr) {
+            $can_hr_overview = false;
+            $can_employees = false;
+            $can_departments = false;
+            $can_attendance = false;
+            $can_schedules = false;
+            $can_leave = false;
+            $can_payroll = false;
+            $can_payslips = false;
+            $can_performance = false;
+            $can_recruitment = false;
+            $can_candidates = false;
+            $can_turnover = false;
+            $can_hr_reports = false;
+            $can_hr_db_checker = false;
+            $show_hr = false;
+        }
+        if (!$partner_can_inventory_mrp) {
+            $can_inventory = false;
+            $can_mrp = false;
+            $show_inventory = $can_products;
+        }
     }
 
-    $can_finance = $is_partner_owner_admin || $canPermission('finance.view') || $canPermission('finance.manage') || $canModule('finance');
-    $can_expenses = $is_partner_owner_admin || $canPermission('expenses.view') || $canPermission('expenses.manage') || $canPermission('finance.manage');
-    $can_order_policy = $is_partner_scoped_admin && ($is_partner_owner_admin || $canPermission('orders.edit'));
-    $can_store_availability = $is_partner_scoped_admin && ($is_partner_owner_admin || $canPermission('orders.edit') || $canPermission('products.edit'));
+    $can_finance = $partner_can_expenses && ($is_partner_owner_admin || $canPermission('finance.view') || $canPermission('finance.manage') || $canModule('finance'));
+    $can_expenses = $partner_can_expenses && ($is_partner_owner_admin || $canPermission('expenses.view') || $canPermission('expenses.manage') || $canPermission('finance.manage'));
+    $can_order_policy = $partner_can_store_settings && ($is_partner_owner_admin || $canPermission('orders.edit'));
+    $can_store_availability = $partner_can_store_settings && ($is_partner_owner_admin || $canPermission('orders.edit') || $canPermission('products.edit'));
     $can_partner_billing = $is_partner_owner_admin || $canPermission('billing.view') || $canPermission('billing.manage') || $canModule('billing');
-    $can_receipt_settings = $is_partner_owner_admin || $canPermission('billing.manage');
-    $can_partner_banking = $is_partner_owner_admin || $canPermission('billing.manage');
+    $can_receipt_settings = $partner_can_receipt_banking && ($is_partner_owner_admin || $canPermission('billing.manage'));
+    $can_partner_banking = $partner_can_receipt_banking && ($is_partner_owner_admin || $canPermission('billing.manage'));
     $can_business_account = $is_partner_owner_admin;
     $show_finance = $can_finance || $can_expenses || $can_partner_billing || $can_receipt_settings || $can_partner_banking;
 
     $can_users = false;
     $can_franchise = false;
-    $can_statistics = $is_partner_owner_admin || $canPermission('dashboard.analytics') || $canPermission('audit.view');
-    $can_dss_reports = $is_partner_owner_admin || $canPermission('reports.view');
-    $can_forecasting = $is_partner_owner_admin || $canPermission('forecasting.view') || $canModule('forecasting');
-    $can_rbac = $is_partner_owner_admin || $canPermission('roles.manage');
+    $can_statistics = $partner_can_dss && ($is_partner_owner_admin || $canPermission('dashboard.analytics') || $canPermission('audit.view'));
+    $can_dss_reports = $partner_can_dss && ($is_partner_owner_admin || $canPermission('reports.view'));
+    $can_forecasting = $partner_can_forecasting && ($is_partner_owner_admin || $canPermission('forecasting.view') || $canModule('forecasting'));
+    $can_rbac = $partner_can_rbac && ($is_partner_owner_admin || $canPermission('roles.manage'));
     $can_operations_modules = false;
     $show_admin = $can_statistics || $can_dss_reports || $can_forecasting || $can_rbac;
+
+    if (is_array($partner_ops_flow)) {
+        if (!empty($partner_ops_flow['modules'])) {
+            $partner_ops_flow['modules'] = array_values(array_filter($partner_ops_flow['modules'], static function($m) use ($can_orders, $can_preorders, $can_logistics, $can_finance, $can_inventory, $can_hr_overview, $can_payroll) {
+                $url = (string)($m['url'] ?? '');
+                if (strpos($url, 'inventory.php') !== false && !$can_inventory) return false;
+                if (strpos($url, 'hr.php') !== false && !$can_hr_overview) return false;
+                if (strpos($url, 'payroll.php') !== false && !$can_payroll) return false;
+                if (strpos($url, 'finance.php') !== false && !$can_finance) return false;
+                if (strpos($url, 'orders.php') !== false && !$can_orders) return false;
+                if (strpos($url, 'preorders.php') !== false && !$can_preorders) return false;
+                if (strpos($url, 'logistics.php') !== false && !$can_logistics) return false;
+                return true;
+            }));
+        }
+        if (!empty($partner_ops_flow['steps'])) {
+            $partner_ops_flow['steps'] = array_values(array_filter($partner_ops_flow['steps'], static function($s) use ($can_orders, $can_preorders, $can_logistics, $can_finance, $can_inventory, $can_hr_overview) {
+                $url = (string)($s['url'] ?? '');
+                if (strpos($url, 'inventory.php') !== false && !$can_inventory) return false;
+                if (strpos($url, 'hr.php') !== false && !$can_hr_overview) return false;
+                if (strpos($url, 'finance.php') !== false && !$can_finance) return false;
+                if (strpos($url, 'orders.php') !== false && !$can_orders) return false;
+                if (strpos($url, 'logistics.php') !== false && !$can_logistics) return false;
+                return true;
+            }));
+        }
+        if (empty($partner_ops_flow['modules']) && empty($partner_ops_flow['steps'])) {
+            $partner_ops_flow = null;
+        }
+    }
 }
 
 if ($is_partner_restricted) {
@@ -360,7 +430,13 @@ $topbar_account_type_label = strtolower(trim((string)($_SESSION['account_type'] 
     ? 'Business Partner'
     : 'Customer Account';
 $topbar_current_shop_label = $sidebar_brand_name;
-$topbar_my_account_link = '../my_account.php';
+require_once __DIR__ . '/../includes/rider_helper.php';
+$is_logistics_active_page = (basename($_SERVER['PHP_SELF'] ?? '') === 'logistics.php');
+if ($is_logistics_active_page || isDeliveryDriverUser($conn, $user_id)) {
+    $topbar_my_account_link = '../my_account.php?from=logistics';
+} else {
+    $topbar_my_account_link = '../my_account.php';
+}
 $topbar_billing_link = '';
 if ($can_partner_billing) {
     $topbar_billing_link = 'partner_billing.php';
@@ -376,6 +452,84 @@ if ($is_partner_scoped_admin && $partner_scope_owner_id > 0) {
     }
 }
 ?>
+
+<script>
+(function() {
+    try {
+        const savedTheme = localStorage.getItem('theme') || (document.cookie.match(/(?:^|;\s*)theme=([^;]*)/) || [])[1];
+        if (savedTheme === 'dark' || (!savedTheme && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark-mode');
+            document.documentElement.setAttribute('data-theme', 'dark');
+            if (document.body) document.body.classList.add('dark-mode');
+        }
+    } catch(e) {}
+})();
+</script>
+<style>
+/* Anti-Flash Immediate Critical Styles */
+html.dark-mode,
+html.dark-mode body,
+body.dark-mode {
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+}
+html.dark-mode .admin-sidebar,
+body.dark-mode .admin-sidebar {
+    background: #181d26 !important;
+    border-right: 1px solid #27303f !important;
+}
+html.dark-mode .sidebar-header,
+body.dark-mode .sidebar-header {
+    background: #181d26 !important;
+    border-bottom: 1px solid #27303f !important;
+}
+html.dark-mode .sidebar-search-container,
+body.dark-mode .sidebar-search-container {
+    background: #181d26 !important;
+    border-bottom: 1px solid #27303f !important;
+}
+html.dark-mode .sidebar-search-input,
+body.dark-mode .sidebar-search-input {
+    background: #222936 !important;
+    border: 1px solid #2e3848 !important;
+    color: #f1f5f9 !important;
+}
+html.dark-mode .sidebar-footer,
+body.dark-mode .sidebar-footer {
+    background: #181d26 !important;
+    border-top: 1px solid #27303f !important;
+}
+html.dark-mode .sidebar-footer .admin-user,
+body.dark-mode .sidebar-footer .admin-user,
+html.dark-mode .sidebar-footer .logout-btn,
+body.dark-mode .sidebar-footer .logout-btn {
+    background: #222936 !important;
+    border: 1px solid #2e3848 !important;
+    color: #e2e8f0 !important;
+}
+.sidebar-menu .menu-item.active {
+    background: #fff1f0 !important;
+    color: #b3261e !important;
+    border-radius: 10px !important;
+    font-weight: 700 !important;
+}
+.sidebar-menu .menu-item.active i {
+    color: #b3261e !important;
+}
+.sidebar-menu .menu-item.active::before {
+    display: none !important;
+}
+html.dark-mode .sidebar-menu .menu-item.active,
+body.dark-mode .sidebar-menu .menu-item.active {
+    background: #2a1818 !important;
+    color: #ff6b6b !important;
+    border: 1px solid #4c1d1d !important;
+}
+html.dark-mode .sidebar-menu .menu-item.active i,
+body.dark-mode .sidebar-menu .menu-item.active i {
+    color: #ff6b6b !important;
+}
+</style>
 
 <!-- Admin Sidebar Navigation -->
 <nav class="admin-sidebar" id="adminSidebar">
@@ -395,6 +549,8 @@ if ($is_partner_scoped_admin && $partner_scope_owner_id > 0) {
                 <?php echo htmlspecialchars($sidebar_role_label); ?>
                 <?php if ($sidebar_active_plan_name !== ''): ?>
                     &bull; <span class="badge" style="background:#b3261e;color:#fff;font-size:0.68rem;font-weight:800;padding:2px 6px;border-radius:4px;letter-spacing:0.04em;"><i class="fas fa-crown"></i> <?php echo htmlspecialchars(strtoupper($sidebar_active_plan_name)); ?></span>
+                <?php elseif ($is_partner_scoped_admin): ?>
+                    &bull; <span class="badge" style="background:#fff1f0;color:#b3261e;border:1px solid #fee4e2;font-size:0.68rem;font-weight:700;padding:2px 6px;border-radius:4px;"><i class="fas fa-lock"></i> NON-SUBSCRIBED</span>
                 <?php endif; ?>
             </p>
         </a>
@@ -434,13 +590,26 @@ if ($is_partner_scoped_admin && $partner_scope_owner_id > 0) {
         <?php endif; ?>
 
         <?php if (!$is_super_admin_user && $is_partner_scoped_admin && is_array($partner_ops_flow)): ?>
+            <?php
+            $pipeline_total_count = 0;
+            foreach (($partner_ops_flow['modules'] ?? []) as $flow_mod) {
+                $pipeline_total_count += (int)($flow_mod['count'] ?? 0);
+            }
+            $is_pipeline_active = false;
+            ?>
             <li class="menu-header">Operations Flow</li>
             <li>
-                <div class="menu-item <?php echo (in_array($current_page, ['orders.php', 'preorders.php', 'logistics.php', 'order_policy_settings.php', 'store_availability.php', 'finance.php', 'inventory.php', 'hr.php', 'payroll.php', 'partner_billing.php', 'subscription_plans.php', 'receipt_settings.php', 'partner_banking.php'], true)) ? 'active' : ''; ?>">
+                <a href="javascript:void(0);" class="menu-item menu-item-with-submenu <?php echo $is_pipeline_active ? 'active' : ''; ?>" title="Toggle Partner Pipeline menu">
                     <i class="fas fa-project-diagram"></i>
                     <span>Partner Pipeline</span>
-                </div>
-                <div class="sidebar-submenu" style="display:block;">
+                    <?php if ($pipeline_total_count > 0): ?>
+                        <span class="sidebar-count-badge" style="margin-left:auto; margin-right:24px; background:#b3261e; color:#fff; border-radius:10px; padding:1px 7px; font-size:11px; font-weight:600;">
+                            <?php echo $pipeline_total_count; ?>
+                        </span>
+                    <?php endif; ?>
+                    <i class="fas fa-chevron-down submenu-arrow"></i>
+                </a>
+                <div class="sidebar-submenu" style="<?php echo $is_pipeline_active ? 'display: block;' : 'display: none;'; ?>">
                     <?php foreach (($partner_ops_flow['modules'] ?? []) as $flow_module): ?>
                         <a href="<?php echo htmlspecialchars((string)$flow_module['url']); ?>" class="submenu-item">
                             <i class="fas fa-arrow-right"></i>
@@ -496,6 +665,12 @@ if ($is_partner_scoped_admin && $partner_scope_owner_id > 0) {
                         <span>Pre-Orders</span>
                     </a>
                 </li>
+                <li>
+                    <a href="preorder_schedule.php" class="menu-item <?php echo ($current_page === 'preorder_schedule.php') ? 'active' : ''; ?>">
+                        <i class="fas fa-calendar-days"></i>
+                        <span>Pickup Schedule &amp; Slots</span>
+                    </a>
+                </li>
             <?php endif; ?>
 
             <?php if ($can_cancellations): ?>
@@ -523,6 +698,7 @@ if ($is_partner_scoped_admin && $partner_scope_owner_id > 0) {
                         <span>Logistics</span>
                     </a>
                 </li>
+
             <?php endif; ?>
 
             <?php if ($can_chat): ?>
@@ -602,6 +778,13 @@ if ($is_partner_scoped_admin && $partner_scope_owner_id > 0) {
                     </a>
                 </li>
             <?php endif; ?>
+
+            <li>
+                <a href="store_wallet.php" class="menu-item <?php echo ($current_page === 'store_wallet.php') ? 'active' : ''; ?>">
+                    <i class="fas fa-wallet"></i>
+                    <span>Store Wallet &amp; Ledger</span>
+                </a>
+            </li>
 
             <?php if ($can_expenses): ?>
                 <li>
@@ -1055,6 +1238,12 @@ if ($is_partner_scoped_admin && $partner_scope_owner_id > 0) {
                 <span>Employee Dashboard</span>
             </a>
         <?php endif; ?>
+        <?php if ($is_partner_scoped_admin || $is_partner_owner_admin || $is_business_owner_role): ?>
+            <a href="javascript:void(0);" onclick="openShopOwnerTutorial(true)" class="logout-btn" style="margin-bottom: 8px; background: #fff1f0; color: #b3261e; border: 1px solid #fee4e2;" title="Replay Merchant Tour">
+                <i class="fas fa-compass" style="color: #b3261e;"></i>
+                <span>Shop Tour</span>
+            </a>
+        <?php endif; ?>
         <a href="logout.php" class="logout-btn" id="logoutBtn">
             <i class="fas fa-sign-out-alt"></i>
             <span>Logout</span>
@@ -1129,14 +1318,59 @@ if ($is_partner_scoped_admin && $partner_scope_owner_id > 0) {
     }
 
     @media (max-width: 576px) {
-        .admin-topbar .topbar-right .theme-toggler,
-        .admin-topbar .topbar-right .notification-btn {
-            width: 36px;
-            height: 36px;
+        .admin-topbar {
+            padding: 8px 10px;
         }
-
+        .admin-topbar .topbar-content {
+            gap: 8px;
+        }
+        .admin-topbar .topbar-content h1 {
+            font-size: 0.95rem;
+            min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .admin-topbar .topbar-right {
+            gap: 6px;
+            margin-left: auto;
+        }
+        .admin-topbar .topbar-right .theme-toggler,
+        .admin-topbar .topbar-right .notification-btn,
+        .admin-topbar .sidebar-toggler {
+            width: 32px;
+            min-width: 32px;
+            height: 32px;
+            font-size: 13px;
+        }
+        .admin-header-actions {
+            gap: 6px;
+        }
         .admin-topbar .topbar-right .admin-profile span {
             display: none;
+        }
+        .admin-topbar .topbar-right .admin-profile-avatar {
+            width: 30px !important;
+            height: 30px !important;
+            font-size: 11px !important;
+        }
+    }
+
+    @media (max-width: 360px) {
+        .admin-topbar {
+            padding: 6px 8px;
+        }
+        .admin-topbar .topbar-content {
+            gap: 6px;
+        }
+        .admin-topbar .topbar-content h1 {
+            font-size: 0.9rem;
+        }
+        .admin-topbar .topbar-right {
+            gap: 4px;
+        }
+        .admin-topbar .topbar-right .theme-toggler {
+            display: none !important;
         }
     }
 
@@ -1218,6 +1452,8 @@ if ($is_partner_scoped_admin && $partner_scope_owner_id > 0) {
         top: 100%;
         right: 0;
         width: 320px;
+        height: 430px;
+        max-height: calc(100vh - 90px);
         background: white;
         border-radius: 8px;
         box-shadow: 0 5px 15px rgba(0,0,0,0.15);
@@ -1251,9 +1487,48 @@ if ($is_partner_scoped_admin && $partner_scope_owner_id > 0) {
     }
     
     .notification-list {
+        flex: 1 1 auto;
+        min-height: 0;
         max-height: 350px;
         overflow-y: auto;
     }
+
+    #adminNotifDropdown {
+        display: none;
+        flex-direction: column;
+    }
+
+    #adminNotifDropdown.show {
+        display: flex;
+    }
+
+    .admin-notification-pagination {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 10px;
+        border-top: 1px solid #eee;
+        background: #fff8f3;
+    }
+
+    .admin-notification-page-btn {
+        width: 28px;
+        height: 28px;
+        border: 1px solid #ddd;
+        border-radius: 7px;
+        background: #fff;
+        color: #475467;
+        cursor: pointer;
+    }
+
+    .admin-notification-page-btn:disabled { opacity: .35; cursor: not-allowed; }
+    .admin-notification-page-label { font-size: .72rem; font-weight: 800; color: #667085; }
+    .admin-franchise-status { font-size: .76rem; font-weight: 900; letter-spacing: .04em; }
+    .admin-franchise-status.approved { color: #027a48; }
+    .admin-franchise-status.rejected { color: #b42318; }
+    .admin-franchise-status.incomplete { color: #b54708; }
+    .admin-franchise-reason { font-size: .8rem; line-height: 1.35; color: #667085; margin-top: 4px; }
     
     .notification-item {
         padding: 12px 15px;
@@ -1328,6 +1603,10 @@ if ($is_partner_scoped_admin && $partner_scope_owner_id > 0) {
     body.dark-mode .notif-title { color: #e0e0e0; }
     body.dark-mode .notif-message { color: #b0b0b0; }
     body.dark-mode .notification-empty { color: #b0b0b0; }
+    body.dark-mode .admin-notification-pagination { background: #1f2937; border-color: var(--border-color-dark); }
+    body.dark-mode .admin-notification-page-btn { background: #2f3543; border-color: #475569; color: #cbd5e1; }
+    body.dark-mode .admin-notification-page-label,
+    body.dark-mode .admin-franchise-reason { color: #94a3b8; }
 
     @keyframes bell-shake {
         0% { transform: rotate(0); }
@@ -1363,38 +1642,108 @@ if ($is_partner_scoped_admin && $partner_scope_owner_id > 0) {
     }
 
     .admin-profile {
-        gap: 8px;
-        max-width: 220px;
-        padding: 6px 10px 6px 8px;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: flex-end !important;
+        padding: 3px 6px 3px 12px !important;
+        width: auto !important;
+        min-width: unset !important;
+        height: auto !important;
+        background: transparent;
+        border-radius: 24px;
+        border: 1px solid transparent;
+        box-shadow: none;
+        position: relative;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        flex-shrink: 0;
     }
 
-    .admin-profile > span,
-    .admin-profile-name {
+    .admin-profile:hover {
+        background: rgba(0, 0, 0, 0.04);
+        border-color: #eaecf0;
+    }
+
+    body.dark-mode .admin-profile:hover {
+        background: rgba(255, 255, 255, 0.06);
+        border-color: #27303f;
+    }
+
+    .admin-profile-meta-wrap {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        margin-right: 10px;
+        line-height: 1.25;
+        max-width: 220px;
+        overflow: hidden;
+        flex-shrink: 0;
+    }
+
+    .admin-profile-meta-name {
+        font-size: 13px;
+        font-weight: 700;
+        color: #101828;
+        white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        max-width: 100%;
+        display: block;
+    }
+
+    body.dark-mode .admin-profile-meta-name {
+        color: #f8fafc;
+    }
+
+    .admin-profile-meta-role {
+        font-size: 10.5px;
+        font-weight: 600;
+        background: #eff8ff;
+        color: #175cd3;
+        border: 1px solid #b2ddff;
+        border-radius: 10px;
+        padding: 1px 7px;
+        margin-top: 2px;
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
         white-space: nowrap;
     }
 
-    .admin-profile-name {
-        flex: 1 1 auto;
-        min-width: 0;
-        font-size: 13px;
-        font-weight: 700;
+    body.dark-mode .admin-profile-meta-role {
+        background: #172554;
+        color: #93c5fd;
+        border-color: #1e3a8a;
     }
 
-    .admin-profile > i,
-    .admin-profile-caret {
-        color: var(--primary);
-        font-size: 13px;
-        flex: 0 0 auto;
+    .admin-profile > span:not(.admin-profile-avatar):not(.admin-profile-meta-wrap *),
+    .admin-profile-caret,
+    .admin-profile > i:not(.admin-profile-dropdown i) {
+        display: none !important;
     }
 
-    .admin-profile-caret {
-        transition: transform 0.18s ease;
+    .admin-profile-avatar {
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #b3261e, #d93829);
+        color: #ffffff;
+        font-size: 15px;
+        font-weight: 800;
+        border: 2px solid #ffffff;
+        box-shadow: 0 2px 8px rgba(179, 38, 30, 0.25);
+        user-select: none;
+        object-fit: cover;
     }
 
-    .admin-profile.open .admin-profile-caret {
-        transform: rotate(180deg);
+    .admin-profile-fallback {
+        background: linear-gradient(135deg, #b3261e, #d93829);
+        color: #ffffff;
+        font-size: 15px;
+        font-weight: 800;
     }
 
     .admin-profile-dropdown-head {
@@ -1434,6 +1783,283 @@ if ($is_partner_scoped_admin && $partner_scope_owner_id > 0) {
 
     body.dark-mode .admin-profile-dropdown-head small {
         color: #cbd5e1;
+    }
+
+    /* ==========================================================================
+       UNIVERSAL ADMIN DARK MODE ENGINE (All 25+ Modules & Topbars)
+       ========================================================================== */
+    body.dark-mode,
+    html.dark-mode {
+        background-color: #0f172a !important;
+        color: #f1f5f9 !important;
+    }
+
+    body.dark-mode .admin-container,
+    body.dark-mode .admin-content,
+    body.dark-mode .admin-polish,
+    body.dark-mode .biz-shell,
+    body.dark-mode .main-content {
+        background-color: #0f172a !important;
+        color: #f1f5f9 !important;
+    }
+
+    /* Topbar & Header in Dark Mode (Resolves white topbar background) */
+    body.dark-mode .admin-topbar,
+    body.dark-mode header.admin-topbar,
+    body.dark-mode .topbar-content {
+        background: #1e293b !important;
+        background-color: #1e293b !important;
+        border-bottom: 1px solid #334155 !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35) !important;
+    }
+
+    body.dark-mode .admin-topbar h1,
+    body.dark-mode .topbar-content h1,
+    body.dark-mode .admin-topbar h2,
+    body.dark-mode .topbar-content h2,
+    body.dark-mode .admin-topbar span:not(.admin-profile-avatar):not(.badge),
+    body.dark-mode .admin-topbar strong {
+        color: #f8fafc !important;
+        -webkit-text-fill-color: initial !important;
+    }
+
+    body.dark-mode .admin-topbar .sidebar-toggler,
+    body.dark-mode .admin-topbar .topbar-content .sidebar-toggler,
+    body.dark-mode .admin-topbar .theme-toggler,
+    body.dark-mode .admin-topbar .topbar-right .theme-toggler {
+        background: #334155 !important;
+        border-color: #475569 !important;
+        color: #facc15 !important;
+    }
+
+    body.dark-mode .admin-topbar .sidebar-toggler:hover,
+    body.dark-mode .admin-topbar .theme-toggler:hover {
+        background: #475569 !important;
+        color: #fef08a !important;
+    }
+
+    body.dark-mode .admin-topbar .admin-header-actions button,
+    body.dark-mode .admin-topbar .admin-header-actions a,
+    body.dark-mode .admin-topbar .topbar-right button:not(.theme-toggler):not(.admin-profile),
+    body.dark-mode .admin-topbar .topbar-right a {
+        background: #334155 !important;
+        border-color: #475569 !important;
+        color: #f8fafc !important;
+    }
+
+    /* Cards, Panels, Widgets & Containers Across All Modules */
+    body.dark-mode .card,
+    body.dark-mode .stat-card,
+    body.dark-mode .biz-card,
+    body.dark-mode .module-card,
+    body.dark-mode .content-card,
+    body.dark-mode .table-container,
+    body.dark-mode .filter-card,
+    body.dark-mode .order-card,
+    body.dark-mode .preorder-card,
+    body.dark-mode .kiosk-card,
+    body.dark-mode .mrp-card,
+    body.dark-mode .inventory-card,
+    body.dark-mode .schedule-card,
+    body.dark-mode .modal-content,
+    body.dark-mode .box,
+    body.dark-mode .panel,
+    body.dark-mode .widget-card,
+    body.dark-mode .info-card {
+        background: #1e293b !important;
+        background-color: #1e293b !important;
+        border-color: #334155 !important;
+        color: #f1f5f9 !important;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25) !important;
+    }
+
+    body.dark-mode .card-header,
+    body.dark-mode .modal-header,
+    body.dark-mode .modal-footer,
+    body.dark-mode .card-footer,
+    body.dark-mode .table-header {
+        background: #1e293b !important;
+        border-color: #334155 !important;
+        color: #f8fafc !important;
+    }
+
+    /* Headings and Typography */
+    body.dark-mode h1,
+    body.dark-mode h2,
+    body.dark-mode h3,
+    body.dark-mode h4,
+    body.dark-mode h5,
+    body.dark-mode h6,
+    body.dark-mode .card-title,
+    body.dark-mode .modal-title,
+    body.dark-mode .section-title,
+    body.dark-mode strong,
+    body.dark-mode b {
+        color: #f8fafc !important;
+    }
+
+    body.dark-mode p,
+    body.dark-mode span:not(.badge):not(.status-badge):not(.admin-profile-avatar):not(.user-avatar-initial),
+    body.dark-mode li,
+    body.dark-mode td {
+        color: #cbd5e1;
+    }
+
+    body.dark-mode .text-muted,
+    body.dark-mode .text-secondary,
+    body.dark-mode small,
+    body.dark-mode .subtitle {
+        color: #94a3b8 !important;
+    }
+
+    /* Form Inputs, Selects, and Textareas */
+    body.dark-mode input[type="text"],
+    body.dark-mode input[type="email"],
+    body.dark-mode input[type="password"],
+    body.dark-mode input[type="number"],
+    body.dark-mode input[type="date"],
+    body.dark-mode input[type="time"],
+    body.dark-mode input[type="search"],
+    body.dark-mode input[type="tel"],
+    body.dark-mode input[type="file"],
+    body.dark-mode textarea,
+    body.dark-mode select,
+    body.dark-mode .form-control,
+    body.dark-mode .form-select {
+        background: #0f172a !important;
+        background-color: #0f172a !important;
+        border-color: #334155 !important;
+        color: #f8fafc !important;
+    }
+
+    body.dark-mode input:focus,
+    body.dark-mode textarea:focus,
+    body.dark-mode select:focus,
+    body.dark-mode .form-control:focus,
+    body.dark-mode .form-select:focus {
+        background: #020617 !important;
+        border-color: #b3261e !important;
+        box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.3) !important;
+        color: #ffffff !important;
+    }
+
+    body.dark-mode input::placeholder,
+    body.dark-mode textarea::placeholder {
+        color: #64748b !important;
+    }
+
+    body.dark-mode label,
+    body.dark-mode .form-label,
+    body.dark-mode .form-check-label {
+        color: #e2e8f0 !important;
+    }
+
+    body.dark-mode .input-group-text {
+        background: #334155 !important;
+        border-color: #475569 !important;
+        color: #cbd5e1 !important;
+    }
+
+    /* Tables across All Modules */
+    body.dark-mode table,
+    body.dark-mode .table,
+    body.dark-mode .admin-table,
+    body.dark-mode .data-table {
+        color: #e2e8f0 !important;
+        border-color: #334155 !important;
+    }
+
+    body.dark-mode table th,
+    body.dark-mode .table th,
+    body.dark-mode .admin-table th,
+    body.dark-mode .data-table th {
+        background: #0f172a !important;
+        background-color: #0f172a !important;
+        color: #f8fafc !important;
+        border-color: #334155 !important;
+    }
+
+    body.dark-mode table td,
+    body.dark-mode .table td,
+    body.dark-mode .admin-table td,
+    body.dark-mode .data-table td {
+        background: #1e293b !important;
+        background-color: #1e293b !important;
+        color: #e2e8f0 !important;
+        border-color: #334155 !important;
+    }
+
+    body.dark-mode table tbody tr:hover td,
+    body.dark-mode .table tbody tr:hover td,
+    body.dark-mode .admin-table tbody tr:hover td {
+        background: #283449 !important;
+    }
+
+    /* Dropdowns, Menus & Tooltips */
+    body.dark-mode .dropdown-menu {
+        background: #1e293b !important;
+        border-color: #334155 !important;
+        box-shadow: 0 14px 28px rgba(0, 0, 0, 0.45) !important;
+    }
+
+    body.dark-mode .dropdown-item {
+        color: #cbd5e1 !important;
+    }
+
+    body.dark-mode .dropdown-item:hover,
+    body.dark-mode .dropdown-item:focus {
+        background: #2d3748 !important;
+        color: #ffffff !important;
+    }
+
+    body.dark-mode .dropdown-divider {
+        border-color: #334155 !important;
+    }
+
+    /* Pagination */
+    body.dark-mode .pagination .page-link,
+    body.dark-mode .page-item .page-link {
+        background: #1e293b !important;
+        border-color: #334155 !important;
+        color: #cbd5e1 !important;
+    }
+
+    body.dark-mode .pagination .page-item.active .page-link {
+        background: #b3261e !important;
+        border-color: #b3261e !important;
+        color: #ffffff !important;
+    }
+
+    /* Nav Tabs & Pills */
+    body.dark-mode .nav-tabs {
+        border-color: #334155 !important;
+    }
+
+    body.dark-mode .nav-tabs .nav-link {
+        color: #94a3b8 !important;
+        border-color: transparent !important;
+    }
+
+    body.dark-mode .nav-tabs .nav-link:hover {
+        border-color: #334155 #334155 transparent !important;
+        color: #f8fafc !important;
+    }
+
+    body.dark-mode .nav-tabs .nav-link.active {
+        background: #1e293b !important;
+        border-color: #334155 #334155 #1e293b !important;
+        color: #f8fafc !important;
+    }
+
+    /* Module Specific Overrides */
+    body.dark-mode .biz-logo-preview {
+        background: #0f172a !important;
+        border-color: #334155 !important;
+    }
+
+    body.dark-mode .biz-summary-list li {
+        background: #0f172a !important;
+        border-color: #334155 !important;
     }
 </style>
 
@@ -1555,46 +2181,61 @@ if ($is_partner_scoped_admin && $partner_scope_owner_id > 0) {
                 });
             }
 
-            let notifWrapper = topbarRight ? topbarRight.querySelector('.admin-header-actions') : null;
-            if (!notifWrapper) {
-                notifWrapper = document.createElement('div');
-                notifWrapper.className = 'admin-header-actions';
+            const isSuperAdminPage = Boolean(
+                (topbarRight && (
+                    topbarRight.querySelector('.sa-alert-wrap, .sa-notification-wrap, .owner-notification-wrap, .sa-topbar-action-wrap')
+                )) ||
+                window.location.pathname.includes('/super_admin/')
+            );
+
+            let notifWrapper = null;
+            if (!isSuperAdminPage) {
+                notifWrapper = topbarRight ? topbarRight.querySelector('.admin-header-actions') : null;
+                if (!notifWrapper) {
+                    notifWrapper = document.createElement('div');
+                    notifWrapper.className = 'admin-header-actions';
+                }
+                notifWrapper.innerHTML = `
+                    <!-- Chat Button -->
+                    <div class="admin-chat-wrapper">
+                        <button class="notification-btn topbar-action-btn" id="adminChatBtn" type="button" title="Chat Support" aria-label="Open chat support conversations">
+                            <i class="fas fa-comment-dots"></i>
+                            <span class="admin-action-label">Messages</span>
+                            <span class="notification-badge" id="adminChatBadge" style="display: none;">0</span>
+                        </button>
+                        <div class="notification-dropdown" id="adminChatDropdown">
+                            <div class="notification-header">
+                                <span>Messages</span>
+                                <a href="chat.php" class="mark-read-btn">View All</a>
+                            </div>
+                            <div class="notification-list" id="adminChatList"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Notification Button -->
+                    <div class="admin-notification-wrapper">
+                        <button class="notification-btn topbar-action-btn" id="adminNotifBtn" type="button" title="Notifications" aria-label="Open notifications">
+                            <i class="fas fa-bell"></i>
+                            <span class="admin-action-label">Notifications</span>
+                            <span class="notification-badge" id="adminNotifBadge" style="display: none;">0</span>
+                        </button>
+                        <div class="notification-dropdown" id="adminNotifDropdown">
+                            <div class="notification-header">
+                                <span>Notifications</span>
+                                <span class="mark-read-btn" id="markAllRead">Mark all read</span>
+                            </div>
+                            <div class="notification-list" id="adminNotifList">
+                                <div class="notification-empty">Loading...</div>
+                            </div>
+                            <div class="admin-notification-pagination" id="adminNotifPagination" hidden>
+                                <button type="button" class="admin-notification-page-btn" id="adminNotifPrev" aria-label="Previous notifications"><i class="fas fa-chevron-left"></i></button>
+                                <span class="admin-notification-page-label" id="adminNotifPageLabel">1 / 1</span>
+                                <button type="button" class="admin-notification-page-btn" id="adminNotifNext" aria-label="Next notifications"><i class="fas fa-chevron-right"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                `;
             }
-            notifWrapper.innerHTML = `
-                <!-- Chat Button -->
-                <div class="admin-chat-wrapper">
-                    <button class="notification-btn topbar-action-btn" id="adminChatBtn" type="button" title="Chat Support" aria-label="Open chat support conversations">
-                        <i class="fas fa-comment-dots"></i>
-                        <span class="admin-action-label">Messages</span>
-                        <span class="notification-badge" id="adminChatBadge" style="display: none;">0</span>
-                    </button>
-                    <div class="notification-dropdown" id="adminChatDropdown">
-                        <div class="notification-header">
-                            <span>Messages</span>
-                            <a href="chat.php" class="mark-read-btn">View All</a>
-                        </div>
-                        <div class="notification-list" id="adminChatList"></div>
-                    </div>
-                </div>
-                
-                <!-- Notification Button -->
-                <div class="admin-notification-wrapper">
-                    <button class="notification-btn topbar-action-btn" id="adminNotifBtn" type="button" title="Notifications" aria-label="Open notifications">
-                        <i class="fas fa-bell"></i>
-                        <span class="admin-action-label">Alerts</span>
-                        <span class="notification-badge" id="adminNotifBadge" style="display: none;">0</span>
-                    </button>
-                    <div class="notification-dropdown" id="adminNotifDropdown">
-                        <div class="notification-header">
-                            <span>Notifications</span>
-                            <span class="mark-read-btn" id="markAllRead">Mark all read</span>
-                        </div>
-                        <div class="notification-list" id="adminNotifList">
-                            <div class="notification-empty">Loading...</div>
-                        </div>
-                    </div>
-                </div>
-            `;
 
             const adminProfile = topbarRight ? topbarRight.querySelector('.admin-profile') : null;
 
@@ -1606,29 +2247,31 @@ if ($is_partner_scoped_admin && $partner_scope_owner_id > 0) {
                 const safeShop = escapeInlineHtml(topbarProfileMenu.currentShop || 'Lechon Delights');
                 const safeMyAccountLink = escapeInlineHtml(topbarProfileMenu.myAccountLink || '../my_account.php');
                 const safeBillingLink = escapeInlineHtml(topbarProfileMenu.billingLink || '');
-                let profileLabel = adminProfile.querySelector('.admin-profile-name');
-                if (!profileLabel) {
-                    profileLabel = document.createElement('span');
-                    profileLabel.className = 'admin-profile-name';
-                    adminProfile.appendChild(profileLabel);
-                }
-                profileLabel.textContent = safeProfileName;
+
                 adminProfile.setAttribute('role', 'button');
                 adminProfile.setAttribute('tabindex', '0');
                 adminProfile.setAttribute('aria-haspopup', 'true');
                 adminProfile.setAttribute('aria-expanded', 'false');
+                adminProfile.setAttribute('title', safeProfileName + ' (' + safeRoleInfo + ')');
 
-                adminProfile.querySelectorAll('i').forEach(icon => icon.remove());
+                // Remove legacy static text / icons from PHP template
+                adminProfile.querySelectorAll(':scope > span:not(.admin-profile-avatar):not(.admin-profile-meta-wrap):not(.admin-profile-meta-wrap *), :scope > i').forEach(el => el.remove());
+
+                if (!adminProfile.querySelector('.admin-profile-meta-wrap')) {
+                    const metaWrap = `
+                        <div class="admin-profile-meta-wrap d-none d-sm-flex">
+                            <span class="admin-profile-meta-name">${escapeInlineHtml(safeProfileName)}</span>
+                            <span class="admin-profile-meta-role"><i class="fas fa-shield-alt" style="font-size:8px;"></i>${safeRoleInfo}</span>
+                        </div>
+                    `;
+                    adminProfile.insertAdjacentHTML('afterbegin', metaWrap);
+                }
 
                 if (!adminProfile.querySelector('.admin-profile-avatar')) {
                     const avatarMarkup = topbarProfile.avatar
                         ? `<img src="${escapeInlineHtml(topbarProfile.avatar)}" alt="${escapeInlineHtml(safeProfileName)} avatar" class="admin-profile-avatar">`
                         : `<span class="admin-profile-avatar admin-profile-fallback">${safeProfileInitials}</span>`;
-                    adminProfile.insertAdjacentHTML('afterbegin', avatarMarkup);
-                }
-
-                if (!adminProfile.querySelector('.admin-profile-caret')) {
-                    adminProfile.insertAdjacentHTML('beforeend', '<i class="fas fa-chevron-down admin-profile-caret" aria-hidden="true"></i>');
+                    adminProfile.insertAdjacentHTML('beforeend', avatarMarkup);
                 }
 
                 if (!adminProfile.querySelector('.admin-profile-dropdown')) {
@@ -1650,6 +2293,7 @@ if ($is_partner_scoped_admin && $partner_scope_owner_id > 0) {
                             <div class="admin-profile-links">
                                 <a href="${safeMyAccountLink}" class="admin-profile-link"><i class="fas fa-user-circle"></i><span>My Account</span></a>
                                 ${billingMarkup}
+                                <a href="../logout.php" class="admin-profile-link text-danger"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
                             </div>
                         </div>
                     `);
@@ -1707,240 +2351,284 @@ if ($is_partner_scoped_admin && $partner_scope_owner_id > 0) {
                 themeToggler.style.marginRight = '0';
             }
 
-            // Place message + notification beside profile, then dark mode button.
-            if (topbarRight) {
-                if (themeToggler && themeToggler.parentNode === topbarRight) {
-                    topbarRight.insertBefore(notifWrapper, themeToggler);
-                } else if (adminProfile) {
-                    topbarRight.insertBefore(notifWrapper, adminProfile);
-                } else {
-                    topbarRight.appendChild(notifWrapper);
+            // Place message + notification beside profile, then dark mode button for standard admin pages.
+            if (!isSuperAdminPage && notifWrapper) {
+                if (topbarRight) {
+                    if (themeToggler && themeToggler.parentNode === topbarRight) {
+                        topbarRight.insertBefore(notifWrapper, themeToggler);
+                    } else if (adminProfile) {
+                        topbarRight.insertBefore(notifWrapper, adminProfile);
+                    } else {
+                        topbarRight.appendChild(notifWrapper);
+                    }
+                } else if (themeToggler && themeToggler.parentNode) {
+                    themeToggler.parentNode.insertBefore(notifWrapper, themeToggler);
                 }
-            } else if (themeToggler && themeToggler.parentNode) {
-                themeToggler.parentNode.insertBefore(notifWrapper, themeToggler);
-            }
 
-            // Notification Logic
-            const btn = notifWrapper.querySelector('#adminNotifBtn');
-            const dropdown = notifWrapper.querySelector('#adminNotifDropdown');
-            const badge = notifWrapper.querySelector('#adminNotifBadge');
-            const list = notifWrapper.querySelector('#adminNotifList');
-            const markAllBtn = notifWrapper.querySelector('#markAllRead');
-            
-            // Chat Variables
-            const chatBtn = notifWrapper.querySelector('#adminChatBtn');
-            const chatDropdown = notifWrapper.querySelector('#adminChatDropdown');
-            const chatBadge = notifWrapper.querySelector('#adminChatBadge');
-            const chatList = notifWrapper.querySelector('#adminChatList');
-            
-            // Toggle Dropdown
-            if (btn && dropdown) {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    if (chatDropdown) {
-                        chatDropdown.classList.remove('show');
-                    }
-                    if (chatBtn) {
-                        chatBtn.classList.remove('is-active');
-                    }
-                    dropdown.classList.toggle('show');
-                    btn.classList.toggle('is-active', dropdown.classList.contains('show'));
-                    if (dropdown.classList.contains('show')) {
-                        loadNotifications();
-                        btn.classList.remove('shaking');
-                    }
-                });
-            }
-            
-            // Toggle Chat Dropdown
-            if (chatBtn && chatDropdown) {
-                chatBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    if (dropdown) {
-                        dropdown.classList.remove('show');
-                    }
-                    if (btn) {
-                        btn.classList.remove('is-active');
-                    }
-                    chatDropdown.classList.toggle('show');
-                    chatBtn.classList.toggle('is-active', chatDropdown.classList.contains('show'));
-                    if (chatDropdown.classList.contains('show')) {
-                        loadChatConversations();
-                    }
-                });
-            }
-            
-            // Close on outside click
-            document.addEventListener('click', (e) => {
-                if (!notifWrapper.contains(e.target)) {
-                    if (dropdown) {
-                        dropdown.classList.remove('show');
-                    }
-                    if (btn) {
-                        btn.classList.remove('is-active');
-                    }
-                    if (chatDropdown) {
-                        chatDropdown.classList.remove('show');
-                    }
-                    if (chatBtn) {
-                        chatBtn.classList.remove('is-active');
-                    }
-                }
-                if (!adminProfile || !adminProfile.contains(e.target)) {
-                    closeProfileMenu();
-                }
-            });
-            
-            // Mark all read
-            if (markAllBtn) {
-                markAllBtn.addEventListener('click', () => {
-                    fetch('get_notifications.php?action=mark_read', { method: 'POST' })
-                        .then(res => res.json())
-                        .then(data => {
-                            if (data.success) {
-                                loadNotificationCount();
-                                loadNotifications();
-                            }
-                        });
-                });
-            }
-            
-            function loadNotificationCount() {
-                if (!btn || !badge) return;
-                fetch('get_notifications.php?action=count')
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.count > 0) {
-                            badge.style.display = 'block';
-                            badge.textContent = data.count > 99 ? '99+' : data.count;
-                            // Add shaking animation if not already open
-                            if (!dropdown || !dropdown.classList.contains('show')) {
-                                btn.classList.add('shaking');
-                            }
-                        } else {
-                            badge.style.display = 'none';
+                // Notification Logic
+                const btn = notifWrapper.querySelector('#adminNotifBtn');
+                const dropdown = notifWrapper.querySelector('#adminNotifDropdown');
+                const badge = notifWrapper.querySelector('#adminNotifBadge');
+                const list = notifWrapper.querySelector('#adminNotifList');
+                const markAllBtn = notifWrapper.querySelector('#markAllRead');
+                const pagination = notifWrapper.querySelector('#adminNotifPagination');
+                const previousPageBtn = notifWrapper.querySelector('#adminNotifPrev');
+                const nextPageBtn = notifWrapper.querySelector('#adminNotifNext');
+                const pageLabel = notifWrapper.querySelector('#adminNotifPageLabel');
+                let adminNotifications = [];
+                let adminNotificationPage = 0;
+                const adminNotificationPageSize = 3;
+                
+                // Chat Variables
+                const chatBtn = notifWrapper.querySelector('#adminChatBtn');
+                const chatDropdown = notifWrapper.querySelector('#adminChatDropdown');
+                const chatBadge = notifWrapper.querySelector('#adminChatBadge');
+                const chatList = notifWrapper.querySelector('#adminChatList');
+                
+                // Toggle Dropdown
+                if (btn && dropdown) {
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        if (chatDropdown) {
+                            chatDropdown.classList.remove('show');
+                        }
+                        if (chatBtn) {
+                            chatBtn.classList.remove('is-active');
+                        }
+                        dropdown.classList.toggle('show');
+                        btn.classList.toggle('is-active', dropdown.classList.contains('show'));
+                        if (dropdown.classList.contains('show')) {
+                            loadNotifications();
                             btn.classList.remove('shaking');
                         }
                     });
-            }
-            
-            function loadChatConversations() {
-                if (!chatList) return;
+                }
                 
-                fetch('../api/get_conversations.php?limit=5')
-                    .then(res => res.json())
-                    .then(data => {
-                        chatList.innerHTML = '';
-                        if (!data.success || !data.conversations || data.conversations.length === 0) {
-                            chatList.innerHTML = '<div class="notification-empty">No messages</div>';
-                            return;
+                // Toggle Chat Dropdown
+                if (chatBtn && chatDropdown) {
+                    chatBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        if (dropdown) {
+                            dropdown.classList.remove('show');
                         }
-
-                        let totalUnread = 0;
-                        data.conversations.forEach(conv => {
-                            totalUnread += parseInt(conv.unread_count || 0);
-                            
-                            const item = document.createElement('div');
-                            item.className = `notification-item ${parseInt(conv.unread_count) > 0 ? 'unread' : ''}`;
-                            
-                            // Calculate time ago
-                            const date = new Date(conv.last_message_time);
-                            const seconds = Math.floor((new Date() - date) / 1000);
-                            let timeString = "just now";
-                            if (seconds > 86400) timeString = Math.floor(seconds/86400) + "d ago";
-                            else if (seconds > 3600) timeString = Math.floor(seconds/3600) + "h ago";
-                            else if (seconds > 60) timeString = Math.floor(seconds/60) + "m ago";
-
-                            item.innerHTML = `
-                                <div class="notif-icon" style="background: #e3f2fd; color: #1976d2;">
-                                    <i class="fas fa-user"></i>
-                                </div>
-                                <div class="notif-content">
-                                    <div class="notif-title">${escapeInlineHtml(conv.counterpart_name || conv.customer_name || 'Customer')}</div>
-                                    <div class="notif-message">${escapeInlineHtml((conv.channel_label ? conv.channel_label + ' · ' : '') + (conv.last_message_preview || 'No messages'))}</div>
-                                    <div class="notif-time">${timeString}</div>
-                                </div>
-                            `;
-                            item.onclick = () => window.location.href = `chat.php?conversation_id=${conv.id}`;
-                            chatList.appendChild(item);
-                        });
-
-                        if (chatBadge) {
-                            chatBadge.textContent = totalUnread > 99 ? '99+' : totalUnread;
-                            chatBadge.style.display = totalUnread > 0 ? 'block' : 'none';
+                        if (btn) {
+                            btn.classList.remove('is-active');
                         }
-                    }).catch(e => console.error(e));
-            }
-            
-            function loadNotifications() {
-                if (!list) return;
-                fetch('get_notifications.php?action=get')
-                    .then(res => res.json())
-                    .then(data => {
-                        const notifications = Array.isArray(data) ? data : [];
-                        list.innerHTML = '';
-                        if (notifications.length === 0) {
-                            list.innerHTML = '<div class="notification-empty">No notifications</div>';
-                            return;
+                        chatDropdown.classList.toggle('show');
+                        chatBtn.classList.toggle('is-active', chatDropdown.classList.contains('show'));
+                        if (chatDropdown.classList.contains('show')) {
+                            loadChatConversations();
+                            chatBtn.classList.remove('shaking');
                         }
-                        
-                        notifications.forEach(notif => {
-                            const item = document.createElement('div');
-                            item.className = `notification-item ${notif.is_read == 0 ? 'unread' : ''}`;
-                            
-                            // Determine icon based on type
-                            let icon = 'fa-bell';
-                            let color = '#1976d2';
-                            let bg = '#e3f2fd';
-                            const notifType = String(notif.type || '').toLowerCase();
-                            
-                            if (notifType.includes('order')) { icon = 'fa-shopping-cart'; color = '#2e7d32'; bg = '#e8f5e9'; }
-                            else if (notifType.includes('alert')) { icon = 'fa-exclamation-triangle'; color = '#c62828'; bg = '#ffebee'; }
-                            else if (notifType.includes('user')) { icon = 'fa-user'; color = '#ef6c00'; bg = '#fff3e0'; }
-                            else if (notifType.includes('franchise')) { icon = 'fa-store'; color = '#7c3aed'; bg = '#f3e8ff'; }
-                            
-                            item.innerHTML = `
-                                <div class="notif-icon" style="color: ${color}; background: ${bg}">
-                                    <i class="fas ${icon}"></i>
-                                </div>
-                                <div class="notif-content">
-                                    <div class="notif-title">${escapeInlineHtml(notif.title)}</div>
-                                    <div class="notif-message">${escapeInlineHtml(notif.message)}</div>
-                                    <div class="notif-time">${escapeInlineHtml(notif.time_ago)}</div>
-                                </div>
-                            `;
-                            
-                            item.addEventListener('click', () => {
-                                // Mark as read on click
-                                if (notif.is_read == 0) {
-                                    const formData = new FormData();
-                                    formData.append('id', notif.id);
-                                    fetch('get_notifications.php?action=mark_read', {
-                                        method: 'POST',
-                                        body: formData
-                                    }).then(() => loadNotificationCount());
-                                    item.classList.remove('unread');
-                                }
-                                
-                                // Redirect if related_id exists (basic mapping)
-                                if (notif.related_type === 'order') window.location.href = `orders.php?search=${notif.related_id}`;
-                                else if (notif.related_type === 'pre_order') window.location.href = `preorders.php?search=${notif.related_id}`;
-                                else if (notif.related_type === 'franchise_application') window.location.href = `../super_admin/franchise_applications.php?search=${notif.related_id}`;
-                            });
-                            
-                            list.appendChild(item);
-                        });
                     });
-            }
-            
-            // Initial load and polling
-            if (btn && badge) {
-                loadNotificationCount();
-                setInterval(loadNotificationCount, 30000);
-            }
-            if (chatBtn && chatList) {
-                loadChatConversations();
-                setInterval(loadChatConversations, 10000);
+                }
+                
+                // Close dropdown when clicking outside
+                document.addEventListener('click', (e) => {
+                    if (dropdown && !dropdown.contains(e.target) && btn && !btn.contains(e.target)) {
+                        dropdown.classList.remove('show');
+                        btn.classList.remove('is-active');
+                    }
+                    if (chatDropdown && !chatDropdown.contains(e.target) && chatBtn && !chatBtn.contains(e.target)) {
+                        chatDropdown.classList.remove('show');
+                        chatBtn.classList.remove('is-active');
+                    }
+                });
+                
+                // Mark all as read
+                if (markAllBtn) {
+                    markAllBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        fetch('get_notifications.php?action=mark_read', { method: 'POST' })
+                            .then(() => {
+                                loadNotifications();
+                                loadNotificationCount();
+                            });
+                    });
+                }
+                
+                function loadNotificationCount() {
+                    if (!badge) return;
+                    fetch('get_notifications.php?action=count')
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.count > 0) {
+                                badge.textContent = data.count > 99 ? '99+' : data.count;
+                                badge.style.display = 'flex';
+                                if (btn) btn.classList.add('shaking');
+                            } else {
+                                badge.style.display = 'none';
+                                if (btn) btn.classList.remove('shaking');
+                            }
+                        })
+                        .catch(err => console.error("Error loading notification count:", err));
+                }
+                
+                function loadChatConversations() {
+                    if (!chatList) return;
+                    fetch('../chat_endpoint.php?action=get_active_conversations')
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.success && data.conversations) {
+                                renderChatList(data.conversations);
+                                updateChatBadge(data.conversations);
+                            }
+                        }).catch(e => console.error(e));
+                }
+                
+                function updateChatBadge(conversations) {
+                    if (!chatBadge) return;
+                    let unreadTotal = 0;
+                    conversations.forEach(c => {
+                        unreadTotal += parseInt(c.unread_count || 0);
+                    });
+                    if (unreadTotal > 0) {
+                        chatBadge.textContent = unreadTotal > 99 ? '99+' : unreadTotal;
+                        chatBadge.style.display = 'flex';
+                        if (chatBtn) chatBtn.classList.add('shaking');
+                    } else {
+                        chatBadge.style.display = 'none';
+                        if (chatBtn) chatBtn.classList.remove('shaking');
+                    }
+                }
+                
+                function renderChatList(conversations) {
+                    chatList.innerHTML = '';
+                    if (conversations.length === 0) {
+                        chatList.innerHTML = '<div class="notification-empty">No active conversations</div>';
+                        return;
+                    }
+                    conversations.forEach(conv => {
+                        const item = document.createElement('div');
+                        item.className = `chat-item ${conv.unread_count > 0 ? 'unread' : ''}`;
+                        const safeInitials = escapeInlineHtml(conv.customer_initials || 'C');
+                        const avatarMarkup = conv.customer_profile_image
+                            ? `<img src="${escapeInlineHtml(conv.customer_profile_image)}" alt="${escapeInlineHtml(conv.customer_name || 'Customer')} avatar" class="chat-avatar-image">`
+                            : `<div class="chat-avatar-fallback">${safeInitials}</div>`;
+                        item.innerHTML = `
+                            <div class="chat-avatar">
+                                ${avatarMarkup}
+                            </div>
+                            <div class="chat-details">
+                                <div class="chat-name">
+                                    <span>${escapeInlineHtml(conv.customer_name || 'Customer')}</span>
+                                    <span class="chat-time">${escapeInlineHtml(conv.time_ago || '')}</span>
+                                </div>
+                                <div class="chat-message-preview">${escapeInlineHtml(conv.last_message || 'No messages yet')}</div>
+                            </div>
+                        `;
+                        item.addEventListener('click', () => {
+                            window.location.href = `chat.php?conversation_id=${encodeURIComponent(conv.id)}`;
+                        });
+                        chatList.appendChild(item);
+                    });
+                }
+                
+                function loadNotifications() {
+                    if (!list) return;
+                    fetch('get_notifications.php?action=get')
+                        .then(res => res.json())
+                        .then(data => {
+                            adminNotifications = Array.isArray(data) ? data : [];
+                            renderAdminNotifications();
+                        });
+                }
+
+                function renderAdminNotifications() {
+                    const totalPages = Math.max(1, Math.ceil(adminNotifications.length / adminNotificationPageSize));
+                    adminNotificationPage = Math.min(Math.max(0, adminNotificationPage), totalPages - 1);
+                    list.innerHTML = '';
+                    if (adminNotifications.length === 0) {
+                        list.innerHTML = '<div class="notification-empty">No notifications</div>';
+                        if (pagination) pagination.hidden = true;
+                        return;
+                    }
+
+                    const pageItems = adminNotifications.slice(adminNotificationPage * adminNotificationPageSize, (adminNotificationPage + 1) * adminNotificationPageSize);
+                    pageItems.forEach(notif => {
+                                const item = document.createElement('div');
+                                item.className = `notification-item ${notif.is_read == 0 ? 'unread' : ''}`;
+                                
+                                // Determine icon based on type
+                                let icon = 'fa-bell';
+                                let color = '#1976d2';
+                                let bg = '#e3f2fd';
+                                const notifType = String(notif.type || '').toLowerCase();
+                                
+                                if (notifType.includes('order')) { icon = 'fa-shopping-cart'; color = '#2e7d32'; bg = '#e8f5e9'; }
+                                else if (notifType.includes('alert')) { icon = 'fa-exclamation-triangle'; color = '#c62828'; bg = '#ffebee'; }
+                                else if (notifType.includes('user')) { icon = 'fa-user'; color = '#ef6c00'; bg = '#fff3e0'; }
+                                else if (notifType.includes('franchise')) { icon = 'fa-store'; color = '#7c3aed'; bg = '#f3e8ff'; }
+                                const statusMatch = notifType.match(/franchise_(approved|rejected|incomplete)/);
+                                const status = statusMatch ? statusMatch[1].toUpperCase() : '';
+                                const reasonMatch = String(notif.message || '').match(/(?:^|\n)Reason:\s*([^\n]*)/i);
+                                const reason = reasonMatch ? reasonMatch[1].trim() : String(notif.message || '').replace(/^Status:\s*[^\n]*\n?/i, '').trim();
+                                const titleMarkup = status
+                                    ? `<div class="admin-franchise-status ${status.toLowerCase()}">${status}</div>`
+                                    : `<div class="notif-title">${escapeInlineHtml(notif.title)}</div>`;
+                                item.innerHTML = `
+                                    <div class="notif-icon" style="color: ${color}; background: ${bg}">
+                                        <i class="fas ${icon}"></i>
+                                    </div>
+                                    <div class="notif-content">
+                                        ${titleMarkup}
+                                        <div class="${status ? 'admin-franchise-reason' : 'notif-message'}">${status ? '<strong>Reason:</strong> ' + escapeInlineHtml(reason || 'No additional reason provided.') : escapeInlineHtml(notif.message)}</div>
+                                        <div class="notif-time">${escapeInlineHtml(notif.time_ago)}</div>
+                                    </div>
+                                `;
+                                
+                                item.addEventListener('click', () => {
+                                    // Mark as read on click
+                                    if (notif.is_read == 0) {
+                                        const formData = new FormData();
+                                        formData.append('id', notif.id);
+                                        fetch('get_notifications.php?action=mark_read', {
+                                            method: 'POST',
+                                            body: formData
+                                        }).then(() => loadNotificationCount());
+                                        item.classList.remove('unread');
+                                    }
+                                    
+                                    // Redirect if related_id exists (basic mapping)
+                                    if (notif.related_type === 'order') window.location.href = `orders.php?search=${notif.related_id}`;
+                                    else if (notif.related_type === 'pre_order') window.location.href = `preorders.php?search=${notif.related_id}`;
+                                    else if (notif.related_type === 'franchise_application') window.location.href = `../super_admin/franchise_applications.php?search=${notif.related_id}`;
+                                });
+                                
+                                list.appendChild(item);
+                            });
+
+                    if (pagination) pagination.hidden = totalPages <= 1;
+                    if (pageLabel) pageLabel.textContent = `${adminNotificationPage + 1} / ${totalPages}`;
+                    if (previousPageBtn) previousPageBtn.disabled = adminNotificationPage === 0;
+                    if (nextPageBtn) nextPageBtn.disabled = adminNotificationPage >= totalPages - 1;
+                }
+
+                if (previousPageBtn) previousPageBtn.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    if (adminNotificationPage > 0) {
+                        adminNotificationPage--;
+                        renderAdminNotifications();
+                    }
+                });
+
+                if (nextPageBtn) nextPageBtn.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    if (adminNotificationPage < Math.ceil(adminNotifications.length / adminNotificationPageSize) - 1) {
+                        adminNotificationPage++;
+                        renderAdminNotifications();
+                    }
+                });
+                
+                // Initial load and polling
+                if (btn && badge) {
+                    loadNotificationCount();
+                    setInterval(loadNotificationCount, 30000);
+                }
+                if (chatBtn && chatList) {
+                    loadChatConversations();
+                    setInterval(loadChatConversations, 10000);
+                }
             }
         }
 
@@ -2007,9 +2695,10 @@ if ($is_partner_scoped_admin && $partner_scope_owner_id > 0) {
             const sessionErrorMessage = <?php echo json_encode($_SESSION['error']); ?>;
             <?php unset($_SESSION['error']); ?>
             if (typeof Swal !== 'undefined') {
+                const isAccessDenied = /access denied|unauthorized|permission|forbidden/i.test(sessionErrorMessage);
                 Swal.fire({
                     icon: 'error',
-                    title: 'Access Denied',
+                    title: isAccessDenied ? 'Access Denied' : 'Error',
                     text: sessionErrorMessage,
                     confirmButtonText: 'OK'
                 });
@@ -2104,6 +2793,29 @@ if ($is_partner_scoped_admin && $partner_scope_owner_id > 0) {
     margin-top: 2px;
     font-weight: 600;
     display: block;
+}
+
+@media (max-width: 576px) {
+    .admin-floating-chat-btn,
+    .admin-floating-chat-btn.with-timestamp {
+        bottom: 16px;
+        right: 14px;
+        width: 44px;
+        height: 44px;
+        font-size: 18px;
+        padding: 0;
+        box-shadow: 0 4px 12px rgba(179, 38, 30, 0.28);
+    }
+    .admin-floating-chat-timestamp {
+        display: none !important;
+    }
+    .admin-floating-chat-btn .badge {
+        width: 18px;
+        height: 18px;
+        font-size: 10px;
+        top: -3px;
+        right: -3px;
+    }
 }
 
 /* Admin Chat Widget Window */
@@ -2299,13 +3011,389 @@ if ($is_partner_scoped_admin && $partner_scope_owner_id > 0) {
     -webkit-backdrop-filter: blur(2px);
 }
 
-/* Desktop Collapsed */
+/* Desktop Collapsed — Modern Slender Dock */
 @media (min-width: 769px) {
-    .admin-container.sidebar-collapsed .admin-sidebar {
-        transform: translateX(-100%) !important;
+    .admin-sidebar {
+        transition: width 0.25s cubic-bezier(0.22, 1, 0.36, 1), transform 0.25s cubic-bezier(0.22, 1, 0.36, 1) !important;
     }
+    .admin-content {
+        transition: margin-left 0.25s cubic-bezier(0.22, 1, 0.36, 1) !important;
+    }
+
+    /* Collapsed Sidebar Dock Geometry */
+    .admin-container.sidebar-collapsed .admin-sidebar {
+        width: 74px !important;
+        min-width: 74px !important;
+        max-width: 74px !important;
+        transform: translateX(0) !important;
+        overflow: visible !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        z-index: 1045 !important;
+    }
+
     .admin-container.sidebar-collapsed .admin-content {
-        margin-left: 0 !important;
+        margin-left: 74px !important;
+    }
+
+    /* Header in Collapsed Dock */
+    .admin-container.sidebar-collapsed .sidebar-header {
+        padding: 16px 0 !important;
+        width: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-bottom: 1px solid var(--border) !important;
+    }
+
+    .admin-container.sidebar-collapsed .sidebar-brand-mark {
+        margin: 0 auto !important;
+    }
+
+    .admin-container.sidebar-collapsed .sidebar-brand-logo,
+    .admin-container.sidebar-collapsed .sidebar-brand-fallback {
+        width: 40px !important;
+        height: 40px !important;
+        border-radius: 12px !important;
+        font-size: 16px !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+    }
+
+    .admin-container.sidebar-collapsed .sidebar-header h3,
+    .admin-container.sidebar-collapsed .sidebar-header p,
+    .admin-container.sidebar-collapsed .sidebar-header .badge,
+    .admin-container.sidebar-collapsed .sidebar-account-badge {
+        display: none !important;
+    }
+
+    /* Search in Collapsed Dock */
+    .admin-container.sidebar-collapsed .sidebar-search-container {
+        padding: 10px 0 !important;
+        width: 100% !important;
+        display: flex !important;
+        justify-content: center !important;
+        border-bottom: 1px solid var(--border) !important;
+    }
+
+    .admin-container.sidebar-collapsed .sidebar-search-wrap {
+        width: 44px !important;
+        height: 44px !important;
+        border-radius: 12px !important;
+        background: #f1f5f9 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        cursor: pointer !important;
+        position: relative !important;
+        transition: all 0.2s cubic-bezier(0.22, 1, 0.36, 1) !important;
+    }
+
+    .admin-container.sidebar-collapsed .sidebar-search-wrap:hover {
+        background: #e2e8f0 !important;
+        transform: translateY(-1px) !important;
+    }
+
+    .admin-container.sidebar-collapsed .sidebar-search-input,
+    .admin-container.sidebar-collapsed .sidebar-search-clear {
+        display: none !important;
+    }
+
+    .admin-container.sidebar-collapsed .sidebar-search-icon {
+        position: static !important;
+        font-size: 14px !important;
+        color: #64748b !important;
+    }
+
+    /* Menu List in Collapsed Dock */
+    .admin-container.sidebar-collapsed .sidebar-menu {
+        padding: 10px 0 !important;
+        width: 100% !important;
+        overflow-x: visible !important;
+        overflow-y: auto !important;
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+    }
+
+    .admin-container.sidebar-collapsed .sidebar-menu::-webkit-scrollbar {
+        display: none !important;
+    }
+
+    /* Force hide all category headers, search empty state, and stray text in collapsed dock */
+    .admin-container.sidebar-collapsed .menu-header,
+    .admin-container.sidebar-collapsed li.menu-header,
+    .admin-container.sidebar-collapsed .sidebar-menu li.menu-header,
+    .admin-container.sidebar-collapsed .sidebar-search-empty,
+    .admin-container.sidebar-collapsed li.sidebar-search-empty,
+    .admin-container.sidebar-collapsed .sidebar-menu li.sidebar-search-empty {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        min-height: 0 !important;
+        max-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+        font-size: 0 !important;
+        line-height: 0 !important;
+        overflow: hidden !important;
+        pointer-events: none !important;
+        opacity: 0 !important;
+    }
+
+    /* Only regular navigation items become centered dock icons */
+    .admin-container.sidebar-collapsed .sidebar-menu li:not(.menu-header):not(.sidebar-search-empty) {
+        display: flex !important;
+        justify-content: center !important;
+        width: 100% !important;
+        position: relative !important;
+        margin-bottom: 4px !important;
+    }
+
+    /* Menu Items in Collapsed Dock */
+    .admin-container.sidebar-collapsed .menu-item {
+        width: 44px !important;
+        height: 44px !important;
+        padding: 0 !important;
+        margin: 2px auto !important;
+        border-radius: 12px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        position: relative !important;
+        border-left: none !important;
+        transition: all 0.18s cubic-bezier(0.22, 1, 0.36, 1) !important;
+    }
+
+    .admin-container.sidebar-collapsed .menu-item.active::before {
+        display: none !important;
+    }
+
+    /* Strictly hide text spans and chevrons in collapsed items */
+    .admin-container.sidebar-collapsed .menu-item > span:not(.sidebar-count-badge),
+    .admin-container.sidebar-collapsed .menu-item span:not(.sidebar-count-badge),
+    .admin-container.sidebar-collapsed .menu-item .submenu-arrow {
+        display: none !important;
+        visibility: hidden !important;
+        width: 0 !important;
+        height: 0 !important;
+        font-size: 0 !important;
+        line-height: 0 !important;
+        overflow: hidden !important;
+        opacity: 0 !important;
+    }
+
+    .admin-container.sidebar-collapsed .menu-item i {
+        font-size: 16px !important;
+        width: auto !important;
+        margin: 0 !important;
+        color: #64748b !important;
+        transition: transform 0.18s ease, color 0.18s ease !important;
+    }
+
+    /* Active Item in Collapsed Dock (Matches Reference Soft Pill) */
+    .admin-container.sidebar-collapsed .menu-item.active {
+        background: #fff1f0 !important;
+        box-shadow: 0 2px 8px rgba(179, 38, 30, 0.12) !important;
+    }
+
+    .admin-container.sidebar-collapsed .menu-item.active i {
+        color: #b3261e !important;
+    }
+
+    .admin-container.sidebar-collapsed .menu-item:hover {
+        background: #f1f5f9 !important;
+        transform: translateY(-1px) !important;
+    }
+
+    .admin-container.sidebar-collapsed .menu-item:hover i {
+        color: #b3261e !important;
+        transform: scale(1.1) !important;
+    }
+
+    /* Notification dot on collapsed icon */
+    .admin-container.sidebar-collapsed .menu-item .sidebar-count-badge {
+        display: block !important;
+        position: absolute !important;
+        top: 7px !important;
+        right: 7px !important;
+        width: 8px !important;
+        height: 8px !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        border-radius: 50% !important;
+        background: #b3261e !important;
+        border: 2px solid #ffffff !important;
+        font-size: 0 !important;
+        line-height: 0 !important;
+    }
+
+    /* Sleek Floating Hover Tooltips */
+    .admin-container.sidebar-collapsed .menu-item::after,
+    .admin-container.sidebar-collapsed .logout-btn::after,
+    .admin-container.sidebar-collapsed .sidebar-search-wrap::after,
+    .admin-container.sidebar-collapsed .sidebar-brand-link::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        left: calc(100% + 12px);
+        top: 50%;
+        transform: translateY(-50%) translateX(-6px);
+        background: #0f172a;
+        color: #ffffff;
+        padding: 6px 12px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1.3;
+        white-space: nowrap;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transition: opacity 0.18s cubic-bezier(0.22, 1, 0.36, 1), transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), visibility 0.18s;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        z-index: 9999;
+    }
+
+    .admin-container.sidebar-collapsed .menu-item:hover::after,
+    .admin-container.sidebar-collapsed .logout-btn:hover::after,
+    .admin-container.sidebar-collapsed .sidebar-search-wrap:hover::after,
+    .admin-container.sidebar-collapsed .sidebar-brand-link:hover::after {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(-50%) translateX(0);
+    }
+
+    .admin-container.sidebar-collapsed .menu-item::before,
+    .admin-container.sidebar-collapsed .logout-btn::before,
+    .admin-container.sidebar-collapsed .sidebar-search-wrap::before,
+    .admin-container.sidebar-collapsed .sidebar-brand-link::before {
+        content: '';
+        position: absolute;
+        left: calc(100% + 6px);
+        top: 50%;
+        transform: translateY(-50%) translateX(-4px);
+        border: 5px solid transparent;
+        border-right-color: #0f172a;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transition: opacity 0.18s cubic-bezier(0.22, 1, 0.36, 1), transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), visibility 0.18s;
+        z-index: 9999;
+    }
+
+    .admin-container.sidebar-collapsed .menu-item:hover::before,
+    .admin-container.sidebar-collapsed .logout-btn:hover::before,
+    .admin-container.sidebar-collapsed .sidebar-search-wrap:hover::before,
+    .admin-container.sidebar-collapsed .sidebar-brand-link:hover::before {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(-50%) translateX(0);
+    }
+
+    /* Submenu Floating Flyout */
+    .admin-container.sidebar-collapsed .sidebar-submenu {
+        position: absolute !important;
+        left: calc(100% + 10px) !important;
+        top: 0 !important;
+        min-width: 210px !important;
+        background: #ffffff !important;
+        border: 1px solid #eaecf0 !important;
+        border-radius: 14px !important;
+        box-shadow: 0 12px 30px rgba(16, 24, 40, 0.15) !important;
+        padding: 8px !important;
+        margin: 0 !important;
+        display: none !important;
+        z-index: 9999 !important;
+    }
+
+    .admin-container.sidebar-collapsed li:hover > .sidebar-submenu {
+        display: block !important;
+        animation: submenuFlyout 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    @keyframes submenuFlyout {
+        from { opacity: 0; transform: translateX(-6px); }
+        to { opacity: 1; transform: translateX(0); }
+    }
+
+    .admin-container.sidebar-collapsed .sidebar-submenu .submenu-item {
+        margin: 2px 0 !important;
+        padding: 8px 12px !important;
+        border-radius: 8px !important;
+        font-size: 13px !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+    }
+
+    /* Footer in Collapsed Dock */
+    .admin-container.sidebar-collapsed .sidebar-footer {
+        padding: 12px 0 !important;
+        width: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        border-top: 1px solid var(--border) !important;
+    }
+
+    .admin-container.sidebar-collapsed .logout-btn {
+        width: 44px !important;
+        height: 44px !important;
+        padding: 0 !important;
+        margin: 4px auto !important;
+        border-radius: 12px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        position: relative !important;
+    }
+
+    .admin-container.sidebar-collapsed .logout-btn span {
+        display: none !important;
+    }
+
+    .admin-container.sidebar-collapsed .logout-btn i {
+        font-size: 16px !important;
+        margin: 0 !important;
+    }
+
+    /* Dark Mode Collapsed Dock Styles */
+    body.dark-mode .admin-container.sidebar-collapsed .sidebar-search-wrap {
+        background: #222936 !important;
+    }
+    body.dark-mode .admin-container.sidebar-collapsed .sidebar-search-wrap:hover {
+        background: #2e3848 !important;
+    }
+    body.dark-mode .admin-container.sidebar-collapsed .sidebar-search-icon {
+        color: #94a3b8 !important;
+    }
+    body.dark-mode .admin-container.sidebar-collapsed .menu-item.active {
+        background: #2a1818 !important;
+        border: 1px solid #4c1d1d !important;
+        box-shadow: 0 2px 8px rgba(255, 107, 107, 0.15) !important;
+    }
+    body.dark-mode .admin-container.sidebar-collapsed .menu-item.active i {
+        color: #ff6b6b !important;
+    }
+    body.dark-mode .admin-container.sidebar-collapsed .menu-item:hover {
+        background: #222936 !important;
+    }
+    body.dark-mode .admin-container.sidebar-collapsed .menu-item:hover i {
+        color: #f8fafc !important;
+    }
+    body.dark-mode .admin-container.sidebar-collapsed .menu-item .sidebar-count-badge {
+        border-color: #181d26 !important;
+    }
+    body.dark-mode .admin-container.sidebar-collapsed .sidebar-submenu {
+        background: #181d26 !important;
+        border-color: #27303f !important;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45) !important;
+    }
+    body.dark-mode .admin-container.sidebar-collapsed .sidebar-submenu .submenu-item:hover {
+        background: #222936 !important;
+        color: #ffffff !important;
     }
 }
 
@@ -2428,8 +3516,13 @@ body.dark-mode .sidebar-menu .menu-item:hover {
 }
 
 body.dark-mode .sidebar-menu .menu-item.active {
-    background: #b3261e !important;
-    color: #ffffff !important;
+    background: #2a1818 !important;
+    color: #fca5a5 !important;
+    border: 1px solid #4c1d1d !important;
+}
+
+body.dark-mode .sidebar-menu .menu-item.active i {
+    color: #ff6b6b !important;
 }
 
 body.dark-mode .sidebar-submenu {
@@ -2471,6 +3564,20 @@ body.dark-mode .sidebar-footer .logout-btn:hover {
     background: #2f1717 !important;
     border-color: #ef4444 !important;
     color: #fca5a5 !important;
+}
+
+body.dark-mode input:-webkit-autofill,
+body.dark-mode input:-webkit-autofill:hover, 
+body.dark-mode input:-webkit-autofill:focus, 
+body.dark-mode input:-webkit-autofill:active,
+body.dark-mode textarea:-webkit-autofill,
+body.dark-mode select:-webkit-autofill {
+    -webkit-box-shadow: 0 0 0 1000px #181d26 inset !important;
+    box-shadow: 0 0 0 1000px #181d26 inset !important;
+    -webkit-text-fill-color: #f8fafc !important;
+    color: #f8fafc !important;
+    transition: background-color 5000s ease-in-out 0s !important;
+    caret-color: #f8fafc !important;
 }
 </style>
 
@@ -2514,39 +3621,51 @@ body.dark-mode .sidebar-footer .logout-btn:hover {
 
 document.addEventListener('DOMContentLoaded', function() {
     // 0. Universal Sticky Theme Synchronization
-    function applyAdminTheme(isDark) {
+    window.applyAdminTheme = function(isDark) {
         if (isDark) {
             document.documentElement.classList.add('dark-mode');
-            document.body.classList.add('dark-mode');
+            document.documentElement.setAttribute('data-theme', 'dark');
+            if (document.body) {
+                document.body.classList.add('dark-mode');
+            }
         } else {
             document.documentElement.classList.remove('dark-mode');
-            document.body.classList.remove('dark-mode');
+            document.documentElement.setAttribute('data-theme', 'light');
+            if (document.body) {
+                document.body.classList.remove('dark-mode');
+            }
         }
         try {
             localStorage.setItem('theme', isDark ? 'dark' : 'light');
             document.cookie = "theme=" + (isDark ? "dark" : "light") + "; path=/; max-age=31536000; SameSite=Lax";
         } catch(e) {}
 
-        document.querySelectorAll('#themeToggler, .theme-toggler').forEach(function(btn) {
+        document.querySelectorAll('#themeToggler, .theme-toggler, #marketThemeToggler, .market-theme-btn').forEach(function(btn) {
             const icon = btn.querySelector('i');
             if (icon) {
                 icon.className = isDark ? 'fas fa-sun' : 'fas fa-moon';
             }
+            btn.setAttribute('title', isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode');
         });
         window.dispatchEvent(new CustomEvent('themeChanged', { detail: { isDark: isDark } }));
-    }
+    };
+
+    window.toggleAdminTheme = function() {
+        const isCurrentlyDark = document.body.classList.contains('dark-mode') || document.documentElement.classList.contains('dark-mode');
+        window.applyAdminTheme(!isCurrentlyDark);
+    };
 
     const currentSavedTheme = localStorage.getItem('theme') || (document.cookie.match(/(?:^|;\s*)theme=([^;]*)/) || [])[1];
-    applyAdminTheme(currentSavedTheme === 'dark');
+    window.applyAdminTheme(currentSavedTheme === 'dark');
 
     // 1. Unified Sidebar Collapse & Mobile Drawer Toggle
     const adminContainer = document.querySelector('.admin-container') || document.body;
     const sidebar = document.getElementById('adminSidebar');
     
-    // Ensure Burger Button & Theme Toggler are always present on ANY admin/seller/partner topbar
-    const topbars = document.querySelectorAll('.topbar-content, .admin-topbar, header.admin-topbar');
-    topbars.forEach(function(topbar) {
-        if (!topbar.querySelector('#sidebarToggler, .sidebar-toggler')) {
+    // Ensure Burger Button & Theme Toggler are always present on ANY admin/seller/partner topbar (without duplicates)
+    if (!document.querySelector('#sidebarToggler, .sidebar-toggler')) {
+        const topbarTarget = document.querySelector('.topbar-content') || document.querySelector('.admin-topbar, header.admin-topbar');
+        if (topbarTarget) {
             const btn = document.createElement('button');
             btn.className = 'sidebar-toggler';
             btn.id = 'sidebarToggler';
@@ -2554,35 +3673,38 @@ document.addEventListener('DOMContentLoaded', function() {
             btn.title = 'Toggle Navigation';
             btn.setAttribute('aria-label', 'Toggle Navigation');
             btn.innerHTML = '<i class="fas fa-bars"></i>';
-            topbar.prepend(btn);
+            topbarTarget.prepend(btn);
         }
+    }
 
-        if (!topbar.querySelector('#themeToggler, .theme-toggler')) {
-            const rightWrap = topbar.querySelector('.topbar-right') || topbar.querySelector('.topbar-content') || topbar;
+    if (!document.querySelector('#themeToggler, .theme-toggler')) {
+        const topbarTarget = document.querySelector('.topbar-content') || document.querySelector('.admin-topbar, header.admin-topbar');
+        if (topbarTarget) {
+            const rightWrap = topbarTarget.querySelector('.topbar-right') || topbarTarget;
             const tBtn = document.createElement('button');
             tBtn.className = 'theme-toggler';
             tBtn.id = 'themeToggler';
             tBtn.type = 'button';
-            tBtn.title = 'Toggle Theme';
+            tBtn.title = (currentSavedTheme === 'dark') ? 'Switch to Light Mode' : 'Switch to Dark Mode';
+            tBtn.setAttribute('aria-label', 'Toggle Theme');
             tBtn.innerHTML = (currentSavedTheme === 'dark') ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
-            const profile = topbar.querySelector('.admin-profile');
+            const profile = topbarTarget.querySelector('.admin-profile');
             if (profile && profile.parentNode) {
                 profile.parentNode.insertBefore(tBtn, profile);
             } else {
                 rightWrap.appendChild(tBtn);
             }
         }
-    });
+    }
 
-    // Global Event Listener for Theme Toggling
+    // Global Event Listener for Theme Toggling with capture phase to prevent double-toggle interference
     document.addEventListener('click', function(e) {
-        const toggler = e.target.closest('#themeToggler, .theme-toggler');
+        const toggler = e.target.closest('#themeToggler, .theme-toggler, #marketThemeToggler, .market-theme-btn');
         if (!toggler) return;
         e.preventDefault();
-        e.stopPropagation();
-        const isCurrentlyDark = document.body.classList.contains('dark-mode') || document.documentElement.classList.contains('dark-mode');
-        applyAdminTheme(!isCurrentlyDark);
-    });
+        e.stopImmediatePropagation();
+        window.toggleAdminTheme();
+    }, true);
 
     // If no topbar exists on a custom page, create a standalone floating burger button
     if (!document.querySelector('#sidebarToggler, .sidebar-toggler') && sidebar) {
@@ -2624,6 +3746,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (e) {
             e.preventDefault();
             e.stopPropagation();
+            if (typeof e.stopImmediatePropagation === 'function') {
+                e.stopImmediatePropagation();
+            }
         }
         if (window.innerWidth > 768) {
             // Desktop: Toggle collapsed state
@@ -2643,7 +3768,7 @@ document.addEventListener('DOMContentLoaded', function() {
     togglers.forEach(function(btn) {
         if (btn.dataset.sidebarBound === '1') return;
         btn.dataset.sidebarBound = '1';
-        btn.addEventListener('click', handleToggle);
+        btn.addEventListener('click', handleToggle, true);
     });
 
     // On mobile, clicking a navigation link inside the sidebar closes the drawer
@@ -2657,6 +3782,40 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     }
+
+    // Modern Collapsed Tooltip Initializer & Interactive Dock Enhancements
+    function initSidebarTooltips() {
+        if (!sidebar) return;
+        sidebar.querySelectorAll('.menu-item, .logout-btn').forEach(function(el) {
+            if (!el.getAttribute('data-tooltip')) {
+                const span = el.querySelector('span');
+                const text = span ? span.textContent.trim() : (el.getAttribute('title') || '');
+                if (text) {
+                    el.setAttribute('data-tooltip', text);
+                }
+            }
+        });
+        const brandLink = sidebar.querySelector('.sidebar-brand-link');
+        if (brandLink && !brandLink.getAttribute('data-tooltip')) {
+            const h3 = brandLink.querySelector('h3');
+            if (h3) brandLink.setAttribute('data-tooltip', h3.textContent.trim());
+        }
+        const searchWrap = sidebar.querySelector('.sidebar-search-wrap');
+        if (searchWrap && !searchWrap.getAttribute('data-tooltip')) {
+            searchWrap.setAttribute('data-tooltip', 'Search Menu');
+            searchWrap.addEventListener('click', function(e) {
+                if (adminContainer.classList.contains('sidebar-collapsed')) {
+                    adminContainer.classList.remove('sidebar-collapsed');
+                    try { localStorage.setItem('admin_sidebar_collapsed', '0'); } catch(err) {}
+                    const searchInput = document.getElementById('sidebarSearchInput');
+                    if (searchInput) {
+                        setTimeout(function() { searchInput.focus(); }, 160);
+                    }
+                }
+            });
+        }
+    }
+    initSidebarTooltips();
 
     // 2. Sidebar Navigation Live Search Filter
     const searchInput = document.getElementById('sidebarSearchInput');
@@ -2973,86 +4132,53 @@ function formatTime(str) {
 </script>
 <?php endif; ?>
 
-<?php if (!empty($_SESSION['login_success_flash'])): ?>
-<style>
-.swal2-container {
-    background: transparent !important;
-    background-color: transparent !important;
-}
-.swal2-container.swal2-backdrop-show,
-.swal2-container.swal2-no-backdrop {
-    background: transparent !important;
-    background-color: transparent !important;
-}
-.swal2-container.swal2-top-end,
-.swal2-container.swal2-top-right {
-    top: 30px !important;
-    right: 24px !important;
-    left: auto !important;
-    bottom: auto !important;
-    padding: 0 !important;
-    z-index: 99999999 !important;
-    overflow: visible !important;
-    pointer-events: none !important;
-    background: transparent !important;
-}
-.swal2-popup.swal2-toast {
-    pointer-events: auto !important;
-    background: #ffffff !important;
-    color: #101828 !important;
-    border: 1px solid #eaecf0 !important;
-    border-radius: 12px !important;
-    box-shadow: 0 10px 25px -3px rgba(16, 24, 40, 0.1), 0 4px 6px -2px rgba(16, 24, 40, 0.05) !important;
-    padding: 12px 18px !important;
-    min-width: 280px !important;
-    max-width: 420px !important;
-    display: flex !important;
-    align-items: center !important;
-    gap: 12px !important;
-}
-.swal2-popup.swal2-toast .swal2-title {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Outfit', sans-serif !important;
-    font-size: 0.92rem !important;
-    font-weight: 600 !important;
-    color: #101828 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    line-height: 1.4 !important;
-}
-.swal2-popup.swal2-toast .swal2-icon {
-    margin: 0 !important;
-    width: 24px !important;
-    height: 24px !important;
-    min-width: 24px !important;
-    border-color: #027a48 !important;
-    color: #027a48 !important;
-}
-.swal2-popup.swal2-toast .swal2-timer-progress-bar {
-    background: #b3261e !important;
-    height: 3px !important;
-}
-</style>
+<!-- Subscription Upgrade Required Modal -->
+<div id="sidebarUpgradeModal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.65); backdrop-filter:blur(4px); z-index:99999; align-items:center; justify-content:center; padding:16px;">
+    <div style="background:#ffffff; border-radius:20px; max-width:480px; width:100%; padding:32px 28px; box-shadow:0 24px 48px rgba(0,0,0,0.25); border:1px solid #eaecf0; text-align:center; position:relative;">
+        <button type="button" onclick="closeSidebarUpgradeModal()" style="position:absolute; top:16px; right:16px; border:none; background:#f1f5f9; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#64748b;">
+            <i class="fas fa-times"></i>
+        </button>
+        <div style="width:64px; height:64px; border-radius:50%; background:#fff1f0; border:1.5px solid #fee4e2; display:inline-flex; align-items:center; justify-content:center; color:#b3261e; font-size:1.75rem; margin-bottom:16px;">
+            <i class="fas fa-lock"></i>
+        </div>
+        <h3 id="upgradeModalTitle" style="font-size:1.3rem; font-weight:800; color:#101828; margin:0 0 10px;">Upgrade Required</h3>
+        <p id="upgradeModalDesc" style="font-size:0.93rem; color:#475467; margin:0 0 24px; line-height:1.5;">
+            This feature is locked on your current plan. Please upgrade your subscription plan to unlock full access.
+        </p>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+            <a id="upgradeModalBtn" href="subscription_plans.php" style="background:#b3261e; color:#ffffff; font-weight:700; padding:12px 24px; border-radius:999px; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 4px 14px rgba(179,38,30,0.3);">
+                <i class="fas fa-crown"></i> <span>View Plans &amp; Upgrade</span>
+            </a>
+            <button type="button" onclick="closeSidebarUpgradeModal()" style="background:none; border:none; color:#64748b; font-size:0.88rem; font-weight:600; cursor:pointer; padding:6px;">
+                Maybe Later
+            </button>
+        </div>
+    </div>
+</div>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    if (typeof Swal !== 'undefined') {
-        const Toast = Swal.mixin({
-            toast: true,
-            position: 'top-end',
-            backdrop: false,
-            showConfirmButton: false,
-            timer: 4000,
-            timerProgressBar: true,
-            didOpen: (toast) => {
-                toast.addEventListener('mouseenter', Swal.stopTimer);
-                toast.addEventListener('mouseleave', Swal.resumeTimer);
-            }
-        });
-        Toast.fire({
-            icon: 'success',
-            title: <?php echo json_encode($_SESSION['login_success_flash']); ?>
-        });
-    }
+function openSidebarUpgradeModal(e, featureName, requiredPlanName, targetUrl) {
+    if (e && e.preventDefault) e.preventDefault();
+    const modal = document.getElementById('sidebarUpgradeModal');
+    if (!modal) return false;
+    const titleEl = document.getElementById('upgradeModalTitle');
+    const descEl = document.getElementById('upgradeModalDesc');
+    const btnEl = document.getElementById('upgradeModalBtn');
+    
+    if (titleEl) titleEl.innerText = 'Upgrade to Unlock ' + (featureName || 'Feature');
+    if (descEl) descEl.innerHTML = 'The feature <strong>' + (featureName || 'this module') + '</strong> requires an active <strong>' + (requiredPlanName || 'higher tier') + '</strong> subscription. Upgrade your shop plan to gain instant access.';
+    if (btnEl) btnEl.href = targetUrl || 'subscription_plans.php';
+    modal.style.display = 'flex';
+    return false;
+}
+function closeSidebarUpgradeModal() {
+    const modal = document.getElementById('sidebarUpgradeModal');
+    if (modal) modal.style.display = 'none';
+}
+window.addEventListener('click', function(e) {
+    const modal = document.getElementById('sidebarUpgradeModal');
+    if (modal && e.target === modal) closeSidebarUpgradeModal();
 });
 </script>
-<?php unset($_SESSION['login_success_flash']); ?>
-<?php endif; ?>
+
+<?php require_once __DIR__ . '/shop_owner_tutorial_modal.php'; ?>
+<?php require_once __DIR__ . '/../includes/popup_alert.php'; ?>

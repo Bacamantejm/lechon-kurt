@@ -31,18 +31,23 @@
                 <div class="ecom-order-card" data-status="<?php echo htmlspecialchars($res_status); ?>">
                     <!-- Card Top Bar -->
                     <div class="ecom-card-top">
-                        <div class="ecom-shop-info">
-                            <i class="fas fa-calendar-check shop-icon"></i>
-                            <span class="shop-name">Pre-Order #<?php echo (int)$preorder['id']; ?></span>
-                            <span class="divider">&bull;</span>
-                            <span class="order-date">Schedule: <?php echo date('M d, Y', strtotime($preorder['preferred_pickup_date'])); ?> @ <?php echo htmlspecialchars($preorder['preferred_pickup_time']); ?></span>
-                            <span class="type-badge type-<?php echo htmlspecialchars($delivery_method); ?>">
-                                <?php echo ucfirst($delivery_method); ?>
-                            </span>
+                        <div class="card-top-row main-row">
+                            <div class="shop-brand">
+                                <i class="fas fa-calendar-check shop-icon"></i>
+                                <span class="shop-name">Pre-Order #<?php echo (int)$preorder['id']; ?></span>
+                            </div>
+                            <div class="ecom-status-label status-<?php echo htmlspecialchars($res_status); ?>">
+                                <span class="status-dot"></span>
+                                <span><?php echo htmlspecialchars($status_text); ?></span>
+                            </div>
                         </div>
-                        <div class="ecom-status-label status-<?php echo htmlspecialchars($res_status); ?>">
-                            <span class="status-dot"></span>
-                            <?php echo htmlspecialchars($status_text); ?>
+                        <div class="card-top-row meta-row">
+                            <span class="order-number">Schedule: <?php echo date('M d, Y', strtotime($preorder['preferred_pickup_date'])); ?> @ <?php echo htmlspecialchars($preorder['preferred_pickup_time']); ?></span>
+                            <div class="meta-right">
+                                <span class="type-badge type-<?php echo htmlspecialchars($delivery_method); ?>">
+                                    <?php echo ucfirst($delivery_method); ?>
+                                </span>
+                            </div>
                         </div>
                     </div>
 

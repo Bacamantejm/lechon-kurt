@@ -502,6 +502,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if (mysqli_stmt_execute($update_stmt)) {
                             $_SESSION['success'] = "User role assigned successfully";
                             logRBACAction($conn, $current_user_id, 'USER_ROLE_ASSIGNED', 'users', "Assigned role {$target_role['name']} to user ID $user_id");
+                            require_once __DIR__ . '/../includes/rider_helper.php';
+                            isDeliveryDriverUser($conn, $user_id);
                         } else {
                             $_SESSION['error'] = 'Failed to assign role: ' . mysqli_error($conn);
                         }
@@ -617,6 +619,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 mysqli_stmt_close($link_stmt);
 
                 mysqli_commit($conn);
+                require_once __DIR__ . '/../includes/rider_helper.php';
+                isDeliveryDriverUser($conn, $new_user_id);
                 $_SESSION['success'] = 'Sub-user created and linked successfully.';
                 logRBACAction($conn, $current_user_id, 'PARTNER_SUBUSER_CREATED', 'users', "Created partner sub-user ID {$new_user_id}");
             } catch (Throwable $e) {
@@ -1314,11 +1318,8 @@ unset($_SESSION['success'], $_SESSION['error']);
                     <div class="topbar-right">
                         <div class="date-display" id="currentDate"></div>
                         <div class="admin-profile">
-                            <img src="https://ui-avatars.com/api/?name=<?php echo urlencode($admin_info['full_name']); ?>" alt="Profile" class="profile-img">
-                            <div class="profile-info">
-                                <div class="profile-name"><?php echo htmlspecialchars($admin_info['full_name']); ?></div>
-                                <div class="profile-role"><?php echo rbacRoleDisplayName($admin_info['role_name'] ?? 'admin', $is_partner_scoped_admin ? $partner_scope_owner_id : 0); ?></div>
-                            </div>
+                            <span><?php echo htmlspecialchars($admin_info['full_name'] ?? 'Admin'); ?></span>
+                            <i class="fas fa-user-circle"></i>
                         </div>
                     </div>
                 </div>

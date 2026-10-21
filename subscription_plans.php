@@ -7,6 +7,7 @@ require_once __DIR__ . '/includes/config.php';
 require_once __DIR__ . '/includes/security.php';
 require_once __DIR__ . '/includes/PlatformMonetizationService.php';
 require_once __DIR__ . '/admin/auth.php';
+require_once __DIR__ . '/includes/SubscriptionAccessService.php';
 
 $current_page = 'subscription_plans';
 $page_title = 'Subscription Plans';
@@ -99,6 +100,13 @@ $featured_plan_code = 'pro';
 $plan_count = count($plans);
 $is_partner_ready_for_deeplink = $is_partner_admin;
 
+$upgrade_notice = $_SESSION['subscription_upgrade_notice'] ?? null;
+unset($_SESSION['subscription_upgrade_notice']);
+$locked_feature_param = $_GET['locked_feature'] ?? ($upgrade_notice['feature'] ?? '');
+$required_tier_param = $_GET['required_tier'] ?? ($upgrade_notice['required_tier'] ?? '');
+$feature_label_display = $locked_feature_param ? SubscriptionAccessService::getFeatureLabel($locked_feature_param) : ($upgrade_notice['feature_label'] ?? '');
+$required_tier_label = $required_tier_param ? SubscriptionAccessService::getTierLabel($required_tier_param) : ($upgrade_notice['required_tier_name'] ?? '');
+
 include 'includes/header.php';
 ?>
 <section class="zen-plans-wrapper">
@@ -110,8 +118,50 @@ include 'includes/header.php';
             <p class="zen-plans-subtitle">Select your subscription term and store count below to customize your plan. All plans include 24/7 customer support and full marketplace access.</p>
         </div>
 
+        <?php if ($locked_feature_param !== ''): ?>
+        <div style="background:#fff1f0; border:1.5px solid #fee4e2; border-radius:16px; padding:18px 24px; margin-bottom:28px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px; box-shadow:0 8px 24px rgba(179,38,30,0.12);">
+            <div style="display:flex; align-items:center; gap:14px;">
+                <div style="width:48px; height:48px; border-radius:50%; background:#fee4e2; display:flex; align-items:center; justify-content:center; color:#b3261e; font-size:1.3rem; flex-shrink:0;">
+                    <i class="fas fa-lock"></i>
+                </div>
+                <div>
+                    <h4 style="margin:0 0 4px; font-size:1.05rem; font-weight:800; color:#b3261e;">
+                        Feature Locked: Upgrade Required for "<?php echo htmlspecialchars($feature_label_display); ?>"
+                    </h4>
+                    <p style="margin:0; font-size:0.9rem; color:#475467;">
+                        This feature requires an active <strong><?php echo htmlspecialchars($required_tier_label); ?></strong> or higher. Select a plan below to unlock instant access.
+                    </p>
+                </div>
+            </div>
+            <a href="#planCardsGrid" style="background:#b3261e; color:#ffffff; font-weight:700; border-radius:999px; padding:10px 22px; text-decoration:none; display:inline-flex; align-items:center; gap:8px;">
+                <i class="fas fa-arrow-down"></i> Choose Plan
+            </a>
+        </div>
+        <?php endif; ?>
+
+        <?php if (!$active_partner_subscription && ($current_user_id > 0 || $is_partner_admin)): ?>
+        <div style="background:#ffffff; border:1.5px solid #fedf89; border-radius:18px; padding:22px 28px; margin-bottom:36px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px; box-shadow:0 4px 20px rgba(181, 71, 8, 0.08);">
+            <div style="display:flex; align-items:center; gap:16px;">
+                <div style="width:50px; height:50px; border-radius:14px; background:#fff8ef; border:1px solid #fedf89; display:flex; align-items:center; justify-content:center; color:#b3261e; font-size:1.4rem; flex-shrink:0;">
+                    <i class="fas fa-lock"></i>
+                </div>
+                <div>
+                    <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px; flex-wrap:wrap;">
+                        <h3 style="margin:0; font-size:1.2rem; font-weight:800; color:#101828;">Current Status: Non-Subscribed / New Account</h3>
+                        <span style="background:#fff8ef; color:#b54708; border:1px solid #fedf89; font-size:0.75rem; font-weight:700; padding:3px 10px; border-radius:999px;">LIMITED ACCESS</span>
+                    </div>
+                    <p style="margin:0; color:#475467; font-size:0.9rem;">
+                        Your store currently has restricted access. Changing Store Name &amp; Logo, uploading products, and advanced system features are locked. Subscribe to a plan below to activate your store.
+                    </p>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <?php if ($active_partner_subscription): ?>
         <?php
+            $activeStatus = strtolower(trim((string)($active_partner_subscription['subscription_status'] ?? 'active')));
+            $isCancelled = ($activeStatus === 'cancelled' || $activeStatus === 'canceled');
             $activePlanName = (string)($active_partner_subscription['plan_name'] ?? 'Partner Plan');
             $activeCycle = ucfirst((string)($active_partner_subscription['billing_cycle'] ?? 'monthly'));
             $subStarted = !empty($active_partner_subscription['started_at']) ? date('M d, Y', strtotime((string)$active_partner_subscription['started_at'])) : 'Recently';
@@ -124,12 +174,14 @@ include 'includes/header.php';
                 <div>
                     <div class="active-banner-title">
                         <h2>Your Current Active Plan: <?php echo htmlspecialchars($activePlanName); ?></h2>
-                        <span class="active-pill-status"><i class="fas fa-check-circle"></i> ACTIVE (<?php echo htmlspecialchars($activeCycle); ?>)</span>
+                        <span class="active-pill-status" style="<?php echo $isCancelled ? 'background:#fff1f0; color:#b3261e; border:1px solid #fee4e2;' : ''; ?>">
+                            <i class="<?php echo $isCancelled ? 'fas fa-ban' : 'fas fa-check-circle'; ?>"></i> <?php echo strtoupper($activeStatus); ?> (<?php echo htmlspecialchars($activeCycle); ?>)
+                        </span>
                     </div>
                     <p class="active-banner-dates">
                         <span><i class="fas fa-calendar-check"></i> Subscribed: <strong><?php echo htmlspecialchars($subStarted); ?></strong></span>
                         <span class="dates-divider">&bull;</span>
-                        <span><i class="fas fa-credit-card"></i> Next Renewal / Due Date: <strong style="color:#b3261e;"><?php echo htmlspecialchars($subRenews); ?></strong></span>
+                        <span><i class="fas fa-credit-card"></i> <?php echo $isCancelled ? 'Active Until / Terminates On:' : 'Next Renewal / Due Date:'; ?> <strong style="color:#b3261e;"><?php echo htmlspecialchars($subRenews); ?></strong></span>
                     </p>
                 </div>
             </div>
@@ -142,13 +194,15 @@ include 'includes/header.php';
                 <a href="admin/subscription_plans.php" class="btn-manage-sub">
                     <i class="fas fa-sliders-h"></i> Dashboard
                 </a>
-                <form method="POST" action="subscription_plans.php" style="display:inline-block;" onsubmit="return confirmSubscriptionCancellation('<?php echo htmlspecialchars($activePlanName, ENT_QUOTES, 'UTF-8'); ?>', '<?php echo htmlspecialchars($subRenews, ENT_QUOTES, 'UTF-8'); ?>');">
+                <?php if (!$isCancelled): ?>
+                <form method="POST" action="subscription_plans.php" style="display:inline-block;" onsubmit="return confirmSubscriptionCancellation(event, '<?php echo htmlspecialchars($activePlanName, ENT_QUOTES, 'UTF-8'); ?>', '<?php echo htmlspecialchars($subRenews, ENT_QUOTES, 'UTF-8'); ?>');">
                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
                     <input type="hidden" name="action" value="cancel_active_subscription">
                     <button type="submit" class="btn-cancel-sub">
                         <i class="fas fa-ban"></i> Cancel Subscription
                     </button>
                 </form>
+                <?php endif; ?>
             </div>
         </div>
         <?php endif; ?>
@@ -177,7 +231,7 @@ include 'includes/header.php';
         </div>
 
         <!-- Minimal Standalone Plan Cards Grid -->
-        <div class="sp-minimal-grid">
+        <div class="sp-minimal-grid" id="planCardsGrid">
             <?php foreach ($plans as $index => $plan): 
                 $planCode = strtolower(trim((string)($plan['plan_code'] ?? '')));
                 $isPro = $planCode === 'pro';
@@ -239,31 +293,37 @@ include 'includes/header.php';
 
                 <ul class="sp-bullet-list">
                     <?php if ($planCode === 'starter'): ?>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Update Store Name &amp; Store Logo</strong></li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Upload Products</strong> &amp; Manage Catalog</li>
                         <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Marketplace Storefront</strong> &amp; Online Orders</li>
                         <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Real-time POS</strong> &amp; Delivery Tracking</li>
-                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Product Catalog</strong> &amp; Stock Alerts</li>
                         <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Customer Live Chat</strong> Messaging</li>
                         <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Up to <?php echo $staffAccounts; ?> Staff</strong> / Cashier Accounts</li>
-                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> Fee Rate: <strong><?php echo number_format($feePercent, 2); ?>% + ₱<?php echo number_format($feeFlat, 2); ?></strong> / order</li>
-                        <li style="color:#94a3b8;"><span class="bullet-dot" style="color:#cbd5e1;"><i class="fas fa-times"></i></span> MRP Batch Yield Calculator</li>
-                        <li style="color:#94a3b8;"><span class="bullet-dot" style="color:#cbd5e1;"><i class="fas fa-times"></i></span> AI Demand Forecasting</li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> Standard Fee: <strong><?php echo number_format($feePercent, 2); ?>% + ₱<?php echo number_format($feeFlat, 2); ?></strong> / order</li>
+                        <li style="color:#94a3b8;"><span class="bullet-dot" style="color:#cbd5e1;"><i class="fas fa-times"></i></span> No HR Department Access</li>
+                        <li style="color:#94a3b8;"><span class="bullet-dot" style="color:#cbd5e1;"><i class="fas fa-times"></i></span> No Inventory MRP Roaster</li>
+                        <li style="color:#94a3b8;"><span class="bullet-dot" style="color:#cbd5e1;"><i class="fas fa-times"></i></span> No AI Demand Forecasting</li>
                     <?php elseif ($planCode === 'growth'): ?>
-                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Everything in Starter</strong>, plus:</li>
-                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Up to <?php echo $staffAccounts; ?> Staff</strong> &amp; Kitchen Accounts</li>
-                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>MRP Batch Roasting</strong> &amp; Yield Calculator</li>
-                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>AI Demand Forecasting</strong> &amp; Trends</li>
-                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Automated Chatbot</strong> FAQ Replies</li>
-                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>DSS Financial</strong> &amp; Sales Reports</li>
-                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> Lower Fee: <strong><?php echo number_format($feePercent, 2); ?>% + ₱<?php echo number_format($feeFlat, 2); ?></strong> / order</li>
-                        <li style="color:#94a3b8;"><span class="bullet-dot" style="color:#cbd5e1;"><i class="fas fa-times"></i></span> HR &amp; Automated Payroll</li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Everything in Starter</strong> (Store Name, Logo, Products)</li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Full HR Department</strong> (Employees, Attendance, Leave, Payroll)</li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Inventory &amp; MRP Roaster</strong> Batch Yield Calculator</li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Shop Expense Tracking</strong> &amp; Financials</li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Store Availability</strong> &amp; Order Policies</li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Up to <?php echo $staffAccounts; ?> Staff</strong> Accounts</li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> Discounted Fee: <strong><?php echo number_format($feePercent, 2); ?>% + ₱<?php echo number_format($feeFlat, 2); ?></strong> / order</li>
+                        <li style="color:#94a3b8;"><span class="bullet-dot" style="color:#cbd5e1;"><i class="fas fa-times"></i></span> No AI Demand Forecasting</li>
+                        <li style="color:#94a3b8;"><span class="bullet-dot" style="color:#cbd5e1;"><i class="fas fa-times"></i></span> No DSS Decision Support Platform</li>
+                        <li style="color:#94a3b8;"><span class="bullet-dot" style="color:#cbd5e1;"><i class="fas fa-times"></i></span> No Custom Staff RBAC</li>
                     <?php else: ?>
-                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Everything in Growth</strong>, plus:</li>
-                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Up to <?php echo $staffAccounts; ?> Staff</strong> &amp; Admin Accounts</li>
-                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Full HR &amp; Automated Payroll</strong> Module</li>
-                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Featured Homepage</strong> Marketplace Placement</li>
-                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Custom Receipt Logo</strong> &amp; Branding</li>
-                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Priority 24/7 Hotline</strong> Support</li>
-                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> Lowest Fee: <strong><?php echo number_format($feePercent, 2); ?>% + ₱<?php echo number_format($feeFlat, 2); ?></strong> / order</li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Unrestricted Platform Access</strong> (Full Features)</li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Full HR Department</strong> Suite &amp; Payroll</li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Inventory &amp; MRP Roaster</strong> Batch Yield Calculator</li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>AI Demand Forecasting</strong> &amp; Predictive Trends</li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>DSS Decision Support</strong> Deep Analytics</li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Custom Staff RBAC</strong> Role Permissions</li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Featured Homepage Placement</strong></li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> <strong>Priority 24/7 Hotline Support</strong></li>
+                        <li><span class="bullet-dot" style="color:#027a48;"><i class="fas fa-check"></i></span> Lowest Platform Fee: <strong><?php echo number_format($feePercent, 2); ?>% + ₱<?php echo number_format($feeFlat, 2); ?></strong> / order</li>
                     <?php endif; ?>
                 </ul>
 
@@ -273,13 +333,19 @@ include 'includes/header.php';
                             <a href="admin/subscription_plans.php" class="sp-pill-button sp-btn-current-active">
                                 <i class="fas fa-check-circle"></i> Current Active Plan
                             </a>
-                            <form method="POST" action="subscription_plans.php" style="width:100%; text-align:center;" onsubmit="return confirmSubscriptionCancellation('<?php echo htmlspecialchars((string)$plan['plan_name'], ENT_QUOTES, 'UTF-8'); ?>', '<?php echo htmlspecialchars($subRenews, ENT_QUOTES, 'UTF-8'); ?>');">
+                            <?php if (!$isCancelled): ?>
+                            <form method="POST" action="subscription_plans.php" style="width:100%; text-align:center;" onsubmit="return confirmSubscriptionCancellation(event, '<?php echo htmlspecialchars((string)$plan['plan_name'], ENT_QUOTES, 'UTF-8'); ?>', '<?php echo htmlspecialchars($subRenews, ENT_QUOTES, 'UTF-8'); ?>');">
                                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
                                 <input type="hidden" name="action" value="cancel_active_subscription">
                                 <button type="submit" class="btn-card-cancel">
                                     <i class="fas fa-times-circle"></i> Cancel Subscription
                                 </button>
                             </form>
+                            <?php else: ?>
+                            <div style="text-align:center; font-size:0.8rem; color:#b54708; font-weight:700; padding:4px;">
+                                <i class="fas fa-clock"></i> Access until <?php echo htmlspecialchars($subRenews); ?>
+                            </div>
+                            <?php endif; ?>
                         </div>
                     <?php else: ?>
                         <a href="<?php echo htmlspecialchars($monthlyHref); ?>" 
@@ -296,6 +362,115 @@ include 'includes/header.php';
                 </div>
             </article>
             <?php endforeach; ?>
+        </div>
+
+        <!-- Feature Comparison Matrix -->
+        <div style="margin-top: 40px; margin-bottom: 40px; background: #ffffff; border: 1px solid #eaecf0; border-radius: 18px; padding: 28px; box-shadow: 0 4px 16px rgba(16, 24, 40, 0.04);">
+            <div style="margin-bottom: 22px;">
+                <h3 style="font-size: 1.3rem; font-weight: 800; color: #101828; margin: 0 0 6px;">
+                    <i class="fas fa-table-list" style="color: #b3261e; margin-right: 8px;"></i> Access Control &amp; Feature Comparison Matrix
+                </h3>
+                <p style="color: #475467; font-size: 0.92rem; margin: 0;">Comprehensive breakdown of provisions, privileges, and system permissions across each subscription tier.</p>
+            </div>
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; min-width: 780px; border-collapse: collapse; font-size: 0.9rem;">
+                    <thead>
+                        <tr style="background: #f8f9fa;">
+                            <th style="padding: 14px 16px; border-bottom: 2px solid #eaecf0; color: #344054; font-weight: 700; text-align: left;">System Feature / Privilege</th>
+                            <th style="padding: 14px 16px; border-bottom: 2px solid #eaecf0; color: #64748b; font-weight: 700; text-align: center;">Non-Subscribed<br><small style="font-weight:400; color:#98a2b3;">Limited Access</small></th>
+                            <th style="padding: 14px 16px; border-bottom: 2px solid #eaecf0; color: #101828; font-weight: 700; text-align: center;">Starter / Basic<br><small style="font-weight:400; color:#667085;">₱500 / mo</small></th>
+                            <th style="padding: 14px 16px; border-bottom: 2px solid #eaecf0; color: #101828; font-weight: 700; text-align: center; background: #fff8ef;">Growth<br><small style="font-weight:400; color:#b54708;">₱1,000 / mo</small></th>
+                            <th style="padding: 14px 16px; border-bottom: 2px solid #eaecf0; color: #b3261e; font-weight: 800; text-align: center; background: #fff1f0;">Pro (Full Access)<br><small style="font-weight:400; color:#b3261e;">₱1,199 / mo</small></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr style="border-bottom: 1px solid #eaecf0;">
+                            <td style="padding: 12px 16px; font-weight: 600; color: #344054;"><i class="fas fa-store text-muted me-2"></i> Update Store Name &amp; Logo</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #b3261e;"><i class="fas fa-times"></i> Locked</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 600;"><i class="fas fa-check"></i> Yes</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 600; background: #fffdfa;"><i class="fas fa-check"></i> Yes</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 600; background: #fffafa;"><i class="fas fa-check"></i> Yes</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #eaecf0;">
+                            <td style="padding: 12px 16px; font-weight: 600; color: #344054;"><i class="fas fa-box text-muted me-2"></i> Upload &amp; Add Products</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #b3261e;"><i class="fas fa-times"></i> Locked</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 600;"><i class="fas fa-check"></i> Yes</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 600; background: #fffdfa;"><i class="fas fa-check"></i> Yes</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 600; background: #fffafa;"><i class="fas fa-check"></i> Yes</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #eaecf0;">
+                            <td style="padding: 12px 16px; font-weight: 600; color: #344054;"><i class="fas fa-shopping-cart text-muted me-2"></i> Marketplace Orders, POS &amp; Live Chat</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #027a48;"><i class="fas fa-check"></i> Basic</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 600;"><i class="fas fa-check"></i> Full</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 600; background: #fffdfa;"><i class="fas fa-check"></i> Full</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 600; background: #fffafa;"><i class="fas fa-check"></i> Full</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #eaecf0;">
+                            <td style="padding: 12px 16px; font-weight: 600; color: #344054;"><i class="fas fa-people-arrows text-muted me-2"></i> HR Department (Staff, Attendance, Payroll, Leave)</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #98a2b3;"><i class="fas fa-times"></i> No</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #b3261e; font-weight: 600;"><i class="fas fa-times"></i> Restricted</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 700; background: #fffdfa;"><i class="fas fa-check"></i> Included</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 700; background: #fffafa;"><i class="fas fa-check"></i> Included</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #eaecf0;">
+                            <td style="padding: 12px 16px; font-weight: 600; color: #344054;"><i class="fas fa-warehouse text-muted me-2"></i> Inventory &amp; MRP Batch Yield Roaster</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #98a2b3;"><i class="fas fa-times"></i> No</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #98a2b3;"><i class="fas fa-times"></i> No</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 600; background: #fffdfa;"><i class="fas fa-check"></i> Yes</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 600; background: #fffafa;"><i class="fas fa-check"></i> Yes</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #eaecf0;">
+                            <td style="padding: 12px 16px; font-weight: 600; color: #344054;"><i class="fas fa-receipt text-muted me-2"></i> Shop Expense Tracking &amp; Finance</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #98a2b3;"><i class="fas fa-times"></i> No</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #98a2b3;"><i class="fas fa-times"></i> No</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 600; background: #fffdfa;"><i class="fas fa-check"></i> Yes</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 600; background: #fffafa;"><i class="fas fa-check"></i> Yes</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #eaecf0;">
+                            <td style="padding: 12px 16px; font-weight: 600; color: #344054;"><i class="fas fa-clock text-muted me-2"></i> Store Availability &amp; Order Policy Settings</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #98a2b3;"><i class="fas fa-times"></i> No</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #98a2b3;"><i class="fas fa-times"></i> No</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 600; background: #fffdfa;"><i class="fas fa-check"></i> Yes</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 600; background: #fffafa;"><i class="fas fa-check"></i> Yes</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #eaecf0;">
+                            <td style="padding: 12px 16px; font-weight: 600; color: #344054;"><i class="fas fa-brain text-muted me-2"></i> AI Demand Forecasting &amp; Predictive Trends</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #98a2b3;"><i class="fas fa-times"></i> No</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #98a2b3;"><i class="fas fa-times"></i> No</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #b3261e;"><i class="fas fa-times"></i> Locked</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 700; background: #fffafa;"><i class="fas fa-check"></i> Exclusive</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #eaecf0;">
+                            <td style="padding: 12px 16px; font-weight: 600; color: #344054;"><i class="fas fa-chart-line text-muted me-2"></i> DSS Decision Support &amp; Deep Platform Analytics</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #98a2b3;"><i class="fas fa-times"></i> No</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #98a2b3;"><i class="fas fa-times"></i> No</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #b3261e;"><i class="fas fa-times"></i> Locked</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 700; background: #fffafa;"><i class="fas fa-check"></i> Exclusive</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #eaecf0;">
+                            <td style="padding: 12px 16px; font-weight: 600; color: #344054;"><i class="fas fa-user-shield text-muted me-2"></i> Custom Staff RBAC Role Management</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #98a2b3;"><i class="fas fa-times"></i> No</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #98a2b3;"><i class="fas fa-times"></i> No</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #b3261e;"><i class="fas fa-times"></i> Locked</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 700; background: #fffafa;"><i class="fas fa-check"></i> Exclusive</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #eaecf0;">
+                            <td style="padding: 12px 16px; font-weight: 600; color: #344054;"><i class="fas fa-crown text-muted me-2"></i> Priority Support &amp; Featured Placement</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #98a2b3;"><i class="fas fa-times"></i> No</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #98a2b3;"><i class="fas fa-times"></i> No</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #98a2b3; background: #fffdfa;"><i class="fas fa-times"></i> No</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #027a48; font-weight: 700; background: #fffafa;"><i class="fas fa-check"></i> 24/7 Hotline</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 12px 16px; font-weight: 600; color: #344054;"><i class="fas fa-percentage text-muted me-2"></i> Platform Order Transaction Fee</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #64748b;">10% + ₱10</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #344054; font-weight: 600;">7.5% + ₱5</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #344054; font-weight: 600; background: #fffdfa;">6.0% + ₱3</td>
+                            <td style="padding: 12px 16px; text-align: center; color: #b3261e; font-weight: 800; background: #fffafa;">4.5% + ₱2 (Lowest)</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <!-- Subscription Terms & Cancellation Agreement Callout -->
@@ -1342,14 +1517,43 @@ include 'includes/header.php';
 </style>
 
 <script>
-function confirmSubscriptionCancellation(planName, renewsDate) {
-    return confirm(
-        "Are you sure you want to cancel your " + planName + " subscription?\n\n" +
-        "• Non-Refundable: In accordance with our Terms of Agreement, subscription payments are non-refundable.\n" +
-        "• Continued Access: Your shop will retain 100% full active access to all " + planName + " features and discounts until " + renewsDate + ".\n" +
-        "• Auto-Termination: After " + renewsDate + ", recurring charges will stop and your plan will conclude.\n\n" +
-        "Click OK to confirm cancellation."
-    );
+function confirmSubscriptionCancellation(e, planName, renewsDate) {
+    if (e && typeof e.preventDefault === 'function') e.preventDefault();
+    const form = e ? (e.target || e.currentTarget) : null;
+    if (form && form.dataset.confirmed === '1') {
+        return true;
+    }
+
+    const htmlContent = `
+        <p style="margin-bottom: 12px; font-weight: 700;">Are you sure you want to cancel your <strong>${planName}</strong> subscription?</p>
+        <div style="text-align: left; background: rgba(0,0,0,0.04); padding: 12px 14px; border-radius: 12px; font-size: 0.85rem; line-height: 1.6; margin-bottom: 8px;">
+            <div style="margin-bottom: 6px;"><i class="fas fa-exclamation-circle" style="color:#b3261e; width:16px;"></i> <strong>Non-Refundable:</strong> Payments are non-refundable per terms.</div>
+            <div style="margin-bottom: 6px;"><i class="fas fa-check-circle" style="color:#027a48; width:16px;"></i> <strong>Continued Access:</strong> You retain 100% full active access until <strong>${renewsDate}</strong>.</div>
+            <div><i class="fas fa-clock" style="color:#b54708; width:16px;"></i> <strong>Auto-Termination:</strong> Recurring billing will stop automatically.</div>
+        </div>
+    `;
+
+    if (window.showConfirmDialog) {
+        window.showConfirmDialog({
+            title: 'Cancel Subscription',
+            html: htmlContent,
+            icon: 'warning',
+            confirmText: 'Yes, Cancel Plan',
+            confirmColor: '#b3261e',
+            cancelText: 'Keep My Plan'
+        }).then((confirmed) => {
+            if (confirmed && form) {
+                form.dataset.confirmed = '1';
+                form.submit();
+            }
+        });
+    } else if (confirm("Are you sure you want to cancel your " + planName + " subscription?")) {
+        if (form) {
+            form.dataset.confirmed = '1';
+            form.submit();
+        }
+    }
+    return false;
 }
 
 (function () {

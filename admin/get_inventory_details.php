@@ -40,55 +40,80 @@ if (!$product) {
 ?>
 
 <div class="inventory-details">
-    <div class="product-info">
-        <h4><?php echo htmlspecialchars($product['name']); ?></h4>
-        <p><strong>Product ID:</strong> <?php echo htmlspecialchars($product['product_id']); ?></p>
-        <p><strong>Price:</strong> ₱<?php echo number_format($product['price'], 2); ?></p>
+    <!-- Section 1: Item & Current Stock Status -->
+    <div class="form-section-card mb-3">
+        <div class="form-section-head">
+            <span class="form-section-title"><i class="fas fa-box"></i> Product Overview</span>
+            <span class="form-req-pill">Active</span>
+        </div>
+        <div class="d-flex justify-content-between align-items-start mb-2">
+            <div>
+                <h6 class="fw-bold mb-1" style="color: #101828; font-size: 15px;"><?php echo htmlspecialchars($product['name']); ?></h6>
+                <div class="text-muted small">Code: <?php echo htmlspecialchars($product['product_id']); ?> &bull; Unit Price: ₱<?php echo number_format($product['price'], 2); ?></div>
+            </div>
+            <span class="badge bg-light text-dark border px-2 py-1"><?php echo date('M d, Y', strtotime($date)); ?></span>
+        </div>
+        <div class="row g-2 pt-2 border-top mt-2">
+            <div class="col-6">
+                <div class="p-2 rounded bg-light">
+                    <span class="d-block text-muted" style="font-size: 11px; font-weight: 600;">CURRENT ON-HAND</span>
+                    <strong style="font-size: 16px; color: #101828;"><?php echo $product['current_stock']; ?> units</strong>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="p-2 rounded bg-light">
+                    <span class="d-block text-muted" style="font-size: 11px; font-weight: 600;">SAFETY MINIMUM</span>
+                    <strong style="font-size: 16px; color: #b3261e;"><?php echo $product['min_stock_level']; ?> units</strong>
+                </div>
+            </div>
+        </div>
     </div>
     
-    <div class="stock-info">
-        <div class="stock-row">
-            <span>Date:</span>
-            <strong><?php echo date('M d, Y', strtotime($date)); ?></strong>
-        </div>
-        <div class="stock-row">
-            <span>Current Stock:</span>
-            <strong><?php echo $product['current_stock']; ?> units</strong>
-        </div>
-        <div class="stock-row">
-            <span>Minimum Level:</span>
-            <strong><?php echo $product['min_stock_level']; ?> units</strong>
-        </div>
-    </div>
-    
+    <!-- Section 2: Adjustment Details -->
     <form method="POST" action="inventory.php" class="adjustment-form">
         <input type="hidden" name="product_id" value="<?php echo $product['id']; ?>">
         <input type="hidden" name="inventory_date" value="<?php echo $date; ?>">
         
-        <div class="form-group">
-            <label>Adjustment Type</label>
-            <select name="adjustment_type" class="form-select" required>
-                <option value="">Select type...</option>
-                <option value="received">Stock Received</option>
-                <option value="add">Add Stock</option>
-                <option value="reduce">Reduce Stock (Sold)</option>
-                <option value="damage">Damage/Loss</option>
-            </select>
+        <div class="form-section-card mb-3">
+            <div class="form-section-head">
+                <span class="form-section-title"><i class="fas fa-sliders-h"></i> Adjustment Details</span>
+                <span class="form-req-pill">Required</span>
+            </div>
+            
+            <div class="form-group-modern">
+                <label class="form-label-modern">Adjustment Type <span class="form-req-star">*</span></label>
+                <div class="form-input-wrap">
+                    <i class="fas fa-exchange-alt form-input-icon"></i>
+                    <select name="adjustment_type" class="form-select" required>
+                        <option value="">Select type...</option>
+                        <option value="received">Stock Received (+)</option>
+                        <option value="add">Manual Add Stock (+)</option>
+                        <option value="reduce">Manual Reduce / Sold (-)</option>
+                        <option value="damage">Damage / Spoilage / Loss (-)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="form-group-modern">
+                <label class="form-label-modern">Quantity <span class="form-req-star">*</span></label>
+                <div class="form-input-wrap">
+                    <i class="fas fa-cubes form-input-icon"></i>
+                    <input type="number" name="quantity" class="form-control" min="1" placeholder="Enter quantity to adjust" required>
+                </div>
+            </div>
+            
+            <div class="form-group-modern">
+                <label class="form-label-modern">Audit Notes</label>
+                <textarea name="notes" class="form-control" rows="2" placeholder="e.g. Supplier delivery batch #124 or damaged during storage"></textarea>
+            </div>
         </div>
         
-        <div class="form-group">
-            <label>Quantity</label>
-            <input type="number" name="quantity" class="form-control" min="1" required>
+        <div class="d-flex justify-content-end gap-2">
+            <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" name="adjust_stock" value="1" class="btn-modal-primary">
+                <i class="fas fa-check"></i> Save Stock Adjustment
+            </button>
         </div>
-        
-        <div class="form-group">
-            <label>Notes (Optional)</label>
-            <textarea name="notes" class="form-control" rows="3" placeholder="Enter adjustment notes..."></textarea>
-        </div>
-        
-        <button type="submit" name="adjust_stock" value="1" class="btn btn-primary w-100">
-            <i class="fas fa-check"></i> Adjust Stock
-        </button>
     </form>
 </div>
 

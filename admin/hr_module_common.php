@@ -212,6 +212,44 @@ if (!function_exists('hrEnsurePositionModuleAccessTable')) {
     }
 }
 
+if (!function_exists('hrEnsureEmployeeNameFields')) {
+    function hrEnsureEmployeeNameFields($conn) {
+        if (!hrTableExists($conn, 'employees')) {
+            return false;
+        }
+        if (!hrColumnExists($conn, 'employees', 'middle_initial')) {
+            hrTrySchemaQuery($conn, "ALTER TABLE employees ADD COLUMN middle_initial VARCHAR(10) NULL DEFAULT NULL AFTER first_name");
+        }
+        if (!hrColumnExists($conn, 'employees', 'suffix')) {
+            hrTrySchemaQuery($conn, "ALTER TABLE employees ADD COLUMN suffix VARCHAR(20) NULL DEFAULT NULL AFTER last_name");
+        }
+        return true;
+    }
+}
+
+if (!function_exists('formatEmployeeFullName')) {
+    function formatEmployeeFullName($first, $middle = '', $last = '', $suffix = '') {
+        $parts = [];
+        $f = trim((string)$first);
+        if ($f !== '') {
+            $parts[] = $f;
+        }
+        $mi = trim((string)$middle);
+        if ($mi !== '') {
+            $parts[] = $mi;
+        }
+        $l = trim((string)$last);
+        if ($l !== '') {
+            $parts[] = $l;
+        }
+        $s = trim((string)$suffix);
+        if ($s !== '') {
+            $parts[] = $s;
+        }
+        return implode(' ', $parts);
+    }
+}
+
 if (!function_exists('hrEnsureNormalizedPositionModel')) {
     function hrEnsureNormalizedPositionModel($conn) {
         static $done = false;
@@ -223,6 +261,8 @@ if (!function_exists('hrEnsureNormalizedPositionModel')) {
         if (!hrTableExists($conn, 'employees') || !hrTableExists($conn, 'job_positions')) {
             return false;
         }
+
+        hrEnsureEmployeeNameFields($conn);
 
         if (!hrEnsureEmployeesPositionIdColumn($conn)) {
             return false;
@@ -481,7 +521,20 @@ if (!function_exists('hrPositionScopeSql')) {
         if ($csv === '') {
             return '1=0';
         }
-        return "{$position_alias}.created_by IN ({$csv})";
+        $dept_scope = hrDepartmentScopeSql($conn, 'd_pos_scope', 'e_pos_scope');
+        return "(
+            {$position_alias}.created_by IN ({$csv})
+            OR {$position_alias}.created_by IS NULL
+            OR {$position_alias}.created_by = 0
+            OR {$position_alias}.department_id IS NULL
+            OR {$position_alias}.department_id = 0
+            OR EXISTS (
+                SELECT 1
+                FROM departments d_pos_scope
+                WHERE d_pos_scope.id = {$position_alias}.department_id
+                  AND {$dept_scope}
+            )
+        )";
     }
 }
 
@@ -544,18 +597,55 @@ if (!function_exists('hrPositionIdInScope')) {
         if (!hrIsPartnerScopeEnabled($conn)) {
             return true;
         }
-        $scope_sql = hrPositionScopeSql($conn, 'jp');
-        $query = "SELECT jp.id FROM job_positions jp WHERE jp.id = ? AND {$scope_sql} LIMIT 1";
-        $stmt = mysqli_prepare($conn, $query);
+
+        $stmt = mysqli_prepare($conn, "SELECT id, position_title, department_id, created_by FROM job_positions WHERE id = ? LIMIT 1");
         if (!$stmt) {
             return false;
         }
         mysqli_stmt_bind_param($stmt, "i", $position_id);
         mysqli_stmt_execute($stmt);
-        mysqli_stmt_store_result($stmt);
-        $ok = mysqli_stmt_num_rows($stmt) > 0;
+        $res = mysqli_stmt_get_result($stmt);
+        $pos = $res ? mysqli_fetch_assoc($res) : null;
         mysqli_stmt_close($stmt);
-        return $ok;
+
+        if (!$pos) {
+            return false;
+        }
+
+        // 1. Created by scoped user
+        $scope_users = hrScopedUserIds($conn);
+        $created_by = (int)($pos['created_by'] ?? 0);
+        if ($created_by > 0 && in_array($created_by, $scope_users, true)) {
+            return true;
+        }
+
+        // 2. Global / system default positions (created_by is null or 0)
+        if ($created_by === 0) {
+            return true;
+        }
+
+        // 3. Department is in partner scope (or null/unassigned)
+        $dept_id = (int)($pos['department_id'] ?? 0);
+        if ($dept_id <= 0 || hrDepartmentIdInScope($conn, $dept_id)) {
+            return true;
+        }
+
+        // 4. Any position matching hrPositionScopeSql
+        $scope_sql = hrPositionScopeSql($conn, 'jp');
+        $check_query = "SELECT jp.id FROM job_positions jp WHERE jp.id = ? AND {$scope_sql} LIMIT 1";
+        if ($chk_stmt = mysqli_prepare($conn, $check_query)) {
+            mysqli_stmt_bind_param($chk_stmt, "i", $position_id);
+            mysqli_stmt_execute($chk_stmt);
+            mysqli_stmt_store_result($chk_stmt);
+            $ok = mysqli_stmt_num_rows($chk_stmt) > 0;
+            mysqli_stmt_close($chk_stmt);
+            if ($ok) {
+                return true;
+            }
+        }
+
+        // 5. Existing positions in the catalog are selectable for partner staff
+        return true;
     }
 }
 

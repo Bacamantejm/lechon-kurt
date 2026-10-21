@@ -4,10 +4,6 @@ require_once 'includes/config.php';
 require_once 'includes/partner_voucher_helper.php';
 require_once 'includes/checkout_address_helper.php';
 require_once 'includes/delivery_pricing_helper.php';
-$google_maps_api_key = function_exists('getGoogleMapsApiKey')
-    ? getGoogleMapsApiKey()
-    : trim((string)(defined('GOOGLE_MAPS_API_KEY') ? GOOGLE_MAPS_API_KEY : (getenv('GOOGLE_MAPS_API_KEY') ?: '')));
-$google_geocoding_enabled = function_exists('shouldUseGoogleGeocoding') ? shouldUseGoogleGeocoding() : true;
 
 // Check if user is logged in BEFORE including header
 if (!isset($_SESSION['user_id'])) {
@@ -24,7 +20,30 @@ if (empty($_SESSION['cart']) || !is_array($_SESSION['cart'])) {
 // Get user information
 $user_id = (int)($_SESSION['user_id'] ?? 0);
 $storefront_seller_id = isset($_SESSION['storefront_seller_id']) ? (int)$_SESSION['storefront_seller_id'] : 0;
-$preorder_switch_link = 'preorder.php' . ($storefront_seller_id > 0 ? '?seller_id=' . $storefront_seller_id : '');
+// Build compact cart prefill param: "id:qty,id:qty,..."
+$_co_prefill_parts = [];
+if (!empty($_SESSION['cart']) && is_array($_SESSION['cart'])) {
+    foreach ($_SESSION['cart'] as $_co_item) {
+        $pid = (int)($_co_item['id'] ?? 0);
+        $qty = max(1, (int)($_co_item['quantity'] ?? 1));
+        if ($pid > 0) {
+            $_co_prefill_parts[] = $pid . ':' . $qty;
+        }
+    }
+}
+$pickup_store_id = (int)($_SESSION['pickup_location'] ?? 0);
+$preorder_params = [];
+if ($storefront_seller_id > 0) {
+    $preorder_params['seller_id'] = $storefront_seller_id;
+}
+if ($pickup_store_id > 0) {
+    $preorder_params['store_id'] = $pickup_store_id;
+}
+if (count($_co_prefill_parts) > 0) {
+    $preorder_params['prefill'] = implode(',', $_co_prefill_parts);
+}
+$_co_prefill_param = count($_co_prefill_parts) > 0 ? '&prefill=' . urlencode(implode(',', $_co_prefill_parts)) : '';
+$preorder_switch_link = 'preorder.php' . (!empty($preorder_params) ? '?' . http_build_query($preorder_params) : '');
 pvEnsureVoucherSchema($conn);
 caEnsureUserSavedAddressSchema($conn);
 
@@ -196,16 +215,29 @@ foreach ($saved_addresses as $saved_address_row) {
 $current_page = 'checkout';
 $page_title = "Checkout | Lechon Delights";
 include 'includes/header.php';
+?>
+<!-- Leaflet Map Assets -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+if (!window.L) {
+    document.write('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />');
+    document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"><\/script>');
+}
+</script>
+<?php
 
-// Get store locations and delivery quote context from session
-$stores = $_SESSION['store_locations'] ?? [];
-if (empty($stores) && isset($conn) && $conn instanceof mysqli) {
+// Always fetch active store locations so newly accepted franchise branches reflect immediately
+if (isset($conn) && $conn instanceof mysqli) {
     $store_query = "SELECT store_id AS id, store_id, owner_user_id, store_name AS name, store_name, address, city, province, phone, opening_hours AS hours, opening_hours, latitude, longitude FROM store_locations WHERE is_active = 1 ORDER BY store_name ASC";
     $store_res = mysqli_query($conn, $store_query);
     if ($store_res) {
         $stores = mysqli_fetch_all($store_res, MYSQLI_ASSOC);
         $_SESSION['store_locations'] = $stores;
     }
+}
+if (empty($stores)) {
+    $stores = $_SESSION['store_locations'] ?? [];
 }
 
 // Auto-align seller store ID for pickup pre-selection if storefront_seller_id is set
@@ -221,19 +253,88 @@ if (!empty($_SESSION['storefront_seller_id']) && !empty($stores)) {
     }
 }
 
+$target_saved = null;
+if (!empty($saved_addresses)) {
+    foreach ($saved_addresses as $sa) {
+        if ($default_saved_address_id > 0 && (int)($sa['id'] ?? 0) === $default_saved_address_id) {
+            $target_saved = $sa;
+            break;
+        }
+    }
+    if (!$target_saved && !empty($saved_addresses[0])) {
+        $target_saved = $saved_addresses[0];
+    }
+}
+
 $current_delivery_quote = is_array($_SESSION['current_delivery_quote'] ?? null) ? $_SESSION['current_delivery_quote'] : [];
 $deliveryPricingConfig = dpGetDeliveryPricingConfig();
+$seller_owner_scope = (int)($_SESSION['storefront_seller_id'] ?? 0);
 
-// Default delivery option
-if (!isset($_SESSION['delivery_option'])) {
-    $_SESSION['delivery_option'] = 'pickup';
+$target_saved_id = (int)($target_saved['id'] ?? $default_saved_address_id ?? 0);
+$target_full_address = (string)($target_saved['full_address'] ?? ($user['address'] ?? ''));
+$target_street_address = (string)($target_saved['street_address'] ?? '');
+if ($target_street_address === '' && $target_full_address !== '') {
+    $addr_parts = explode(',', $target_full_address);
+    $target_street_address = trim($addr_parts[0]);
+}
+$target_region_name = (string)($target_saved['region_name'] ?? '');
+$target_region_code = (string)($target_saved['region_code'] ?? '');
+$target_province_name = (string)($target_saved['province_name'] ?? '');
+$target_province_code = (string)($target_saved['province_code'] ?? '');
+$target_city_name = (string)($target_saved['city_name'] ?? '');
+$target_city_code = (string)($target_saved['city_code'] ?? '');
+$target_barangay_name = (string)($target_saved['barangay_name'] ?? '');
+$target_barangay_code = (string)($target_saved['barangay_code'] ?? '');
+$target_postal_code = (string)($target_saved['postal_code'] ?? '');
+
+$saCoords = dpSanitizeCoordinates($target_saved['latitude'] ?? null, $target_saved['longitude'] ?? null);
+if ($saCoords === null && $target_full_address !== '') {
+    $saCoords = dpResolveCoordinatesFromAddress($target_full_address);
+}
+
+$lat_val = $saCoords ? (float)($saCoords['lat'] ?? $saCoords['latitude'] ?? 0) : null;
+$lng_val = $saCoords ? (float)($saCoords['lng'] ?? $saCoords['longitude'] ?? 0) : null;
+
+// Calculate initial delivery quote if missing or not successful
+if (empty($current_delivery_quote) || empty($current_delivery_quote['success'])) {
+    if ($lat_val !== null || $target_full_address !== '') {
+        $initial_q = dpBuildDeliveryQuote($stores, $lat_val, $lng_val, $seller_owner_scope, $deliveryPricingConfig, $target_full_address);
+        if (!empty($initial_q['success'])) {
+            $current_delivery_quote = $initial_q;
+            $_SESSION['current_delivery_quote'] = $initial_q;
+        }
+    }
+}
+
+$target_lat_val = ($lat_val !== null) ? number_format($lat_val, 8, '.', '') : (string)($current_delivery_quote['customer_lat'] ?? '');
+$target_lng_val = ($lng_val !== null) ? number_format($lng_val, 8, '.', '') : (string)($current_delivery_quote['customer_lng'] ?? '');
+$target_distance_val = !empty($current_delivery_quote['distance_km']) ? (string)$current_delivery_quote['distance_km'] : '';
+$target_fee_val = isset($current_delivery_quote['fee']) ? number_format((float)$current_delivery_quote['fee'], 2, '.', '') : '';
+
+// Display labels for Step 2 address card
+$target_street_display = $target_street_address ?: ($target_full_address ?: 'No address selected');
+$city_display_parts = array_filter([$target_barangay_name, $target_city_name, $target_province_name]);
+if (!empty($city_display_parts)) {
+    $target_city_display = implode(', ', $city_display_parts);
+} elseif ($target_full_address !== '') {
+    $addr_parts = explode(',', $target_full_address);
+    array_shift($addr_parts);
+    $target_city_display = trim(implode(',', $addr_parts));
+} else {
+    $target_city_display = '';
+}
+
+// Fulfillment Mode: Default to 'delivery' so customer immediately sees the delivery fee and breakdown
+$has_explicit_delivery_choice = !empty($_SESSION['delivery_option_explicit']);
+if (!$has_explicit_delivery_choice || empty($_SESSION['delivery_option'])) {
+    $_SESSION['delivery_option'] = 'delivery';
     if (!isset($_SESSION['pickup_location']) && !empty($stores)) {
         $_SESSION['pickup_location'] = (int)($stores[0]['id'] ?? 1);
     }
 }
 $current_checkout_delivery_option = in_array((string)($_SESSION['delivery_option'] ?? ''), ['pickup', 'delivery'], true)
     ? (string)$_SESSION['delivery_option']
-    : 'pickup';
+    : 'delivery';
 $_SESSION['delivery_option'] = $current_checkout_delivery_option;
 
 // Calculate order totals
@@ -280,13 +381,57 @@ if ($current_checkout_delivery_option === 'pickup') {
     }
 }
 
+// Fulfilling store context for Delivery Route Map Overview
+$overview_store = null;
+$overview_store_id = (int)($current_delivery_quote['nearest_store_id'] ?? 0);
+if ($overview_store_id > 0 && !empty($stores)) {
+    foreach ($stores as $st) {
+        if ((int)($st['id'] ?? $st['store_id'] ?? 0) === $overview_store_id) {
+            $overview_store = $st;
+            break;
+        }
+    }
+}
+if (!$overview_store && !empty($stores)) {
+    $overview_store = $stores[0];
+}
+
+$overview_store_id = (int)($overview_store['id'] ?? $overview_store['store_id'] ?? 1);
+$overview_store_name = (string)($current_delivery_quote['nearest_store_name'] ?? ($overview_store['name'] ?? ($overview_store['store_name'] ?? 'Nearest Store')));
+$overview_store_address = (string)($current_delivery_quote['nearest_store_address'] ?? ($overview_store['address'] ?? ''));
+$overview_store_lat = !empty($overview_store['latitude']) ? (float)$overview_store['latitude'] : 0.0;
+$overview_store_lng = !empty($overview_store['longitude']) ? (float)$overview_store['longitude'] : 0.0;
+$overview_distance_km = !empty($current_delivery_quote['distance_km']) ? (float)$current_delivery_quote['distance_km'] : 0.0;
+$overview_fee = !empty($current_delivery_quote['fee']) ? (float)$current_delivery_quote['fee'] : (float)$delivery_fee;
+$overview_eta = (string)($current_delivery_quote['estimated_delivery_text'] ?? $estimated_delivery_text);
+if ($overview_eta === '' && $overview_distance_km > 0) {
+    $overview_eta = '35 - 50 mins';
+}
+
 $vat_rate = 0.12;
 $vat_amount = round($subtotal * $vat_rate, 2);
+
+if (!empty($_GET['voucher']) && $user_id > 0 && !empty($_SESSION['cart'])) {
+    pvApplyVoucherCodeForSession($conn, (int)$user_id, (string)$_GET['voucher'], $_SESSION['cart']);
+}
+
+if (empty($_SESSION['applied_voucher']) && !empty($_SESSION['pending_welcome_voucher']) && $user_id > 0 && !empty($_SESSION['cart'])) {
+    $auto_pre = pvApplyVoucherCodeForSession($conn, (int)$user_id, (string)$_SESSION['pending_welcome_voucher'], $_SESSION['cart']);
+    if (!empty($auto_pre['success'])) {
+        unset($_SESSION['pending_welcome_voucher']);
+    }
+}
+
 $applied_voucher_state = pvResolveAppliedVoucherState($conn, (int)$user_id, $_SESSION['cart']);
 $voucher_discount = (float)($applied_voucher_state['discount_amount'] ?? 0);
 $applied_voucher_code = (string)($applied_voucher_state['voucher_code'] ?? '');
+$prefill_voucher_code = $applied_voucher_code !== '' ? $applied_voucher_code : (!empty($_SESSION['pending_welcome_voucher']) ? (string)$_SESSION['pending_welcome_voucher'] : '');
 $applied_voucher_id = (int)($applied_voucher_state['voucher_id'] ?? 0);
 $voucher_message = (string)($applied_voucher_state['message'] ?? '');
+$voucher_scope_label = (string)($applied_voucher_state['scope_label'] ?? '');
+$voucher_store_name = (string)($applied_voucher_state['store_name'] ?? '');
+$voucher_is_exclusive = !empty($applied_voucher_state['is_store_exclusive']);
+$available_vouchers = function_exists('pvFetchAvailableVouchersForCart') ? pvFetchAvailableVouchersForCart($conn, (int)$user_id, $_SESSION['cart']) : [];
 $checkout_tenant_scope = function_exists('pvGetCheckoutTenantScope')
     ? pvGetCheckoutTenantScope($conn, $_SESSION['cart'])
     : ['is_valid' => true, 'seller_id' => 0, 'message' => ''];
@@ -297,7 +442,8 @@ $checkout_tenant_message = $checkout_tenant_blocked
 if (!$checkout_tenant_blocked && (int)($checkout_tenant_scope['seller_id'] ?? 0) > 0) {
     $storefront_seller_id = (int)$checkout_tenant_scope['seller_id'];
     $_SESSION['storefront_seller_id'] = $storefront_seller_id;
-    $preorder_switch_link = 'preorder.php?seller_id=' . $storefront_seller_id;
+    $preorder_params['seller_id'] = $storefront_seller_id;
+    $preorder_switch_link = 'preorder.php' . (!empty($preorder_params) ? '?' . http_build_query($preorder_params) : '');
 }
 $total = max(0, $subtotal + $vat_amount + $delivery_fee - $voucher_discount);
 
@@ -413,10 +559,8 @@ $remaining = $total - $downpayment;
                     <div class="checkout-flow-step" data-step="2" style="cursor: pointer;"><span>2</span>Address</div>
                     <div class="checkout-flow-step" data-step="3" style="cursor: pointer;"><span>3</span>Payment</div>
                 </div>
-                <div class="progress-container" style="width: 100%; height: 6px; background: #efddcd; border-radius: 3px; margin-top: 15px; margin-bottom: 24px; overflow: visible; position: relative;">
-                    <div class="progress-bar" id="checkoutProgressBar" style="position: absolute; left: 0; top: 0; height: 100%; width: 33.33%; background: #b3261e; transition: width 0.3s ease; display: block !important; overflow: visible;">
-                        <div class="running-pig" style="position: absolute; right: -14px; top: -20px; font-size: 22px; user-select: none; line-height: 1; animation: pigRun 0.4s infinite alternate ease-in-out;">🐖</div>
-                    </div>
+                <div class="progress-container" style="width: 100%; height: 6px; background: #eaecf0; border-radius: 999px; margin-top: 14px; margin-bottom: 24px; overflow: hidden; position: relative;">
+                    <div class="progress-bar" id="checkoutProgressBar" style="position: absolute; left: 0; top: 0; height: 100%; width: 33.33%; background: #b3261e; border-radius: 999px; transition: width 0.3s ease; display: block !important;"></div>
                 </div>
 
                 <div class="checkout-type-switch" aria-label="Checkout Type">
@@ -508,7 +652,7 @@ $remaining = $total - $downpayment;
                         </a>
                     </div>
                 <?php endif; ?>
-                <form id="checkoutForm" action="process_order.php" method="POST">
+                <form id="checkoutForm" action="process_order.php" method="POST" novalidate>
                     <!-- Step 1: Contact Details -->
                     <div class="step-content is-active" id="stepContent1">
                         <p class="checkout-section-label"><i class="fas fa-user"></i> Contact Details</p>
@@ -584,10 +728,10 @@ $remaining = $total - $downpayment;
                                     <i class="fas fa-location-dot" style="font-size: 22px; color: #2a211d; margin-top: 2px; flex-shrink: 0;"></i>
                                     <div>
                                         <div id="displayStreetAddress" style="font-size: 15px; font-weight: 700; color: #2a211d; line-height: 1.4;">
-                                            Loading address...
+                                            <?php echo htmlspecialchars($target_street_display); ?>
                                         </div>
                                         <div id="displayCityAddress" style="font-size: 14px; color: #7b6d64; margin-top: 4px;">
-                                            
+                                            <?php echo htmlspecialchars($target_city_display); ?>
                                         </div>
                                     </div>
                                 </div>
@@ -598,26 +742,101 @@ $remaining = $total - $downpayment;
                                            style="width: 100%; border: 1px solid #efddcd; border-radius: 12px; padding: 14px 16px; font-size: 14px; color: #2a211d; background: #fff9f2; outline: none; box-sizing: border-box;">
                                 </div>
                             </div>
+
+                            <!-- Delivery Route & Store Overview Map Card -->
+                            <div class="co-delivery-map-card" id="deliveryRouteMapCard" style="background: #ffffff; border: 1px solid #eaecf0; border-radius: 16px; padding: 20px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);">
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+                                    <div>
+                                        <h4 style="font-size: 16px; font-weight: 800; color: #101828; margin: 0; display: flex; align-items: center; gap: 8px;">
+                                            <i class="fas fa-map-location-dot" style="color: #b3261e; font-size: 18px;"></i> Delivery Route & Store Overview
+                                        </h4>
+                                        <p style="font-size: 13px; color: #667085; margin: 4px 0 0 0;">
+                                            Real-time distance, estimated delivery time, and route from our store branch to your pinned address.
+                                        </p>
+                                    </div>
+                                    <button type="button" id="recenterRouteMapBtn" style="background: #ffffff; border: 1px solid #d0d5dd; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 700; color: #344054; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: background 0.15s;">
+                                        <i class="fas fa-crosshairs" style="color: #b3261e;"></i> Recenter Map
+                                    </button>
+                                </div>
+
+                                <!-- Overview Metrics Strip -->
+                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 14px;">
+                                    <div style="background: #f8f9fa; border: 1px solid #eaecf0; border-radius: 10px; padding: 10px 12px;">
+                                        <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #667085; margin-bottom: 3px; display: flex; align-items: center; gap: 5px;">
+                                            <i class="fas fa-store" style="color: #b3261e;"></i> Fulfilling Store
+                                        </div>
+                                        <div id="overviewStoreName" style="font-size: 13px; font-weight: 800; color: #101828; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                            <?php echo htmlspecialchars($overview_store_name); ?>
+                                        </div>
+                                    </div>
+                                    <div style="background: #eff8ff; border: 1px solid #b2ddff; border-radius: 10px; padding: 10px 12px;">
+                                        <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #175cd3; margin-bottom: 3px; display: flex; align-items: center; gap: 5px;">
+                                            <i class="fas fa-route"></i> Distance
+                                        </div>
+                                        <div id="overviewDistance" style="font-size: 13px; font-weight: 800; color: #175cd3;">
+                                            <?php echo $overview_distance_km > 0 ? number_format($overview_distance_km, 1) . ' km' : '0.0 km'; ?>
+                                        </div>
+                                    </div>
+                                    <div style="background: #ecfdf3; border: 1px solid #abefc6; border-radius: 10px; padding: 10px 12px;">
+                                        <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #027a48; margin-bottom: 3px; display: flex; align-items: center; gap: 5px;">
+                                            <i class="fas fa-clock"></i> Est. Delivery
+                                        </div>
+                                        <div id="overviewEta" style="font-size: 13px; font-weight: 800; color: #027a48;">
+                                            <?php echo !empty($overview_eta) ? htmlspecialchars(str_replace('Estimated delivery: ', '', $overview_eta)) : '35 - 50 mins'; ?>
+                                        </div>
+                                    </div>
+                                    <div style="background: #fff1f0; border: 1px solid #fee4e2; border-radius: 10px; padding: 10px 12px;">
+                                        <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #b3261e; margin-bottom: 3px; display: flex; align-items: center; gap: 5px;">
+                                            <i class="fas fa-peso-sign"></i> Delivery Fee
+                                        </div>
+                                        <div id="overviewDeliveryFee" style="font-size: 13px; font-weight: 800; color: #b3261e;">
+                                            ₱<?php echo number_format($overview_fee, 2); ?>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Map Canvas Shell -->
+                                <div id="deliveryOverviewMapShell" style="height: 280px; width: 100%; border-radius: 12px; overflow: hidden; position: relative; background: #f8f9fa; border: 1px solid #eaecf0;">
+                                    <div id="checkoutDeliveryOverviewMap" style="width: 100%; height: 280px; min-height: 280px; z-index: 1;"></div>
+                                </div>
+
+                                <!-- Map Legend Footer -->
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 12px; color: #667085; flex-wrap: wrap; gap: 8px;">
+                                    <div style="display: flex; align-items: center; gap: 14px;">
+                                        <span style="display: inline-flex; align-items: center; gap: 5px;">
+                                            <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #b3261e;"></span>
+                                            <strong style="color: #344054;">Store:</strong> <span id="legendStoreText"><?php echo htmlspecialchars($overview_store_name); ?></span>
+                                        </span>
+                                        <span style="display: inline-flex; align-items: center; gap: 5px;">
+                                            <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #101828;"></span>
+                                            <strong style="color: #344054;">Delivery:</strong> <span id="legendCustomerText"><?php echo htmlspecialchars($target_street_display); ?></span>
+                                        </span>
+                                    </div>
+                                    <div style="font-size: 11px; color: #98a2b3;">
+                                        <i class="fas fa-shield-alt"></i> Automatic calculation from fulfilling store
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Hidden Address & PSGC Form Fields -->
-                        <input type="hidden" id="street_address" name="street_address" value="<?php echo htmlspecialchars($user['address'] ?? ''); ?>">
-                        <input type="hidden" id="postal_code" name="postal_code" value="">
-                        <input type="hidden" id="delivery_address" name="delivery_address" value="">
-                        <input type="hidden" id="delivery_region_name" name="delivery_region_name" value="">
-                        <input type="hidden" id="delivery_region_code" name="delivery_region_code" value="">
-                        <input type="hidden" id="delivery_province_name" name="delivery_province_name" value="">
-                        <input type="hidden" id="delivery_province_code" name="delivery_province_code" value="">
-                        <input type="hidden" id="delivery_city_name" name="delivery_city_name" value="">
-                        <input type="hidden" id="delivery_city_code" name="delivery_city_code" value="">
-                        <input type="hidden" id="delivery_barangay_name" name="delivery_barangay_name" value="">
-                        <input type="hidden" id="delivery_barangay_code" name="delivery_barangay_code" value="">
-                        <input type="hidden" id="delivery_postal_code" name="delivery_postal_code" value="">
-                        <input type="hidden" id="saved_address_id" name="saved_address_id" value="<?php echo (int)$default_saved_address_id; ?>">
-                        <input type="hidden" id="latitude" name="latitude">
-                        <input type="hidden" id="longitude" name="longitude">
-                        <input type="hidden" id="distance_km" name="distance_km">
-                        <input type="hidden" id="calculated_delivery_fee" name="calculated_delivery_fee">
+                        <input type="hidden" id="street_address" name="street_address" value="<?php echo htmlspecialchars($target_street_address); ?>">
+                        <input type="hidden" id="postal_code" name="postal_code" value="<?php echo htmlspecialchars($target_postal_code); ?>">
+                        <input type="hidden" id="delivery_address" name="delivery_address" value="<?php echo htmlspecialchars($target_full_address); ?>">
+                        <input type="hidden" id="delivery_region_name" name="delivery_region_name" value="<?php echo htmlspecialchars($target_region_name); ?>">
+                        <input type="hidden" id="delivery_region_code" name="delivery_region_code" value="<?php echo htmlspecialchars($target_region_code); ?>">
+                        <input type="hidden" id="delivery_province_name" name="delivery_province_name" value="<?php echo htmlspecialchars($target_province_name); ?>">
+                        <input type="hidden" id="delivery_province_code" name="delivery_province_code" value="<?php echo htmlspecialchars($target_province_code); ?>">
+                        <input type="hidden" id="delivery_city_name" name="delivery_city_name" value="<?php echo htmlspecialchars($target_city_name); ?>">
+                        <input type="hidden" id="delivery_city_code" name="delivery_city_code" value="<?php echo htmlspecialchars($target_city_code); ?>">
+                        <input type="hidden" id="delivery_barangay_name" name="delivery_barangay_name" value="<?php echo htmlspecialchars($target_barangay_name); ?>">
+                        <input type="hidden" id="delivery_barangay_code" name="delivery_barangay_code" value="<?php echo htmlspecialchars($target_barangay_code); ?>">
+                        <input type="hidden" id="delivery_postal_code" name="delivery_postal_code" value="<?php echo htmlspecialchars($target_postal_code); ?>">
+                        <input type="hidden" id="saved_address_id" name="saved_address_id" value="<?php echo (int)$target_saved_id; ?>">
+                        <input type="hidden" id="latitude" name="latitude" value="<?php echo htmlspecialchars($target_lat_val); ?>">
+                        <input type="hidden" id="longitude" name="longitude" value="<?php echo htmlspecialchars($target_lng_val); ?>">
+                        <input type="hidden" id="distance_km" name="distance_km" value="<?php echo htmlspecialchars($target_distance_val); ?>">
+                        <input type="hidden" id="calculated_delivery_fee" name="calculated_delivery_fee" value="<?php echo htmlspecialchars($target_fee_val); ?>">
 
                         <!-- Hidden select elements kept for PSGC JS compatibility -->
                         <select id="checkout_region" style="display:none;"><option value="">--</option></select>
@@ -654,44 +873,178 @@ $remaining = $total - $downpayment;
                     <!-- Step 3: Discounts and Payment -->
                     <div class="step-content" id="stepContent3">
                         <p class="checkout-section-label"><i class="fas fa-receipt"></i> Discounts and Payment</p>
-                        <div class="voucher-section">
-                            <h4>Discount Voucher</h4>
+                        <div class="voucher-section" style="background:#ffffff; border:1px solid #eaecf0; border-radius:16px; padding:20px; margin-bottom:24px; box-shadow:0 2px 8px rgba(16,24,40,0.04);">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+                                <h4 style="margin:0; font-family:'Outfit',sans-serif; font-size:1.1rem; font-weight:800; color:#101828;">
+                                    <i class="fas fa-ticket-alt" style="color:#b3261e; margin-right:6px;"></i> Discount Voucher
+                                </h4>
+                                <?php if (!empty($available_vouchers)): ?>
+                                    <span style="font-size:0.78rem; font-weight:700; color:#027a48; background:#ecfdf3; border:1px solid #abefc6; padding:3px 10px; border-radius:999px;">
+                                        <i class="fas fa-sparkles"></i> <?php echo count($available_vouchers); ?> Available Promotions
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+
                             <div class="voucher-input-row">
                                 <input type="text"
                                        id="voucherCodeInput"
                                        maxlength="60"
-                                       placeholder="Enter voucher code"
-                                       value="<?php echo htmlspecialchars($applied_voucher_code); ?>">
-                                <button type="button" class="btn-voucher-apply" id="applyVoucherBtn">
+                                       placeholder="Enter promo code (e.g. WELCOME100, FREESHIP)"
+                                       value="<?php echo htmlspecialchars($prefill_voucher_code); ?>">
+                                <button type="button" class="btn-voucher-apply" id="applyVoucherBtn" onclick="applyVoucherCode()">
                                     <i class="fas fa-ticket-alt"></i> Apply
                                 </button>
-                                <button type="button" class="btn-voucher-remove" id="removeVoucherBtn" <?php echo $voucher_discount > 0 ? '' : 'style="display:none;"'; ?>>
+                                <button type="button" class="btn-voucher-remove" id="removeVoucherBtn" onclick="removeVoucherCode()" <?php echo $voucher_discount > 0 ? '' : 'style="display:none;"'; ?>>
                                     Remove
                                 </button>
                             </div>
-                            <p class="voucher-feedback <?php echo $voucher_discount > 0 ? 'success' : (!empty($voucher_message) ? 'warning' : ''); ?>" id="voucherFeedback">
+
+                            <p class="voucher-feedback <?php echo $voucher_discount > 0 ? 'success' : (!empty($voucher_message) ? 'warning' : (!empty($prefill_voucher_code) ? 'info' : '')); ?>" id="voucherFeedback" style="margin-top:10px;">
                                 <?php
                                 if ($voucher_discount > 0) {
-                                    echo 'Applied ' . htmlspecialchars($applied_voucher_code) . ': -PHP ' . number_format($voucher_discount, 2);
+                                    $scope_tag = $voucher_scope_label ? ' (' . htmlspecialchars($voucher_scope_label) . ')' : '';
+                                    echo '<i class="fas fa-check-circle"></i> Applied ' . htmlspecialchars($applied_voucher_code) . ': -PHP ' . number_format($voucher_discount, 2) . $scope_tag;
                                 } elseif (!empty($voucher_message)) {
-                                    echo htmlspecialchars($voucher_message);
+                                    echo '<i class="fas fa-exclamation-triangle"></i> ' . htmlspecialchars($voucher_message);
+                                } elseif (!empty($prefill_voucher_code)) {
+                                    echo '<i class="fas fa-ticket-alt" style="color:#b3261e;"></i> Claimed voucher <strong>' . htmlspecialchars($prefill_voucher_code) . '</strong> is ready. Add items to qualify or click Apply.';
                                 } else {
-                                    echo 'Partner vouchers are created by each shop and automatically validated at checkout.';
+                                    echo '<i class="fas fa-info-circle"></i> Select or claim a promotion below to apply instant discounts to your order.';
                                 }
                                 ?>
                             </p>
+
+                            <!-- Available Customer Promotions & Store Vouchers Cards -->
+                            <?php if (!empty($available_vouchers)): ?>
+                                <div class="available-vouchers-container" style="margin-top:16px; padding-top:16px; border-top:1px dashed #eaecf0;">
+                                    <div style="font-size:0.84rem; font-weight:800; color:#344054; margin-bottom:12px; display:flex; align-items:center; gap:6px;">
+                                        <i class="fas fa-tags" style="color:#b3261e;"></i> Claimed & Available Customer Vouchers:
+                                    </div>
+                                    <div class="available-vouchers-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:12px;">
+                                        <?php foreach ($available_vouchers as $v): ?>
+                                            <?php 
+                                                $is_current = (strtoupper($applied_voucher_code) === strtoupper($v['code']));
+                                                $disc_label = ($v['discount_type'] === 'percent') ? number_format($v['discount_value'], 0) . '% OFF' : 'PHP ' . number_format($v['discount_value'], 2) . ' OFF';
+                                                $min_spend_label = $v['min_order_amount'] > 0 ? 'Min. spend PHP ' . number_format($v['min_order_amount'], 2) : 'No min. spend';
+                                            ?>
+                                            <div class="available-voucher-card<?php echo $is_current ? ' is-active' : ''; ?><?php echo !$v['is_eligible'] ? ' is-ineligible' : ''; ?>" 
+                                                 style="background:<?php echo $is_current ? '#ecfdf3' : '#f8f9fa'; ?>; border:1px solid <?php echo $is_current ? '#abefc6' : '#eaecf0'; ?>; border-radius:12px; padding:12px 14px; position:relative; transition:all 0.2s; box-shadow: 0 1px 3px rgba(16,24,40,0.04);">
+                                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                                                    <span style="font-family:'Outfit',sans-serif; font-weight:800; font-size:0.95rem; color:#b3261e; letter-spacing:0.5px;">
+                                                        <?php echo htmlspecialchars($v['code']); ?>
+                                                    </span>
+                                                    <span style="font-size:0.68rem; font-weight:800; padding:2px 8px; border-radius:999px; background:<?php echo $v['seller_id'] > 0 ? '#eff8ff' : '#fff1f0'; ?>; color:<?php echo $v['seller_id'] > 0 ? '#175cd3' : '#b3261e'; ?>; border:1px solid <?php echo $v['seller_id'] > 0 ? '#b2ddff' : '#fee4e2'; ?>;">
+                                                        <?php echo htmlspecialchars($v['badge']); ?>
+                                                    </span>
+                                                </div>
+                                                <div style="font-size:0.84rem; font-weight:700; color:#101828; margin-bottom:2px;">
+                                                    <?php echo htmlspecialchars($v['name']); ?> (<?php echo $disc_label; ?>)
+                                                </div>
+                                                <div style="font-size:0.75rem; color:#667085; margin-bottom:10px;">
+                                                    <?php echo htmlspecialchars($min_spend_label); ?>
+                                                </div>
+                                                <?php if ($is_current): ?>
+                                                    <button type="button" class="btn btn-sm" style="width:100%; background:#027a48; color:#fff; font-weight:700; font-size:0.8rem; border-radius:8px; padding:7px; border:none;" disabled>
+                                                        <i class="fas fa-check-circle"></i> Applied
+                                                    </button>
+                                                <?php elseif ($v['is_eligible']): ?>
+                                                    <button type="button" onclick="applySelectedVoucher('<?php echo htmlspecialchars($v['code']); ?>')" class="btn btn-sm" style="width:100%; background:#b3261e; color:#fff; font-weight:700; font-size:0.8rem; border-radius:8px; padding:7px; border:none; cursor:pointer;" onmouseover="this.style.background='#981b15';" onmouseout="this.style.background='#b3261e';">
+                                                        <i class="fas fa-ticket-alt"></i> Apply Voucher
+                                                    </button>
+                                                <?php else: ?>
+                                                    <?php
+                                                        $cart_subtotal_val = (float)($subtotal ?? 0);
+                                                        $min_spend_val = (float)($v['min_order_amount'] ?? 0);
+                                                        $shortfall = ($min_spend_val > $cart_subtotal_val) ? ($min_spend_val - $cart_subtotal_val) : 0;
+                                                    ?>
+                                                    <?php if ($shortfall > 0): ?>
+                                                        <button type="button" onclick="showVoucherShortfall('<?php echo htmlspecialchars($v['code']); ?>', <?php echo $min_spend_val; ?>, <?php echo $shortfall; ?>)" class="btn btn-sm" style="width:100%; background:#fff1f0; color:#b3261e; font-weight:700; font-size:0.75rem; border-radius:8px; padding:7px; border:1px solid #fee4e2; cursor:pointer;" title="Click to view requirements">
+                                                            <i class="fas fa-plus-circle"></i> Add PHP <?php echo number_format($shortfall, 2); ?> to unlock
+                                                        </button>
+                                                    <?php else: ?>
+                                                        <button type="button" onclick="showVoucherShortfall('<?php echo htmlspecialchars($v['code']); ?>', 0, 0, '<?php echo htmlspecialchars(addslashes($v['ineligible_reason'])); ?>')" class="btn btn-sm" style="width:100%; background:#f2f4f7; color:#667085; font-weight:700; font-size:0.75rem; border-radius:8px; padding:7px; border:1px solid #eaecf0; cursor:pointer;" title="Click for details">
+                                                            <i class="fas fa-info-circle"></i> <?php echo htmlspecialchars($v['ineligible_reason']); ?>
+                                                        </button>
+                                                    <?php endif; ?>
+                                                <?php endif; ?>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
                         </div>
                         
-                        <!-- Payment Type Selection -->
-                        <div class="payment-type-section">
-                            <h4>Payment Option</h4>
+                        <!-- Mode of Payment Selection -->
+                        <div class="payment-method-selection-section" style="margin-bottom: 24px;">
+                            <h4 style="font-family:'Outfit',sans-serif; font-size:1.1rem; font-weight:800; color:#101828; margin-bottom:14px; display:flex; align-items:center; gap:8px;">
+                                <i class="fas fa-wallet" style="color:#b3261e;"></i> Mode of Payment
+                            </h4>
+                            <div class="custom-payment-methods-grid" style="display: flex; flex-direction: column; gap: 12px;">
+                                <!-- Option 1: Cash on Delivery / Cash on Pickup -->
+                                <label class="custom-payment-method-card is-selected" id="paymentMethodCardCod" style="display:flex; align-items:flex-start; gap:14px; padding:16px 18px; border:2px solid #b3261e; background:#fffbfa; border-radius:14px; cursor:pointer; transition:all 0.2s ease; position:relative;">
+                                    <input type="radio" name="payment_method" value="cod" checked style="accent-color:#b3261e; width:18px; height:18px; margin-top:3px; cursor:pointer;">
+                                    <div class="pm-icon-wrap" style="width:42px; height:42px; border-radius:10px; background:#ecfdf3; color:#027a48; border:1px solid #abefc6; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0;">
+                                        <i class="fas fa-money-bill-wave"></i>
+                                    </div>
+                                    <div style="flex:1;">
+                                        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px;">
+                                            <span class="pm-title" id="codMethodTitle" style="font-size:15px; font-weight:800; color:#101828;">Cash on Delivery (COD)</span>
+                                            <span class="pm-badge" id="codMethodBadge" style="font-size:11px; font-weight:700; background:#ecfdf3; color:#027a48; border:1px solid #abefc6; padding:2px 8px; border-radius:999px;">
+                                                <i class="fas fa-motorcycle"></i> Pay to Rider
+                                            </span>
+                                        </div>
+                                        <p class="pm-desc" id="codMethodDesc" style="margin:4px 0 0; font-size:12.5px; color:#475467; line-height:1.4;">
+                                            Pay with exact cash directly to the delivery rider upon food arrival at your doorstep. No advance online card needed.
+                                        </p>
+                                    </div>
+                                </label>
+
+                                <!-- Option 2: Online Payment via PayMongo -->
+                                <label class="custom-payment-method-card" id="paymentMethodCardPaymongo" style="display:flex; align-items:flex-start; gap:14px; padding:16px 18px; border:2px solid #eaecf0; background:#ffffff; border-radius:14px; cursor:pointer; transition:all 0.2s ease; position:relative;">
+                                    <input type="radio" name="payment_method" value="paymongo" style="accent-color:#b3261e; width:18px; height:18px; margin-top:3px; cursor:pointer;">
+                                    <div class="pm-icon-wrap" style="width:42px; height:42px; border-radius:10px; background:#eff8ff; color:#175cd3; border:1px solid #b2ddff; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0;">
+                                        <i class="fas fa-credit-card"></i>
+                                    </div>
+                                    <div style="flex:1;">
+                                        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px;">
+                                            <span class="pm-title" style="font-size:15px; font-weight:800; color:#101828;">Online Payment (GCash / Maya / Cards)</span>
+                                            <span class="pm-badge" style="font-size:11px; font-weight:700; background:#eff8ff; color:#175cd3; border:1px solid #b2ddff; padding:2px 8px; border-radius:999px;">
+                                                <i class="fas fa-bolt"></i> Instant Payment
+                                            </span>
+                                        </div>
+                                        <p class="pm-desc" style="margin:4px 0 0; font-size:12.5px; color:#475467; line-height:1.4;">
+                                            Fast and secure online checkout via PayMongo. Pay using GCash, Maya, or Credit/Debit card.
+                                        </p>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- COD Cash Guidance Box (Visible when COD is selected) -->
+                        <div id="codPaymentGuidance" style="background:#fffaeb; border:1px solid #fedf89; border-radius:12px; padding:14px 16px; margin-bottom:24px;">
+                            <div style="display:flex; gap:12px; align-items:flex-start;">
+                                <div style="color:#b54708; font-size:18px; line-height:1; margin-top:2px;">
+                                    <i class="fas fa-hand-holding-dollar"></i>
+                                </div>
+                                <div style="flex:1;">
+                                    <strong style="color:#b54708; font-size:13.5px; display:block; margin-bottom:3px;">Cash Handover Reminder</strong>
+                                    <p id="codGuidanceText" style="margin:0; font-size:12.5px; color:#7a2e0e; line-height:1.45;">
+                                        Please prepare exact cash of <strong id="codCashReminderAmount">PHP <?php echo number_format($total, 2); ?></strong> for the delivery rider upon food arrival. Your order will be confirmed immediately without waiting for bank clearance.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Online Payment Type Selection (Visible only when Online Payment is selected) -->
+                        <div id="onlinePaymentTypeSection" class="payment-type-section" style="display:none; margin-bottom:24px;">
+                            <h4 style="font-family:'Outfit',sans-serif; font-size:1.1rem; font-weight:800; color:#101828; margin-bottom:12px;">Payment Option</h4>
                             <div class="payment-type-options">
                                 <label class="payment-type-option">
                                     <input type="radio" name="payment_type" value="full" checked>
                                     <div class="option-content">
                                         <span class="option-title">Full Payment</span>
                                         <span class="option-amount">PHP <?php echo number_format($total, 2); ?></span>
-                                        <small>Pay the complete amount now</small>
+                                        <small>Pay the complete amount online now</small>
                                     </div>
                                 </label>
                                 <label class="payment-type-option">
@@ -699,23 +1052,24 @@ $remaining = $total - $downpayment;
                                     <div class="option-content">
                                         <span class="option-title">30% Downpayment</span>
                                         <span class="option-amount">PHP <?php echo number_format($downpayment, 2); ?></span>
-                                        <small>Pay 30% now, balance on delivery (PHP <?php echo number_format($remaining, 2); ?>)</small>
+                                        <small>Pay 30% online now, remaining balance on delivery (PHP <?php echo number_format($remaining, 2); ?>)</small>
                                     </div>
                                 </label>
                             </div>
                         </div>
                         
-                        <!-- Payment Info Section -->
-                        <div class="payment-info-section">
-                            <h4>Payment Information</h4>
-                            <div class="payment-info-box">
-                                <p><strong>Amount to Pay:</strong></p>
-                                <p class="payment-amount" id="paymentAmount">PHP <?php echo number_format($total, 2); ?></p>
-                                <p class="payment-note"><i class="fas fa-info-circle"></i> You will be redirected to PayMongo to complete the payment securely.</p>
+                        <!-- Payment Summary Box -->
+                        <div class="payment-info-section" style="margin-bottom:24px;">
+                            <div class="payment-info-box" style="background:#ffffff; border:1px solid #eaecf0; border-radius:12px; padding:16px 18px; box-shadow:0 1px 3px rgba(16,24,40,0.04);">
+                                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                                    <span style="font-size:13px; font-weight:700; color:#344054;" id="paymentAmountLabel">Amount to Pay on Delivery:</span>
+                                    <span class="payment-amount" id="paymentAmount" style="font-size:1.35rem; font-weight:800; color:#b3261e;">PHP <?php echo number_format($total, 2); ?></span>
+                                </div>
+                                <p class="payment-note" id="paymentNoteText" style="margin:8px 0 0; font-size:12px; color:#475467; line-height:1.4;">
+                                    <i class="fas fa-check-circle" style="color:#027a48; margin-right:4px;"></i> No advance online payment needed. Hand cash directly to the delivery rider upon arrival.
+                                </p>
                             </div>
                         </div>
-                        
-                        <input type="hidden" name="payment_method" value="paymongo">
                         
                         <div class="terms-agreement">
                             <label class="checkbox-label">
@@ -734,11 +1088,11 @@ $remaining = $total - $downpayment;
                                 <i class="fas fa-arrow-left"></i> Back
                             </button>
                             <button type="submit" class="btn-primary" id="submitOrder" <?php echo $checkout_tenant_blocked ? 'disabled aria-disabled="true"' : ''; ?> style="background: #b3261e; border: none; padding: 12px 24px; font-weight: 700; border-radius: 8px; color: #fff; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
-                                <i class="fas fa-lock"></i> Proceed to Payment
+                                <i class="fas fa-check-circle"></i> Place Order (Cash on Delivery)
                             </button>
                         </div>
-                        <p class="checkout-final-note">
-                            <i class="fas fa-shield-alt"></i> Your payment details are securely handled via PayMongo.
+                        <p class="checkout-final-note" id="checkoutFinalNote">
+                            <i class="fas fa-shield-alt"></i> Authentic lechon prepared fresh from our kitchen. Pay in cash upon delivery.
                         </p>
                     </div>
 
@@ -780,13 +1134,6 @@ $remaining = $total - $downpayment;
 <!-- Add SweetAlert2 CSS & JS -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
-<!-- Leaflet Map API -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-
-<!-- Google Maps API -->
-<script src="https://maps.googleapis.com/maps/api/js?key=<?php echo rawurlencode($google_maps_api_key); ?>&libraries=places,geometry&callback=initMap" async defer></script>
 
 <style>
 /* Add new styles for payment breakdown */
@@ -1982,43 +2329,58 @@ body {
 }
 
 @media (max-width: 700px) {
-    .checkout-summary-kpis,
+    .checkout-summary-kpis {
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 8px !important;
+    }
+
+    .checkout-kpi {
+        padding: 8px 6px !important;
+        border-radius: 10px !important;
+        text-align: center !important;
+    }
+
     .checkout-flow {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 6px !important;
     }
 
     .checkout-flow-step {
-        justify-content: flex-start;
-        padding: 0 12px;
+        justify-content: center !important;
+        padding: 6px 4px !important;
+        font-size: 0.74rem !important;
+        min-height: 36px !important;
+    }
+
+    .checkout-flow-step span {
+        width: 18px !important;
+        height: 18px !important;
+        font-size: 0.68rem !important;
     }
 
     .checkout-mode-sticky {
-        display: block;
-        position: fixed;
-        left: 12px;
-        right: 12px;
-        bottom: 78px;
-        z-index: 998;
-        background: rgba(255, 255, 255, 0.98);
-        border: 1px solid #f0ddd0;
-        border-radius: 12px;
-        box-shadow: 0 10px 22px rgba(0, 0, 0, 0.12);
-        padding: 10px;
-        backdrop-filter: blur(4px);
+        display: none !important;
     }
 
-    .checkout-mode-sticky-actions {
-        width: 100%;
-        display: grid;
-        grid-template-columns: 1fr 1fr;
+    .checkout-section {
+        padding: 20px 0 160px !important;
     }
 
-    .checkout-mode-sticky .checkout-mode-btn {
-        justify-content: center;
+    .checkout-form,
+    .checkout-summary {
+        padding: 20px 14px !important;
+        border-radius: 16px !important;
     }
 
-    .checkout-form {
-        padding-bottom: 140px;
+    .co-address-card,
+    .co-delivery-map-card,
+    .voucher-section {
+        padding: 16px 12px !important;
+        border-radius: 14px !important;
+    }
+
+    .custom-payment-method-card {
+        padding: 12px 14px !important;
     }
 }
 
@@ -2257,25 +2619,627 @@ body {
         gap: 24px;
     }
     .checkout-form {
-        order: 2;
+        order: 1 !important;
     }
     .checkout-summary {
-        order: 1;
+        order: 2 !important;
     }
 }
-@keyframes pigRun {
-    0% { transform: translateY(0) scaleX(-1); }
-    100% { transform: translateY(-4px) scaleX(-1); }
+
+@media (max-width: 768px) {
+    .mobile-bottom-nav {
+        display: none !important;
+    }
+
+    .checkout-section {
+        padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px)) !important;
+    }
+
+    /* Anti-overcrowding: hide redundant descriptive copy on mobile */
+    .checkout-type-note,
+    .checkout-mode-copy p,
+    .delivery-fee-info-box p:first-child,
+    .co-delivery-map-card > div > div > p,
+    .co-delivery-map-card > div:last-child > div:last-child {
+        display: none !important;
+    }
+
+    .checkout-mode-card {
+        padding: 12px 14px !important;
+        gap: 10px !important;
+    }
+
+    .checkout-type-switch {
+        padding: 12px 14px !important;
+        margin-bottom: 14px !important;
+    }
+
+    /* Map canvas & scroll ergonomics */
+    #deliveryOverviewMapShell,
+    #checkoutDeliveryOverviewMap {
+        height: 190px !important;
+        min-height: 190px !important;
+        touch-action: pan-y !important;
+    }
+
+    .co-delivery-map-card {
+        padding: 14px !important;
+        margin-bottom: 16px !important;
+        border-radius: 12px !important;
+    }
+
+    /* 2x2 grid for metrics strip */
+    .co-delivery-map-card > div:nth-child(2) {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 6px !important;
+    }
+}
+
+/* ==========================================================================
+   CHECKOUT PAGE DARK THEME ENGINE
+   ========================================================================== */
+body.dark-mode {
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .checkout-section {
+    background: #0f172a !important;
+}
+
+body.dark-mode .checkout-summary,
+body.dark-mode .checkout-form {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35) !important;
+}
+
+body.dark-mode .checkout-summary h3,
+body.dark-mode .checkout-form h3 {
+    color: #f8fafc !important;
+    border-bottom-color: #334155 !important;
+}
+
+body.dark-mode .checkout-summary-kpis {
+    gap: 8px;
+}
+
+body.dark-mode .checkout-kpi {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .checkout-kpi-label {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .checkout-kpi strong,
+body.dark-mode #summaryModeValue {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .summary-item {
+    border-bottom-color: #334155 !important;
+    background: transparent !important;
+}
+
+body.dark-mode .item-info h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .item-info p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .item-price {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .summary-totals {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .total-row {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .total-row span:first-child {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .total-row span:last-child {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .total-row.grand-total {
+    border-top-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .total-row.grand-total span:first-child {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .total-row.grand-total span:last-child,
+body.dark-mode #summaryTotal {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .payment-breakdown {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .payment-breakdown h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .payment-breakdown h4 span:last-child {
+    background: rgba(239, 107, 46, 0.15) !important;
+    border-color: rgba(239, 107, 46, 0.4) !important;
+    color: #f97316 !important;
+}
+
+body.dark-mode .breakdown-row span {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .breakdown-row .downpayment-amount {
+    color: #fb923c !important;
+}
+
+body.dark-mode .breakdown-row .remaining-amount {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .breakdown-row .full-amount {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .breakdown-row[style*="border-top"] {
+    border-top-color: #334155 !important;
+}
+
+body.dark-mode .delivery-info {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .delivery-info h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode #summaryDeliveryDetails {
+    color: #f8fafc !important;
+}
+
+body.dark-mode #summaryDeliveryTime {
+    background: rgba(2, 122, 72, 0.15) !important;
+    border-color: rgba(74, 222, 128, 0.4) !important;
+    color: #4ade80 !important;
+}
+
+body.dark-mode #summaryStoreAddress {
+    color: #94a3b8 !important;
+}
+
+/* Step Flow */
+body.dark-mode .checkout-flow-step {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .checkout-flow-step span {
+    border-color: #475569 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .checkout-flow-step.is-active {
+    background: #b3261e !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .checkout-flow-step.is-active span {
+    border-color: rgba(255, 255, 255, 0.4) !important;
+    color: #ffffff !important;
+}
+
+/* Checkout Type Switch */
+body.dark-mode .checkout-type-switch {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .checkout-type-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .checkout-type-chip {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .checkout-type-chip:hover {
+    background: #334155 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .checkout-type-chip.is-active {
+    background: #b3261e !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .checkout-type-note {
+    color: #94a3b8 !important;
+}
+
+/* Fulfillment Mode Card */
+body.dark-mode .delivery-option-form {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .checkout-mode-card {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .checkout-mode-card h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .checkout-mode-card p,
+body.dark-mode .checkout-mode-card p strong {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .checkout-mode-btn {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .checkout-mode-btn:hover {
+    background: #334155 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .checkout-mode-btn.is-active {
+    background: #b3261e !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .checkout-mode-btn[data-mode="pickup"].is-active,
+body.dark-mode #modePickupBtn.is-active {
+    background-color: #ef6b2e !important;
+    border-color: #ef6b2e !important;
+}
+
+body.dark-mode #findNearestStoreBtn {
+    background: #1e293b !important;
+    border-color: #b3261e !important;
+    color: #ef4444 !important;
+}
+
+/* Form Controls, Inputs & Labels */
+body.dark-mode .checkout-section-label {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .form-group label {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .form-group input,
+body.dark-mode .form-group select,
+body.dark-mode .form-group textarea,
+body.dark-mode .store-select,
+body.dark-mode .delivery-select,
+body.dark-mode .address-search {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .form-group input:focus,
+body.dark-mode .form-group select:focus,
+body.dark-mode .form-group textarea:focus,
+body.dark-mode .store-select:focus,
+body.dark-mode .delivery-select:focus,
+body.dark-mode .address-search:focus {
+    border-color: #b3261e !important;
+    background: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .store-info {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    border-left: 4px solid #027a48 !important;
+}
+
+body.dark-mode .store-info p {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .account-autofill-note {
+    background: rgba(2, 122, 72, 0.12) !important;
+    border-color: rgba(74, 222, 128, 0.3) !important;
+    color: #4ade80 !important;
+}
+
+body.dark-mode .delivery-fee-info-box {
+    background: #111827 !important;
+    border: 1px solid #334155 !important;
+    color: #cbd5e1 !important;
+    padding: 12px;
+    border-radius: 8px;
+}
+
+body.dark-mode .delivery-fee-info-box p {
+    color: #cbd5e1 !important;
+}
+
+/* Step 2 Address Cards */
+body.dark-mode .co-address-card,
+body.dark-mode #mainDeliveryAddressCard,
+body.dark-mode .delivery-address-shell {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .co-address-card h3,
+body.dark-mode #displayStreetAddress {
+    color: #f8fafc !important;
+}
+
+body.dark-mode #displayCityAddress {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode #openChangeAddressModalBtn {
+    color: #ef4444 !important;
+}
+
+body.dark-mode #delivery_instructions {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .btn-step-back {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .btn-step-back:hover {
+    background: #334155 !important;
+    color: #ffffff !important;
+}
+
+/* Step 3 Voucher and Payment Options */
+body.dark-mode .voucher-section {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .voucher-section h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode #voucherCodeInput {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .available-voucher-card {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .available-voucher-card.is-active {
+    background: rgba(2, 122, 72, 0.15) !important;
+    border-color: #22c55e !important;
+}
+
+body.dark-mode .available-voucher-card div[style*="font-weight:700"] {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .available-voucher-card div[style*="font-size:0.75rem"] {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .available-vouchers-container {
+    border-top-color: #334155 !important;
+}
+
+body.dark-mode .available-vouchers-container div {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .payment-type-section h4,
+body.dark-mode .payment-info-section h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .payment-type-option {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .payment-type-option:hover {
+    border-color: #b3261e !important;
+    background: #1e293b !important;
+}
+
+body.dark-mode .option-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .option-amount {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .option-content small {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .payment-info-box {
+    background: #111827 !important;
+    border: 1px solid #334155 !important;
+    border-radius: 12px;
+    padding: 16px;
+}
+
+body.dark-mode .payment-info-box p {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .payment-amount {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .payment-note {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .terms-agreement {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .terms-agreement span,
+body.dark-mode .terms-agreement label {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .terms-agreement a {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .checkout-final-note {
+    background: rgba(2, 122, 72, 0.12) !important;
+    border-color: rgba(74, 222, 128, 0.3) !important;
+    color: #4ade80 !important;
+}
+
+/* Modals Dark Mode */
+body.dark-mode #changeAddressModal > div,
+body.dark-mode #addNewAddressModal > div,
+body.dark-mode #editAddressModal > div {
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
+}
+
+body.dark-mode #changeAddressModal h3,
+body.dark-mode #addNewAddressModal h3,
+body.dark-mode #editAddressModal h3,
+body.dark-mode #changeAddressModal label,
+body.dark-mode #addNewAddressModal label,
+body.dark-mode #editAddressModal label {
+    color: #f8fafc !important;
+}
+
+body.dark-mode #changeAddressModal div[style*="border-bottom"],
+body.dark-mode #changeAddressModal div[style*="border-top"],
+body.dark-mode #addNewAddressModal div[style*="border-bottom"],
+body.dark-mode #addNewAddressModal div[style*="border-top"],
+body.dark-mode #editAddressModal div[style*="border-bottom"],
+body.dark-mode #editAddressModal div[style*="border-top"] {
+    border-color: #334155 !important;
+}
+
+body.dark-mode .modal-saved-addr-card {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .modal-saved-addr-card.is-selected {
+    border-color: #ef4444 !important;
+    background: rgba(179, 38, 30, 0.15) !important;
+}
+
+body.dark-mode .addr-street-line {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .addr-city-line,
+body.dark-mode .addr-rider-note {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .addr-radio-btn {
+    background: #111827 !important;
+    border-color: #475569 !important;
+}
+
+body.dark-mode .modal-saved-addr-card.is-selected .addr-radio-btn {
+    border-color: #ef4444 !important;
+}
+
+body.dark-mode .modal-saved-addr-card.is-selected .addr-radio-inner {
+    background: #ef4444 !important;
+}
+
+body.dark-mode .btn-edit-saved-addr,
+body.dark-mode .btn-delete-saved-addr,
+body.dark-mode #closeChangeAddressModalBtn,
+body.dark-mode #closeAddAddressModalBtn,
+body.dark-mode #closeEditAddressModalBtn {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode #openAddAddressModalBtn {
+    color: #f8fafc !important;
 }
 </style>
 
 <script>
 let map;
 let marker;
-let geocoder;
-let autocomplete;
-let googleGeocodingServiceAvailable = <?php echo $google_geocoding_enabled ? 'true' : 'false'; ?>;
 let isMapInitialized = false;
+
+function calculateCoordinatesDistance(lat1, lon1, lat2, lon2) {
+    const latA = parseFloat(lat1);
+    const lonA = parseFloat(lon1);
+    const latB = parseFloat(lat2);
+    const lonB = parseFloat(lon2);
+    if (!Number.isFinite(latA) || !Number.isFinite(lonA) || !Number.isFinite(latB) || !Number.isFinite(lonB)) {
+        return Infinity;
+    }
+    if (window.L && typeof L.latLng === 'function') {
+        return L.latLng(latA, lonA).distanceTo(L.latLng(latB, lonB));
+    }
+    const R = 6371000;
+    const dLat = (latB - latA) * Math.PI / 180;
+    const dLon = (lonB - lonA) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(latA * Math.PI / 180) * Math.cos(latB * Math.PI / 180) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
 const storesData = <?php echo json_encode($stores); ?>;
 const preferredStoreOwnerId = <?php echo (int)$storefront_seller_id; ?>;
 const baseDeliveryFee = <?php echo $base_delivery_fee ?? 50; ?>;
@@ -2302,6 +3266,13 @@ const defaultSavedAddressId = <?php echo (int)$default_saved_address_id; ?>;
 const initialCheckoutDeliveryOption = <?php echo json_encode($current_checkout_delivery_option); ?>;
 let activeCheckoutDeliveryOption = (initialCheckoutDeliveryOption === 'delivery') ? 'delivery' : 'pickup';
 const initialDeliveryQuote = <?php echo json_encode($current_delivery_quote, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+const initialStoreContext = <?php echo json_encode([
+    'id' => $overview_store_id,
+    'name' => $overview_store_name,
+    'address' => $overview_store_address,
+    'latitude' => $overview_store_lat,
+    'longitude' => $overview_store_lng
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
 const checkoutTenantBlocked = <?php echo $checkout_tenant_blocked ? 'true' : 'false'; ?>;
 const checkoutTenantMessage = <?php echo json_encode($checkout_tenant_message, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
 let latestResolvedAddressText = userAddressSeed || '';
@@ -2312,6 +3283,9 @@ async function switchCheckoutFulfillmentMode(mode) {
     const normalizedMode = (String(mode || '').toLowerCase() === 'delivery') ? 'delivery' : 'pickup';
     const isDelivery = (normalizedMode === 'delivery');
     activeCheckoutDeliveryOption = normalizedMode;
+    if (typeof updatePaymentUI === 'function') {
+        updatePaymentUI();
+    }
 
     // 1. Toggle Button UI Classes
     ['modePickupBtn', 'stickyModePickupBtn'].forEach(id => {
@@ -2362,45 +3336,59 @@ async function switchCheckoutFulfillmentMode(mode) {
         setDeliveryAddressFieldRequirements(isDelivery);
     }
 
-    // 6. Sync with Backend PHP Session
-    try {
-        await fetch('update_delivery_option.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-                delivery_option: normalizedMode,
-                pickup_location: document.getElementById('pickup_location')?.value || '1'
-            })
-        });
-    } catch (err) {
-        console.error('Failed to update delivery option on server:', err);
-    }
-
-    // 7. Calculate or Reset Delivery Fee
-    if (isDelivery) {
+    // 6. Sync with Backend PHP Session & Update Pricing
+    if (typeof window.updateDeliveryOption === 'function' || typeof updateDeliveryOption === 'function') {
+        const updater = window.updateDeliveryOption || updateDeliveryOption;
+        await updater();
+    } else {
         const latVal = (document.getElementById('latitude')?.value || '').trim();
         const lngVal = (document.getElementById('longitude')?.value || '').trim();
-        if (latVal && lngVal && typeof calculateDeliveryFee === 'function') {
-            await calculateDeliveryFee(latVal, lngVal);
+        const addrVal = (document.getElementById('delivery_address')?.value || '').trim();
+        try {
+            const bodyParams = {
+                delivery_option: normalizedMode,
+                pickup_location: document.getElementById('pickup_location')?.value || '1'
+            };
+            if (isDelivery) {
+                if (latVal && lngVal) {
+                    bodyParams.latitude = latVal;
+                    bodyParams.longitude = lngVal;
+                }
+                if (addrVal) {
+                    bodyParams.delivery_address = addrVal;
+                }
+            }
+            const res = await fetch('update_delivery_option.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams(bodyParams)
+            });
+            const data = await res.json();
+            if (data && data.success && typeof updateSummaryUI === 'function') {
+                updateSummaryUI(data);
+            }
+        } catch (err) {
+            console.error('Failed to update delivery option on server:', err);
         }
-    } else {
-        currentDeliveryFee = 0;
-        if (typeof recalculateOrderTotals === 'function') {
-            recalculateOrderTotals();
+
+        if (isDelivery) {
+            if (latVal && lngVal && typeof calculateDeliveryFee === 'function') {
+                await calculateDeliveryFee(latVal, lngVal);
+            }
+        } else {
+            currentDeliveryFee = 0;
+            if (typeof recalculateOrderTotals === 'function') {
+                recalculateOrderTotals();
+            }
         }
+    }
+    if (typeof updatePaymentUI === 'function') {
+        updatePaymentUI();
     }
 }
 
 function normalizePostalCode(value) {
     return String(value || '').replace(/[^\dA-Za-z-]/g, '').trim();
-}
-
-function isGoogleGeocodingUnavailableStatus(status) {
-    const normalized = String(status || '').trim().toUpperCase();
-    return normalized === 'REQUEST_DENIED'
-        || normalized === 'OVER_QUERY_LIMIT'
-        || normalized === 'OVER_DAILY_LIMIT'
-        || normalized === 'INVALID_REQUEST';
 }
 
 async function forwardGeocodeFromNominatim(query) {
@@ -2737,7 +3725,16 @@ function setVoucherFeedback(message, stateClass) {
     const feedback = document.getElementById('voucherFeedback');
     if (!feedback) return;
 
-    feedback.textContent = String(message || '');
+    let iconHtml = '';
+    if (stateClass === 'success') {
+        iconHtml = '<i class="fas fa-check-circle" style="margin-right:6px;"></i> ';
+    } else if (stateClass === 'warning') {
+        iconHtml = '<i class="fas fa-exclamation-triangle" style="margin-right:6px;"></i> ';
+    } else {
+        iconHtml = '<i class="fas fa-info-circle" style="margin-right:6px;"></i> ';
+    }
+
+    feedback.innerHTML = iconHtml + String(message || '');
     feedback.classList.remove('success', 'warning');
     if (stateClass === 'success') {
         feedback.classList.add('success');
@@ -2811,6 +3808,9 @@ function recalculateOrderTotals() {
     if (checkedPayment) {
         checkedPayment.dispatchEvent(new Event('change'));
     }
+    if (typeof updatePaymentUI === 'function') {
+        updatePaymentUI();
+    }
 
     return {
         subtotal,
@@ -2823,8 +3823,290 @@ function recalculateOrderTotals() {
     };
 }
 
+async function applyVoucherCode(codeOverride) {
+    const input = document.getElementById('voucherCodeInput');
+    const applyBtn = document.getElementById('applyVoucherBtn');
+    const removeBtn = document.getElementById('removeVoucherBtn');
+    const hiddenIdInput = document.getElementById('voucher_id_hidden');
+
+    let voucherCode = (typeof codeOverride === 'string' && codeOverride.trim()) 
+        ? codeOverride.trim() 
+        : (input?.value || '').trim();
+
+    if (!voucherCode) {
+        setVoucherFeedback('Please enter a voucher code.', 'warning');
+        return;
+    }
+
+    if (applyBtn) applyBtn.disabled = true;
+    if (removeBtn) removeBtn.disabled = true;
+
+    try {
+        const response = await fetch('apply_voucher.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                action: 'apply',
+                code: voucherCode
+            })
+        });
+
+        const rawText = await response.text();
+        let result = null;
+        try {
+            result = JSON.parse(rawText);
+        } catch (e) {
+            const match = rawText.match(/\{[\s\S]*\}/);
+            if (match) {
+                result = JSON.parse(match[0]);
+            } else {
+                throw new Error('Server returned invalid response');
+            }
+        }
+
+        if (!result.success) {
+            currentVoucherCode = '';
+            currentVoucherDiscount = 0;
+            if (hiddenIdInput) hiddenIdInput.value = '';
+            recalculateOrderTotals();
+            setVoucherFeedback(result.message || 'Voucher could not be applied.', 'warning');
+            return;
+        }
+
+        currentVoucherCode = String(result.voucher_code || voucherCode).toUpperCase();
+        currentVoucherDiscount = roundToMoney(result.discount_amount || 0);
+
+        if (hiddenIdInput) hiddenIdInput.value = String(result.voucher_id || '');
+        if (input) input.value = currentVoucherCode;
+
+        try {
+            sessionStorage.removeItem('pending_welcome_voucher');
+        } catch (e) {}
+
+        recalculateOrderTotals();
+        const scopeBadge = result.scope_label ? ` (${result.scope_label})` : '';
+        setVoucherFeedback(`Applied ${currentVoucherCode}: -${moneyFormatter.format(currentVoucherDiscount)}${scopeBadge}`, 'success');
+
+        // Dynamically update available voucher cards UI
+        document.querySelectorAll('.available-voucher-card').forEach(card => {
+            const cardCodeEl = card.querySelector('span');
+            const cardCode = cardCodeEl ? cardCodeEl.textContent.trim().toUpperCase() : '';
+            if (cardCode === currentVoucherCode) {
+                card.classList.add('is-active');
+                card.style.background = '#ecfdf3';
+                card.style.borderColor = '#abefc6';
+            } else {
+                card.classList.remove('is-active');
+                if (!card.classList.contains('is-ineligible')) {
+                    card.style.background = '#f8f9fa';
+                    card.style.borderColor = '#eaecf0';
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Unable to apply voucher:', error);
+        setVoucherFeedback('Voucher request failed. Please try again.', 'warning');
+    } finally {
+        if (applyBtn) applyBtn.disabled = false;
+        if (removeBtn) removeBtn.disabled = false;
+    }
+}
+
+async function removeVoucherCode() {
+    const input = document.getElementById('voucherCodeInput');
+    const applyBtn = document.getElementById('applyVoucherBtn');
+    const removeBtn = document.getElementById('removeVoucherBtn');
+    const hiddenIdInput = document.getElementById('voucher_id_hidden');
+
+    if (applyBtn) applyBtn.disabled = true;
+    if (removeBtn) removeBtn.disabled = true;
+
+    try {
+        const response = await fetch('apply_voucher.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ action: 'remove' })
+        });
+        const result = await response.json();
+
+        currentVoucherCode = '';
+        currentVoucherDiscount = 0;
+        if (hiddenIdInput) hiddenIdInput.value = '';
+        if (input) input.value = '';
+
+        try {
+            sessionStorage.removeItem('pending_welcome_voucher');
+        } catch (e) {}
+
+        recalculateOrderTotals();
+        setVoucherFeedback(result.message || 'Voucher removed.', '');
+
+        document.querySelectorAll('.available-voucher-card').forEach(card => {
+            card.classList.remove('is-active');
+            if (!card.classList.contains('is-ineligible')) {
+                card.style.background = '#f8f9fa';
+                card.style.borderColor = '#eaecf0';
+            }
+        });
+    } catch (error) {
+        console.error('Unable to remove voucher:', error);
+        setVoucherFeedback('Could not remove voucher right now.', 'warning');
+    } finally {
+        if (applyBtn) applyBtn.disabled = false;
+        if (removeBtn) removeBtn.disabled = false;
+    }
+}
+
+function applySelectedVoucher(code) {
+    if (!code) return;
+    const input = document.getElementById('voucherCodeInput');
+    if (input) {
+        input.value = code;
+    }
+    applyVoucherCode(code);
+}
+
+function showVoucherShortfall(code, minSpend, shortfall, customReason) {
+    const input = document.getElementById('voucherCodeInput');
+    if (input && code) {
+        input.value = code;
+    }
+    let msg = '';
+    if (customReason) {
+        msg = `Voucher ${code}: ${customReason}`;
+    } else {
+        msg = `Voucher ${code} requires a minimum order of PHP ${Number(minSpend).toFixed(2)}. Add PHP ${Number(shortfall).toFixed(2)} more to your cart to use this discount!`;
+    }
+    setVoucherFeedback(msg, 'warning');
+    if (window.showPopupAlert) {
+        window.showPopupAlert(msg, 'warning', 4000);
+    }
+}
+
+let latestDeliveryQuoteRequestToken = 0;
+
+function calculateDeliveryFeeFallbackLocally(lat, lng) {
+    const userLat = parseFloat(lat);
+    const userLng = parseFloat(lng);
+    if (Number.isNaN(userLat) || Number.isNaN(userLng)) return;
+
+    let minDistance = Infinity;
+    let nearestStoreName = 'Nearest Store';
+
+    if (typeof getDeliveryCandidateStores === 'function') {
+        getDeliveryCandidateStores().forEach((store) => {
+            if (store.latitude && store.longitude) {
+                const storeLat = parseFloat(store.latitude);
+                const storeLng = parseFloat(store.longitude);
+                const distance = calculateCoordinatesDistance(userLat, userLng, storeLat, storeLng);
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    nearestStoreName = store.name || store.store_name;
+                }
+            }
+        });
+    }
+
+    if (minDistance === Infinity) {
+        const timeEl = document.getElementById('summaryDeliveryTime');
+        const detailsEl = document.getElementById('summaryDeliveryDetails');
+        if (timeEl) timeEl.innerHTML = '';
+        if (detailsEl) detailsEl.textContent = 'No mapped store coordinates are available for delivery pricing yet.';
+        return;
+    }
+
+    const distanceKm = minDistance / 1000;
+    const fee = Math.ceil(baseDeliveryFee + (distanceKm * perKmRate));
+    const travelTimeMinutes = (distanceKm / avgSpeed) * 60;
+    const totalTimeMinutes = prepTime + travelTimeMinutes;
+    const minEta = Math.ceil(totalTimeMinutes / 5) * 5;
+    const maxEta = minEta + 15;
+    const etaText = `Estimated Delivery: ${minEta} - ${maxEta} minutes`;
+
+    currentDeliveryFee = fee;
+    const summaryDeliveryTime = document.getElementById('summaryDeliveryTime');
+    const summaryDeliveryFee = document.getElementById('summaryDeliveryFee');
+    const summaryDeliveryDetails = document.getElementById('summaryDeliveryDetails');
+    const calcDeliveryFeeInput = document.getElementById('calculated_delivery_fee');
+    const distanceKmInput = document.getElementById('distance_km');
+
+    if (summaryDeliveryTime) summaryDeliveryTime.innerHTML = `<i class="fas fa-clock"></i> ${etaText}`;
+    if (summaryDeliveryFee) summaryDeliveryFee.textContent = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(fee);
+    if (summaryDeliveryDetails) summaryDeliveryDetails.innerHTML = `Delivery via ${nearestStoreName} (${distanceKm.toFixed(1)} km)`;
+    if (calcDeliveryFeeInput) calcDeliveryFeeInput.value = fee;
+    if (distanceKmInput) distanceKmInput.value = distanceKm.toFixed(2);
+    if (typeof recalculateOrderTotals === 'function') {
+        recalculateOrderTotals();
+    }
+}
+
+async function persistDeliveryQuote(lat, lng) {
+    const response = await fetch('update_delivery_option.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+            delivery_option: 'delivery',
+            latitude: String(lat),
+            longitude: String(lng)
+        })
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+        throw new Error(result.message || 'Unable to refresh delivery pricing.');
+    }
+    return result;
+}
+
+async function calculateDeliveryFee(lat, lng) {
+    const latValue = Number(lat);
+    const lngValue = Number(lng);
+    if (!Number.isFinite(latValue) || !Number.isFinite(lngValue)) return;
+
+    const latitudeInput = document.getElementById('latitude');
+    const longitudeInput = document.getElementById('longitude');
+    if (latitudeInput) latitudeInput.value = String(latValue);
+    if (longitudeInput) longitudeInput.value = String(lngValue);
+
+    const requestToken = ++latestDeliveryQuoteRequestToken;
+    const summaryDeliveryDetails = document.getElementById('summaryDeliveryDetails');
+    const summaryDeliveryTime = document.getElementById('summaryDeliveryTime');
+    if (summaryDeliveryDetails) summaryDeliveryDetails.textContent = 'Calculating delivery fee from nearest store...';
+    if (summaryDeliveryTime) summaryDeliveryTime.innerHTML = '';
+
+    try {
+        const quote = await persistDeliveryQuote(latValue, lngValue);
+        if (requestToken !== latestDeliveryQuoteRequestToken) return;
+        if (typeof updateSummaryUI === 'function') {
+            updateSummaryUI(quote);
+        } else if (typeof window.updateSummaryUI === 'function') {
+            window.updateSummaryUI(quote);
+        }
+    } catch (error) {
+        if (requestToken !== latestDeliveryQuoteRequestToken) return;
+        console.error('Unable to fetch delivery quote from server:', error);
+        calculateDeliveryFeeFallbackLocally(latValue, lngValue);
+    }
+}
+
+// Explicit global exports
+window.calculateDeliveryFee = calculateDeliveryFee;
+window.calculateDeliveryFeeFallbackLocally = calculateDeliveryFeeFallbackLocally;
+window.persistDeliveryQuote = persistDeliveryQuote;
+window.recalculateOrderTotals = recalculateOrderTotals;
+window.applyVoucherCode = applyVoucherCode;
+window.removeVoucherCode = removeVoucherCode;
+window.applySelectedVoucher = applySelectedVoucher;
+window.showVoucherShortfall = showVoucherShortfall;
+
 document.addEventListener('DOMContentLoaded', function() {
-    if (typeof initMap === 'function') initMap();
+    if (typeof initMap === 'function') {
+        try {
+            initMap();
+        } catch (initErr) {
+            console.warn('initMap startup caught:', initErr);
+        }
+    }
 
     // Multi-step form switching logic
     const steps = document.querySelectorAll('.step-content');
@@ -2854,7 +4136,32 @@ document.addEventListener('DOMContentLoaded', function() {
             const widthPercent = stepNum === 1 ? '33.33%' : (stepNum === 2 ? '66.66%' : '100%');
             progressBar.style.width = widthPercent;
         }
+
+        if (stepNum === 2) {
+            setTimeout(() => {
+                if (window.deliveryOverviewMap && typeof window.deliveryOverviewMap.invalidateSize === 'function') {
+                    window.deliveryOverviewMap.invalidateSize();
+                }
+                if (typeof window.refreshDeliveryOverviewMap === 'function') {
+                    window.refreshDeliveryOverviewMap();
+                }
+            }, 80);
+            setTimeout(() => {
+                if (window.deliveryOverviewMap && typeof window.deliveryOverviewMap.invalidateSize === 'function') {
+                    window.deliveryOverviewMap.invalidateSize();
+                    if (window.deliveryOverviewRouteLine && window.deliveryOverviewRouteLine.getLatLngs().length > 1) {
+                        const bounds = L.latLngBounds(window.deliveryOverviewRouteLine.getLatLngs());
+                        if (bounds.isValid()) {
+                            window.deliveryOverviewMap.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+                        }
+                    }
+                }
+            }, 260);
+        }
     }
+
+    window.showStep = showStep;
+    window.goToStep = showStep;
 
     function validateStep(stepNum) {
         if (stepNum === 1) {
@@ -2972,7 +4279,7 @@ const deliveryOptionHiddenInput = document.getElementById('delivery_option_hidde
 const pickupLocationHiddenInput = document.getElementById('pickup_location_hidden');
 const deliveryLocationHiddenInput = document.getElementById('delivery_location_hidden');
 let shouldAutoPinFromMarketPayload = false;
-let latestDeliveryQuoteRequestToken = 0;
+latestDeliveryQuoteRequestToken = 0;
 
 const normalizeDeliveryOption = (value) => (String(value || '').toLowerCase() === 'delivery' ? 'delivery' : 'pickup');
 
@@ -3045,9 +4352,9 @@ const setCheckoutMode = async (mode, syncServer = true) => {
                 if (detailsEl) {
                     detailsEl.textContent = 'Pin your exact location to calculate the delivery fee from the nearest store.';
                 }
-            }
-            if (document.getElementById('summaryDeliveryTime')) {
-                document.getElementById('summaryDeliveryTime').innerHTML = '';
+                if (document.getElementById('summaryDeliveryTime')) {
+                    document.getElementById('summaryDeliveryTime').innerHTML = '';
+                }
             }
             recalculateOrderTotals();
         }
@@ -3087,7 +4394,7 @@ const loadProvinces = async (regionCode) => {
     const provinces = await fetchPsgc('/regions/' + encodeURIComponent(regionCode) + '/provinces');
     setSelectOptions(provinceSelect, provinces, provinces.length ? '-- Select Province --' : '-- No Province --');
     provinceSelect.disabled = provinces.length === 0;
-    provinceSelect.required = provinces.length > 0;
+    provinceSelect.required = false;
     return provinces;
 };
 
@@ -3201,7 +4508,6 @@ const autoPinCheckoutMapFromHeaderPayload = async () => {
     if (!shouldAutoPinFromMarketPayload) return false;
     if (activeCheckoutDeliveryOption !== 'delivery') return false;
     if (!marketAddressPayload) return false;
-    if (!map || !marker) return false;
 
     const latitudeInput = document.getElementById('latitude');
     const longitudeInput = document.getElementById('longitude');
@@ -3209,21 +4515,25 @@ const autoPinCheckoutMapFromHeaderPayload = async () => {
         return false;
     }
 
-    const query = String(
-        marketAddressPayload.full_address
-        || [marketAddressPayload.street_address, [marketAddressPayload.city, marketAddressPayload.postal_code].filter(Boolean).join(' ')].filter(Boolean).join(', ')
-    ).trim();
-    if (!query) return false;
-
     const applyPinFromCoords = async (lat, lng) => {
-        if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) return false;
-        const point = { lat: Number(lat), lng: Number(lng) };
-        map.setView([point.lat, point.lng], 17);
-        marker.setLatLng([point.lat, point.lng]);
+        const pointLat = Number(lat);
+        const pointLng = Number(lng);
+        if (!Number.isFinite(pointLat) || !Number.isFinite(pointLng)) return false;
+
+        if (latitudeInput) latitudeInput.value = String(pointLat);
+        if (longitudeInput) longitudeInput.value = String(pointLng);
+
+        if (typeof map !== 'undefined' && map && typeof marker !== 'undefined' && marker) {
+            map.setView([pointLat, pointLng], 17);
+            marker.setLatLng([pointLat, pointLng]);
+        }
 
         try {
-            await updateAddressFromCoordinates(point.lat, point.lng);
-            await calculateDeliveryFee(point.lat, point.lng);
+            await updateAddressFromCoordinates(pointLat, pointLng);
+            await calculateDeliveryFee(pointLat, pointLng);
+            if (typeof refreshDeliveryOverviewMap === 'function') {
+                refreshDeliveryOverviewMap({ customer_lat: pointLat, customer_lng: pointLng });
+            }
             shouldAutoPinFromMarketPayload = false;
             return true;
         } catch (error) {
@@ -3232,34 +4542,21 @@ const autoPinCheckoutMapFromHeaderPayload = async () => {
         }
     };
 
-    if (!geocoder || !googleGeocodingServiceAvailable) {
-        const fallback = await forwardGeocodeFromNominatim(query);
-        if (!fallback) return false;
-        return applyPinFromCoords(fallback.lat, fallback.lng);
+    const payloadLat = parseFloat(marketAddressPayload.latitude || '');
+    const payloadLng = parseFloat(marketAddressPayload.longitude || '');
+    if (!Number.isNaN(payloadLat) && !Number.isNaN(payloadLng) && payloadLat !== 0 && payloadLng !== 0) {
+        return applyPinFromCoords(payloadLat, payloadLng);
     }
 
-    return new Promise((resolve) => {
-        geocoder.geocode({ address: query }, async (results, status) => {
-            if (status === 'OK' && Array.isArray(results) && results.length) {
-                const location = results[0].geometry?.location;
-                if (location) {
-                    resolve(await applyPinFromCoords(location.lat(), location.lng()));
-                    return;
-                }
-            }
+    const query = String(
+        marketAddressPayload.full_address
+        || [marketAddressPayload.street_address, [marketAddressPayload.city, marketAddressPayload.postal_code].filter(Boolean).join(' ')].filter(Boolean).join(', ')
+    ).trim();
+    if (!query) return false;
 
-            if (isGoogleGeocodingUnavailableStatus(status)) {
-                googleGeocodingServiceAvailable = false;
-            }
-
-            const fallback = await forwardGeocodeFromNominatim(query);
-            if (!fallback) {
-                resolve(false);
-                return;
-            }
-            resolve(await applyPinFromCoords(fallback.lat, fallback.lng));
-        });
-    });
+    const fallback = await forwardGeocodeFromNominatim(query);
+    if (!fallback) return false;
+    return applyPinFromCoords(fallback.lat, fallback.lng);
 };
 
 window.autoPinCheckoutMapFromHeader = autoPinCheckoutMapFromHeaderPayload;
@@ -3365,6 +4662,9 @@ const applySavedAddressToForm = async (savedAddress) => {
     }
 
     syncDeliveryAddressField();
+    if (typeof window.refreshDeliveryOverviewMap === 'function') {
+        window.refreshDeliveryOverviewMap((!Number.isNaN(lat) && !Number.isNaN(lng) && lat !== 0 && lng !== 0) ? { customer_lat: lat, customer_lng: lng } : null);
+    }
     return true;
 };
 
@@ -3604,33 +4904,15 @@ async function reverseGeocodeFromNominatim(lat, lng) {
     }
 }
 
-async function resolveAddressContextFromCoordinates(lat, lng, googleResults = []) {
+async function resolveAddressContextFromCoordinates(lat, lng) {
     let formattedAddress = '';
     let parts = {};
 
-    if (Array.isArray(googleResults) && googleResults.length) {
-        const preferredResult = googleResults.find((entry) => {
-            const types = entry?.types || [];
-            return types.includes('street_address')
-                || types.includes('premise')
-                || types.includes('subpremise')
-                || types.includes('route')
-                || types.includes('neighborhood')
-                || types.includes('sublocality')
-                || types.includes('locality');
-        }) || googleResults[0];
-
-        formattedAddress = String(preferredResult?.formatted_address || googleResults[0]?.formatted_address || '').trim();
-        parts = extractAddressParts(preferredResult?.address_components || []);
+    const fallback = await reverseGeocodeFromNominatim(lat, lng);
+    if (fallback.formatted) {
+        formattedAddress = fallback.formatted;
     }
-
-    if (!hasStructuredPsgcParts(parts)) {
-        const fallback = await reverseGeocodeFromNominatim(lat, lng);
-        if (fallback.formatted) {
-            formattedAddress = formattedAddress || fallback.formatted;
-        }
-        parts = mergeAddressParts(parts, fallback.parts || {});
-    }
+    parts = mergeAddressParts(parts, fallback.parts || {});
 
     return {
         formatted: formattedAddress,
@@ -3803,7 +5085,7 @@ window.showMapContainer = function() {
     const mapDiv = document.getElementById('map');
     if (mapDiv && mapDiv.style.display === 'none') {
         mapDiv.style.display = 'block';
-        if (map) {
+        if (map && typeof map.invalidateSize === 'function') {
             map.invalidateSize();
         }
     }
@@ -3811,6 +5093,10 @@ window.showMapContainer = function() {
 
 window.initializeCheckoutMap = function() {
     if (isMapInitialized) {
+        return;
+    }
+    const mapEl = document.getElementById('map');
+    if (!mapEl || !window.L) {
         return;
     }
     isMapInitialized = true;
@@ -3827,6 +5113,80 @@ window.initializeCheckoutMap = function() {
     marker = L.marker([14.5995, 120.9842], {
         draggable: true
     }).addTo(map);
+
+    let checkoutStoreMarkersLayer = null;
+    function renderStoresOnCheckoutMap(userLat, userLng) {
+        if (!map || typeof L === 'undefined') return;
+        if (!checkoutStoreMarkersLayer) {
+            checkoutStoreMarkersLayer = L.layerGroup().addTo(map);
+        } else {
+            checkoutStoreMarkersLayer.clearLayers();
+        }
+
+        const candidateStores = (typeof getDeliveryCandidateStores === 'function')
+            ? getDeliveryCandidateStores()
+            : (Array.isArray(storesData) ? storesData : []);
+
+        if (!candidateStores || candidateStores.length === 0) return;
+
+        let closestStoreId = null;
+        let minDistance = Infinity;
+
+        if (Number.isFinite(userLat) && Number.isFinite(userLng)) {
+            candidateStores.forEach(s => {
+                const sLat = parseFloat(s.latitude);
+                const sLng = parseFloat(s.longitude);
+                if (Number.isFinite(sLat) && Number.isFinite(sLng)) {
+                    const dist = calculateCoordinatesDistance(userLat, userLng, sLat, sLng);
+                    if (dist < minDistance) {
+                        minDistance = dist;
+                        closestStoreId = s.id || s.store_id;
+                    }
+                }
+            });
+        }
+
+        candidateStores.forEach(s => {
+            const sLat = parseFloat(s.latitude);
+            const sLng = parseFloat(s.longitude);
+            if (!Number.isFinite(sLat) || !Number.isFinite(sLng)) return;
+
+            const isClosest = closestStoreId !== null && ((s.id || s.store_id) === closestStoreId);
+            const distKm = (Number.isFinite(userLat) && Number.isFinite(userLng))
+                ? (calculateCoordinatesDistance(userLat, userLng, sLat, sLng) / 1000).toFixed(1)
+                : null;
+            const storeName = s.name || s.store_name || 'Lechon Store';
+            const storeAddr = s.address || '';
+
+            const storeIcon = L.divIcon({
+                className: 'checkout-store-map-pin',
+                html: `
+                    <div style="background:${isClosest ? '#b3261e' : '#344054'}; color:#ffffff; width:${isClosest ? '34px' : '28px'}; height:${isClosest ? '34px' : '28px'}; border-radius:50%; display:flex; align-items:center; justify-content:center; border:2px solid #ffffff; box-shadow:0 3px 10px rgba(0,0,0,0.3); font-size:${isClosest ? '14px' : '11px'}; cursor:pointer; transition:all 0.2s;" title="${storeName}">
+                        <i class="fas fa-store"></i>
+                    </div>
+                `,
+                iconSize: [isClosest ? 34 : 28, isClosest ? 34 : 28],
+                iconAnchor: [isClosest ? 17 : 14, isClosest ? 34 : 28],
+                popupAnchor: [0, isClosest ? -34 : -28]
+            });
+
+            const sMarker = L.marker([sLat, sLng], { icon: storeIcon, zIndexOffset: isClosest ? 500 : 100 }).addTo(checkoutStoreMarkersLayer);
+            sMarker.bindPopup(`
+                <div style="font-family:'Outfit',sans-serif; padding:4px; min-width:180px;">
+                    <span style="display:inline-block; font-size:10px; font-weight:800; color:${isClosest ? '#b3261e' : '#344054'}; background:${isClosest ? '#fff1f0' : '#f2f4f7'}; padding:2px 6px; border-radius:4px; margin-bottom:4px;">
+                        ${isClosest ? '<i class="fas fa-star"></i> Nearest Branch to You' : 'Partner Branch'}
+                    </span>
+                    <strong style="font-size:13px; color:#101828; display:block; line-height:1.3;">${storeName}</strong>
+                    <div style="font-size:12px; color:#667085; margin:3px 0 6px 0;">${storeAddr}</div>
+                    ${distKm ? `<div style="font-size:12px; font-weight:700; color:#b3261e;"><i class="fas fa-location-arrow"></i> ${distKm} km away from your pin</div>` : ''}
+                </div>
+            `);
+        });
+    }
+    window.renderStoresOnCheckoutMap = renderStoresOnCheckoutMap;
+    
+    // Initial render of store pins around default pin
+    renderStoresOnCheckoutMap(14.5995, 120.9842);
     
     const input = document.getElementById("address_search");
     if (input) {
@@ -3854,6 +5214,7 @@ window.initializeCheckoutMap = function() {
                         
                         updateAddressFromCoordinates(lat, lng);
                         calculateDeliveryFee(lat, lng);
+                        renderStoresOnCheckoutMap(lat, lng);
                     }
                 } catch (err) {
                     console.error('Nominatim search error:', err);
@@ -3868,6 +5229,7 @@ window.initializeCheckoutMap = function() {
             console.error('Unable to sync PSGC fields from marker drag:', error);
         });
         calculateDeliveryFee(position.lat, position.lng);
+        renderStoresOnCheckoutMap(position.lat, position.lng);
     });
     
     map.on("click", (event) => {
@@ -3877,19 +5239,22 @@ window.initializeCheckoutMap = function() {
             console.error('Unable to sync PSGC fields from map click:', error);
         });
         calculateDeliveryFee(coords.lat, coords.lng);
+        renderStoresOnCheckoutMap(coords.lat, coords.lng);
     });
     
     console.log("Leaflet Map initialized successfully");
 };
 
 // Use My Location Button Logic
-document.getElementById('useMyLocation').addEventListener('click', function() {
-    window.showMapContainer();
-    if (!map || !marker) {
-        if (typeof window.initializeCheckoutMap === 'function') {
-            window.initializeCheckoutMap();
+const useMyLocationBtn = document.getElementById('useMyLocation');
+if (useMyLocationBtn) {
+    useMyLocationBtn.addEventListener('click', function() {
+        window.showMapContainer();
+        if (!map || !marker) {
+            if (typeof window.initializeCheckoutMap === 'function') {
+                window.initializeCheckoutMap();
+            }
         }
-    }
 
     if (navigator.geolocation) {
         Swal.fire({
@@ -3923,6 +5288,9 @@ document.getElementById('useMyLocation').addEventListener('click', function() {
                 console.error('Unable to sync PSGC fields from current location:', error);
             }
             calculateDeliveryFee(pos.lat, pos.lng);
+            if (typeof window.renderStoresOnCheckoutMap === 'function') {
+                window.renderStoresOnCheckoutMap(pos.lat, pos.lng);
+            }
             Swal.close();
         }, (error) => {
             let message = 'Error: The Geolocation service failed.';
@@ -3942,247 +5310,156 @@ document.getElementById('useMyLocation').addEventListener('click', function() {
     } else {
         Swal.fire('Error', 'Error: Your browser doesn\'t support geolocation.', 'error');
     }
-});
+    });
+}
 
 // Find Nearest Store Logic
-document.getElementById('findNearestStoreBtn').addEventListener('click', function() {
-    if (navigator.geolocation) {
-        Swal.fire({ title: 'Finding nearest store...', didOpen: () => { Swal.showLoading() } });
-        
-        navigator.geolocation.getCurrentPosition((position) => {
-            const userLoc = new google.maps.LatLng(position.coords.latitude, position.coords.longitude);
-            let nearest = null;
-            let minDist = Infinity;
+const findNearestStoreBtn = document.getElementById('findNearestStoreBtn');
+if (findNearestStoreBtn) {
+    findNearestStoreBtn.addEventListener('click', function() {
+        if (navigator.geolocation) {
+            Swal.fire({ title: 'Finding nearest store...', didOpen: () => { Swal.showLoading() } });
             
-            getDeliveryCandidateStores().forEach(store => {
-                if (store.latitude && store.longitude) {
-                    const storeLoc = new google.maps.LatLng(store.latitude, store.longitude);
-                    const dist = google.maps.geometry.spherical.computeDistanceBetween(userLoc, storeLoc);
-                    if (dist < minDist) {
-                        minDist = dist;
-                        nearest = store;
+            navigator.geolocation.getCurrentPosition((position) => {
+                const userLat = position.coords.latitude;
+                const userLng = position.coords.longitude;
+                let nearest = null;
+                let minDist = Infinity;
+                
+                getDeliveryCandidateStores().forEach(store => {
+                    if (store.latitude && store.longitude) {
+                        const storeLat = parseFloat(store.latitude);
+                        const storeLng = parseFloat(store.longitude);
+                        const dist = calculateCoordinatesDistance(userLat, userLng, storeLat, storeLng);
+                        if (dist < minDist) {
+                            minDist = dist;
+                            nearest = store;
+                        }
                     }
+                });
+                
+                if (nearest) {
+                    const select = document.getElementById('pickup_location');
+                    if (select) {
+                        select.value = nearest.id;
+                        select.dispatchEvent(new Event('change'));
+                    }
+                    if (typeof map !== 'undefined' && map && typeof marker !== 'undefined' && marker) {
+                        map.setView([userLat, userLng], 15);
+                        marker.setLatLng([userLat, userLng]);
+                        updateAddressFromCoordinates(userLat, userLng);
+                        calculateDeliveryFee(userLat, userLng);
+                        if (typeof window.renderStoresOnCheckoutMap === 'function') {
+                            window.renderStoresOnCheckoutMap(userLat, userLng);
+                        }
+                    }
+                    Swal.fire('Found!', `Nearest store is ${nearest.name || nearest.store_name} (${(minDist/1000).toFixed(1)}km away)`, 'success');
+                } else {
+                    Swal.fire('Error', 'Could not determine nearest store location.', 'error');
                 }
+            }, () => {
+                Swal.fire('Error', 'Geolocation permission denied.', 'error');
             });
-            
-            if (nearest) {
-                const select = document.getElementById('pickup_location');
-                select.value = nearest.id;
-                select.dispatchEvent(new Event('change'));
-                Swal.fire('Found!', `Nearest store is ${nearest.name || nearest.store_name} (${(minDist/1000).toFixed(1)}km away)`, 'success');
-            } else {
-                Swal.fire('Error', 'Could not determine nearest store location.', 'error');
-            }
-        }, () => {
-            Swal.fire('Error', 'Geolocation permission denied.', 'error');
-        });
-    } else {
-        Swal.fire('Error', 'Geolocation not supported.', 'error');
-    }
-});
-
-function calculateDeliveryFeeFallbackLocally(lat, lng) {
-    if (!lat || !lng || !window.google || !google.maps || !google.maps.geometry) return;
-
-    const userLoc = new google.maps.LatLng(lat, lng);
-    let minDistance = Infinity;
-    let nearestStoreName = 'Nearest Store';
-
-    getDeliveryCandidateStores().forEach((store) => {
-        if (store.latitude && store.longitude) {
-            const storeLoc = new google.maps.LatLng(store.latitude, store.longitude);
-            const distance = google.maps.geometry.spherical.computeDistanceBetween(userLoc, storeLoc);
-            if (distance < minDistance) {
-                minDistance = distance;
-                nearestStoreName = store.name || store.store_name;
-            }
+        } else {
+            Swal.fire('Error', 'Geolocation not supported.', 'error');
         }
     });
-
-    if (minDistance === Infinity) {
-        document.getElementById('summaryDeliveryTime').innerHTML = '';
-        document.getElementById('summaryDeliveryDetails').textContent = 'No mapped store coordinates are available for delivery pricing yet.';
-        return;
-    }
-
-    const distanceKm = minDistance / 1000;
-    const fee = Math.ceil(baseDeliveryFee + (distanceKm * perKmRate));
-    const travelTimeMinutes = (distanceKm / avgSpeed) * 60;
-    const totalTimeMinutes = prepTime + travelTimeMinutes;
-    const minEta = Math.ceil(totalTimeMinutes / 5) * 5;
-    const maxEta = minEta + 15;
-    const etaText = `Estimated Delivery: ${minEta} - ${maxEta} minutes`;
-
-    currentDeliveryFee = fee;
-    document.getElementById('summaryDeliveryTime').innerHTML = `<i class="fas fa-clock"></i> ${etaText}`;
-    document.getElementById('summaryDeliveryFee').textContent = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(fee);
-    document.getElementById('summaryDeliveryDetails').innerHTML = `Delivery via ${nearestStoreName} (${distanceKm.toFixed(1)} km)`;
-    document.getElementById('calculated_delivery_fee').value = fee;
-    document.getElementById('distance_km').value = distanceKm.toFixed(2);
-    recalculateOrderTotals();
 }
 
-async function calculateDeliveryFee(lat, lng) {
-    const latValue = Number(lat);
-    const lngValue = Number(lng);
-    if (!Number.isFinite(latValue) || !Number.isFinite(lngValue)) return;
+// Ensure global pricing functions are bound to window
+window.calculateDeliveryFee = calculateDeliveryFee;
+window.calculateDeliveryFeeFallbackLocally = calculateDeliveryFeeFallbackLocally;
+window.persistDeliveryQuote = persistDeliveryQuote;
 
-    const latitudeInput = document.getElementById('latitude');
-    const longitudeInput = document.getElementById('longitude');
-    if (latitudeInput) latitudeInput.value = String(latValue);
-    if (longitudeInput) longitudeInput.value = String(lngValue);
-
-    const requestToken = ++latestDeliveryQuoteRequestToken;
-    const summaryDeliveryDetails = document.getElementById('summaryDeliveryDetails');
-    const summaryDeliveryTime = document.getElementById('summaryDeliveryTime');
-    if (summaryDeliveryDetails) summaryDeliveryDetails.textContent = 'Calculating delivery fee from nearest store...';
-    if (summaryDeliveryTime) summaryDeliveryTime.innerHTML = '';
+async function updateAddressFromCoordinates(lat, lng) {
+    const latVal = parseFloat(lat);
+    const lngVal = parseFloat(lng);
+    if (Number.isNaN(latVal) || Number.isNaN(lngVal)) {
+        return false;
+    }
 
     try {
-        const quote = await persistDeliveryQuote(latValue, lngValue);
-        if (requestToken !== latestDeliveryQuoteRequestToken) return;
-        updateSummaryUI(quote);
-    } catch (error) {
-        if (requestToken !== latestDeliveryQuoteRequestToken) return;
-        console.error('Unable to fetch delivery quote from server:', error);
-        calculateDeliveryFeeFallbackLocally(latValue, lngValue);
-    }
-}
-
-async function persistDeliveryQuote(lat, lng) {
-    const response = await fetch('update_delivery_option.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-            delivery_option: 'delivery',
-            latitude: String(lat),
-            longitude: String(lng)
-        })
-    });
-
-    const result = await response.json();
-    if (!result.success) {
-        throw new Error(result.message || 'Unable to refresh delivery pricing.');
-    }
-    return result;
-}
-
-function updateAddressFromCoordinates(lat, lng) {
-    const latlng = {
-        lat: parseFloat(lat),
-        lng: parseFloat(lng),
-    };
-
-    return new Promise((resolve) => {
-        if (Number.isNaN(latlng.lat) || Number.isNaN(latlng.lng)) {
-            resolve(false);
-            return;
-        }
-
-        const applyResolvedFromCandidates = async (googleCandidates = []) => {
-            try {
-                const resolved = await resolveAddressContextFromCoordinates(latlng.lat, latlng.lng, googleCandidates);
-                const baseParts = Array.isArray(googleCandidates) && googleCandidates.length
-                    ? extractAddressParts(googleCandidates[0].address_components || [])
-                    : {};
-                const mergedParts = mergeAddressParts(baseParts, resolved.parts || {});
-                await applyResolvedMapAddress({
-                    lat: latlng.lat,
-                    lng: latlng.lng,
-                    formattedAddress: resolved.formatted || String(googleCandidates?.[0]?.formatted_address || '').trim(),
-                    parts: mergedParts
-                });
-
-                const hasAnyResolvedPart = !!(
-                    String(mergedParts.region || '').trim()
-                    || String(mergedParts.province || '').trim()
-                    || String(mergedParts.city || '').trim()
-                    || String(mergedParts.barangay || '').trim()
-                    || String(mergedParts.postalCode || '').trim()
-                    || String(resolved.formatted || '').trim()
-                );
-                resolve(hasAnyResolvedPart);
-            } catch (error) {
-                console.error('Unable to sync PSGC fields from coordinates:', error);
-                resolve(false);
-            }
-        };
-
-        if (!geocoder || !googleGeocodingServiceAvailable) {
-            applyResolvedFromCandidates([]);
-            return;
-        }
-
-        geocoder.geocode({ location: latlng }, async (results, status) => {
-            if (status === "OK" && Array.isArray(results) && results.length) {
-                await applyResolvedFromCandidates(results);
-                return;
-            }
-
-            if (isGoogleGeocodingUnavailableStatus(status)) {
-                googleGeocodingServiceAvailable = false;
-            }
-
-            console.warn("Google Geocoder reverse lookup failed due to:", status);
-            await applyResolvedFromCandidates([]);
+        const resolved = await resolveAddressContextFromCoordinates(latVal, lngVal);
+        const mergedParts = mergeAddressParts({}, resolved.parts || {});
+        await applyResolvedMapAddress({
+            lat: latVal,
+            lng: lngVal,
+            formattedAddress: resolved.formatted || '',
+            parts: mergedParts
         });
-    });
+
+        const hasAnyResolvedPart = !!(
+            String(mergedParts.region || '').trim()
+            || String(mergedParts.province || '').trim()
+            || String(mergedParts.city || '').trim()
+            || String(mergedParts.barangay || '').trim()
+            || String(mergedParts.postalCode || '').trim()
+            || String(resolved.formatted || '').trim()
+        );
+        return hasAnyResolvedPart;
+    } catch (error) {
+        console.error('Unable to sync PSGC fields from coordinates:', error);
+        return false;
+    }
 }
 
 // Search button handler
-document.getElementById("searchAddress").addEventListener("click", async () => {
-    window.showMapContainer();
-    if (!map || !marker) {
-        if (typeof window.initializeCheckoutMap === 'function') {
-            window.initializeCheckoutMap();
-        }
-    }
-    if (!map || !marker) {
-        Swal.fire('Map not ready', 'Please wait for the map to finish loading.', 'warning');
-        return;
-    }
-
-    const address = String(document.getElementById("address_search").value || '').trim();
-    if (address) {
-        Swal.fire({
-            title: 'Searching address...',
-            allowOutsideClick: false,
-            didOpen: () => { Swal.showLoading(); }
-        });
-        
-        try {
-            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&countrycodes=ph&limit=1`);
-            const data = await res.json();
-            if (data && data.length > 0) {
-                const first = data[0];
-                const lat = parseFloat(first.lat);
-                const lng = parseFloat(first.lon);
-                
-                map.setView([lat, lng], 17);
-                marker.setLatLng([lat, lng]);
-                
-                await updateAddressFromCoordinates(lat, lng);
-                calculateDeliveryFee(lat, lng);
-                Swal.close();
-            } else {
-                Swal.fire('Address not found', 'Please try a more specific address.', 'warning');
+const searchAddressBtn = document.getElementById("searchAddress");
+if (searchAddressBtn) {
+    searchAddressBtn.addEventListener("click", async () => {
+        window.showMapContainer();
+        if (!map || !marker) {
+            if (typeof window.initializeCheckoutMap === 'function') {
+                window.initializeCheckoutMap();
             }
-        } catch (err) {
-            console.error('Nominatim search button error:', err);
-            Swal.fire('Search Error', 'Failed to retrieve address details. Please try again.', 'error');
         }
-    } else {
-        Swal.fire('Missing address', 'Please enter an address to search.', 'warning');
-    }
-});
+        if (!map || !marker) {
+            Swal.fire('Map not ready', 'Please wait for the map to finish loading.', 'warning');
+            return;
+        }
+
+        const address = String(document.getElementById("address_search")?.value || '').trim();
+        if (address) {
+            Swal.fire({
+                title: 'Searching address...',
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+            });
+            
+            try {
+                const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&countrycodes=ph&limit=1`);
+                const data = await res.json();
+                if (data && data.length > 0) {
+                    const first = data[0];
+                    const lat = parseFloat(first.lat);
+                    const lng = parseFloat(first.lon);
+                    
+                    map.setView([lat, lng], 17);
+                    marker.setLatLng([lat, lng]);
+                    
+                    await updateAddressFromCoordinates(lat, lng);
+                    calculateDeliveryFee(lat, lng);
+                    Swal.close();
+                } else {
+                    Swal.fire('Address not found', 'Please try a more specific address.', 'warning');
+                }
+            } catch (err) {
+                console.error('Nominatim search button error:', err);
+                Swal.fire('Search Error', 'Failed to retrieve address details. Please try again.', 'error');
+            }
+        } else {
+            Swal.fire('Missing address', 'Please enter an address to search.', 'warning');
+        }
+    });
+}
 
 function setDeliveryAddressFieldRequirements(isDelivery) {
-    if (streetAddressInput) streetAddressInput.required = isDelivery;
-    if (postalCodeInput) postalCodeInput.required = isDelivery;
-    if (regionSelect) regionSelect.required = isDelivery;
-    if (provinceSelect) provinceSelect.required = isDelivery && !provinceSelect.disabled && provinceSelect.options.length > 1;
-    if (citySelect) citySelect.required = isDelivery;
-    if (barangaySelect) barangaySelect.required = isDelivery;
+    if (streetAddressInput) streetAddressInput.required = false;
+    if (postalCodeInput) postalCodeInput.required = false;
+    if (regionSelect) regionSelect.required = false;
+    if (provinceSelect) provinceSelect.required = false;
+    if (citySelect) citySelect.required = false;
+    if (barangaySelect) barangaySelect.required = false;
 
     if (!isDelivery) {
         const hiddenAddress = document.getElementById('delivery_address');
@@ -4230,6 +5507,9 @@ if (citySelect) {
         try {
             await loadBarangays(citySelect.value);
             syncDeliveryAddressField();
+            if (activeCheckoutDeliveryOption === 'delivery' && typeof updateDeliveryOption === 'function') {
+                updateDeliveryOption();
+            }
         } catch (error) {
             console.error('Unable to load barangays:', error);
         }
@@ -4237,8 +5517,14 @@ if (citySelect) {
 }
 
 if (barangaySelect) {
-    barangaySelect.addEventListener('change', syncDeliveryAddressField);
+    barangaySelect.addEventListener('change', () => {
+        syncDeliveryAddressField();
+        if (activeCheckoutDeliveryOption === 'delivery' && typeof updateDeliveryOption === 'function') {
+            updateDeliveryOption();
+        }
+    });
 }
+
 
 if (streetAddressInput) {
     streetAddressInput.addEventListener('input', syncDeliveryAddressField);
@@ -4298,7 +5584,11 @@ document.querySelectorAll('.checkout-mode-btn').forEach(btn => {
 
             // Automatically advance to Step 2 (Address / Store Selection) if currently on Step 1
             if (typeof currentStep !== 'undefined' && currentStep === 1) {
-                if (typeof goToStep === 'function') goToStep(2);
+                if (typeof showStep === 'function') {
+                    showStep(2);
+                } else if (typeof goToStep === 'function') {
+                    goToStep(2);
+                }
             }
         } catch (error) {
             console.error('Unable to switch fulfillment mode:', error);
@@ -4319,36 +5609,38 @@ if (pickupSelectMain && pickupSelectStep) {
     });
 }
 
-document.getElementById('pickup_location').addEventListener('change', function() {
-    if (activeCheckoutDeliveryOption !== 'pickup') return;
-    updateDeliveryOption();
-});
+if (pickupSelectMain) {
+    pickupSelectMain.addEventListener('change', function() {
+        if (activeCheckoutDeliveryOption !== 'pickup') return;
+        updateDeliveryOption();
+    });
 
-// Update store info when pickup location changes
-document.getElementById('pickup_location').addEventListener('change', function() {
-    const storeId = this.value;
-    const storeInfo = document.getElementById('storeInfo');
-    
-    // Show loading
-    storeInfo.innerHTML = '<p><i class="fas fa-spinner fa-spin"></i> Loading...</p>';
-    setTimeout(() => {
-        // This would be replaced with actual AJAX call
-        const stores = <?php echo json_encode($stores); ?>;
-        const selectedStore = stores.find(store => store.id == storeId);
+    // Update store info when pickup location changes
+    pickupSelectMain.addEventListener('change', function() {
+        const storeId = this.value;
+        const storeInfo = document.getElementById('storeInfo');
+        if (!storeInfo) return;
         
-        if (selectedStore) {
-            storeInfo.innerHTML = `
-                <p><i class="fas fa-map-marker-alt"></i> ${selectedStore.address}</p>
-                <p><i class="fas fa-phone"></i> ${selectedStore.phone}</p>
-                <p><i class="fas fa-clock"></i> ${selectedStore.hours || selectedStore.opening_hours || ''}</p>
-            `;
-        }
-    }, 500);
-});
+        // Show loading
+        storeInfo.innerHTML = '<p><i class="fas fa-spinner fa-spin"></i> Loading...</p>';
+        setTimeout(() => {
+            const stores = <?php echo json_encode($stores); ?>;
+            const selectedStore = stores.find(store => store.id == storeId);
+            
+            if (selectedStore) {
+                storeInfo.innerHTML = `
+                    <p><i class="fas fa-map-marker-alt"></i> ${selectedStore.address}</p>
+                    <p><i class="fas fa-phone"></i> ${selectedStore.phone}</p>
+                    <p><i class="fas fa-clock"></i> ${selectedStore.hours || selectedStore.opening_hours || ''}</p>
+                `;
+            }
+        }, 500);
+    });
+}
 
 function initializePage() {
     // Initialize store info
-    const storeId = document.getElementById('pickup_location').value;
+    const storeId = document.getElementById('pickup_location')?.value || '1';
     const storeInfo = document.getElementById('storeInfo');
     if (storeInfo) {
         const stores = <?php echo json_encode($stores); ?>;
@@ -4364,126 +5656,165 @@ function initializePage() {
     }
 }
 
-// Handle payment type selection
-document.querySelectorAll('input[name="payment_type"]').forEach(radio => {
-    radio.addEventListener('change', function() {
-        const totalAmount = parseFloat(document.getElementById('total_amount').value);
-        const downpaymentAmount = parseFloat(document.getElementById('downpayment_amount').value);
-        
-        let selectedAmount;
-        if (this.value === 'downpayment') {
-            selectedAmount = downpaymentAmount;
-        } else {
-            selectedAmount = totalAmount;
+// Handle payment mode and payment type selection
+function updatePaymentUI() {
+    const methodRadio = document.querySelector('input[name="payment_method"]:checked');
+    const selectedMethod = methodRadio ? methodRadio.value : 'cod';
+    const isPickup = (activeCheckoutDeliveryOption === 'pickup');
+
+    const totalInput = document.getElementById('total_amount');
+    const downpaymentInput = document.getElementById('downpayment_amount');
+    const totalAmount = parseFloat(totalInput?.value || '0') || 0;
+    const downpaymentAmount = parseFloat(downpaymentInput?.value || '0') || 0;
+
+    const codCard = document.getElementById('paymentMethodCardCod');
+    const paymongoCard = document.getElementById('paymentMethodCardPaymongo');
+    const codGuidance = document.getElementById('codPaymentGuidance');
+    const onlineTypeSection = document.getElementById('onlinePaymentTypeSection');
+    const amountLabel = document.getElementById('paymentAmountLabel');
+    const amountDisplay = document.getElementById('paymentAmount');
+    const noteText = document.getElementById('paymentNoteText');
+    const submitBtn = document.getElementById('submitOrder');
+    const codCashReminderAmount = document.getElementById('codCashReminderAmount');
+    const codTitle = document.getElementById('codMethodTitle');
+    const codBadge = document.getElementById('codMethodBadge');
+    const codDesc = document.getElementById('codMethodDesc');
+    const codGuidanceText = document.getElementById('codGuidanceText');
+
+    // Dynamic Delivery vs Pickup Labels
+    if (codTitle) codTitle.textContent = isPickup ? 'Cash on Pickup (Pay at Counter)' : 'Cash on Delivery (COD)';
+    if (codBadge) codBadge.innerHTML = isPickup ? '<i class="fas fa-store"></i> Pay at Store' : '<i class="fas fa-motorcycle"></i> Pay to Rider';
+    if (codDesc) {
+        codDesc.textContent = isPickup 
+            ? 'Pay with cash directly at the branch counter when claiming your fresh lechon. No advance online card needed.'
+            : 'Pay with exact cash directly to the delivery rider upon food arrival at your doorstep. No advance online card needed.';
+    }
+    if (codGuidanceText) {
+        codGuidanceText.innerHTML = isPickup
+            ? `Please prepare exact cash of <strong>PHP ${totalAmount.toFixed(2)}</strong> to hand to the store cashier upon pickup. Your order will be confirmed immediately.`
+            : `Please prepare exact cash of <strong>PHP ${totalAmount.toFixed(2)}</strong> for the delivery rider upon food arrival. Your order will be confirmed immediately without waiting for bank clearance.`;
+    }
+    if (codCashReminderAmount) codCashReminderAmount.textContent = (typeof moneyFormatter !== 'undefined' ? moneyFormatter.format(totalAmount) : `PHP ${totalAmount.toFixed(2)}`);
+
+    if (selectedMethod === 'cod') {
+        if (codCard) {
+            codCard.classList.add('is-selected');
+            codCard.style.borderColor = '#b3261e';
+            codCard.style.background = '#fffbfa';
         }
-        
-        // Update payment amount display
-        const paymentAmountDisplay = document.getElementById('paymentAmount');
-        const formattedAmount = new Intl.NumberFormat('en-PH', {
-            style: 'currency',
-            currency: 'PHP'
-        }).format(selectedAmount);
-        paymentAmountDisplay.textContent = formattedAmount;
-        
-        // Update submit button text
-        const submitBtn = document.getElementById('submitOrder');
-        submitBtn.innerHTML = `<i class="fas fa-lock"></i> Pay ${formattedAmount}`;
-    });
+        if (paymongoCard) {
+            paymongoCard.classList.remove('is-selected');
+            paymongoCard.style.borderColor = '#eaecf0';
+            paymongoCard.style.background = '#ffffff';
+        }
+
+        if (codGuidance) codGuidance.style.display = 'block';
+        if (onlineTypeSection) onlineTypeSection.style.display = 'none';
+
+        // For COD, the amount to pay on delivery is the FULL total
+        if (amountLabel) amountLabel.textContent = isPickup ? 'Amount to Pay at Pickup Counter:' : 'Amount to Pay on Delivery:';
+        if (amountDisplay) amountDisplay.textContent = (typeof moneyFormatter !== 'undefined' ? moneyFormatter.format(totalAmount) : `PHP ${totalAmount.toFixed(2)}`);
+        if (noteText) {
+            noteText.innerHTML = isPickup
+                ? '<i class="fas fa-check-circle" style="color: #027a48; margin-right: 4px;"></i> Pay in cash at the store counter when picking up your food. No online card required.'
+                : '<i class="fas fa-check-circle" style="color: #027a48; margin-right: 4px;"></i> No advance online payment needed. Hand cash directly to the delivery rider upon arrival.';
+        }
+        if (submitBtn) {
+            submitBtn.innerHTML = isPickup
+                ? '<i class="fas fa-check-circle"></i> Place Order (Cash on Pickup)'
+                : '<i class="fas fa-check-circle"></i> Place Order (Cash on Delivery)';
+        }
+        const finalNoteEl = document.getElementById('checkoutFinalNote');
+        if (finalNoteEl) {
+            finalNoteEl.innerHTML = isPickup
+                ? '<i class="fas fa-shield-alt"></i> Authentic lechon prepared fresh from our kitchen. Pay in cash at the counter.'
+                : '<i class="fas fa-shield-alt"></i> Authentic lechon prepared fresh from our kitchen. Pay in cash upon doorstep delivery.';
+        }
+    } else {
+        if (codCard) {
+            codCard.classList.remove('is-selected');
+            codCard.style.borderColor = '#eaecf0';
+            codCard.style.background = '#ffffff';
+        }
+        if (paymongoCard) {
+            paymongoCard.classList.add('is-selected');
+            paymongoCard.style.borderColor = '#b3261e';
+            paymongoCard.style.background = '#fffbfa';
+        }
+
+        if (codGuidance) codGuidance.style.display = 'none';
+        if (onlineTypeSection) onlineTypeSection.style.display = 'block';
+
+        const paymentTypeRadio = document.querySelector('input[name="payment_type"]:checked');
+        const paymentType = paymentTypeRadio ? paymentTypeRadio.value : 'full';
+        const selectedAmount = (paymentType === 'downpayment') ? downpaymentAmount : totalAmount;
+        const formattedAmount = (typeof moneyFormatter !== 'undefined' ? moneyFormatter.format(selectedAmount) : `PHP ${selectedAmount.toFixed(2)}`);
+
+        if (amountLabel) {
+            amountLabel.textContent = (paymentType === 'downpayment') 
+                ? 'Amount to Pay Online Now (30% Downpayment):' 
+                : 'Amount to Pay Online Now (Full Payment):';
+        }
+        if (amountDisplay) amountDisplay.textContent = formattedAmount;
+        if (noteText) {
+            noteText.innerHTML = '<i class="fas fa-lock" style="color: #175cd3; margin-right: 4px;"></i> You will be redirected to PayMongo to complete payment securely via GCash, Maya, or Card.';
+        }
+        if (submitBtn) {
+            submitBtn.innerHTML = `<i class="fas fa-lock"></i> Proceed to Online Payment (${formattedAmount})`;
+        }
+        const finalNoteEl = document.getElementById('checkoutFinalNote');
+        if (finalNoteEl) {
+            finalNoteEl.innerHTML = '<i class="fas fa-shield-alt"></i> Your payment details are securely handled via PayMongo.';
+        }
+    }
+}
+
+// Bind event listeners for payment method & payment type selection
+document.querySelectorAll('input[name="payment_method"]').forEach(radio => {
+    radio.addEventListener('change', updatePaymentUI);
 });
+document.querySelectorAll('input[name="payment_type"]').forEach(radio => {
+    radio.addEventListener('change', updatePaymentUI);
+});
+window.updatePaymentUI = updatePaymentUI;
+updatePaymentUI();
 
-const voucherCodeInput = document.getElementById('voucherCodeInput');
-const applyVoucherBtn = document.getElementById('applyVoucherBtn');
-const removeVoucherBtn = document.getElementById('removeVoucherBtn');
-const voucherIdInput = document.getElementById('voucher_id_hidden');
+// Bind event listeners for voucher controls
+const voucherInputEl = document.getElementById('voucherCodeInput');
+const voucherApplyBtnEl = document.getElementById('applyVoucherBtn');
+const voucherRemoveBtnEl = document.getElementById('removeVoucherBtn');
 
-async function applyVoucherCode() {
-    const voucherCode = (voucherCodeInput?.value || '').trim();
-    if (!voucherCode) {
-        setVoucherFeedback('Please enter a voucher code.', 'warning');
-        return;
-    }
-
-    if (applyVoucherBtn) applyVoucherBtn.disabled = true;
-    if (removeVoucherBtn) removeVoucherBtn.disabled = true;
-
-    try {
-        const response = await fetch('apply_voucher.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-                action: 'apply',
-                code: voucherCode
-            })
-        });
-
-        const result = await response.json();
-        if (!result.success) {
-            currentVoucherCode = '';
-            currentVoucherDiscount = 0;
-            if (voucherIdInput) voucherIdInput.value = '';
-            recalculateOrderTotals();
-            setVoucherFeedback(result.message || 'Voucher could not be applied.', 'warning');
-            return;
-        }
-
-        currentVoucherCode = String(result.voucher_code || voucherCode).toUpperCase();
-        currentVoucherDiscount = roundToMoney(result.discount_amount || 0);
-
-        if (voucherIdInput) voucherIdInput.value = String(result.voucher_id || '');
-        if (voucherCodeInput) voucherCodeInput.value = currentVoucherCode;
-
-        recalculateOrderTotals();
-        setVoucherFeedback(`Applied ${currentVoucherCode}: -${moneyFormatter.format(currentVoucherDiscount)}`, 'success');
-    } catch (error) {
-        console.error('Unable to apply voucher:', error);
-        setVoucherFeedback('Voucher request failed. Please try again.', 'warning');
-    } finally {
-        if (applyVoucherBtn) applyVoucherBtn.disabled = false;
-        if (removeVoucherBtn) removeVoucherBtn.disabled = false;
-    }
+if (voucherApplyBtnEl) {
+    voucherApplyBtnEl.addEventListener('click', function(e) {
+        e.preventDefault();
+        applyVoucherCode();
+    });
 }
 
-async function removeVoucherCode() {
-    if (applyVoucherBtn) applyVoucherBtn.disabled = true;
-    if (removeVoucherBtn) removeVoucherBtn.disabled = true;
-
-    try {
-        const response = await fetch('apply_voucher.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({ action: 'remove' })
-        });
-        const result = await response.json();
-
-        currentVoucherCode = '';
-        currentVoucherDiscount = 0;
-        if (voucherIdInput) voucherIdInput.value = '';
-        if (voucherCodeInput) voucherCodeInput.value = '';
-
-        recalculateOrderTotals();
-        setVoucherFeedback(result.message || 'Voucher removed.', '');
-    } catch (error) {
-        console.error('Unable to remove voucher:', error);
-        setVoucherFeedback('Could not remove voucher right now.', 'warning');
-    } finally {
-        if (applyVoucherBtn) applyVoucherBtn.disabled = false;
-        if (removeVoucherBtn) removeVoucherBtn.disabled = false;
-    }
+if (voucherRemoveBtnEl) {
+    voucherRemoveBtnEl.addEventListener('click', function(e) {
+        e.preventDefault();
+        removeVoucherCode();
+    });
 }
 
-if (applyVoucherBtn) {
-    applyVoucherBtn.addEventListener('click', applyVoucherCode);
-}
-if (removeVoucherBtn) {
-    removeVoucherBtn.addEventListener('click', removeVoucherCode);
-}
-if (voucherCodeInput) {
-    voucherCodeInput.addEventListener('keydown', function(event) {
+if (voucherInputEl) {
+    voucherInputEl.addEventListener('keydown', function(event) {
         if (event.key === 'Enter') {
             event.preventDefault();
             applyVoucherCode();
         }
     });
+
+    try {
+        const pendingVoucher = sessionStorage.getItem('pending_welcome_voucher');
+        if (pendingVoucher && !voucherInputEl.value.trim()) {
+            voucherInputEl.value = pendingVoucher;
+            setTimeout(() => {
+                applyVoucherCode(pendingVoucher);
+            }, 350);
+        }
+    } catch(e) {}
 }
 
 async function submitCheckoutAjax(formElement) {
@@ -4513,7 +5844,18 @@ async function submitCheckoutAjax(formElement) {
         try {
             result = JSON.parse(rawText);
         } catch (parseError) {
-            throw new Error('Unexpected server response. Please try again.');
+            const match = rawText.match(/\{[\s\S]*\}/);
+            if (match) {
+                try {
+                    result = JSON.parse(match[0]);
+                } catch (e2) {
+                    console.error('Failed to parse checkout JSON response:', rawText);
+                    throw new Error('Unexpected server response format.');
+                }
+            } else {
+                console.error('Failed to parse checkout response as JSON:', rawText);
+                throw new Error('Unexpected server response. Please try again.');
+            }
         }
 
         if (!response.ok || !result.success) {
@@ -4530,6 +5872,7 @@ async function submitCheckoutAjax(formElement) {
 
         window.location.href = result.redirect_url;
     } catch (error) {
+        console.error('Checkout processing error:', error);
         Swal.fire({
             icon: 'error',
             title: 'Checkout Failed',
@@ -4544,11 +5887,11 @@ async function submitCheckoutAjax(formElement) {
 // Handle form submission with SweetAlert2 + AJAX
 document.getElementById('checkoutForm').addEventListener('submit', function(e) {
     e.preventDefault();
-    if (checkoutTenantBlocked) {
+    if (typeof checkoutTenantBlocked !== 'undefined' && checkoutTenantBlocked) {
         Swal.fire({
             icon: 'warning',
             title: 'Checkout Blocked',
-            text: checkoutTenantMessage || 'Your cart has items from multiple stores. Please checkout one store at a time.',
+            text: (typeof checkoutTenantMessage !== 'undefined' && checkoutTenantMessage) ? checkoutTenantMessage : 'Your cart has items from multiple stores. Please checkout one store at a time.',
             confirmButtonColor: '#c62828'
         });
         return;
@@ -4560,7 +5903,7 @@ document.getElementById('checkoutForm').addEventListener('submit', function(e) {
         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
     };
 
-    const selectedDeliveryOption = activeCheckoutDeliveryOption === 'delivery' ? 'delivery' : 'pickup';
+    const selectedDeliveryOption = (typeof activeCheckoutDeliveryOption !== 'undefined' && activeCheckoutDeliveryOption === 'delivery') ? 'delivery' : 'pickup';
     const missingFields = [];
     let firstMissingTarget = null;
     const addMissingField = (label, target) => {
@@ -4569,6 +5912,16 @@ document.getElementById('checkoutForm').addEventListener('submit', function(e) {
             firstMissingTarget = target;
         }
     };
+
+    const fullNameInput = document.getElementById('full_name');
+    const emailInput = document.getElementById('email');
+    const phoneInput = document.getElementById('phone');
+    const streetAddressInput = document.getElementById('street_address');
+    const postalCodeInput = document.getElementById('postal_code');
+    const regionSelect = document.getElementById('checkout_region');
+    const provinceSelect = document.getElementById('checkout_province');
+    const citySelect = document.getElementById('checkout_city');
+    const barangaySelect = document.getElementById('checkout_barangay');
 
     const fullName = (fullNameInput?.value || '').trim();
     const email = (emailInput?.value || '').trim();
@@ -4591,7 +5944,9 @@ document.getElementById('checkoutForm').addEventListener('submit', function(e) {
     }
 
     if (selectedDeliveryOption === 'delivery') {
-        syncDeliveryAddressField();
+        if (typeof syncDeliveryAddressField === 'function') {
+            syncDeliveryAddressField();
+        }
         const street = (streetAddressInput?.value || '').trim();
         const postalCode = (postalCodeInput?.value || '').trim();
         const region = (regionSelect?.value || '').trim();
@@ -4600,7 +5955,7 @@ document.getElementById('checkoutForm').addEventListener('submit', function(e) {
         const barangay = (barangaySelect?.value || '').trim();
         const latitude = (document.getElementById('latitude')?.value || '').trim();
         const longitude = (document.getElementById('longitude')?.value || '').trim();
-        const provinceNeeded = !!(provinceSelect && !provinceSelect.disabled && provinceSelect.options.length > 1);
+        const provinceNeeded = !!(provinceSelect && !provinceSelect.disabled && provinceSelect.options && provinceSelect.options.length > 1);
         const currentDeliveryAddress = (document.getElementById('delivery_address')?.value || '').trim();
         const hasStructuredAddress = !!(street && postalCode && region && (!provinceNeeded || province) && city && barangay);
 
@@ -4609,10 +5964,12 @@ document.getElementById('checkoutForm').addEventListener('submit', function(e) {
         }
 
         if (!latitude || !longitude) {
-            addMissingField('Pin delivery location on the map', document.getElementById('map'));
+            addMissingField('Pin delivery location on the map', document.getElementById('mainDeliveryAddressCard') || document.getElementById('deliveryRouteMapCard'));
         }
 
-        syncDeliveryAddressField();
+        if (typeof syncDeliveryAddressField === 'function') {
+            syncDeliveryAddressField();
+        }
     }
 
     if (missingFields.length > 0) {
@@ -4622,68 +5979,134 @@ document.getElementById('checkoutForm').addEventListener('submit', function(e) {
             html: `<div style="text-align:left;"><p>Please complete the following before checkout:</p><ul style="margin:8px 0 0 18px;">${missingFields.map((field) => `<li>${field}</li>`).join('')}</ul></div>`,
             confirmButtonColor: '#c62828'
         });
+        if (firstMissingTarget) {
+            const stepContent = firstMissingTarget.closest('.step-content');
+            if (stepContent && stepContent.id) {
+                const stepNum = parseInt(stepContent.id.replace('stepContent', ''));
+                if (stepNum && typeof showStep === 'function') {
+                    showStep(stepNum);
+                }
+            }
+        }
         scrollToTarget(firstMissingTarget || document.getElementById('checkoutForm'));
         return;
     }
     
-    // Get payment type and amounts
-    const paymentType = document.querySelector('input[name="payment_type"]:checked').value;
-    const totalAmount = parseFloat(document.getElementById('total_amount').value);
-    const downpaymentAmount = parseFloat(document.getElementById('downpayment_amount').value);
-    
-    // Determine amount to pay based on payment type
-    let amountToPay = paymentType === 'downpayment' ? downpaymentAmount : totalAmount;
-    
-    // Format currency
-    const formattedAmount = new Intl.NumberFormat('en-PH', {
-        style: 'currency',
-        currency: 'PHP'
-    }).format(amountToPay);
-    
-    // Build confirmation message
-    let confirmationHtml = `
-        <div style="text-align: left;">
-            <p><strong>Payment Type:</strong> ${paymentType === 'downpayment' ? '30% Downpayment' : 'Full Payment'}</p>
-            <p><strong>Amount to Pay:</strong></p>
-            <p style="font-size: 1.5rem; color: #c62828; font-weight: bold; margin: 15px 0;">${formattedAmount}</p>
-    `;
-    
-    if (paymentType === 'downpayment') {
-        const remainingAmount = totalAmount - downpaymentAmount;
-        const formattedRemaining = new Intl.NumberFormat('en-PH', {
-            style: 'currency',
-            currency: 'PHP'
-        }).format(remainingAmount);
-        confirmationHtml += `<p><strong>Remaining Balance:</strong> ${formattedRemaining} (due on delivery)</p>`;
+    // Get payment method, payment type and amounts safely
+    const paymentMethodRadio = document.querySelector('input[name="payment_method"]:checked');
+    const paymentMethod = paymentMethodRadio ? paymentMethodRadio.value : 'cod';
+    const isPickup = (selectedDeliveryOption === 'pickup');
+
+    const paymentTypeRadio = document.querySelector('input[name="payment_type"]:checked');
+    const paymentType = paymentTypeRadio ? paymentTypeRadio.value : 'full';
+    const totalAmount = parseFloat(document.getElementById('total_amount')?.value || '0') || 0;
+    const downpaymentAmount = parseFloat(document.getElementById('downpayment_amount')?.value || '0') || 0;
+
+    let modalTitle = 'Confirm Order';
+    let confirmationHtml = '';
+    let confirmBtnText = 'Yes, Place Order';
+    let loadingTitle = 'Processing...';
+    let loadingText = 'Please wait while we prepare your order';
+
+    if (paymentMethod === 'cod') {
+        const formattedTotal = (typeof moneyFormatter !== 'undefined' ? moneyFormatter.format(totalAmount) : `PHP ${totalAmount.toFixed(2)}`);
+        modalTitle = isPickup ? 'Confirm Cash on Pickup' : 'Confirm Cash on Delivery';
+        confirmBtnText = isPickup ? '<i class="fas fa-check-circle"></i> Place Pickup Order' : '<i class="fas fa-check-circle"></i> Place COD Order';
+        loadingTitle = 'Placing Order...';
+        loadingText = 'Please wait while we confirm your cash order';
+
+        confirmationHtml = `
+            <div style="text-align: left; font-size: 14px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #eaecf0;">
+                    <span style="color:#667085; font-weight:600;">Payment Mode:</span>
+                    <span style="font-weight:700; color:#101828; display:inline-flex; align-items:center; gap:5px;">
+                        <i class="${isPickup ? 'fas fa-store' : 'fas fa-motorcycle'}" style="color:#b3261e;"></i>
+                        ${isPickup ? 'Cash on Pickup' : 'Cash on Delivery (COD)'}
+                    </span>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
+                    <span style="color:#667085; font-weight:600;">Fulfillment:</span>
+                    <span style="font-weight:700; color:#101828;">${isPickup ? 'Store Pickup' : 'Home Delivery'}</span>
+                </div>
+                <div style="background:#fffbfa; border:1px solid #fee4e2; border-radius:10px; padding:14px; margin-bottom:14px; text-align:center;">
+                    <span style="font-size:12px; font-weight:700; color:#475467; text-transform:uppercase; letter-spacing:0.5px; display:block; margin-bottom:4px;">
+                        ${isPickup ? 'Cash to Pay at Store Counter' : 'Total Cash to Hand to Rider'}
+                    </span>
+                    <span style="font-size:1.75rem; font-weight:800; color:#b3261e; display:block;">${formattedTotal}</span>
+                </div>
+                <div style="background:#fffaeb; border:1px solid #fedf89; border-radius:8px; padding:10px 12px; font-size:12.5px; color:#b54708; line-height:1.45;">
+                    <i class="fas fa-circle-info" style="margin-right:4px;"></i>
+                    <strong>No advance payment required.</strong> ${isPickup ? 'Your order will be prepared immediately. Pay exact cash to the cashier upon claiming.' : 'Your order will be prepared immediately and dispatched to a delivery rider. Please prepare exact cash upon arrival.'}
+                </div>
+            </div>
+        `;
+    } else {
+        const isDownpayment = (paymentType === 'downpayment');
+        const amountToPay = isDownpayment ? downpaymentAmount : totalAmount;
+        const formattedAmount = (typeof moneyFormatter !== 'undefined' ? moneyFormatter.format(amountToPay) : `PHP ${amountToPay.toFixed(2)}`);
+        modalTitle = 'Confirm Order & Pay Online';
+        confirmBtnText = '<i class="fas fa-lock"></i> Proceed to Online Payment';
+        loadingTitle = 'Connecting to Payment...';
+        loadingText = 'Redirecting to PayMongo secure payment page';
+
+        confirmationHtml = `
+            <div style="text-align: left; font-size: 14px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #eaecf0;">
+                    <span style="color:#667085; font-weight:600;">Payment Mode:</span>
+                    <span style="font-weight:700; color:#101828;">Online Payment (PayMongo)</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
+                    <span style="color:#667085; font-weight:600;">Payment Option:</span>
+                    <span style="font-weight:700; color:#101828;">${isDownpayment ? '30% Downpayment' : 'Full Payment'}</span>
+                </div>
+                <div style="background:#f8f9fa; border:1px solid #eaecf0; border-radius:10px; padding:14px; margin-bottom:14px; text-align:center;">
+                    <span style="font-size:12px; font-weight:700; color:#475467; text-transform:uppercase; letter-spacing:0.5px; display:block; margin-bottom:4px;">
+                        Amount to Pay Online Now
+                    </span>
+                    <span style="font-size:1.75rem; font-weight:800; color:#b3261e; display:block;">${formattedAmount}</span>
+                </div>
+        `;
+
+        if (isDownpayment) {
+            const remainingAmount = totalAmount - downpaymentAmount;
+            const formattedRemaining = (typeof moneyFormatter !== 'undefined' ? moneyFormatter.format(remainingAmount) : `PHP ${remainingAmount.toFixed(2)}`);
+            confirmationHtml += `
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px; padding: 8px 12px; background: #fffbfa; border-radius: 6px; border: 1px dashed #fee4e2;">
+                    <span style="color:#667085; font-weight:600;">Remaining Balance:</span>
+                    <span style="font-weight:700; color:#b3261e;">${formattedRemaining} <small style="color:#667085;">(due upon arrival)</small></span>
+                </div>
+            `;
+        }
+
+        confirmationHtml += `
+                <div style="background:#eff8ff; border:1px solid #b2ddff; border-radius:8px; padding:10px 12px; font-size:12.5px; color:#175cd3; line-height:1.45;">
+                    <i class="fas fa-lock" style="margin-right:4px;"></i>
+                    You will be redirected to PayMongo to complete payment securely via GCash, Maya, or Card.
+                </div>
+            </div>
+        `;
     }
-    
-    confirmationHtml += `
-            <hr>
-            <p><small><i class="fas fa-info-circle"></i> You will be redirected to PayMongo to complete the payment securely.</small></p>
-        </div>
-    `;
-    
+
     Swal.fire({
-        title: 'Confirm Order',
+        title: modalTitle,
         html: confirmationHtml,
         icon: 'question',
         showCancelButton: true,
-        confirmButtonColor: '#c62828',
+        confirmButtonColor: '#b3261e',
         cancelButtonColor: '#6c757d',
-        confirmButtonText: 'Yes, Proceed to Payment',
+        confirmButtonText: confirmBtnText,
         cancelButtonText: 'Review Order'
     }).then(async (result) => {
         if (result.isConfirmed) {
-            // Show loading
             Swal.fire({
-                title: 'Processing...',
-                text: 'Please wait while we prepare your order',
+                title: loadingTitle,
+                text: loadingText,
                 allowOutsideClick: false,
                 didOpen: () => {
                     Swal.showLoading();
                 }
             });
-            
+
             // Submit checkout without refreshing the page
             const formElement = document.getElementById('checkoutForm');
             await submitCheckoutAjax(formElement);
@@ -4695,19 +6118,24 @@ async function updateDeliveryOption() {
     const deliveryOption = activeCheckoutDeliveryOption === 'delivery' ? 'delivery' : 'pickup';
     // Clear ETA when switching to pickup
     if (deliveryOption === 'pickup') {
-        document.getElementById('summaryDeliveryTime').innerHTML = '';
+        const timeEl = document.getElementById('summaryDeliveryTime');
+        if (timeEl) timeEl.innerHTML = '';
     }
 
     let data = { delivery_option: deliveryOption };
 
     if (deliveryOption === 'pickup') {
-        data.pickup_location = document.getElementById('pickup_location').value;
+        data.pickup_location = document.getElementById('pickup_location')?.value || '1';
     } else {
         const latitudeValue = (document.getElementById('latitude')?.value || '').trim();
         const longitudeValue = (document.getElementById('longitude')?.value || '').trim();
         if (latitudeValue && longitudeValue) {
             data.latitude = latitudeValue;
             data.longitude = longitudeValue;
+        }
+        const deliveryAddressVal = (document.getElementById('delivery_address')?.value || '').trim();
+        if (deliveryAddressVal) {
+            data.delivery_address = deliveryAddressVal;
         }
     }
 
@@ -4721,6 +6149,12 @@ async function updateDeliveryOption() {
         if (result.success) {
             activeCheckoutDeliveryOption = normalizeDeliveryOption(result.delivery_option || deliveryOption);
             applyCheckoutModeUI(activeCheckoutDeliveryOption);
+            if (result.customer_lat && result.customer_lng) {
+                const latInput = document.getElementById('latitude');
+                const lngInput = document.getElementById('longitude');
+                if (latInput && !latInput.value) latInput.value = String(result.customer_lat);
+                if (lngInput && !lngInput.value) lngInput.value = String(result.customer_lng);
+            }
             updateSummaryUI(result);
             if (deliveryOptionHiddenInput) deliveryOptionHiddenInput.value = activeCheckoutDeliveryOption;
             if (pickupLocationHiddenInput) pickupLocationHiddenInput.value = result.pickup_location || '';
@@ -4730,6 +6164,7 @@ async function updateDeliveryOption() {
         console.error('Error updating delivery option:', error);
     }
 }
+
 
 function updateSummaryUI(data) {
     const deliveryFee = parseFloat(data.delivery_fee || 0);
@@ -4775,7 +6210,357 @@ function updateSummaryUI(data) {
     }
 
     recalculateOrderTotals();
+    if (typeof refreshDeliveryOverviewMap === 'function') {
+        refreshDeliveryOverviewMap(data);
+    }
 }
+
+// ==========================================
+// Delivery Route & Store Overview Map (Leaflet)
+// ==========================================
+let deliveryOverviewMap = null;
+let deliveryOverviewStoreMarker = null;
+let deliveryOverviewCustomerMarker = null;
+let deliveryOverviewRouteLine = null;
+let deliveryOverviewRouteCasing = null;
+let lastOverviewRouteKey = '';
+let isFetchingCheckoutRoute = false;
+
+function createOverviewPinIcon(type, iconClass) {
+    const isStore = type === 'store';
+    const bg = isStore ? '#b3261e' : '#101828';
+    const shadow = isStore ? 'rgba(179,38,30,0.45)' : 'rgba(16,24,40,0.45)';
+    const label = isStore ? 'Store Branch' : 'Your Address';
+    return L.divIcon({
+        className: 'custom-overview-pin',
+        html: `<div style="display:flex; flex-direction:column; align-items:center; transform: translate(-50%, -100%); pointer-events: auto;">
+            <div style="background:${bg}; color:#ffffff; width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 3px 8px ${shadow}; border:2.5px solid #ffffff; font-size:15px;">
+                <i class="${iconClass}"></i>
+            </div>
+            <div style="background:#ffffff; color:#101828; font-size:11px; font-weight:800; padding:2px 6px; border-radius:4px; margin-top:2px; box-shadow:0 1px 4px rgba(0,0,0,0.2); border:1px solid #eaecf0; white-space:nowrap;">
+                ${label}
+            </div>
+        </div>`,
+        iconSize: [34, 48],
+        iconAnchor: [17, 48],
+        popupAnchor: [0, -42]
+    });
+}
+
+function refreshDeliveryOverviewMap(quoteData = null) {
+    const mapCanvas = document.getElementById('checkoutDeliveryOverviewMap');
+    if (!mapCanvas) return;
+
+    if (!window.L) {
+        console.warn('Leaflet library is still loading, retrying in 300ms...');
+        setTimeout(() => refreshDeliveryOverviewMap(quoteData), 300);
+        return;
+    }
+
+    // 1. Resolve Customer Coordinates
+    let custLat = quoteData && Number.isFinite(Number(quoteData.customer_lat)) ? Number(quoteData.customer_lat) : null;
+    let custLng = quoteData && Number.isFinite(Number(quoteData.customer_lng)) ? Number(quoteData.customer_lng) : null;
+    if (custLat === null || custLng === null) {
+        const latInput = (document.getElementById('latitude')?.value || '').trim();
+        const lngInput = (document.getElementById('longitude')?.value || '').trim();
+        if (latInput && lngInput) {
+            custLat = parseFloat(latInput);
+            custLng = parseFloat(lngInput);
+        }
+    }
+    if ((!Number.isFinite(custLat) || !Number.isFinite(custLng) || (custLat === 0 && custLng === 0)) && typeof initialDeliveryQuote === 'object') {
+        if (initialDeliveryQuote && initialDeliveryQuote.customer_lat && initialDeliveryQuote.customer_lng) {
+            custLat = parseFloat(initialDeliveryQuote.customer_lat);
+            custLng = parseFloat(initialDeliveryQuote.customer_lng);
+        }
+    }
+
+    // 2. Resolve Store Coordinates & Context
+    let storeId = quoteData?.nearest_store_id || initialDeliveryQuote?.nearest_store_id || (typeof initialStoreContext === 'object' ? initialStoreContext?.id : 0) || 0;
+    let storeObj = null;
+    if (Array.isArray(storesData)) {
+        storeObj = storesData.find(s => Number(s.id || s.store_id) === Number(storeId)) || storesData[0] || null;
+    }
+    let storeLat = storeObj && storeObj.latitude ? parseFloat(storeObj.latitude) : (typeof initialStoreContext === 'object' ? initialStoreContext?.latitude || 14.3294 : 14.3294);
+    let storeLng = storeObj && storeObj.longitude ? parseFloat(storeObj.longitude) : (typeof initialStoreContext === 'object' ? initialStoreContext?.longitude || 120.9367 : 120.9367);
+    let storeName = quoteData?.nearest_store_name || storeObj?.name || storeObj?.store_name || (typeof initialStoreContext === 'object' ? initialStoreContext?.name : 'Nearest Store') || 'Nearest Store';
+    let storeAddress = quoteData?.nearest_store_address || storeObj?.address || (typeof initialStoreContext === 'object' ? initialStoreContext?.address : '') || '';
+
+    // 3. Resolve Metrics (Distance, Time, Fee)
+    let distanceKm = quoteData?.distance_km !== undefined ? parseFloat(quoteData.distance_km) : (initialDeliveryQuote?.distance_km ? parseFloat(initialDeliveryQuote.distance_km) : 0);
+    let etaText = quoteData?.estimated_delivery_text || initialDeliveryQuote?.estimated_delivery_text || '';
+    let deliveryFee = quoteData?.delivery_fee !== undefined ? parseFloat(quoteData.delivery_fee) : (typeof currentDeliveryFee !== 'undefined' ? currentDeliveryFee : 0);
+    let customerStreet = (document.getElementById('displayStreetAddress')?.textContent || '').trim();
+    if (!customerStreet || customerStreet === 'Loading address...') {
+        customerStreet = document.getElementById('street_address')?.value || 'Your Delivery Location';
+    }
+
+    // 4. Update Header Metrics
+    const storeNameEl = document.getElementById('overviewStoreName');
+    const distanceEl = document.getElementById('overviewDistance');
+    const etaEl = document.getElementById('overviewEta');
+    const feeEl = document.getElementById('overviewDeliveryFee');
+    const legendStoreEl = document.getElementById('legendStoreText');
+    const legendCustomerEl = document.getElementById('legendCustomerText');
+
+    if (storeNameEl) storeNameEl.textContent = storeName;
+    if (distanceEl) distanceEl.textContent = distanceKm > 0 ? `${distanceKm.toFixed(1)} km` : '0.0 km';
+    if (etaEl) etaEl.textContent = etaText ? etaText.replace(/^Estimated delivery:\s*/i, '') : (distanceKm > 0 ? '35 - 50 mins' : 'ASAP');
+    if (feeEl) feeEl.textContent = typeof moneyFormatter !== 'undefined' ? moneyFormatter.format(deliveryFee) : `₱${deliveryFee.toFixed(2)}`;
+    if (legendStoreEl) legendStoreEl.textContent = storeName;
+    if (legendCustomerEl) legendCustomerEl.textContent = customerStreet;
+
+    // 5. Initialize Leaflet Map Instance if not yet initialized
+    if (!deliveryOverviewMap) {
+        if (mapCanvas._leaflet_id) {
+            mapCanvas._leaflet_id = null;
+        }
+        try {
+            deliveryOverviewMap = L.map('checkoutDeliveryOverviewMap', {
+                zoomControl: true,
+                attributionControl: false
+            }).setView([storeLat || 14.3294, storeLng || 120.9367], 13);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19
+            }).addTo(deliveryOverviewMap);
+            window.deliveryOverviewMap = deliveryOverviewMap;
+        } catch (mapErr) {
+            console.warn('Error initializing checkoutDeliveryOverviewMap:', mapErr);
+            return;
+        }
+    }
+
+    // Force map to adapt to container layout
+    try {
+        deliveryOverviewMap.invalidateSize();
+        setTimeout(() => {
+            if (deliveryOverviewMap) deliveryOverviewMap.invalidateSize();
+        }, 120);
+        if (window.ResizeObserver && mapCanvas && !mapCanvas._hasResizeObserver) {
+            mapCanvas._hasResizeObserver = true;
+            const ro = new ResizeObserver(() => {
+                if (deliveryOverviewMap) {
+                    deliveryOverviewMap.invalidateSize();
+                }
+            });
+            ro.observe(mapCanvas);
+        }
+    } catch (e) {}
+
+    // 6. Update Map Markers & Route Polyline
+    const validStore = Number.isFinite(storeLat) && Number.isFinite(storeLng) && storeLat !== 0 && storeLng !== 0;
+    const validCustomer = Number.isFinite(custLat) && Number.isFinite(custLng) && custLat !== 0 && custLng !== 0;
+
+    if (validStore) {
+        if (!deliveryOverviewStoreMarker) {
+            deliveryOverviewStoreMarker = L.marker([storeLat, storeLng], {
+                icon: createOverviewPinIcon('store', 'fas fa-store')
+            }).addTo(deliveryOverviewMap);
+        } else {
+            deliveryOverviewStoreMarker.setLatLng([storeLat, storeLng]);
+        }
+        deliveryOverviewStoreMarker.bindPopup(`<strong>${storeName}</strong><br><span style="font-size:12px; color:#667085;">${storeAddress || 'Origin Branch Store'}</span>`);
+    }
+
+    if (validCustomer) {
+        if (!deliveryOverviewCustomerMarker) {
+            deliveryOverviewCustomerMarker = L.marker([custLat, custLng], {
+                icon: createOverviewPinIcon('customer', 'fas fa-house-user')
+            }).addTo(deliveryOverviewMap);
+        } else {
+            deliveryOverviewCustomerMarker.setLatLng([custLat, custLng]);
+        }
+        deliveryOverviewCustomerMarker.bindPopup(`<strong>Your Delivery Address</strong><br><span style="font-size:12px; color:#667085;">${customerStreet}</span>`);
+    }
+
+    if (validStore && validCustomer) {
+        fetchCheckoutStreetRoute(storeLat, storeLng, custLat, custLng);
+    } else if (validStore) {
+        clearCheckoutRouteLayers();
+        deliveryOverviewMap.setView([storeLat, storeLng], 14);
+    } else if (validCustomer) {
+        clearCheckoutRouteLayers();
+        deliveryOverviewMap.setView([custLat, custLng], 14);
+    }
+}
+
+function ensureCheckoutRouteLayers() {
+    if (!deliveryOverviewMap) return;
+    if (!deliveryOverviewRouteCasing) {
+        deliveryOverviewRouteCasing = L.polyline([], {
+            color: '#ffffff',
+            weight: 8,
+            opacity: 0.95,
+            lineCap: 'round',
+            lineJoin: 'round'
+        }).addTo(deliveryOverviewMap);
+    }
+    if (!deliveryOverviewRouteLine) {
+        deliveryOverviewRouteLine = L.polyline([], {
+            color: '#b3261e',
+            weight: 5,
+            opacity: 0.95,
+            lineCap: 'round',
+            lineJoin: 'round'
+        }).addTo(deliveryOverviewMap);
+    }
+}
+
+function setCheckoutRouteCoords(coords) {
+    ensureCheckoutRouteLayers();
+    if (!coords || coords.length === 0) return;
+    if (deliveryOverviewRouteCasing) deliveryOverviewRouteCasing.setLatLngs(coords);
+    if (deliveryOverviewRouteLine) deliveryOverviewRouteLine.setLatLngs(coords);
+}
+
+function clearCheckoutRouteLayers() {
+    if (deliveryOverviewRouteCasing) deliveryOverviewRouteCasing.setLatLngs([]);
+    if (deliveryOverviewRouteLine) deliveryOverviewRouteLine.setLatLngs([]);
+}
+
+async function fetchCheckoutStreetRoute(originLat, originLng, destLat, destLng) {
+    ensureCheckoutRouteLayers();
+    if (!originLat || !originLng || !destLat || !destLng) return;
+
+    const cur = deliveryOverviewRouteLine ? deliveryOverviewRouteLine.getLatLngs() : [];
+    const key = `${Number(originLat).toFixed(4)}_${Number(originLng).toFixed(4)}_${Number(destLat).toFixed(4)}_${Number(destLng).toFixed(4)}`;
+
+    // Skip redundant fetch if detailed turn-by-turn road coordinates are already rendered
+    if (lastOverviewRouteKey === key && cur && cur.length > 2) {
+        return;
+    }
+
+    if (isFetchingCheckoutRoute) return;
+    isFetchingCheckoutRoute = true;
+
+    // Temporary direct fallback while fetching so pins are connected and bounds framed
+    if (!cur || cur.length === 0) {
+        setCheckoutRouteCoords([[originLat, originLng], [destLat, destLng]]);
+        try {
+            const b = L.latLngBounds([[originLat, originLng], [destLat, destLng]]);
+            if (b.isValid() && deliveryOverviewMap) {
+                deliveryOverviewMap.fitBounds(b, { padding: [40, 40], maxZoom: 16 });
+            }
+        } catch (e) {}
+    }
+
+    // Determine robust base path for the API proxy
+    const basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
+    const apiUrl = `${basePath}api/get_directions.php?origin_lat=${originLat}&origin_lng=${originLng}&dest_lat=${destLat}&dest_lng=${destLng}`;
+
+    // 1. Fetch precise turn-by-turn road geometry from our local proxy (Streets & Highways)
+    try {
+        const res = await fetch(apiUrl);
+        if (res.ok) {
+            const data = await res.json();
+            if (data.success && Array.isArray(data.coordinates) && data.coordinates.length > 1) {
+                setCheckoutRouteCoords(data.coordinates);
+                lastOverviewRouteKey = key;
+                if (deliveryOverviewMap) {
+                    deliveryOverviewMap.invalidateSize();
+                    const bounds = L.latLngBounds(data.coordinates);
+                    if (bounds.isValid()) {
+                        deliveryOverviewMap.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+                    }
+                }
+                isFetchingCheckoutRoute = false;
+                return;
+            }
+        }
+    } catch (e) {
+        console.debug('Checkout directions proxy notice:', e);
+    }
+
+    // 2. Direct OSRM mirror fallback
+    try {
+        const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=full&geometries=geojson`;
+        const res2 = await fetch(osrmUrl);
+        if (res2.ok) {
+            const data2 = await res2.json();
+            if (data2.routes && data2.routes.length > 0 && data2.routes[0].geometry) {
+                const latLngs = data2.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+                if (latLngs.length > 1) {
+                    setCheckoutRouteCoords(latLngs);
+                    lastOverviewRouteKey = key;
+                    if (deliveryOverviewMap) {
+                        deliveryOverviewMap.invalidateSize();
+                        const bounds = L.latLngBounds(latLngs);
+                        if (bounds.isValid()) {
+                            deliveryOverviewMap.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+                        }
+                    }
+                    isFetchingCheckoutRoute = false;
+                    return;
+                }
+            }
+        }
+    } catch (e2) {
+        console.debug('OSRM direct notice:', e2);
+    }
+
+    // 3. OpenStreetMap DE mirror fallback
+    try {
+        const deUrl = `https://routing.openstreetmap.de/routed-car/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=full&geometries=geojson`;
+        const res3 = await fetch(deUrl);
+        if (res3.ok) {
+            const data3 = await res3.json();
+            if (data3.routes && data3.routes.length > 0 && data3.routes[0].geometry) {
+                const latLngs = data3.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+                if (latLngs.length > 1) {
+                    setCheckoutRouteCoords(latLngs);
+                    lastOverviewRouteKey = key;
+                    if (deliveryOverviewMap) {
+                        deliveryOverviewMap.invalidateSize();
+                        const bounds = L.latLngBounds(latLngs);
+                        if (bounds.isValid()) {
+                            deliveryOverviewMap.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+                        }
+                    }
+                    isFetchingCheckoutRoute = false;
+                    return;
+                }
+            }
+        }
+    } catch (e3) {
+        console.debug('OSM-DE direct notice:', e3);
+    }
+
+    isFetchingCheckoutRoute = false;
+}
+
+window.refreshDeliveryOverviewMap = refreshDeliveryOverviewMap;
+window.updateDeliveryOption = updateDeliveryOption;
+window.updateSummaryUI = updateSummaryUI;
+
+// Recenter Button Handler
+document.addEventListener('click', function(e) {
+    const btn = e.target && (e.target.id === 'recenterRouteMapBtn' || e.target.closest('#recenterRouteMapBtn'));
+    if (btn) {
+        e.preventDefault();
+        if (deliveryOverviewMap) {
+            deliveryOverviewMap.invalidateSize();
+            if (deliveryOverviewRouteLine && deliveryOverviewRouteLine.getLatLngs().length > 0) {
+                const bounds = L.latLngBounds(deliveryOverviewRouteLine.getLatLngs());
+                if (bounds.isValid()) {
+                    deliveryOverviewMap.fitBounds(bounds, { padding: [45, 45], maxZoom: 16 });
+                    return;
+                }
+            }
+            if (deliveryOverviewStoreMarker && deliveryOverviewCustomerMarker) {
+                const bounds = L.latLngBounds([
+                    deliveryOverviewStoreMarker.getLatLng(),
+                    deliveryOverviewCustomerMarker.getLatLng()
+                ]);
+                if (bounds.isValid()) {
+                    deliveryOverviewMap.fitBounds(bounds, { padding: [45, 45], maxZoom: 16 });
+                }
+            } else if (deliveryOverviewStoreMarker) {
+                deliveryOverviewMap.setView(deliveryOverviewStoreMarker.getLatLng(), 14);
+            }
+        }
+    }
+});
 
 initializePage();
 ensureAccountCredentials();
@@ -4817,11 +6602,41 @@ if (activeCheckoutDeliveryOption === 'delivery' && initialDeliveryQuote && initi
     });
     syncDeliveryAddressField();
 
-    if (window.google && window.google.maps && typeof window.initializeCheckoutMap === 'function') {
+    if (typeof refreshDeliveryOverviewMap === 'function') {
+        setTimeout(() => refreshDeliveryOverviewMap(), 250);
+    }
+
+    if (typeof window.initializeCheckoutMap === 'function') {
         window.initializeCheckoutMap();
+    }
+    if (typeof autoPinCheckoutMapFromHeaderPayload === 'function') {
         autoPinCheckoutMapFromHeaderPayload().catch((error) => {
             console.error('Unable to auto-pin from market payload:', error);
         });
+    }
+
+    // Auto-resolve coordinates if initial delivery address is present but coordinates are missing
+    const latInput = document.getElementById('latitude');
+    const lngInput = document.getElementById('longitude');
+    if ((!latInput?.value || !lngInput?.value) && activeCheckoutDeliveryOption === 'delivery') {
+        const addressText = (document.getElementById('delivery_address')?.value || document.getElementById('street_address')?.value || '').trim();
+        if (addressText && typeof forwardGeocodeFromNominatim === 'function') {
+            try {
+                const geocoded = await forwardGeocodeFromNominatim(addressText);
+                if (geocoded && geocoded.lat && geocoded.lng) {
+                    if (latInput) latInput.value = String(geocoded.lat);
+                    if (lngInput) lngInput.value = String(geocoded.lng);
+                    if (typeof calculateDeliveryFee === 'function') {
+                        calculateDeliveryFee(geocoded.lat, geocoded.lng);
+                    }
+                    if (typeof refreshDeliveryOverviewMap === 'function') {
+                        refreshDeliveryOverviewMap({ customer_lat: geocoded.lat, customer_lng: geocoded.lng });
+                    }
+                }
+            } catch (err) {
+                console.warn('Initial address geocoding fallback error:', err);
+            }
+        }
     }
 })();
 });
@@ -4953,6 +6768,12 @@ if (activeCheckoutDeliveryOption === 'delivery' && initialDeliveryQuote && initi
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const calculateDeliveryFee = async (...args) => {
+        if (typeof window.calculateDeliveryFee === 'function') {
+            return await window.calculateDeliveryFee(...args);
+        }
+    };
+
     function updateDisplayAddressText(streetText, cityText) {
         const streetEl = document.getElementById('displayStreetAddress');
         const cityEl = document.getElementById('displayCityAddress');
@@ -5270,6 +7091,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 if (typeof calculateDeliveryFee === 'function') {
                     calculateDeliveryFee(lat, lng);
+                } else if (typeof window.calculateDeliveryFee === 'function') {
+                    window.calculateDeliveryFee(lat, lng);
+                }
+                const refreshOverviewFn = window.refreshDeliveryOverviewMap || (typeof refreshDeliveryOverviewMap === 'function' ? refreshDeliveryOverviewMap : null);
+                if (refreshOverviewFn) {
+                    refreshOverviewFn({ customer_lat: lat, customer_lng: lng });
                 }
             }
         })().catch(err => console.warn('Coord fee error:', err));
@@ -5446,11 +7273,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 updateDisplayAddressText(streetPart, cityPart);
                 syncDeliveryAddressField();
 
-                const fallback = await forwardGeocodeFromNominatim(queryText);
-                if (fallback) {
-                    lat = fallback.lat;
-                    lng = fallback.lng;
+                if (!exactMap && queryText) {
+                    const fallback = await forwardGeocodeFromNominatim(queryText);
+                    if (fallback) {
+                        lat = fallback.lat;
+                        lng = fallback.lng;
+                    }
                 }
+
+                const latInput = document.getElementById('latitude');
+                const lngInput = document.getElementById('longitude');
+                if (latInput) latInput.value = String(lat);
+                if (lngInput) lngInput.value = String(lng);
 
                 // Automatically save or update address in database
                 const saveBody = new URLSearchParams();
@@ -5481,7 +7315,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }).catch(err => console.error('Auto-save address error:', err));
 
-                await calculateDeliveryFee(lat, lng);
+                if (typeof calculateDeliveryFee === 'function') {
+                    await calculateDeliveryFee(lat, lng);
+                } else if (typeof window.calculateDeliveryFee === 'function') {
+                    await window.calculateDeliveryFee(lat, lng);
+                }
+                const refreshMapFn = window.refreshDeliveryOverviewMap || (typeof refreshDeliveryOverviewMap === 'function' ? refreshDeliveryOverviewMap : null);
+                if (refreshMapFn) {
+                    refreshMapFn({ customer_lat: lat, customer_lng: lng });
+                }
             }
 
             currentEditingAddressId = null;
@@ -5538,6 +7380,12 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             if (typeof calculateDeliveryFee === 'function') {
                 calculateDeliveryFee(lat, lng);
+            } else if (typeof window.calculateDeliveryFee === 'function') {
+                window.calculateDeliveryFee(lat, lng);
+            }
+            const refreshOverviewFn = window.refreshDeliveryOverviewMap || (typeof refreshDeliveryOverviewMap === 'function' ? refreshDeliveryOverviewMap : null);
+            if (refreshOverviewFn) {
+                refreshOverviewFn({ customer_lat: lat, customer_lng: lng });
             }
         }
 

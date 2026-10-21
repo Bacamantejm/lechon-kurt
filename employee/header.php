@@ -18,16 +18,43 @@ if (isset($_SESSION['user_id']) && function_exists('hrIsLogisticsEmployeeByUserI
 }
 ?>
 
+<?php
+$is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
+?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="<?php echo $is_initial_dark ? 'dark' : 'light'; ?>" class="<?php echo $is_initial_dark ? 'dark-mode' : ''; ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Employee Portal | Lechon Delights</title>
+    <script>
+        (function() {
+            try {
+                var cookieTheme = (document.cookie.match(/(?:^|;\s*)theme=([^;]*)/) || [])[1];
+                var savedTheme = localStorage.getItem('theme') || cookieTheme;
+                var isDark = (savedTheme === 'dark' || (!savedTheme && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches));
+                if (isDark) {
+                    document.documentElement.classList.add('dark-mode');
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                } else {
+                    document.documentElement.classList.remove('dark-mode');
+                    document.documentElement.setAttribute('data-theme', 'light');
+                }
+            } catch (e) {}
+        })();
+    </script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        /* Anti-Flash Immediate Critical Styles */
+        html.dark-mode,
+        html[data-theme="dark"],
+        html.dark-mode body,
+        body.dark-mode {
+            background-color: #0f172a !important;
+            color: #f8fafc !important;
+        }
         :root {
             --food-red: #b3261e;
             --food-red-dark: #8f1d17;
@@ -79,14 +106,14 @@ if (isset($_SESSION['user_id']) && function_exists('hrIsLogisticsEmployeeByUserI
             top: 0;
             left: 0;
             width: var(--sidebar-width);
-            background: #171922;
-            color: #ffffff;
+            background: #ffffff;
+            color: #344054;
             transition: var(--transition);
             z-index: 1000;
-            box-shadow: 4px 0 20px rgba(0,0,0,0.12);
+            box-shadow: 0 1px 3px rgba(16, 24, 40, 0.05), 0 4px 16px rgba(16, 24, 40, 0.03);
             display: flex;
             flex-direction: column;
-            border-right: 1px solid #2a2d3a;
+            border-right: 1px solid #eaecf0;
         }
 
         .admin-sidebar h3 {
@@ -95,16 +122,16 @@ if (isset($_SESSION['user_id']) && function_exists('hrIsLogisticsEmployeeByUserI
             font-family: 'Outfit', sans-serif;
             font-weight: 800;
             margin-bottom: 10px;
-            color: #ffffff;
+            color: #101828;
             font-size: 1.35rem;
             display: flex;
             align-items: center;
             gap: 10px;
-            border-bottom: 1px solid #2a2d3a;
+            border-bottom: 1px solid #eaecf0;
         }
 
         .admin-sidebar h3 i {
-            color: var(--food-orange);
+            color: #b3261e;
             font-size: 1.25rem;
         }
 
@@ -113,13 +140,14 @@ if (isset($_SESSION['user_id']) && function_exists('hrIsLogisticsEmployeeByUserI
             display: flex;
             flex-direction: column;
             gap: 4px;
+            height: calc(100% - 80px);
         }
 
         .admin-sidebar a {
             padding: 12px 18px;
             text-decoration: none;
             font-size: 0.92rem;
-            color: rgba(255,255,255,0.75);
+            color: #475467;
             display: flex;
             align-items: center;
             gap: 12px;
@@ -129,15 +157,26 @@ if (isset($_SESSION['user_id']) && function_exists('hrIsLogisticsEmployeeByUserI
         }
 
         .admin-sidebar a:hover {
-            color: #ffffff;
-            background-color: rgba(255,255,255,0.08);
+            color: #101828;
+            background-color: #f8f9fa;
             transform: translateX(3px);
         }
 
         .admin-sidebar a.active {
             color: #ffffff;
-            background: linear-gradient(135deg, #b3261e 0%, #ef6b2e 100%);
-            box-shadow: 0 6px 16px rgba(179, 38, 30, 0.35);
+            background: #b3261e;
+            box-shadow: 0 4px 12px rgba(179, 38, 30, 0.25);
+        }
+
+        .admin-sidebar a.logout-link {
+            margin-top: auto;
+            color: #b3261e;
+            font-weight: 600;
+        }
+
+        .admin-sidebar a.logout-link:hover {
+            background-color: #fff1f0;
+            color: #981b15;
         }
 
         .admin-sidebar i {
@@ -460,15 +499,108 @@ if (isset($_SESSION['user_id']) && function_exists('hrIsLogisticsEmployeeByUserI
         .notification-item .content .time { font-size: 11px; color: #999; margin-top: 5px; }
 
         /* Dark Mode Styles */
-        body.dark-mode { background-color: var(--bg-color-dark) !important; color: var(--text-color-dark) !important; }
-        body.dark-mode .admin-content { background-color: var(--bg-color-dark) !important; }
-        body.dark-mode .admin-sidebar { background: #121319; border-color: #272a37; }
-        body.dark-mode .admin-topbar, body.dark-mode .stat-card, body.dark-mode .recent-section, body.dark-mode .card, body.dark-mode .card-body, body.dark-mode .card-header { background-color: var(--card-bg-dark) !important; color: var(--text-color-dark) !important; border-color: var(--border-color-dark) !important; }
-        body.dark-mode h1, body.dark-mode h2, body.dark-mode h3, body.dark-mode h4, body.dark-mode .topbar-title h1, body.dark-mode .stat-content h3, body.dark-mode .admin-profile span { color: var(--text-color-dark) !important; }
+        body.dark-mode,
+        html.dark-mode { background-color: var(--bg-color-dark) !important; color: var(--text-color-dark) !important; }
+        body.dark-mode .admin-content { background-color: var(--bg-color-dark) !important; color: var(--text-color-dark) !important; }
+        body.dark-mode .admin-sidebar,
+        html.dark-mode .admin-sidebar {
+            background: #181d26 !important;
+            border-right: 1px solid #27303f !important;
+            color: #e2e8f0 !important;
+            box-shadow: 4px 0 20px rgba(0, 0, 0, 0.3) !important;
+        }
+        body.dark-mode .admin-sidebar h3,
+        html.dark-mode .admin-sidebar h3 {
+            color: #f8fafc !important;
+            border-bottom: 1px solid #27303f !important;
+        }
+        body.dark-mode .admin-sidebar h3 i,
+        html.dark-mode .admin-sidebar h3 i {
+            color: #ef4444 !important;
+        }
+        body.dark-mode .admin-sidebar a,
+        html.dark-mode .admin-sidebar a {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode .admin-sidebar a:hover,
+        html.dark-mode .admin-sidebar a:hover {
+            color: #ffffff !important;
+            background-color: #222936 !important;
+        }
+        body.dark-mode .admin-sidebar a.active,
+        html.dark-mode .admin-sidebar a.active {
+            color: #ffffff !important;
+            background: #b3261e !important;
+            box-shadow: 0 4px 14px rgba(179, 38, 30, 0.4) !important;
+        }
+        body.dark-mode .admin-sidebar a.logout-link,
+        html.dark-mode .admin-sidebar a.logout-link {
+            color: #f87171 !important;
+        }
+        body.dark-mode .admin-sidebar a.logout-link:hover,
+        html.dark-mode .admin-sidebar a.logout-link:hover {
+            background-color: rgba(239, 68, 68, 0.15) !important;
+            color: #fca5a5 !important;
+        }
+        body.dark-mode .admin-topbar,
+        body.dark-mode .stat-card,
+        body.dark-mode .recent-section,
+        body.dark-mode .card,
+        body.dark-mode .card-body,
+        body.dark-mode .card-header,
+        body.dark-mode .modal-content,
+        body.dark-mode .modal-header,
+        body.dark-mode .modal-body,
+        body.dark-mode .modal-footer {
+            background-color: var(--card-bg-dark) !important;
+            color: var(--text-color-dark) !important;
+            border-color: var(--border-color-dark) !important;
+        }
+        body.dark-mode h1,
+        body.dark-mode h2,
+        body.dark-mode h3,
+        body.dark-mode h4,
+        body.dark-mode .topbar-title h1,
+        body.dark-mode .stat-content h3,
+        body.dark-mode .admin-profile span {
+            color: var(--text-color-dark) !important;
+        }
         body.dark-mode .admin-profile { background: #272a37; border-color: #373a4b; color: #fff; }
-        body.dark-mode .admin-table th { background-color: #272a37; color: #fff; border-color: var(--border-color-dark); }
-        body.dark-mode .admin-table td { border-color: var(--border-color-dark); color: #e2e8f0; }
-        body.dark-mode .admin-table tr:hover td { background-color: #272a37; }
+        body.dark-mode .table,
+        body.dark-mode .admin-table {
+            color: #e2e8f0 !important;
+            border-color: var(--border-color-dark) !important;
+        }
+        body.dark-mode .table th,
+        body.dark-mode .admin-table th {
+            background-color: #272a37 !important;
+            color: #fff !important;
+            border-color: var(--border-color-dark) !important;
+        }
+        body.dark-mode .table td,
+        body.dark-mode .admin-table td {
+            border-color: var(--border-color-dark) !important;
+            color: #e2e8f0 !important;
+            background-color: transparent !important;
+        }
+        body.dark-mode .table tr:hover td,
+        body.dark-mode .admin-table tr:hover td {
+            background-color: #272a37 !important;
+        }
+        body.dark-mode .form-control,
+        body.dark-mode .form-select,
+        body.dark-mode input,
+        body.dark-mode select,
+        body.dark-mode textarea {
+            background-color: #121319 !important;
+            border-color: var(--border-color-dark) !important;
+            color: #e2e8f0 !important;
+        }
+        body.dark-mode .form-control:focus,
+        body.dark-mode .form-select:focus {
+            border-color: var(--food-red) !important;
+            box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.25) !important;
+        }
         body.dark-mode .theme-toggler { background: #272a37; color: #ffc107; border-color: #373a4b; }
 
         /* Page Loader */
@@ -480,17 +612,101 @@ if (isset($_SESSION['user_id']) && function_exists('hrIsLogisticsEmployeeByUserI
         /* Sidebar Toggler */
         .sidebar-toggler { background: #fff9f2; border: 1px solid var(--food-border); font-size: 1.1rem; color: var(--food-ink); cursor: pointer; display: none; width: 38px; height: 38px; border-radius: 12px; align-items: center; justify-content: center; margin-right: 12px; }
         body.dark-mode .sidebar-toggler { background: #272a37; border-color: #373a4b; color: #e2e8f0; }
+        .employee-sidebar-backdrop {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.45);
+            backdrop-filter: blur(2px);
+            -webkit-backdrop-filter: blur(2px);
+            z-index: 999;
+            opacity: 0;
+            transition: opacity 0.25s ease;
+        }
+
         @media (max-width: 992px) {
             .sidebar-toggler { display: flex; }
-            .admin-sidebar { left: -260px; }
-            .admin-content { margin-left: 0; width: 100%; }
+            .admin-sidebar { 
+                left: -260px;
+                z-index: 1050 !important;
+                box-shadow: 0 0 25px rgba(0, 0, 0, 0.25) !important;
+            }
+            .admin-content { margin-left: 0; width: 100%; min-width: 0; }
             .admin-container.sidebar-collapsed .admin-sidebar { left: 0; }
+            .admin-container.sidebar-collapsed .employee-sidebar-backdrop {
+                display: block;
+                opacity: 1;
+            }
+            .admin-topbar {
+                padding: 10px 16px;
+            }
+            .admin-main {
+                padding: 20px 16px 140px 16px !important;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .date-display {
+                display: none !important;
+            }
+            .topbar-title h1 {
+                font-size: 1.15rem;
+            }
+            .table-responsive {
+                overflow-x: auto !important;
+                -webkit-overflow-scrolling: touch;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .admin-topbar {
+                padding: 8px 12px;
+            }
+            .admin-main {
+                padding: 14px 10px 140px 10px !important;
+            }
+            .admin-profile span {
+                display: none;
+            }
+            .admin-profile {
+                padding: 5px 8px;
+            }
+            .card {
+                border-radius: 12px;
+            }
         }
     </style>
 </head>
-<body>
+<body class="<?php echo $is_initial_dark ? 'dark-mode' : ''; ?>">
+<script>
+(function(){
+    function syncThemeClasses() {
+        var isDark = document.body && document.body.classList.contains('dark-mode');
+        if (document.documentElement) {
+            document.documentElement.classList.toggle('dark-mode', isDark);
+            document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+        }
+        document.cookie = "theme=" + (isDark ? 'dark' : 'light') + "; path=/; max-age=31536000";
+    }
+    if (document.documentElement.classList.contains('dark-mode') && document.body) {
+        document.body.classList.add('dark-mode');
+    }
+    syncThemeClasses();
+    if (window.MutationObserver && document.body) {
+        new MutationObserver(function(mutations) {
+            for (var i = 0; i < mutations.length; i++) {
+                if (mutations[i].attributeName === 'class') {
+                    syncThemeClasses();
+                    break;
+                }
+            }
+        }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    }
+})();
+</script>
 <div class="page-loader"><div class="spinner"></div></div>
 <div class="admin-container">
+    <div class="employee-sidebar-backdrop" id="employeeSidebarBackdrop" onclick="document.querySelector('.admin-container').classList.remove('sidebar-collapsed');"></div>
     <nav class="admin-sidebar" id="adminSidebar">
         <h3><i class="fas fa-drumstick-bite"></i> Lechon Delights</h3>
         <div class="sidebar-nav-list">
@@ -504,7 +720,7 @@ if (isset($_SESSION['user_id']) && function_exists('hrIsLogisticsEmployeeByUserI
             <?php if ($can_back_to_admin): ?>
                 <a href="../admin/index.php"><i class="fas fa-user-shield"></i> Back to Admin</a>
             <?php endif; ?>
-            <a href="../logout.php" id="logoutBtn" style="margin-top:auto; color:#ef4444;"><i class="fas fa-right-from-bracket"></i> Logout</a>
+            <a href="../logout.php" id="logoutBtn" class="logout-link"><i class="fas fa-right-from-bracket"></i> Logout</a>
         </div>
     </nav>
 

@@ -235,43 +235,75 @@ mysqli_stmt_close($stmt);
     </div>
     
     <!-- Update Balance Modal -->
-    <div class="modal fade" id="updateBalanceModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
+    <div class="modal fade modern-form-modal" id="updateBalanceModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Update Leave Balance</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
                 <form method="POST">
+                    <div class="modal-header">
+                        <div class="modal-header-icon">
+                            <i class="fas fa-calendar-check"></i>
+                        </div>
+                        <div>
+                            <h5 class="modal-title">Update Leave Balance</h5>
+                            <p class="modal-subtitle">Adjust allocated leave credit days for the employee's annual cycle.</p>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
                     <div class="modal-body">
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
                         <input type="hidden" id="modalEmployeeId" name="employee_id">
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label>Year</label>
-                                <input type="number" name="year" class="form-control" value="<?php echo $year; ?>" required>
+
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <div class="form-section-title">
+                                    <i class="fas fa-sliders-h text-danger"></i>
+                                    Annual Allocation Details
+                                </div>
+                                <span class="form-req-pill">Required</span>
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <label>Leave Type</label>
-                                <select name="leave_type" class="form-control" required>
-                                    <option value="">Select Leave Type</option>
-                                    <option value="sick">Sick Leave</option>
-                                    <option value="vacation">Vacation Leave</option>
-                                    <option value="personal">Personal Leave</option>
-                                    <option value="maternity">Maternity Leave</option>
-                                    <option value="paternity">Paternity Leave</option>
-                                    <option value="emergency">Emergency Leave</option>
-                                </select>
+
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern" for="modalYear">Cycle Year</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-calendar-alt form-input-icon"></i>
+                                            <input type="number" id="modalYear" name="year" class="form-control" value="<?php echo $year; ?>" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern" for="modalLeaveType">Leave Category</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-tag form-input-icon"></i>
+                                            <select id="modalLeaveType" name="leave_type" class="form-select" required>
+                                                <option value="">Select Category</option>
+                                                <option value="sick">Sick Leave</option>
+                                                <option value="vacation">Vacation Leave</option>
+                                                <option value="personal">Personal Leave</option>
+                                                <option value="maternity">Maternity Leave</option>
+                                                <option value="paternity">Paternity Leave</option>
+                                                <option value="emergency">Emergency Leave</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern" for="modalInitialBalance">Initial Balance <span class="text-muted fw-normal">(Days)</span></label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-business-time form-input-icon"></i>
+                                            <input type="number" id="modalInitialBalance" name="initial_balance" class="form-control" step="0.25" min="0" value="0" placeholder="0.00" required>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                        <div class="mb-3">
-                            <label>Initial Balance (days)</label>
-                            <input type="number" name="initial_balance" class="form-control" step="0.25" value="0" required>
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" name="update_balance" class="btn btn-primary">Update Balance</button>
+                        <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" name="update_balance" class="btn-modal-primary">Update Balance</button>
                     </div>
                 </form>
             </div>

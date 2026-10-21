@@ -227,15 +227,22 @@ if ($selected_product_id > 0) {
 
                     <!-- Add Ingredient Form -->
                     <div class="col-md-4">
-                        <div class="card">
-                            <div class="card-header bg-primary text-white">Add Ingredient</div>
-                            <div class="card-body">
-                                <form method="POST">
-                                    <input type="hidden" name="product_id" value="<?php echo $selected_product_id; ?>">
-                                    <input type="hidden" name="add_bom_item" value="1">
-                                    <div class="mb-3">
-                                        <label>Material</label>
-                                        <select name="material_id" class="form-select" required>
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <div class="form-section-title">
+                                    <i class="fas fa-carrot text-danger"></i>
+                                    Add Material
+                                </div>
+                                <span class="form-req-pill">Required</span>
+                            </div>
+                            <form method="POST">
+                                <input type="hidden" name="product_id" value="<?php echo $selected_product_id; ?>">
+                                <input type="hidden" name="add_bom_item" value="1">
+                                <div class="form-group-modern mb-3">
+                                    <label class="form-label-modern" for="bomMaterialSelect">Material</label>
+                                    <div class="form-input-wrap">
+                                        <i class="fas fa-box form-input-icon"></i>
+                                        <select name="material_id" id="bomMaterialSelect" class="form-select" required>
                                             <?php foreach($materials_arr as $m): ?>
                                                 <option value="<?php echo $m['id']; ?>">
                                                     <?php echo htmlspecialchars($m['name']) . " (" . $m['unit'] . ") - ₱" . $m['cost_per_unit']; ?>
@@ -243,13 +250,18 @@ if ($selected_product_id > 0) {
                                             <?php endforeach; ?>
                                         </select>
                                     </div>
-                                    <div class="mb-3">
-                                        <label>Quantity Needed</label>
-                                        <input type="number" step="0.01" name="quantity" class="form-control" required placeholder="e.g. 0.5">
+                                </div>
+                                <div class="form-group-modern mb-3">
+                                    <label class="form-label-modern" for="bomQuantityInput">Quantity Needed</label>
+                                    <div class="form-input-wrap">
+                                        <i class="fas fa-weight-hanging form-input-icon"></i>
+                                        <input type="number" step="0.01" min="0.01" name="quantity" id="bomQuantityInput" class="form-control" required placeholder="e.g. 0.50">
                                     </div>
-                                    <button type="submit" class="btn btn-success w-100">Add to BOM</button>
-                                </form>
-                            </div>
+                                </div>
+                                <button type="submit" class="btn-modal-primary w-100 justify-content-center">
+                                    <i class="fas fa-plus me-1"></i> Add to BOM
+                                </button>
+                            </form>
                         </div>
                     </div>
                 </div>
@@ -259,26 +271,46 @@ if ($selected_product_id > 0) {
     </div>
 
     <!-- Labor Cost Modal -->
-    <div class="modal fade" id="laborModal" tabindex="-1">
-        <div class="modal-dialog">
+    <div class="modal fade modern-form-modal" id="laborModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <form method="POST">
                     <div class="modal-header">
-                        <h5 class="modal-title">Update Labor Cost</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        <div class="modal-header-icon">
+                            <i class="fas fa-user-cog"></i>
+                        </div>
+                        <div>
+                            <h5 class="modal-title">Update Labor Cost</h5>
+                            <p class="modal-subtitle">Direct labor allocation per finished unit produced.</p>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
                         <input type="hidden" name="product_id" value="<?php echo $selected_product_id; ?>">
                         <input type="hidden" name="update_labor" value="1">
-                        <div class="mb-3">
-                            <label>Labor Cost per Unit (₱)</label>
-                            <input type="number" step="0.01" name="labor_cost" class="form-control" value="<?php echo isset($labor_cost) ? $labor_cost : '0.00'; ?>" required>
-                            <small class="text-muted">Enter the estimated labor cost to produce one unit of this product.</small>
+                        
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <div class="form-section-title">
+                                    <i class="fas fa-coins text-danger"></i>
+                                    Labor Expense Rate
+                                </div>
+                                <span class="form-req-pill">Required</span>
+                            </div>
+
+                            <div class="form-group-modern">
+                                <label class="form-label-modern" for="modalLaborCost">Labor Cost per Unit (₱)</label>
+                                <div class="form-input-wrap">
+                                    <i class="fas fa-peso-sign form-input-icon"></i>
+                                    <input type="number" step="0.01" min="0" name="labor_cost" id="modalLaborCost" class="form-control" value="<?php echo isset($labor_cost) ? $labor_cost : '0.00'; ?>" required>
+                                </div>
+                                <small class="text-muted d-block mt-1" style="font-size: 11px;">Estimated human labor cost required to roast or assemble one unit.</small>
+                            </div>
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                        <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn-modal-primary">Save Changes</button>
                     </div>
                 </form>
             </div>

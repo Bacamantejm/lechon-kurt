@@ -53,11 +53,13 @@ foreach ($favorite_store_keys as $raw_key) {
 
     if (isset($store_lookup_cache[$store_key])) {
         $card = $store_lookup_cache[$store_key];
-    } elseif (preg_match('/^seller-(\d+)$/', $store_key, $matches)) {
+    } elseif (preg_match('/^seller[-_](\d+)$/', $store_key, $matches)) {
         $seller_id = (int)$matches[1];
         $sql = "SELECT
                     COALESCE(NULLIF(TRIM(business_name), ''), full_name) AS store_name,
-                    address
+                    address,
+                    business_logo,
+                    profile_image
                 FROM users
                 WHERE id = ?
                 LIMIT 1";
@@ -74,6 +76,11 @@ foreach ($favorite_store_keys as $raw_key) {
                 $card['location'] = trim((string)($row['address'] ?? 'Marketplace storefront'));
                 $card['subtitle'] = 'Partner store';
                 $card['link'] = 'menu.php?seller_id=' . $seller_id;
+                if (!empty($row['business_logo'])) {
+                    $card['image'] = favoriteAssetPath((string)$row['business_logo'], 'images/store-bg.jpg');
+                } elseif (!empty($row['profile_image'])) {
+                    $card['image'] = favoriteAssetPath((string)$row['profile_image'], 'images/store-bg.jpg');
+                }
             }
         }
 
@@ -89,7 +96,7 @@ foreach ($favorite_store_keys as $raw_key) {
                 $card['image'] = favoriteAssetPath((string)$image_row['image'], 'images/store-bg.jpg');
             }
         }
-    } elseif (preg_match('/^branch-(\d+)$/', $store_key, $matches)) {
+    } elseif (preg_match('/^branch[-_](\d+)$/', $store_key, $matches)) {
         $branch_id = (int)$matches[1];
         $stmt = mysqli_prepare($conn, "SELECT store_name, address, city, province FROM store_locations WHERE store_id = ? LIMIT 1");
         if ($stmt) {
@@ -108,7 +115,7 @@ foreach ($favorite_store_keys as $raw_key) {
                 ])));
                 if ($card['location'] === '') $card['location'] = 'Pickup branch';
                 $card['subtitle'] = 'Pickup branch';
-                $card['link'] = 'locations.php';
+                $card['link'] = 'menu.php?branch_id=' . $branch_id;
             }
         }
     } elseif ($store_key === 'platform-main') {
@@ -124,6 +131,7 @@ foreach ($favorite_store_keys as $raw_key) {
 }
 
 $favorite_products = [];
+$in_stock_favorites_count = 0;
 if (!empty($favorite_product_ids)) {
     $id_list = implode(',', array_values(array_filter(array_map('intval', $favorite_product_ids), static function ($id) {
         return $id > 0;
@@ -138,8 +146,11 @@ if (!empty($favorite_product_ids)) {
                     p.avg_rating,
                     p.review_count,
                     p.seller_id,
+                    p.is_available,
+                    COALESCE(i.current_stock, p.stock, 0) AS current_stock,
                     COALESCE(NULLIF(TRIM(u.business_name), ''), 'Lechon Delights Kitchen') AS store_name
                   FROM products p
+                  LEFT JOIN inventory i ON (i.product_id = p.id AND i.date = CURRENT_DATE())
                   LEFT JOIN users u ON p.seller_id = u.id
                   WHERE p.id IN ($id_list) AND p.is_archived = 0
                   ORDER BY FIELD(p.id, $id_list)";
@@ -147,6 +158,13 @@ if (!empty($favorite_product_ids)) {
         if ($result) {
             while ($row = mysqli_fetch_assoc($result)) {
                 $seller_id = (int)($row['seller_id'] ?? 0);
+                $stock = max(0, (int)($row['current_stock'] ?? 0));
+                $is_available = (int)($row['is_available'] ?? 1) === 1;
+                $in_stock = ($stock > 0 && $is_available);
+                if ($in_stock) {
+                    $in_stock_favorites_count++;
+                }
+
                 $favorite_products[] = [
                     'id' => (int)$row['id'],
                     'name' => trim((string)($row['name'] ?? 'Product')),
@@ -155,6 +173,8 @@ if (!empty($favorite_product_ids)) {
                     'rating' => (float)($row['avg_rating'] ?? 0),
                     'reviews' => (int)($row['review_count'] ?? 0),
                     'store_name' => trim((string)($row['store_name'] ?? 'Marketplace')),
+                    'in_stock' => $in_stock,
+                    'stock' => $stock,
                     'menu_link' => $seller_id > 0 ? ('menu.php?seller_id=' . $seller_id) : 'menu.php',
                     'image' => favoriteAssetPath((string)($row['image'] ?? ''), 'images/menu/whole-lechon.jpg')
                 ];
@@ -375,6 +395,181 @@ include 'includes/header.php';
 .btn-empty-action:hover {
     background: #981b15;
 }
+
+
+@media (max-width: 768px) {
+    .favorites-page {
+        padding: 16px 0 150px !important;
+    }
+
+    .favorites-head {
+        margin-bottom: 14px !important;
+        padding-bottom: 10px !important;
+    }
+
+    .favorites-head p {
+        display: none !important;
+    }
+
+    .favorite-section-head {
+        margin-bottom: 10px !important;
+    }
+
+    .favorite-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 10px !important;
+    }
+
+    .favorite-cover {
+        height: 105px !important;
+    }
+
+    .favorite-toggle {
+        width: 28px !important;
+        height: 28px !important;
+        font-size: 0.75rem !important;
+        top: 6px !important;
+        right: 6px !important;
+    }
+
+    .favorite-body {
+        padding: 10px 12px !important;
+    }
+
+    .favorite-subtitle {
+        font-size: 0.65rem !important;
+        margin-bottom: 2px !important;
+    }
+
+    .favorite-title {
+        font-size: 0.86rem !important;
+        margin-bottom: 4px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+
+    .favorite-meta {
+        font-size: 0.74rem !important;
+        margin-bottom: 8px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+
+    .favorite-link {
+        width: 100% !important;
+        justify-content: center !important;
+        padding: 6px 8px !important;
+        font-size: 0.75rem !important;
+    }
+}
+
+/* ==========================================================================
+   FAVORITES PAGE DARK THEME ENGINE
+   ========================================================================== */
+body.dark-mode .favorites-page {
+    background: #0f172a !important;
+}
+
+body.dark-mode .favorites-head {
+    border-bottom-color: #334155 !important;
+}
+
+body.dark-mode .favorites-head h1 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .favorites-head p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .favorite-section-head h2 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .favorite-count {
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .favorite-card {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+body.dark-mode .favorite-card:hover {
+    border-color: #475569 !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35) !important;
+}
+
+body.dark-mode .favorite-toggle {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #ef4444 !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+}
+
+body.dark-mode .favorite-toggle.is-active {
+    background: #1e293b !important;
+    color: #ef4444 !important;
+}
+
+body.dark-mode .favorite-subtitle {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .favorite-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .favorite-meta {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .favorite-link {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .favorite-link:hover {
+    background: #334155 !important;
+    border-color: #475569 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .favorite-empty {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .favorite-empty i {
+    color: #64748b !important;
+}
+
+body.dark-mode .favorite-empty-text {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .favorite-price strong {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .stock-badge.in-stock {
+    background: rgba(2, 122, 72, 0.15) !important;
+    border-color: rgba(74, 222, 128, 0.4) !important;
+    color: #4ade80 !important;
+}
+
+body.dark-mode .stock-badge.out-stock {
+    background: rgba(179, 38, 30, 0.15) !important;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+    color: #f87171 !important;
+}
 </style>
 
 <div class="favorites-page">
@@ -383,6 +578,25 @@ include 'includes/header.php';
             <h1>My Favorites</h1>
             <p>Keep your favorite shops and products in one place for faster re-ordering.</p>
         </div>
+
+        <?php if ($in_stock_favorites_count > 0): ?>
+            <div class="favorite-stock-reminder-banner" style="background: linear-gradient(135deg, #15803d 0%, #166534 100%); color: #ffffff; padding: 18px 24px; border-radius: 18px; margin-bottom: 24px; box-shadow: 0 8px 22px rgba(21, 128, 61, 0.2); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px;">
+                <div style="display: flex; align-items: center; gap: 14px;">
+                    <div style="background: rgba(255,255,255,0.2); width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem;">
+                        <i class="fas fa-bell"></i>
+                    </div>
+                    <div>
+                        <h4 style="margin: 0 0 2px 0; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 1.08rem; color: #ffffff;">In-Stock Favorite Reminder! ⚡</h4>
+                        <p style="margin: 0; font-size: 0.88rem; opacity: 0.95; color: #ffffff;">
+                            Great news! <strong><?php echo $in_stock_favorites_count; ?> of your favorite dish<?php echo $in_stock_favorites_count > 1 ? 'es' : ''; ?></strong> <?php echo $in_stock_favorites_count > 1 ? 'are' : 'is'; ?> currently in stock. Order now before stock runs out!
+                        </p>
+                    </div>
+                </div>
+                <a href="#favoriteProductsSection" style="background: #ffffff; color: #15803d; padding: 8px 18px; border-radius: 999px; font-weight: 800; font-size: 0.84rem; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                    <i class="fas fa-cart-shopping"></i> View In-Stock Favorites
+                </a>
+            </div>
+        <?php endif; ?>
 
         <section class="favorite-section" id="favoriteShopsSection">
             <div class="favorite-section-head">
@@ -458,15 +672,32 @@ include 'includes/header.php';
                                 </button>
                             </div>
                             <div class="favorite-body">
-                                <p class="favorite-subtitle"><?php echo htmlspecialchars((string)$product['category']); ?></p>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                    <p class="favorite-subtitle" style="margin: 0;"><?php echo htmlspecialchars((string)$product['category']); ?></p>
+                                    <?php if ($product['in_stock']): ?>
+                                        <span class="stock-badge in-stock" style="background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; font-size: 0.72rem; font-weight: 800; padding: 2px 8px; border-radius: 999px; display: inline-flex; align-items: center; gap: 4px;">
+                                            <i class="fas fa-circle-check"></i> IN STOCK (<?php echo (int)$product['stock']; ?> left)
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="stock-badge out-stock" style="background: #fff1f2; color: #b3261e; border: 1px solid #fecdd3; font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; display: inline-flex; align-items: center; gap: 4px;">
+                                            <i class="fas fa-circle-xmark"></i> OUT OF STOCK
+                                        </span>
+                                    <?php endif; ?>
+                                </div>
                                 <h3 class="favorite-title"><?php echo htmlspecialchars((string)$product['name']); ?></h3>
                                 <p class="favorite-meta">
-                                    <?php echo htmlspecialchars((string)$product['store_name']); ?> | PHP <?php echo number_format((float)$product['price'], 2); ?>
+                                    <?php echo htmlspecialchars((string)$product['store_name']); ?> | ₱<?php echo number_format((float)$product['price'], 2); ?>
                                     <?php if ((float)$product['rating'] > 0): ?>
                                         | <?php echo number_format((float)$product['rating'], 1); ?>★
                                     <?php endif; ?>
                                 </p>
-                                <a href="<?php echo htmlspecialchars((string)$product['menu_link']); ?>" class="favorite-link"><i class="fas fa-arrow-right"></i> View in menu</a>
+                                <?php if ($product['in_stock']): ?>
+                                    <a href="<?php echo htmlspecialchars((string)$product['menu_link']); ?>" class="favorite-link" style="background: #15803d; color: #ffffff; padding: 6px 14px; border-radius: 8px; text-decoration: none; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; margin-top: 8px;">
+                                        <i class="fas fa-cart-plus"></i> Order Now
+                                    </a>
+                                <?php else: ?>
+                                    <a href="<?php echo htmlspecialchars((string)$product['menu_link']); ?>" class="favorite-link"><i class="fas fa-arrow-right"></i> View in menu</a>
+                                <?php endif; ?>
                             </div>
                         </article>
                     <?php endforeach; ?>

@@ -306,60 +306,109 @@ $active_count = mysqli_fetch_assoc($active_emp)['count'];
     </div>
     
     <!-- Record Separation Modal -->
-    <div class="modal fade" id="recordSeparationModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
+    <div class="modal fade modern-form-modal" id="recordSeparationModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Record Employee Separation</h5>
+                    <div class="modal-header-icon">
+                        <i class="fas fa-user-times"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title">Record Employee Separation</h5>
+                        <p class="modal-subtitle">Process employee resignation or departure and initiate clearance tracking.</p>
+                    </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <form method="POST">
                     <div class="modal-body">
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
-                        <div class="mb-3">
-                            <label>Employee</label>
-                            <select name="employee_id" class="form-control" required>
-                                <option value="">Select Employee</option>
-                                <?php
-                                $active_employees_sql = "SELECT e.id, e.first_name, e.last_name FROM employees e WHERE e.status = 'active'" . ($is_partner_scoped_hr ? " AND {$employee_scope_sql}" : "") . " ORDER BY e.first_name";
-                                $active_employees = mysqli_query($conn, $active_employees_sql);
-                                while ($emp = mysqli_fetch_assoc($active_employees)) {
-                                    echo "<option value='{$emp['id']}'>{$emp['first_name']} {$emp['last_name']}</option>";
-                                }
-                                ?>
-                            </select>
-                        </div>
                         
-                        <div class="mb-3">
-                            <label>Separation Type</label>
-                            <select name="separation_type" class="form-control" required>
-                                <option value="">Select Type</option>
-                                <option value="resignation">Resignation</option>
-                                <option value="termination">Termination</option>
-                                <option value="retirement">Retirement</option>
-                                <option value="contract_end">Contract End</option>
-                            </select>
-                        </div>
-                        
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label>Resignation Date</label>
-                                <input type="date" name="resignation_date" class="form-control">
+                        <!-- Section 1: Employee & Separation Type -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-user"></i> Employee & Type</span>
+                                <span class="form-req-pill">Required</span>
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <label>Last Working Day</label>
-                                <input type="date" name="last_working_day" class="form-control" required>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Employee <span class="form-req-star">*</span></label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-user-tag form-input-icon"></i>
+                                            <select name="employee_id" class="form-select" required>
+                                                <option value="">Select Employee</option>
+                                                <?php
+                                                $active_employees_sql = "SELECT e.id, e.first_name, e.last_name FROM employees e WHERE e.status = 'active'" . ($is_partner_scoped_hr ? " AND {$employee_scope_sql}" : "") . " ORDER BY e.first_name";
+                                                $active_employees = mysqli_query($conn, $active_employees_sql);
+                                                while ($emp = mysqli_fetch_assoc($active_employees)) {
+                                                    echo "<option value='{$emp['id']}'>{$emp['first_name']} {$emp['last_name']}</option>";
+                                                }
+                                                ?>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Separation Type <span class="form-req-star">*</span></label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-door-open form-input-icon"></i>
+                                            <select name="separation_type" class="form-select" required>
+                                                <option value="">Select Type</option>
+                                                <option value="resignation">Resignation</option>
+                                                <option value="termination">Termination</option>
+                                                <option value="retirement">Retirement</option>
+                                                <option value="contract_end">Contract End</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        
-                        <div class="mb-3">
-                            <label>Reason for Resignation/Termination</label>
-                            <textarea name="resignation_reason" class="form-control" rows="3"></textarea>
+
+                        <!-- Section 2: Timeline -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-calendar-alt"></i> Timeline</span>
+                                <span class="form-req-pill">Dates</span>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Filing / Resignation Date</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-calendar-day form-input-icon"></i>
+                                            <input type="date" name="resignation_date" class="form-control">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Last Working Day <span class="form-req-star">*</span></label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-calendar-check form-input-icon"></i>
+                                            <input type="date" name="last_working_day" class="form-control" required>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Section 3: Separation Reason -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-comment-alt"></i> Remarks & Reason</span>
+                                <span class="form-opt-pill">Optional</span>
+                            </div>
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Reason for Resignation / Termination</label>
+                                <textarea name="resignation_reason" class="form-control" rows="3" placeholder="Enter departure rationale, exit interview findings, or feedback..."></textarea>
+                            </div>
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" name="record_separation" class="btn btn-primary">Record Separation</button>
+                        <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" name="record_separation" class="btn-modal-primary"><i class="fas fa-save"></i> Record Separation</button>
                     </div>
                 </form>
             </div>
@@ -367,11 +416,17 @@ $active_count = mysqli_fetch_assoc($active_emp)['count'];
     </div>
     
     <!-- Update Clearance Modal -->
-    <div class="modal fade" id="updateClearanceModal" tabindex="-1">
-        <div class="modal-dialog">
+    <div class="modal fade modern-form-modal" id="updateClearanceModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Update Exit Clearance</h5>
+                    <div class="modal-header-icon">
+                        <i class="fas fa-clipboard-check"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title">Update Exit Clearance</h5>
+                        <p class="modal-subtitle">Log status of returned equipment, handover tasks, and account closures.</p>
+                    </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <form method="POST">
@@ -379,23 +434,31 @@ $active_count = mysqli_fetch_assoc($active_emp)['count'];
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
                         <input type="hidden" id="turnoverIdInput" name="turnover_id">
                         
-                        <div class="mb-3">
-                            <label>Clearance Status</label>
-                            <select name="clearance_status" class="form-control" required>
-                                <option value="pending">Pending</option>
-                                <option value="completed">Completed</option>
-                                <option value="pending_items">Pending Items</option>
-                            </select>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label>Clearance Notes</label>
-                            <textarea name="clearance_notes" class="form-control" rows="4"></textarea>
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-tasks"></i> Clearance Stage</span>
+                                <span class="form-req-pill">Required</span>
+                            </div>
+                            <div class="form-group-modern mb-3">
+                                <label class="form-label-modern">Clearance Status <span class="form-req-star">*</span></label>
+                                <div class="form-input-wrap">
+                                    <i class="fas fa-check-double form-input-icon"></i>
+                                    <select name="clearance_status" class="form-select" required>
+                                        <option value="pending">Pending</option>
+                                        <option value="completed">Completed</option>
+                                        <option value="pending_items">Pending Items</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Clearance Notes</label>
+                                <textarea name="clearance_notes" class="form-control" rows="3" placeholder="Notes on surrendered keys, uniforms, IDs, or remaining settlement items..."></textarea>
+                            </div>
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" name="update_clearance" class="btn btn-primary">Update Clearance</button>
+                        <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" name="update_clearance" class="btn-modal-primary"><i class="fas fa-save"></i> Update Clearance</button>
                     </div>
                 </form>
             </div>

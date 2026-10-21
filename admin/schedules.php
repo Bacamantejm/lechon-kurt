@@ -313,54 +313,101 @@ if ($dept_query) {
     </div>
     
     <!-- Add Schedule Modal -->
-    <div class="modal fade" id="addScheduleModal" tabindex="-1">
-        <div class="modal-dialog">
+    <div class="modal fade modern-form-modal" id="addScheduleModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Create Schedule</h5>
+                    <div class="modal-header-icon">
+                        <i class="fas fa-calendar-alt"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title">Create Schedule</h5>
+                        <p class="modal-subtitle">Assign work shifts and duty hours to staff members.</p>
+                    </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <form method="POST">
                     <div class="modal-body">
                         <input type="hidden" name="action" value="add_schedule">
                         <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
-                        <div class="form-group mb-3">
-                            <label>Employee *</label>
-                            <select name="employee_id" class="form-select" required>
-                                <option value="">Select employee</option>
-                                <?php foreach ($employees as $emp): ?>
-                                    <option value="<?php echo $emp['id']; ?>"><?php echo htmlspecialchars($emp['first_name'] . ' ' . $emp['last_name']); ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="form-group mb-3">
-                            <label>Date *</label>
-                            <input type="date" name="schedule_date" class="form-control" required>
-                        </div>
-                        <div class="form-group mb-3">
-                            <label>Shift Type</label>
-                            <select name="shift_type" class="form-select">
-                                <option value="regular">Regular</option>
-                                <option value="morning">Morning</option>
-                                <option value="afternoon">Afternoon</option>
-                                <option value="night">Night</option>
-                                <option value="custom">Custom</option>
-                            </select>
-                        </div>
-                        <div class="row g-2 mb-3">
-                            <div class="col">
-                                <label>Start Time *</label>
-                                <input type="time" name="start_time" class="form-control" required>
+                        
+                        <!-- Section 1: Staff & Shift -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-user-clock"></i> Staff & Shift Details</span>
+                                <span class="form-req-pill">Required</span>
                             </div>
-                            <div class="col">
-                                <label>End Time *</label>
-                                <input type="time" name="end_time" class="form-control" required>
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Employee <span class="form-req-star">*</span></label>
+                                <div class="form-input-wrap">
+                                    <i class="fas fa-user form-input-icon"></i>
+                                    <select name="employee_id" class="form-select" required>
+                                        <option value="">Select employee</option>
+                                        <?php foreach ($employees as $emp): ?>
+                                            <option value="<?php echo $emp['id']; ?>"><?php echo htmlspecialchars($emp['first_name'] . ' ' . $emp['last_name']); ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Date <span class="form-req-star">*</span></label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-calendar-day form-input-icon"></i>
+                                            <input type="date" name="schedule_date" class="form-control" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Shift Type</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-business-time form-input-icon"></i>
+                                            <select name="shift_type" class="form-select">
+                                                <option value="regular">Regular</option>
+                                                <option value="morning">Morning</option>
+                                                <option value="afternoon">Afternoon</option>
+                                                <option value="night">Night</option>
+                                                <option value="custom">Custom</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Section 2: Shift Hours -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-clock"></i> Working Hours</span>
+                                <span class="form-req-pill">Required</span>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Start Time <span class="form-req-star">*</span></label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-hourglass-start form-input-icon"></i>
+                                            <input type="time" name="start_time" class="form-control" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">End Time <span class="form-req-star">*</span></label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-hourglass-end form-input-icon"></i>
+                                            <input type="time" name="end_time" class="form-control" required>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Save Schedule</button>
+                        <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn-modal-primary"><i class="fas fa-plus"></i> Save Schedule</button>
                     </div>
                 </form>
             </div>
@@ -368,11 +415,17 @@ if ($dept_query) {
     </div>
 
     <!-- Edit Schedule Modal -->
-    <div class="modal fade" id="editScheduleModal" tabindex="-1">
-        <div class="modal-dialog">
+    <div class="modal fade modern-form-modal" id="editScheduleModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Edit Schedule</h5>
+                    <div class="modal-header-icon">
+                        <i class="fas fa-edit"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title">Edit Schedule</h5>
+                        <p class="modal-subtitle">Update assigned staff, shift date, or working hours.</p>
+                    </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <form method="POST">
@@ -380,43 +433,84 @@ if ($dept_query) {
                         <input type="hidden" name="action" value="edit_schedule">
                         <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
                         <input type="hidden" name="schedule_id" id="editScheduleId">
-                        <div class="form-group mb-3">
-                            <label>Employee *</label>
-                            <select name="employee_id" id="editEmployeeId" class="form-select" required>
-                                <option value="">Select employee</option>
-                                <?php foreach ($employees as $emp): ?>
-                                    <option value="<?php echo $emp['id']; ?>"><?php echo htmlspecialchars($emp['first_name'] . ' ' . $emp['last_name']); ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="form-group mb-3">
-                            <label>Date *</label>
-                            <input type="date" name="schedule_date" id="editScheduleDate" class="form-control" required>
-                        </div>
-                        <div class="form-group mb-3">
-                            <label>Shift Type</label>
-                            <select name="shift_type" id="editShiftType" class="form-select">
-                                <option value="regular">Regular</option>
-                                <option value="morning">Morning</option>
-                                <option value="afternoon">Afternoon</option>
-                                <option value="night">Night</option>
-                                <option value="custom">Custom</option>
-                            </select>
-                        </div>
-                        <div class="row g-2 mb-3">
-                            <div class="col">
-                                <label>Start Time *</label>
-                                <input type="time" name="start_time" id="editStartTime" class="form-control" required>
+                        
+                        <!-- Section 1: Staff & Shift -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-user-clock"></i> Staff & Shift Details</span>
+                                <span class="form-req-pill">Required</span>
                             </div>
-                            <div class="col">
-                                <label>End Time *</label>
-                                <input type="time" name="end_time" id="editEndTime" class="form-control" required>
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Employee <span class="form-req-star">*</span></label>
+                                <div class="form-input-wrap">
+                                    <i class="fas fa-user form-input-icon"></i>
+                                    <select name="employee_id" id="editEmployeeId" class="form-select" required>
+                                        <option value="">Select employee</option>
+                                        <?php foreach ($employees as $emp): ?>
+                                            <option value="<?php echo $emp['id']; ?>"><?php echo htmlspecialchars($emp['first_name'] . ' ' . $emp['last_name']); ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Date <span class="form-req-star">*</span></label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-calendar-day form-input-icon"></i>
+                                            <input type="date" name="schedule_date" id="editScheduleDate" class="form-control" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Shift Type</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-business-time form-input-icon"></i>
+                                            <select name="shift_type" id="editShiftType" class="form-select">
+                                                <option value="regular">Regular</option>
+                                                <option value="morning">Morning</option>
+                                                <option value="afternoon">Afternoon</option>
+                                                <option value="night">Night</option>
+                                                <option value="custom">Custom</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Section 2: Shift Hours -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-clock"></i> Working Hours</span>
+                                <span class="form-req-pill">Required</span>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">Start Time <span class="form-req-star">*</span></label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-hourglass-start form-input-icon"></i>
+                                            <input type="time" name="start_time" id="editStartTime" class="form-control" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern">End Time <span class="form-req-star">*</span></label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-hourglass-end form-input-icon"></i>
+                                            <input type="time" name="end_time" id="editEndTime" class="form-control" required>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Update Schedule</button>
+                        <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn-modal-primary"><i class="fas fa-save"></i> Update Schedule</button>
                     </div>
                 </form>
             </div>

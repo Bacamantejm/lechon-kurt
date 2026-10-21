@@ -893,6 +893,10 @@ class EnhancedLogisticsService {
                     mysqli_stmt_bind_param($order_stmt, "i", $current_tracking['order_id']);
                     mysqli_stmt_execute($order_stmt);
                     mysqli_stmt_close($order_stmt);
+
+                    require_once __DIR__ . '/includes/CommissionAndWalletService.php';
+                    $walletService = CommissionAndWalletService::getInstance($this->conn);
+                    $walletService->recordOrUpdateSplit((int)$current_tracking['order_id'], true);
                 }
             }
             

@@ -172,130 +172,180 @@ $payroll_breakdown = calculatePayrollBreakdown($attendance_result, $payroll_reco
 mysqli_stmt_close($attendance_stmt);
 ?>
 
-<div class="payroll-card">
-    <p class="text-muted mb-3">
-        <strong><?php echo htmlspecialchars((string)($payroll_record['first_name'] ?? '') . ' ' . (string)($payroll_record['last_name'] ?? '')); ?></strong>
-        | <?php echo date('M d, Y', strtotime($payroll_record['pay_period_start'])); ?> to <?php echo date('M d, Y', strtotime($payroll_record['pay_period_end'])); ?>
-    </p>
-
-    <div class="row mt-4">
-        <div class="col-md-6">
-            <h5>Compensation</h5>
-            <table class="table table-sm table-borderless">
-                <tr>
-                    <td>Regular Pay (<?php echo $payroll_breakdown['total_hours_worked']; ?> hrs x &#8369;<?php echo $payroll_breakdown['hourly_rate']; ?>)</td>
-                    <td class="text-end"><strong>&#8369;<?php echo number_format((float)$payroll_breakdown['regular_pay'], 2); ?></strong></td>
-                </tr>
-                <tr>
-                    <td>Overtime Pay (<?php echo $payroll_breakdown['overtime_hours']; ?> hrs x &#8369;<?php echo number_format((float)$payroll_breakdown['hourly_rate'] * 1.25, 2); ?>)</td>
-                    <td class="text-end"><strong>&#8369;<?php echo number_format((float)$payroll_breakdown['overtime_pay'], 2); ?></strong></td>
-                </tr>
-                <tr style="border-top: 2px solid #ddd; font-weight: bold;">
-                    <td>GROSS PAY</td>
-                    <td class="text-end"><strong>&#8369;<?php echo number_format((float)$payroll_record['gross_pay'], 2); ?></strong></td>
-                </tr>
-            </table>
+<div class="payroll-inspection-wrapper">
+    <!-- 1. Employee & Period Summary Card -->
+    <div class="form-section-card mb-3">
+        <div class="form-section-head">
+            <div class="form-section-title">
+                <i class="fas fa-user-tie"></i>
+                Employee &amp; Period Overview
+            </div>
+            <span class="form-req-pill">Payroll Record #<?php echo (int)$payroll_id; ?></span>
         </div>
-        <div class="col-md-6">
-            <h5>Deductions</h5>
-            <table class="table table-sm table-borderless">
-                <tr>
-                    <td>Late Deduction (<?php echo $payroll_breakdown['late_hours']; ?> hrs)</td>
-                    <td class="text-end"><strong>-&#8369;<?php echo number_format((float)$payroll_breakdown['late_deduction'], 2); ?></strong></td>
-                </tr>
-                <tr style="border-top: 2px solid #ddd; font-weight: bold;">
-                    <td>TOTAL DEDUCTIONS</td>
-                    <td class="text-end"><strong>-&#8369;<?php echo number_format((float)$payroll_record['deductions'], 2); ?></strong></td>
-                </tr>
-                <tr style="border-top: 2px solid #ffc107; background: #fffbea;">
-                    <td><strong>NET PAY</strong></td>
-                    <td class="text-end"><strong style="font-size: 1.3rem; color: #28a745;">&#8369;<?php echo number_format((float)$payroll_record['net_pay'], 2); ?></strong></td>
-                </tr>
-            </table>
+        <div class="p-3">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="text-muted small">Employee Name</div>
+                    <div class="fw-bold fs-6 text-dark mt-1">
+                        <i class="fas fa-user me-1 text-danger"></i>
+                        <?php echo htmlspecialchars((string)($payroll_record['first_name'] ?? '') . ' ' . (string)($payroll_record['last_name'] ?? '')); ?>
+                    </div>
+                    <div class="text-muted small mt-1">
+                        Employee ID: #<?php echo htmlspecialchars((string)($payroll_record['employee_id'] ?? 'N/A')); ?>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="text-muted small">Pay Period Window</div>
+                    <div class="fw-bold fs-6 text-dark mt-1">
+                        <i class="fas fa-calendar-alt me-1 text-primary"></i>
+                        <?php echo date('M d, Y', strtotime($payroll_record['pay_period_start'])); ?> &ndash; <?php echo date('M d, Y', strtotime($payroll_record['pay_period_end'])); ?>
+                    </div>
+                    <div class="text-muted small mt-1">
+                        Basis: <span class="badge bg-light text-dark border"><?php echo htmlspecialchars(ucfirst((string)($payroll_record['employment_basis'] ?? 'Daily'))); ?></span>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
-    <div class="attendance-table mt-4">
-        <h5>Attendance Records for Period</h5>
-        <div class="table-responsive" style="max-height: 200px;">
-            <table class="table table-sm table-hover">
-                <thead class="table-light">
-                    <tr>
-                        <th>Date</th>
-                        <th>Time In</th>
-                        <th>Time Out</th>
-                        <th>Hours Worked</th>
-                        <th>Late</th>
-                        <th>Overtime</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if (!empty($payroll_breakdown['attendance_records'])): ?>
-                        <?php foreach ($payroll_breakdown['attendance_records'] as $record): ?>
-                            <tr>
-                                <td><?php echo date('M d, Y', strtotime($record['date'])); ?></td>
-                                <td><?php echo !empty($record['time_in']) ? date('h:i A', strtotime($record['time_in'])) : '-'; ?></td>
-                                <td><?php echo !empty($record['time_out']) ? date('h:i A', strtotime($record['time_out'])) : '-'; ?></td>
-                                <td><?php echo number_format((float)$record['hours_worked'], 2); ?> hrs</td>
-                                <td>
-                                    <?php if (!empty($record['is_late'])): ?>
-                                        <span class="badge bg-danger"><?php echo (int)$record['late_minutes']; ?> min</span>
-                                    <?php else: ?>
-                                        <span class="text-muted">-</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <?php if (!empty($record['is_overtime'])): ?>
-                                        <span class="badge bg-success"><?php echo number_format((float)$record['overtime_hours'], 2); ?> hrs</span>
-                                    <?php else: ?>
-                                        <span class="text-muted">-</span>
-                                    <?php endif; ?>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    <?php else: ?>
+    <!-- 2. Compensation & Deductions Cards -->
+    <div class="row g-3 mb-3">
+        <div class="col-md-6">
+            <div class="form-section-card h-100">
+                <div class="form-section-head">
+                    <div class="form-section-title">
+                        <i class="fas fa-coins"></i>
+                        Gross Compensation
+                    </div>
+                    <span class="badge" style="background:#ecfdf3; color:#027a48; border:1px solid #abefc6;">Earnings</span>
+                </div>
+                <div class="p-3">
+                    <table class="table table-sm table-borderless mb-0">
                         <tr>
-                            <td colspan="6" class="text-center text-muted">No attendance records for this period</td>
+                            <td class="text-muted">Regular Pay (<?php echo $payroll_breakdown['total_hours_worked']; ?> hrs x &#8369;<?php echo number_format((float)$payroll_breakdown['hourly_rate'], 2); ?>)</td>
+                            <td class="text-end fw-semibold text-dark">&#8369;<?php echo number_format((float)$payroll_breakdown['regular_pay'], 2); ?></td>
                         </tr>
-                    <?php endif; ?>
-                </tbody>
-            </table>
+                        <tr>
+                            <td class="text-muted">Overtime Pay (<?php echo $payroll_breakdown['overtime_hours']; ?> hrs x &#8369;<?php echo number_format((float)$payroll_breakdown['hourly_rate'] * 1.25, 2); ?>)</td>
+                            <td class="text-end fw-semibold text-dark">&#8369;<?php echo number_format((float)$payroll_breakdown['overtime_pay'], 2); ?></td>
+                        </tr>
+                        <tr style="border-top: 1px solid #eaecf0;">
+                            <td class="fw-bold text-dark pt-2">GROSS PAY</td>
+                            <td class="text-end fw-bold text-dark pt-2">&#8369;<?php echo number_format((float)$payroll_record['gross_pay'], 2); ?></td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="form-section-card h-100">
+                <div class="form-section-head">
+                    <div class="form-section-title">
+                        <i class="fas fa-file-invoice"></i>
+                        Deductions &amp; Net Take-Home
+                    </div>
+                    <span class="badge" style="background:#fff1f0; color:#b3261e; border:1px solid #fee4e2;">Deductions</span>
+                </div>
+                <div class="p-3">
+                    <table class="table table-sm table-borderless mb-0">
+                        <tr>
+                            <td class="text-muted">Late Deductions (<?php echo $payroll_breakdown['late_hours']; ?> hrs)</td>
+                            <td class="text-end fw-semibold text-danger">-&#8369;<?php echo number_format((float)$payroll_breakdown['late_deduction'], 2); ?></td>
+                        </tr>
+                        <tr style="border-top: 1px solid #eaecf0;">
+                            <td class="fw-bold text-dark pt-2">TOTAL DEDUCTIONS</td>
+                            <td class="text-end fw-bold text-danger pt-2">-&#8369;<?php echo number_format((float)$payroll_record['deductions'], 2); ?></td>
+                        </tr>
+                        <tr style="border-top: 2px solid #abefc6; background: #ecfdf3;">
+                            <td class="fw-bold text-dark p-2">NET PAY</td>
+                            <td class="text-end fw-bold p-2" style="font-size: 1.2rem; color: #027a48;">&#8369;<?php echo number_format((float)$payroll_record['net_pay'], 2); ?></td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 
-    <div class="mt-4 border-top pt-3">
+    <!-- 3. Attendance Records Card -->
+    <div class="form-section-card mb-4">
+        <div class="form-section-head">
+            <div class="form-section-title">
+                <i class="fas fa-calendar-check"></i>
+                Attendance Records for Period
+            </div>
+            <span class="form-opt-pill"><?php echo count($payroll_breakdown['attendance_records']); ?> Logs</span>
+        </div>
+        <div class="p-3">
+            <div class="table-responsive" style="max-height: 220px; overflow-y: auto;">
+                <table class="table table-sm table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Date</th>
+                            <th>Time In</th>
+                            <th>Time Out</th>
+                            <th>Hours Worked</th>
+                            <th>Late</th>
+                            <th>Overtime</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (!empty($payroll_breakdown['attendance_records'])): ?>
+                            <?php foreach ($payroll_breakdown['attendance_records'] as $record): ?>
+                                <tr>
+                                    <td class="fw-semibold"><?php echo date('M d, Y', strtotime($record['date'])); ?></td>
+                                    <td><?php echo !empty($record['time_in']) ? date('h:i A', strtotime($record['time_in'])) : '-'; ?></td>
+                                    <td><?php echo !empty($record['time_out']) ? date('h:i A', strtotime($record['time_out'])) : '-'; ?></td>
+                                    <td><?php echo number_format((float)$record['hours_worked'], 2); ?> hrs</td>
+                                    <td>
+                                        <?php if (!empty($record['is_late'])): ?>
+                                            <span class="badge" style="background:#fff1f0; color:#b3261e; border:1px solid #fee4e2;"><?php echo (int)$record['late_minutes']; ?> min</span>
+                                        <?php else: ?>
+                                            <span class="text-muted">-</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <?php if (!empty($record['is_overtime'])): ?>
+                                            <span class="badge" style="background:#ecfdf3; color:#027a48; border:1px solid #abefc6;"><?php echo number_format((float)$record['overtime_hours'], 2); ?> hrs</span>
+                                        <?php else: ?>
+                                            <span class="text-muted">-</span>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-3">No attendance records found for this period</td>
+                            </tr>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Decision Actions -->
+    <div class="d-flex justify-content-end gap-2 pt-2 border-top">
         <?php if ($can_manage_finance): ?>
-            <form id="payrollActionForm" method="POST" action="finance.php">
+            <form id="payrollActionForm" method="POST" action="finance.php" class="d-flex gap-2">
                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
                 <input type="hidden" name="payroll_id" value="<?php echo (int)$payroll_id; ?>">
                 <input type="hidden" name="payroll_action" id="payrollActionInput" value="">
                 <input type="hidden" name="rejection_reason" id="rejectionReasonInput" value="">
                 <input type="hidden" name="payroll_signature" id="payrollSignatureInput" value="">
-                <button type="button" class="btn btn-success btn-lg" onclick="handlePayrollAction('approve', <?php echo (int)$payroll_id; ?>)">
-                    <i class="fas fa-check-circle"></i> Approve
+                
+                <button type="button" class="btn btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-outline-danger px-3 py-2 fw-semibold" style="border-radius:10px;" onclick="handlePayrollAction('reject', <?php echo (int)$payroll_id; ?>)">
+                    <i class="fas fa-times-circle me-1"></i> Reject Payroll
                 </button>
-                <button type="button" class="btn btn-danger btn-lg ms-2" onclick="handlePayrollAction('reject', <?php echo (int)$payroll_id; ?>)">
-                    <i class="fas fa-times-circle"></i> Reject
+                <button type="button" class="btn btn-success px-4 py-2 fw-semibold" style="background:#027a48; border-color:#027a48; border-radius:10px;" onclick="handlePayrollAction('approve', <?php echo (int)$payroll_id; ?>)">
+                    <i class="fas fa-check-circle me-1"></i> Approve Payroll
                 </button>
-                <button type="button" class="btn btn-secondary btn-lg ms-2" data-bs-dismiss="modal">Cancel</button>
             </form>
         <?php else: ?>
-            <div class="alert alert-warning mb-3">
-                <i class="fas fa-lock"></i> View-only mode. `finance.manage` permission is required for approve/reject actions.
+            <div class="alert alert-warning mb-0 me-auto">
+                <i class="fas fa-lock me-1"></i> View-only mode. <code>finance.manage</code> permission required for approval.
             </div>
-            <button type="button" class="btn btn-secondary btn-lg" data-bs-dismiss="modal">Close</button>
+            <button type="button" class="btn btn-modal-cancel" data-bs-dismiss="modal">Close</button>
         <?php endif; ?>
     </div>
 </div>
-
-<style>
-    .payroll-card {
-        background: #fff;
-        border-radius: 8px;
-        padding: 20px;
-    }
-
-    .text-end {
-        text-align: right;
-    }
-</style>

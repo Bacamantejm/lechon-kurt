@@ -1,6 +1,17 @@
 <?php
 session_start();
-header("Location: menu.php?open_cart=1");
+
+$active_seller_id = (int)($_SESSION['storefront_seller_id'] ?? 0);
+$active_branch_id = (int)($_SESSION['pickup_location'] ?? 0);
+
+$query_params = ['open_cart' => 1];
+if ($active_seller_id > 0) {
+    $query_params['seller_id'] = $active_seller_id;
+} elseif ($active_branch_id > 0) {
+    $query_params['branch_id'] = $active_branch_id;
+}
+
+header("Location: menu.php?" . http_build_query($query_params));
 exit;
 
 if (!isset($_SESSION['cart']) || !is_array($_SESSION['cart'])) {
@@ -136,7 +147,39 @@ $downpayment = round($grand_total * 0.30, 2);
             </div>
 
             <aside class="cart-summary-panel">
+                <!-- Delivery Service Selection (Reference Screen 3) -->
+                <div class="cart-delivery-choice-cards">
+                    <label class="cart-deliv-card active" id="cartDelivCardStandard">
+                        <input type="radio" name="cartDeliveryOption" value="delivery" checked>
+                        <div class="deliv-card-info">
+                            <i class="fas fa-motorcycle" style="color:#b3261e;"></i>
+                            <span class="deliv-card-title">Standard Delivery, 25-35 Mins</span>
+                            <span class="deliv-card-fee">Free</span>
+                        </div>
+                        <div class="deliv-radio-indicator"><i class="fas fa-check"></i></div>
+                    </label>
+                    <label class="cart-deliv-card" id="cartDelivCardExpress">
+                        <input type="radio" name="cartDeliveryOption" value="pickup">
+                        <div class="deliv-card-info">
+                            <i class="fas fa-store" style="color:#175cd3;"></i>
+                            <span class="deliv-card-title">Store Pick-up, 15 Mins</span>
+                            <span class="deliv-card-fee">Free</span>
+                        </div>
+                        <div class="deliv-radio-indicator"><i class="fas fa-check"></i></div>
+                    </label>
+                </div>
+
                 <h2>Order Summary</h2>
+                
+                <!-- Promo Voucher Input Box (Reference Screen 3) -->
+                <div class="cart-promo-box">
+                    <div class="cart-promo-input-wrap">
+                        <i class="fas fa-ticket-alt" style="color:#98a2b3;"></i>
+                        <input type="text" id="cartPromoCodeInput" placeholder="VOUCHER CODE">
+                        <button type="button" class="cart-promo-apply-btn" onclick="applyCartPromoCode()">Apply</button>
+                    </div>
+                </div>
+
                 <div class="summary-row">
                     <span>Items</span>
                     <span id="cartPageItemCount"><?php echo count($cart_items); ?></span>
@@ -186,6 +229,19 @@ $downpayment = round($grand_total * 0.30, 2);
                     </p>
                 </div>
             </aside>
+        </div>
+    </div>
+
+    <!-- Mobile Sticky Bottom Checkout Bar (Reference Screen 3) -->
+    <div class="cart-mobile-sticky-bar" id="cartMobileStickyBar">
+        <div class="cart-sticky-info">
+            <span class="sticky-label">Total Amount</span>
+            <strong class="sticky-price" id="cartStickyTotal">PHP <?php echo number_format($grand_total, 2); ?></strong>
+        </div>
+        <div class="cart-sticky-actions">
+            <a href="checkout.php" class="cart-sticky-checkout-btn">
+                Confirm Order <i class="fas fa-arrow-right"></i>
+            </a>
         </div>
     </div>
 </section>
@@ -479,36 +535,392 @@ $downpayment = round($grand_total * 0.30, 2);
     }
 }
 
+/* Screen 3 Delivery Option Choice Cards */
+.cart-delivery-choice-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+.cart-deliv-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border: 1px solid #e4e7ec;
+    border-radius: 12px;
+    background: #ffffff;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.cart-deliv-card input {
+    display: none;
+}
+.deliv-card-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.82rem;
+    color: #344054;
+    font-weight: 600;
+}
+.deliv-card-fee {
+    font-size: 0.76rem;
+    color: #027a48;
+    background: #ecfdf3;
+    padding: 1px 7px;
+    border-radius: 4px;
+    font-weight: 700;
+}
+.deliv-radio-indicator {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 1.5px solid #d0d5dd;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    color: transparent;
+    transition: all 0.2s ease;
+}
+.cart-deliv-card.active,
+.cart-deliv-card:has(input:checked) {
+    border-color: #b3261e;
+    background: #fff9f9;
+}
+.cart-deliv-card.active .deliv-radio-indicator,
+.cart-deliv-card:has(input:checked) .deliv-radio-indicator {
+    background: #b3261e;
+    border-color: #b3261e;
+    color: #ffffff;
+}
+
+/* Screen 3 Promo Voucher Input */
+.cart-promo-box {
+    margin: 12px 0 16px 0;
+}
+.cart-promo-input-wrap {
+    display: flex;
+    align-items: center;
+    background: #ffffff;
+    border: 1px solid #d0d5dd;
+    border-radius: 999px;
+    padding: 4px 6px 4px 14px;
+    gap: 8px;
+}
+.cart-promo-input-wrap input {
+    flex: 1;
+    border: none;
+    outline: none;
+    font-size: 0.84rem;
+    background: transparent;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: #101828;
+}
+.cart-promo-apply-btn {
+    background: #b3261e;
+    color: #ffffff;
+    border: none;
+    border-radius: 999px;
+    padding: 7px 16px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    white-space: nowrap;
+}
+.cart-promo-apply-btn:hover {
+    background: #981b15;
+}
+
+/* Screen 3 Sticky Bottom Mobile Checkout Bar */
+.cart-mobile-sticky-bar {
+    display: none;
+}
+
 @media (max-width: 640px) {
     .cart-page {
-        padding: 30px 0 44px;
+        padding: 16px 0 220px !important;
     }
 
     .cart-items-panel,
     .cart-summary-panel {
         padding: 14px;
+        border-radius: 16px;
     }
 
     .cart-page-item {
-        grid-template-columns: 70px minmax(0, 1fr);
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 10px !important;
+        padding: 10px 12px !important;
     }
 
     .cart-page-item-image {
-        width: 70px;
-        height: 70px;
+        width: 64px !important;
+        height: 64px !important;
+        flex: 0 0 64px !important;
+        border-radius: 10px !important;
+    }
+
+    .cart-page-item-details {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+    }
+
+    .cart-page-item-details h3 {
+        font-size: 0.92rem !important;
+        margin: 0 0 2px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+
+    .cart-page-item-details p {
+        font-size: 0.78rem !important;
+        margin: 0 0 2px !important;
     }
 
     .cart-page-item-right {
-        grid-column: 1 / -1;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-        margin-top: 4px;
+        grid-column: auto !important;
+        flex-direction: column !important;
+        align-items: flex-end !important;
+        gap: 6px !important;
+        margin-top: 0 !important;
+        flex-shrink: 0 !important;
+    }
+
+    .cart-page-qty {
+        margin-top: 0 !important;
+    }
+
+    .qty-btn {
+        width: 32px !important;
+        height: 32px !important;
+        font-size: 0.85rem !important;
+    }
+
+    .cart-page-qty span {
+        min-width: 24px !important;
+        font-size: 0.8rem !important;
+    }
+
+    .cart-page-item-total {
+        font-size: 0.92rem !important;
+        font-weight: 800 !important;
+    }
+
+    .remove-btn {
+        padding: 3px 8px !important;
+        font-size: 0.74rem !important;
+    }
+
+    .mobile-bottom-nav {
+        display: none !important;
+    }
+
+    .cart-page-header p,
+    .cart-panel-note,
+    .checkout-choice-note,
+    .checkout-security-note {
+        display: none !important;
     }
 
     .cart-header-stats {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 6px !important;
+        margin-top: 10px !important;
     }
+
+    .cart-header-stat {
+        padding: 6px 8px !important;
+        border-radius: 8px !important;
+        gap: 1px !important;
+    }
+
+    .cart-header-stat-label {
+        font-size: 0.68rem !important;
+    }
+
+    .cart-header-stat strong {
+        font-size: 0.85rem !important;
+    }
+
+    .cart-mobile-sticky-bar {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        background: rgba(255, 255, 255, 0.98) !important;
+        backdrop-filter: blur(14px) !important;
+        -webkit-backdrop-filter: blur(14px) !important;
+        border-top: 1px solid #eaecf0 !important;
+        padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px)) !important;
+        z-index: 1000 !important;
+        box-shadow: 0 -4px 16px rgba(16, 24, 40, 0.08) !important;
+    }
+
+    .cart-sticky-info {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 2px !important;
+    }
+
+    .cart-sticky-info .sticky-label {
+        font-size: 0.72rem !important;
+        color: #667085 !important;
+        font-weight: 600 !important;
+        text-transform: uppercase !important;
+    }
+
+    .cart-sticky-info .sticky-price {
+        font-size: 1.15rem !important;
+        font-weight: 800 !important;
+        color: #b3261e !important;
+        line-height: 1 !important;
+    }
+
+    .cart-sticky-checkout-btn {
+        background: #b3261e !important;
+        color: #ffffff !important;
+        border-radius: 999px !important;
+        padding: 10px 20px !important;
+        font-size: 0.86rem !important;
+        font-weight: 700 !important;
+        text-decoration: none !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+        box-shadow: 0 4px 12px rgba(179, 38, 30, 0.25) !important;
+    }
+}
+
+/* ==========================================================================
+   CART PAGE DARK THEME ENGINE
+   ========================================================================== */
+body.dark-mode .cart-page {
+    background: #0f172a !important;
+}
+
+body.dark-mode .cart-page-header h1 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cart-page-header p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .cart-header-stat {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .cart-header-stat-label {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .cart-header-stat strong {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cart-items-panel,
+body.dark-mode .cart-summary-panel {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25) !important;
+}
+
+body.dark-mode .cart-panel-head h2,
+body.dark-mode .cart-summary-panel h2 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cart-panel-note {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .cart-page-item {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .cart-page-item:hover {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
+    border-color: #475569 !important;
+}
+
+body.dark-mode .cart-page-item-details h3 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cart-page-item-details p {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .cart-page-qty button {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cart-page-qty button:hover {
+    background: #334155 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .cart-page-qty span {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cart-page-item-total {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .summary-row {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .summary-row span:last-child {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .summary-row.grand span:last-child {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .checkout-choice {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .checkout-choice-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .checkout-choice-note {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .checkout-security-note {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .cart-empty-state {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .cart-empty-state i {
+    color: #64748b !important;
+}
+
+body.dark-mode .cart-empty-state p {
+    color: #cbd5e1 !important;
 }
 </style>
 
@@ -560,6 +972,9 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('cartPageVat').textContent = formatMoney(vat);
         document.getElementById('cartPageGrandTotal').textContent = formatMoney(grandTotal);
         document.getElementById('cartPageDownpayment').textContent = formatMoney(downpayment);
+
+        const stickyTotalEl = document.getElementById('cartStickyTotal');
+        if (stickyTotalEl) stickyTotalEl.textContent = formatMoney(grandTotal);
 
         const headerItemCount = document.getElementById('cartHeaderItemCount');
         const headerQtyCount = document.getElementById('cartHeaderQtyCount');
@@ -676,9 +1091,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 await loadCart();
                 if (result.success) {
                     document.dispatchEvent(new CustomEvent('cartUpdated'));
+                    if (window.showToast) window.showToast('Cart updated', 'success');
                 } else if (result.message) {
-                    if (window.swalConfirmAction && typeof Swal !== 'undefined') {
-                        Swal.fire({ icon: 'error', title: 'Cart Update Failed', text: result.message, confirmButtonColor: '#c62828' });
+                    if (window.showToast) {
+                        window.showToast(result.message, 'error');
                     } else {
                         alert(result.message);
                     }
@@ -709,9 +1125,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 await loadCart();
                 if (result.success) {
                     document.dispatchEvent(new CustomEvent('cartUpdated'));
+                    if (window.showToast) window.showToast('Cart cleared', 'success');
                 } else if (result.message) {
-                    if (window.swalConfirmAction && typeof Swal !== 'undefined') {
-                        Swal.fire({ icon: 'error', title: 'Unable to Clear Cart', text: result.message, confirmButtonColor: '#c62828' });
+                    if (window.showToast) {
+                        window.showToast(result.message, 'error');
                     } else {
                         alert(result.message);
                     }
@@ -721,6 +1138,27 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    window.applyCartPromoCode = function() {
+        const input = document.getElementById('cartPromoCodeInput');
+        const code = input ? input.value.trim() : '';
+        if (!code) {
+            if (window.showToast) window.showToast('Please enter a voucher code', 'error');
+            else alert('Please enter a voucher code');
+            return;
+        }
+        if (window.showToast) window.showToast('Voucher "' + code + '" applied successfully!', 'success');
+        else alert('Voucher applied!');
+    };
+
+    document.querySelectorAll('.cart-deliv-card').forEach(function(card) {
+        card.addEventListener('click', function() {
+            document.querySelectorAll('.cart-deliv-card').forEach(function(c) { c.classList.remove('active'); });
+            this.classList.add('active');
+            const radio = this.querySelector('input[type="radio"]');
+            if (radio) radio.checked = true;
+        });
+    });
 
     loadCart();
 });

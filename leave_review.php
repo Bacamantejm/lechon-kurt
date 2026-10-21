@@ -103,6 +103,61 @@ if (empty($items)) {
     from { opacity: 0; transform: translateY(20px); }
     to { opacity: 1; transform: translateY(0); }
 }
+
+/* ==========================================================================
+   LEAVE REVIEW DARK THEME ENGINE
+   ========================================================================== */
+body.dark-mode .review-page {
+    background-color: #0f172a !important;
+}
+
+body.dark-mode .review-container {
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
+}
+
+body.dark-mode .review-header {
+    border-bottom-color: #334155 !important;
+}
+
+body.dark-mode .review-header h1 {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .review-header p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .product-review-card,
+body.dark-mode .delivery-review-card {
+    background: #111827 !important;
+    border: 1px solid #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .product-review-card h3,
+body.dark-mode .delivery-review-card h3 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .rating-group label,
+body.dark-mode .form-group label {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .form-group textarea {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .form-group textarea:focus {
+    border-color: #b3261e !important;
+    background: #0f172a !important;
+    color: #f8fafc !important;
+}
 </style>
 
 <div class="review-page">

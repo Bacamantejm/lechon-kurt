@@ -244,7 +244,7 @@ if (!empty($data['payslip_number'])) {
 
         <div class="footer">
             <p>This is a computer-generated document and does not require a signature.</p>
-            <p>Lechon Delights • 123 Main St, Manila • (02) 8123-4567</p>
+            <p>Lechon Delights • Governor Drive, Dasmariñas, Cavite • (046) 416-1234</p>
         </div>
     </div>
 

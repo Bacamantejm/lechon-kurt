@@ -4,6 +4,11 @@ $current_page = 'menu';
 $page_title = "Menu & Order | Lechon Delights";
 
 require_once 'includes/config.php';
+require_once __DIR__ . '/includes/rider_helper.php';
+if (!empty($_SESSION['user_id']) && isDeliveryDriverUser($conn, (int)$_SESSION['user_id'])) {
+    header("Location: rider/index.php");
+    exit();
+}
 
 $scoped_partner_seller_id = 0;
 if (!empty($_SESSION['user_id']) && isset($conn) && $conn) {
@@ -64,7 +69,7 @@ if (!isset($_SESSION['delivery_option'])) {
     $_SESSION['delivery_option'] = 'pickup'; // Default to pickup
 }
 if (!isset($_SESSION['delivery_location'])) {
-    $_SESSION['delivery_location'] = 'metro_manila'; // Default to Metro Manila
+    $_SESSION['delivery_location'] = 'cavite'; // Default to Cavite
 }
 
 // Delivery fee quotes are now calculated dynamically from the nearest store and the customer's pinned location.
@@ -226,64 +231,132 @@ if (empty($store_locations)) {
         [
             'id' => 1,
             'owner_user_id' => 0,
-            'name' => 'Main Branch - Makati',
-            'street_address' => '123 Ayala Avenue',
-            'address' => '123 Ayala Avenue, Makati City, Metro Manila',
-            'city' => 'Makati',
-            'province' => 'Metro Manila',
-            'phone' => '(02) 1234-5678',
+            'name' => 'Dasmariñas Branch',
+            'street_address' => 'Governor Drive, Sampaloc 1',
+            'address' => 'Governor Drive, Sampaloc 1, Dasmariñas, Cavite',
+            'city' => 'Dasmariñas',
+            'province' => 'Cavite',
+            'phone' => '(046) 416-1234',
             'hours' => '8:00 AM - 10:00 PM',
-            'latitude' => 14.554729,
-            'longitude' => 121.024445
+            'latitude' => 14.32940000,
+            'longitude' => 120.93670000
         ],
         [
             'id' => 2,
             'owner_user_id' => 0,
-            'name' => 'Quezon City Branch',
-            'street_address' => '456 Tomas Morato Avenue',
-            'address' => '456 Tomas Morato Avenue, Quezon City, Metro Manila',
-            'city' => 'Quezon City',
-            'province' => 'Metro Manila',
-            'phone' => '(02) 8765-4321',
+            'name' => 'Imus Branch',
+            'street_address' => 'Nueno Avenue, Poblacion',
+            'address' => 'Nueno Avenue, Poblacion, Imus, Cavite',
+            'city' => 'Imus',
+            'province' => 'Cavite',
+            'phone' => '(046) 471-5678',
             'hours' => '8:00 AM - 10:00 PM',
-            'latitude' => 14.632916,
-            'longitude' => 121.033203
+            'latitude' => 14.42970000,
+            'longitude' => 120.93670000
         ],
         [
             'id' => 3,
             'owner_user_id' => 0,
-            'name' => 'Alabang Branch',
-            'street_address' => '789 Commerce Avenue',
-            'address' => '789 Commerce Avenue, Muntinlupa, Metro Manila',
-            'city' => 'Muntinlupa',
-            'province' => 'Metro Manila',
-            'phone' => '(02) 3456-7890',
+            'name' => 'General Trias Branch',
+            'street_address' => 'Arnaldo Highway, San Francisco',
+            'address' => 'Arnaldo Highway, San Francisco, General Trias, Cavite',
+            'city' => 'General Trias',
+            'province' => 'Cavite',
+            'phone' => '(046) 509-9012',
             'hours' => '8:00 AM - 10:00 PM',
-            'latitude' => 14.425533,
-            'longitude' => 121.039489
+            'latitude' => 14.38690000,
+            'longitude' => 120.88090000
         ],
         [
             'id' => 4,
             'owner_user_id' => 0,
-            'name' => 'Antipolo Branch',
-            'street_address' => '101 Sumulong Highway',
-            'address' => '101 Sumulong Highway, Antipolo, Rizal',
-            'city' => 'Antipolo',
-            'province' => 'Rizal',
-            'phone' => '(02) 9876-5432',
-            'hours' => '8:00 AM - 9:00 PM',
-            'latitude' => 14.589768,
-            'longitude' => 121.173599
+            'name' => 'Bacoor Branch',
+            'street_address' => 'Aguinaldo Highway, Talaba',
+            'address' => 'Aguinaldo Highway, Talaba, Bacoor, Cavite',
+            'city' => 'Bacoor',
+            'province' => 'Cavite',
+            'phone' => '(046) 417-3456',
+            'hours' => '8:00 AM - 10:00 PM',
+            'latitude' => 14.46040000,
+            'longitude' => 120.96340000
+        ],
+        [
+            'id' => 5,
+            'owner_user_id' => 0,
+            'name' => 'Tagaytay Branch',
+            'street_address' => 'Emilio Aguinaldo Hwy, Silang Junction South',
+            'address' => 'Emilio Aguinaldo Hwy, Silang Junction South, Tagaytay, Cavite',
+            'city' => 'Tagaytay',
+            'province' => 'Cavite',
+            'phone' => '(046) 483-7890',
+            'hours' => '8:00 AM - 10:00 PM',
+            'latitude' => 14.11530000,
+            'longitude' => 120.96210000
         ]
     ];
 }
 
+function menuGetStoreImage($store_id, $store_name, $custom_image = '') {
+    $custom = trim((string)$custom_image);
+    if ($custom !== '' && $custom !== 'default.jpg') {
+        if (str_starts_with($custom, 'http') || str_starts_with($custom, 'images/') || str_starts_with($custom, 'uploads/')) {
+            return $custom;
+        }
+        if (file_exists('uploads/business_logos/' . $custom)) {
+            return 'uploads/business_logos/' . $custom;
+        }
+        if (file_exists('images/' . $custom)) {
+            return 'images/' . $custom;
+        }
+    }
+    
+    $image_map = [
+        1 => 'images/store-bg.jpg',
+        2 => 'images/panda_preorder_lechon.jpg',
+        3 => 'images/about-us-bg.jpg',
+        4 => 'images/hero-bg.jpg',
+        5 => 'images/panda_fresh_lechon.jpg',
+        6 => 'images/store-bg.jpg',
+        7 => 'images/panda_preorder_lechon.jpg',
+    ];
+    if (isset($image_map[$store_id])) {
+        return $image_map[$store_id];
+    }
+    
+    $name_lower = strtolower((string)$store_name);
+    if (str_contains($name_lower, 'lydia')) return 'images/panda_fresh_lechon.jpg';
+    if (str_contains($name_lower, 'linda')) return 'images/about-us-bg.jpg';
+    if (str_contains($name_lower, 'tagaytay')) return 'images/hero-bg.jpg';
+    if (str_contains($name_lower, 'bacoor')) return 'images/panda_preorder_lechon.jpg';
+    if (str_contains($name_lower, 'imus')) return 'images/about-us-bg.jpg';
+    return 'images/store-bg.jpg';
+}
+
+$official_owner_ids = [0, 1, 42, 43, 44, 45];
+$selected_pickup_branch = null;
 $default_pickup_location = (int)($_SESSION['pickup_location'] ?? ($store_locations[0]['id'] ?? 1));
 if ($requested_branch_id > 0) {
     foreach ($store_locations as $branch_option) {
         if ((int)$branch_option['id'] === $requested_branch_id) {
             $default_pickup_location = $requested_branch_id;
             $_SESSION['pickup_location'] = $requested_branch_id;
+            $selected_pickup_branch = $branch_option;
+            break;
+        }
+    }
+}
+if (!$selected_pickup_branch && $requested_seller_id > 0) {
+    foreach ($store_locations as $branch_option) {
+        if ((int)($branch_option['owner_user_id'] ?? 0) === $requested_seller_id) {
+            $selected_pickup_branch = $branch_option;
+            break;
+        }
+    }
+}
+if (!$selected_pickup_branch) {
+    foreach ($store_locations as $branch_option) {
+        if ((int)($branch_option['id'] ?? 0) === (int)$default_pickup_location) {
+            $selected_pickup_branch = $branch_option;
             break;
         }
     }
@@ -296,6 +369,70 @@ if ($requested_seller_id > 0) {
         }
     }
 }
+
+// Build unified list of all business shops for the store directory & quick switcher
+$all_menu_shops = [];
+
+// 1. Physical branches
+foreach ($store_locations as $loc) {
+    $b_id = (int)$loc['id'];
+    $b_owner = (int)($loc['owner_user_id'] ?? 1);
+    $is_partner = ($b_owner > 0 && !in_array($b_owner, $official_owner_ids, true));
+    $all_menu_shops[] = [
+        'id' => $b_id,
+        'seller_id' => $b_owner,
+        'branch_id' => $b_id,
+        'name' => (string)$loc['name'],
+        'address' => (string)($loc['address'] ?? ''),
+        'city' => (string)($loc['city'] ?? 'Cavite'),
+        'category' => $is_partner ? 'partner' : 'branch',
+        'type_label' => $is_partner ? 'Partner Store' : 'Official Branch',
+        'image' => menuGetStoreImage($b_id, (string)$loc['name']),
+        'link' => $is_partner ? ('menu.php?seller_id=' . $b_owner) : ('menu.php?branch_id=' . $b_id),
+        'is_active_selection' => ($is_partner ? ($requested_seller_id > 0 && $requested_seller_id === $b_owner) : ($requested_branch_id > 0 && $requested_branch_id === $b_id && $requested_seller_id <= 0))
+    ];
+}
+
+// 2. Partner organization sellers
+$partner_sql = "SELECT u.id AS seller_id, u.full_name, u.business_name, u.business_type, u.business_logo, u.profile_image, u.address, u.phone,
+                       sl.store_id, sl.city, sl.province
+                FROM users u
+                LEFT JOIN store_locations sl ON sl.owner_user_id = u.id AND sl.is_active = 1
+                WHERE (u.account_type = 'organization' OR u.user_type = 'seller' OR EXISTS (SELECT 1 FROM franchise_applications fa WHERE fa.user_id = u.id AND fa.status = 'approved')) AND u.is_active = 1";
+$partner_res = mysqli_query($conn, $partner_sql);
+if ($partner_res) {
+    while ($p_row = mysqli_fetch_assoc($partner_res)) {
+        $sid = (int)$p_row['seller_id'];
+        $already_in = false;
+        foreach ($all_menu_shops as $st) {
+            if ((int)($st['seller_id'] ?? 0) === $sid) {
+                $already_in = true;
+                break;
+            }
+        }
+        if (!$already_in) {
+            $name = trim((string)$p_row['business_name']) ?: (trim((string)$p_row['full_name']) . ' Store');
+            $city = !empty($p_row['city']) ? $p_row['city'] : 'Cavite';
+            $p_img = !empty($p_row['business_logo']) ? $p_row['business_logo'] : (!empty($p_row['profile_image']) ? $p_row['profile_image'] : '');
+            $all_menu_shops[] = [
+                'id' => 9000 + $sid,
+                'seller_id' => $sid,
+                'branch_id' => !empty($p_row['store_id']) ? (int)$p_row['store_id'] : 0,
+                'name' => $name,
+                'address' => $p_row['address'] ?: ($city . ', Cavite'),
+                'city' => $city,
+                'category' => 'partner',
+                'type_label' => 'Partner Store',
+                'image' => menuGetStoreImage(9000 + $sid, $name, $p_img),
+                'link' => 'menu.php?seller_id=' . $sid,
+                'is_active_selection' => ($requested_seller_id > 0 && $requested_seller_id === $sid)
+            ];
+        }
+    }
+    mysqli_free_result($partner_res);
+}
+
+$has_selected_store = ($requested_seller_id > 0 || $requested_branch_id > 0);
 
 // Compute total sold per product for best/top-seller filtering
 $total_sold_map = [];
@@ -325,6 +462,13 @@ $query = "SELECT p.*, COALESCE(i.current_stock, p.stock) as stock,
           WHERE p.is_archived = 0 AND p.is_active = 1";
 if ($requested_seller_id > 0) {
     $query .= " AND p.seller_id = " . (int)$requested_seller_id;
+} elseif ($requested_branch_id > 0) {
+    $branch_owner = $selected_pickup_branch ? (int)($selected_pickup_branch['owner_user_id'] ?? 0) : 0;
+    if ($branch_owner > 0 && !in_array($branch_owner, [0, 1, 42, 43, 44, 45], true)) {
+        $query .= " AND p.seller_id = " . (int)$branch_owner;
+    } else {
+        $query .= " AND (p.seller_id = 1 OR p.seller_id IS NULL" . ($branch_owner > 0 ? " OR p.seller_id = " . (int)$branch_owner : "") . ")";
+    }
 }
 $query .= " ORDER BY p.category, p.name";
 $result = mysqli_query($conn, $query);
@@ -416,14 +560,6 @@ $_SESSION['product_details'] = $product_details;
 $_SESSION['delivery_fees'] = $delivery_fees;
 $_SESSION['store_locations'] = $store_locations;
 
-$selected_pickup_branch = null;
-foreach ($store_locations as $branch_option) {
-    if ((int)($branch_option['id'] ?? 0) === (int)$default_pickup_location) {
-        $selected_pickup_branch = $branch_option;
-        break;
-    }
-}
-
 $breadcrumb_location = 'Marketplace';
 $storefront_breadcrumb_address = '';
 if ($requested_seller_id > 0) {
@@ -499,8 +635,19 @@ if ($storefront_breadcrumb_address !== '') {
     $breadcrumb_location = $storefront_breadcrumb_address;
 }
 
-$store_display_name = $storefront_name !== '' ? $storefront_name : 'Lechon Delights';
-$store_display_subtitle = $storefront_subtitle;
+if ($requested_seller_id > 0) {
+    $store_display_name = $storefront_name !== '' ? $storefront_name : 'Partner Store';
+    $store_display_type_label = 'Partner Store';
+    $store_display_subtitle = $storefront_subtitle;
+} elseif ($requested_branch_id > 0 && $selected_pickup_branch) {
+    $store_display_name = $selected_pickup_branch['name'];
+    $store_display_type_label = 'Official Pickup Branch';
+    $store_display_subtitle = 'Order directly from ' . $selected_pickup_branch['name'] . ' and browse available products.';
+} else {
+    $store_display_name = 'All Business Shops';
+    $store_display_type_label = 'Marketplace Directory';
+    $store_display_subtitle = 'Browse products across all verified partner shops and official branches, or select a specific shop below.';
+}
 
 $category_keys = array_values(array_filter(array_keys($menu_categories), static function ($category) {
     return trim((string)$category) !== '';
@@ -636,8 +783,287 @@ if (!empty($product_ids_for_reviews)) {
     }
 }
 
-mysqli_close($conn);
-?><!-- Product Preview Modal -->
+// Record claimed voucher from URL if passed
+if (!empty($_GET['voucher'])) {
+    $claimed_v_code = strtoupper(trim((string)$_GET['voucher']));
+    if ($claimed_v_code !== '') {
+        $_SESSION['pending_welcome_voucher'] = $claimed_v_code;
+    }
+}
+
+// Fetch active store-specific deals/vouchers for this shop
+$store_deals = [];
+$lookup_seller_id = (int)($requested_seller_id ?: ($store_owner_id ?? 0));
+if ($lookup_seller_id <= 0) {
+    if (!empty($selected_pickup_branch['owner_user_id']) && (int)$selected_pickup_branch['owner_user_id'] > 0) {
+        $lookup_seller_id = (int)$selected_pickup_branch['owner_user_id'];
+    } elseif (!empty($_SESSION['storefront_seller_id']) && (int)$_SESSION['storefront_seller_id'] > 0) {
+        $lookup_seller_id = (int)$_SESSION['storefront_seller_id'];
+    } else {
+        $lookup_seller_id = 1;
+    }
+}
+
+if ($lookup_seller_id > 0 && isset($conn) && $conn instanceof mysqli) {
+    require_once __DIR__ . '/includes/partner_voucher_helper.php';
+    pvEnsureVoucherSchema($conn);
+    $vd_stmt = mysqli_prepare($conn, "
+        SELECT id, seller_id, code, name, description, discount_type, discount_value, min_order_amount, max_discount_amount 
+        FROM partner_vouchers 
+        WHERE (seller_id = ? OR seller_id = 0) AND is_active = 1 
+          AND (start_at IS NULL OR start_at <= NOW()) 
+          AND (end_at IS NULL OR end_at >= NOW()) 
+        ORDER BY (seller_id = ?) DESC, id DESC 
+        LIMIT 6
+    ");
+    if ($vd_stmt) {
+        mysqli_stmt_bind_param($vd_stmt, "ii", $lookup_seller_id, $lookup_seller_id);
+        mysqli_stmt_execute($vd_stmt);
+        $vd_res = mysqli_stmt_get_result($vd_stmt);
+        if ($vd_res) {
+            while ($vd_row = mysqli_fetch_assoc($vd_res)) {
+                $store_deals[] = $vd_row;
+            }
+            mysqli_free_result($vd_res);
+        }
+        mysqli_stmt_close($vd_stmt);
+    }
+}
+?>
+<style>
+/* Immediate Navigation & Tab Styles */
+.panda-cat-tab {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    padding: 10px 0 !important;
+    color: #64748b !important;
+    font-size: 0.92rem !important;
+    font-weight: 600 !important;
+    text-decoration: none !important;
+    border-bottom: 3px solid transparent !important;
+    transition: all 0.2s ease !important;
+    cursor: pointer !important;
+}
+.panda-cat-tab:hover {
+    color: #171922 !important;
+    text-decoration: none !important;
+}
+.panda-cat-tab.active {
+    color: #171922 !important;
+    font-weight: 800 !important;
+    border-bottom-color: #171922 !important;
+    text-decoration: none !important;
+}
+.panda-cat-count {
+    font-size: 0.84rem !important;
+    color: #64748b !important;
+    font-weight: 500 !important;
+}
+.panda-cat-tab.active .panda-cat-count {
+    color: #171922 !important;
+    font-weight: 700 !important;
+}
+
+/* Store Breadcrumb & Metadata Links */
+.store-breadcrumb a {
+    color: #64748b !important;
+    text-decoration: none !important;
+    font-size: 0.84rem !important;
+}
+.store-breadcrumb a:hover {
+    color: #b3261e !important;
+}
+.storefront-meta-row-secondary a {
+    color: #475467 !important;
+    text-decoration: none !important;
+}
+.storefront-meta-row-secondary a:hover {
+    color: #171922 !important;
+}
+
+/* Smooth Image Display & Zero-Jump Sizing */
+.store-logo-tile {
+    width: 100px !important;
+    height: 100px !important;
+    border-radius: 16px !important;
+    overflow: hidden !important;
+    flex-shrink: 0 !important;
+    background: #e2e8f0 !important;
+}
+.store-logo-tile img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    display: block !important;
+    transition: transform 0.25s ease !important;
+}
+.item-image {
+    position: relative !important;
+    height: 140px !important;
+    overflow: hidden !important;
+    background: #f8fafc !important;
+    border-radius: 16px 16px 0 0 !important;
+}
+.item-image img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    display: block !important;
+    transition: transform 0.25s ease !important;
+}
+.menu-item:hover .item-image img {
+    transform: scale(1.03) !important;
+}
+
+/* Dark Mode Theme Engine for Menu & Quick Order */
+body.dark-mode .panda-cat-tab {
+    color: #94a3b8 !important;
+    text-decoration: none !important;
+}
+body.dark-mode .panda-cat-tab:hover {
+    color: #ffffff !important;
+    text-decoration: none !important;
+}
+body.dark-mode .panda-cat-tab.active {
+    color: #ef4444 !important;
+    border-bottom-color: #ef4444 !important;
+    text-decoration: none !important;
+}
+body.dark-mode .panda-cat-count {
+    color: #64748b !important;
+}
+body.dark-mode .panda-cat-tab.active .panda-cat-count {
+    color: #ef4444 !important;
+}
+body.dark-mode .store-breadcrumb a {
+    color: #94a3b8 !important;
+}
+body.dark-mode .store-breadcrumb a:hover {
+    color: #ffffff !important;
+}
+body.dark-mode .storefront-meta-row-secondary a {
+    color: #cbd5e1 !important;
+}
+body.dark-mode .storefront-meta-row-secondary a:hover {
+    color: #ffffff !important;
+}
+body.dark-mode .quick-order-panel {
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+body.dark-mode .quick-order-tabs {
+    background: #0f172a !important;
+    border: 1px solid #334155 !important;
+}
+body.dark-mode .quick-order-tab {
+    color: #94a3b8 !important;
+}
+body.dark-mode .quick-order-tab.active {
+    background: #1e293b !important;
+    color: #f8fafc !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3) !important;
+}
+body.dark-mode .quick-order-hero {
+    background: #111827 !important;
+    border: 1px solid #334155 !important;
+}
+body.dark-mode .quick-order-hero h3 {
+    color: #f8fafc !important;
+}
+body.dark-mode .quick-order-hero p {
+    color: #94a3b8 !important;
+}
+body.dark-mode .quick-order-summary {
+    color: #f8fafc !important;
+}
+body.dark-mode .quick-order-meta {
+    color: #94a3b8 !important;
+}
+body.dark-mode .quick-order-items-empty {
+    color: #94a3b8 !important;
+}
+body.dark-mode .quick-order-item {
+    border-bottom-color: #334155 !important;
+}
+body.dark-mode .quick-order-item-title {
+    color: #f8fafc !important;
+}
+body.dark-mode .quick-order-item-price {
+    color: #ef4444 !important;
+}
+body.dark-mode .summary-row {
+    color: #f8fafc !important;
+}
+body.dark-mode .summary-row strong,
+body.dark-mode #quickOrderTotal {
+    color: #f8fafc !important;
+}
+body.dark-mode .quick-order-link {
+    color: #f8fafc !important;
+}
+body.dark-mode .quick-order-checkout:disabled {
+    background: #334155 !important;
+    color: #64748b !important;
+}
+body.dark-mode .quick-order-checkout:not(:disabled) {
+    background: #b3261e !important;
+    color: #ffffff !important;
+}
+
+/* Business Shop Showcase Directory Cards */
+.menu-shop-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease !important;
+}
+.menu-shop-card:hover {
+    transform: translateY(-3px) !important;
+    border-color: #b3261e !important;
+    box-shadow: 0 10px 24px rgba(16, 24, 40, 0.08) !important;
+}
+.menu-shop-card:hover img {
+    transform: scale(1.04) !important;
+}
+.storefront-change-shop-btn {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    padding: 5px 12px !important;
+    background: #fff1f0 !important;
+    border: 1px solid #fee4e2 !important;
+    border-radius: 999px !important;
+    color: #b3261e !important;
+    font-weight: 700 !important;
+    font-size: 0.8rem !important;
+    text-decoration: none !important;
+    transition: all 0.15s ease !important;
+}
+.storefront-change-shop-btn:hover {
+    background: #b3261e !important;
+    color: #ffffff !important;
+    border-color: #b3261e !important;
+    text-decoration: none !important;
+}
+body.dark-mode .menu-shop-card {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+body.dark-mode .menu-shop-card:hover {
+    border-color: #ef4444 !important;
+}
+body.dark-mode .storefront-change-shop-btn {
+    background: #334155 !important;
+    border-color: #475467 !important;
+    color: #ef4444 !important;
+}
+body.dark-mode .storefront-change-shop-btn:hover {
+    background: #ef4444 !important;
+    color: #ffffff !important;
+}
+</style>
+
+<!-- Product Preview Modal -->
 <div class="product-preview-modal" id="productPreviewModal" style="display:none;">
     <div class="preview-modal-content">
         <button class="preview-close" id="previewClose">&times;</button>
@@ -687,9 +1113,14 @@ mysqli_close($conn);
                     </div>
                 </div>
                 
-                <button class="btn-primary add-to-cart-confirm" id="addToCartConfirm">
-                    <i class="fas fa-cart-plus"></i> Add to Cart
-                </button>
+                <div class="preview-actions-wrap" style="display: flex; gap: 10px; margin-top: 14px; margin-bottom: 24px; padding-bottom: 16px; flex-wrap: wrap;">
+                    <button class="btn-primary add-to-cart-confirm" id="addToCartConfirm" style="flex: 1; min-width: 160px;">
+                        <i class="fas fa-cart-plus"></i> Add to Cart
+                    </button>
+                    <a href="preorder.php" id="previewPreorderLink" style="display: none; align-items: center; justify-content: center; gap: 6px; padding: 12px 18px; border-radius: 12px; font-weight: 700; font-size: 0.88rem; background: #fffaeb; color: #b54708; border: 1px solid #fedf89; text-decoration: none; white-space: nowrap;">
+                        <i class="fas fa-calendar-check"></i> Reserve Event Date
+                    </a>
+                </div>
             </div>
         </div>
     </div>
@@ -806,18 +1237,24 @@ mysqli_close($conn);
 <section class="storefront-header">
     <div class="container">
         <nav class="store-breadcrumb" aria-label="Breadcrumb">
-            <a href="locations.php"><?php echo htmlspecialchars($breadcrumb_location); ?></a>
-            <span class="breadcrumb-sep">&rsaquo;</span>
-            <a href="index.php#marketplaceStores">Store list</a>
-            <span class="breadcrumb-sep">&rsaquo;</span>
-            <span class="is-current"><?php echo htmlspecialchars($store_display_name); ?></span>
+            <?php if ($has_selected_store): ?>
+                <a href="menu.php" style="color: #b3261e; font-weight: 700;"><i class="fas fa-arrow-left"></i> All Business Shops</a>
+                <span class="breadcrumb-sep">&rsaquo;</span>
+                <span class="is-current"><?php echo htmlspecialchars($store_display_name); ?></span>
+            <?php else: ?>
+                <a href="locations.php"><?php echo htmlspecialchars($breadcrumb_location); ?></a>
+                <span class="breadcrumb-sep">&rsaquo;</span>
+                <span class="is-current">All Business Shops</span>
+            <?php endif; ?>
         </nav>
         <div class="storefront-overview">
             <div class="store-logo-tile">
                 <?php if ($store_logo_image !== ''): ?>
-                    <img src="<?php echo htmlspecialchars($store_logo_image); ?>" alt="<?php echo htmlspecialchars($store_display_name); ?>" loading="lazy" onerror="this.style.display='none';">
+                    <img src="<?php echo htmlspecialchars($store_logo_image); ?>" alt="<?php echo htmlspecialchars($store_display_name); ?>" loading="lazy" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <span class="store-logo-initials" style="display:none;"><?php echo htmlspecialchars($store_initials); ?></span>
+                <?php else: ?>
+                    <span class="store-logo-initials"><?php echo htmlspecialchars($store_initials); ?></span>
                 <?php endif; ?>
-                <span class="store-logo-initials"><?php echo htmlspecialchars($store_initials); ?></span>
             </div>
             <div class="storefront-copy">
                 <p class="storefront-categories"><?php echo htmlspecialchars($store_category_line); ?></p>
@@ -826,12 +1263,17 @@ mysqli_close($conn);
                 <div class="storefront-meta-row">
                     <span><i class="fas fa-motorcycle"></i> Delivery and pickup available</span>
                     <span><i class="fas fa-receipt"></i> <?php echo htmlspecialchars($store_price_label); ?></span>
-                    <span><i class="fas fa-utensils"></i> <?php echo number_format($store_item_count); ?> items</span>
+                    <span><i class="fas fa-utensils"></i> <?php echo $has_selected_store ? (number_format($store_item_count) . ' items') : (count($all_menu_shops) . ' shops available'); ?></span>
                 </div>
                 <div class="storefront-meta-row storefront-meta-row-secondary">
-                    <a href="javascript:void(0);" id="openStorefrontReviewsBtn"><i class="fas fa-star" style="color:#f59e0b;"></i> <?php echo htmlspecialchars($store_rating_label); ?> <span style="text-decoration:underline; font-weight:700; margin-left:4px;">See reviews</span></a>
-                    <a href="#menu"><i class="far fa-comment-dots"></i> See menu</a>
-                    <a href="locations.php"><i class="fas fa-circle-info"></i> More info</a>
+                    <?php if ($has_selected_store): ?>
+                        <a href="javascript:void(0);" id="openStorefrontReviewsBtn"><i class="fas fa-star" style="color:#f59e0b;"></i> <?php echo htmlspecialchars($store_rating_label); ?> <span style="text-decoration:underline; font-weight:700; margin-left:4px;">See reviews</span></a>
+                        <a href="menu.php" class="storefront-change-shop-btn"><i class="fas fa-arrows-rotate"></i> Change Shop</a>
+                        <a href="locations.php"><i class="fas fa-circle-info"></i> More info</a>
+                    <?php else: ?>
+                        <a href="#shopsDirectory"><i class="fas fa-store"></i> Choose a Shop Below</a>
+                        <a href="locations.php"><i class="fas fa-location-dot"></i> View Branch Map</a>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -841,230 +1283,347 @@ mysqli_close($conn);
 <!-- Menu Section -->
 <section class="menu-section" id="menu">
     <div class="container">
-        <!-- Foodpanda Unified Sticky Category Navigation Bar -->
-        <div class="panda-menu-sticky-bar" id="pandaMenuStickyBar">
-            <div class="panda-menu-bar-inner">
-                <!-- Search in Menu Input -->
-                <div class="panda-menu-search-box">
-                    <i class="fas fa-magnifying-glass"></i>
-                    <input type="search" id="menuSearchInput" placeholder="Search in menu" autocomplete="off">
-                </div>
-
-                <!-- Left Scroll Arrow -->
-                <button type="button" class="panda-cat-arrow arrow-left" id="pandaCatScrollLeft" aria-label="Scroll categories left">
-                    <i class="fas fa-chevron-left"></i>
-                </button>
-
-                <!-- Category Tabs Strip -->
-                <div class="panda-cat-strip-wrap" id="pandaCatStripWrap">
-                    <div class="panda-cat-strip" id="pandaCatStrip">
-                        <?php $cat_index = 0; foreach ($menu_categories as $category => $items): ?>
-                            <?php
-                            $cat_slug = strtolower(str_replace(' ', '-', $category));
-                            $cat_count = count($items);
-                            $is_active_cat = ($cat_index === 0);
-                            ?>
-                            <a href="#<?php echo htmlspecialchars($cat_slug); ?>" class="panda-cat-tab<?php echo $is_active_cat ? ' active' : ''; ?>" data-category="<?php echo htmlspecialchars($cat_slug); ?>">
-                                <?php echo htmlspecialchars($category); ?> <span class="panda-cat-count">(<?php echo $cat_count; ?>)</span>
-                            </a>
-                        <?php $cat_index++; endforeach; ?>
+        <?php if (!$has_selected_store): ?>
+            <!-- All Business Shops Directory Showcase Grid -->
+            <div class="menu-shops-showcase-section" id="shopsDirectory" style="margin-bottom: 40px;">
+                <div style="background: #ffffff; border: 1px solid #eaecf0; border-radius: 20px; padding: 32px 24px; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);">
+                    <div style="text-align: center; max-width: 680px; margin: 0 auto 28px;">
+                        <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.78rem; font-weight: 800; color: #b3261e; background: #fff1f0; border: 1px solid #fee4e2; padding: 4px 12px; border-radius: 999px; margin-bottom: 10px;">
+                            <i class="fas fa-store"></i> Verified Marketplace Partners & Branches
+                        </span>
+                        <h2 style="font-family: 'Outfit', sans-serif; font-size: 1.75rem; font-weight: 800; color: #101828; margin: 0 0 8px; letter-spacing: -0.02em;">
+                            Choose a Business Shop to Order
+                        </h2>
+                        <p style="font-size: 0.92rem; color: #475467; margin: 0; line-height: 1.5;">
+                            Select an official pickup branch or partner restaurant below to view their exclusive dishes, real-time inventory, and store deals.
+                        </p>
                     </div>
-                </div>
 
-                <!-- Right Scroll Arrow -->
-                <button type="button" class="panda-cat-arrow arrow-right" id="pandaCatScrollRight" aria-label="Scroll categories right">
-                    <i class="fas fa-chevron-right"></i>
-                </button>
-                
-                <!-- Filter Dropdown -->
-                <div class="panda-menu-filter-select-wrap">
-                    <select id="menuSortFilter" class="panda-menu-filter-select">
-                        <option value="default" selected>Default Sort</option>
-                        <option value="lowest_price">Lowest Price</option>
-                        <option value="highest_price">Highest Price</option>
-                        <option value="best_top_seller">Best / Top Seller</option>
-                    </select>
+                    <div class="menu-shops-directory-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px;">
+                        <?php foreach ($all_menu_shops as $shop): ?>
+                            <a href="<?php echo htmlspecialchars($shop['link']); ?>" class="menu-shop-card" style="background: #ffffff; border: 1.5px solid #eaecf0; border-radius: 16px; overflow: hidden; text-decoration: none; display: flex; flex-direction: column; transition: all 0.2s ease; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);">
+                                <div style="height: 160px; overflow: hidden; position: relative; background: #f8f9fa;">
+                                    <img src="<?php echo htmlspecialchars($shop['image']); ?>" alt="<?php echo htmlspecialchars($shop['name']); ?>" style="width: 100%; height: 100%; object-fit: cover; transition: transform 0.25s ease;" onerror="this.src='images/store-bg.jpg'">
+                                    <span style="position: absolute; top: 12px; left: 12px; font-size: 0.72rem; font-weight: 800; padding: 4px 10px; border-radius: 999px; background: rgba(16, 24, 40, 0.82); color: #ffffff; backdrop-filter: blur(4px);">
+                                        <i class="<?php echo $shop['category'] === 'branch' ? 'fas fa-location-dot' : 'fas fa-shop'; ?>" style="margin-right: 3px;"></i> <?php echo htmlspecialchars($shop['type_label']); ?>
+                                    </span>
+                                </div>
+                                <div style="padding: 18px; display: flex; flex-direction: column; flex: 1;">
+                                    <div style="font-size: 0.78rem; color: #b3261e; font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 5px;">
+                                        <i class="fas fa-map-pin"></i> <?php echo htmlspecialchars($shop['city']); ?>
+                                    </div>
+                                    <h3 style="margin: 0 0 6px; font-family: 'Outfit', sans-serif; font-size: 1.15rem; font-weight: 800; color: #101828;">
+                                        <?php echo htmlspecialchars($shop['name']); ?>
+                                    </h3>
+                                    <p style="margin: 0 0 16px; font-size: 0.82rem; color: #667085; line-height: 1.4; flex: 1;">
+                                        <?php echo htmlspecialchars($shop['address']); ?>
+                                    </p>
+                                    <div style="border-top: 1px solid #f2f4f7; padding-top: 14px; display: flex; align-items: center; justify-content: space-between;">
+                                        <span style="font-size: 0.84rem; font-weight: 700; color: #b3261e; display: inline-flex; align-items: center; gap: 6px;">
+                                            <i class="fas fa-utensils"></i> Browse Food Menu
+                                        </span>
+                                        <span style="width: 32px; height: 32px; border-radius: 50%; background: #fff1f0; color: #b3261e; display: flex; align-items: center; justify-content: center; font-size: 0.85rem;">
+                                            <i class="fas fa-arrow-right"></i>
+                                        </span>
+                                    </div>
+                                </div>
+                            </a>
+                        <?php endforeach; ?>
+                    </div>
                 </div>
             </div>
-        </div>
-        <p id="menuSearchResultInfo" class="menu-search-result-info" style="display:none;"></p>
-
-        <div class="menu-layout">
-            <div class="menu-main-column">
-
-        <?php if (empty($menu_categories)): ?>
-        <div class="menu-filter-bar" style="margin-top:16px;">
-            <label>Storefront update:</label>
-            <span style="color:#6b7280;font-weight:600;">This store has no active posted products yet.</span>
-            <a href="index.php#marketplaceStores" class="btn-primary" style="margin-left:auto;">Back to Stores</a>
-        </div>
-        <?php endif; ?>
-
-        <!-- Menu Items by Category -->
-        <?php foreach ($menu_categories as $category => $items): ?>
-        <div class="menu-category" id="<?php echo strtolower(str_replace(' ', '-', $category)); ?>">
-            <h2 class="category-title"><?php echo $category; ?></h2>
-            <div class="menu-items-grid">
-                <?php foreach ($items as $item): ?>
-                <?php
-                    $item_search_tokens = [
-                        (string)($item['name'] ?? ''),
-                        (string)($item['category'] ?? ''),
-                        (string)strip_tags((string)($item['description'] ?? '')),
-                        (string)($item['store_name'] ?? ''),
-                        implode(' ', array_filter(array_map('strval', (array)($item['sizes'] ?? [])))),
-                        implode(' ', array_filter(array_map('strval', (array)($item['addons'] ?? [])))),
-                        implode(' ', array_filter(array_map('strval', (array)($item['weights'] ?? [])))),
-                        implode(' ', array_filter(array_map('strval', (array)($item['good_for'] ?? []))))
-                    ];
-                    $item_search_text = strtolower(trim(preg_replace('/\s+/', ' ', implode(' ', array_filter($item_search_tokens)))));
-                    $is_product_favorite = !empty($favorite_product_ids[(int)$item['id']]);
-                ?>
-                 <div class="menu-item <?php if ($item['stock'] <= 0) echo 'item-unavailable'; ?>"
-                     data-product-id="<?php echo $item['id']; ?>"
-                     data-min-price="<?php echo htmlspecialchars((string)min($item['size_prices'])); ?>"
-                     data-search="<?php echo htmlspecialchars($item_search_text); ?>"
-                     data-total-sold="<?php echo (int)$item['total_sold']; ?>">
-<?php
-    $imagePath = $item['image'] ?? '';
-    $placeholderText = urlencode($item['name']);
-    if (empty($imagePath)) {
-        $imageSrc = 'https://via.placeholder.com/400x300?text=' . $placeholderText;
-    } elseif (stripos($imagePath, 'http://') === 0 || stripos($imagePath, 'https://') === 0) {
-        $imageSrc = $imagePath;
-    } elseif (strpos($imagePath, '/') === false) {
-        $imageSrc = 'images/menu/' . $imagePath;
-    } else {
-        $imageSrc = $imagePath;
-    }
-?>
-                    <?php if ($item['stock'] <= 0): ?>
-                        <div class="item-sold-out-overlay">
-                            <span>Sold Out</span>
+        <?php else: ?>
+            <!-- Specific Shop Food Menu & Ordering Section -->
+            <?php if (!empty($store_deals)): ?>
+                <div class="store-deals-strip" style="background: #ffffff; border: 1px solid #eaecf0; border-radius: 16px; padding: 18px 20px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(16, 24, 40, 0.04);">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="width: 34px; height: 34px; border-radius: 10px; background: #fff1f0; color: #b3261e; display: flex; align-items: center; justify-content: center; font-size: 0.95rem;">
+                                <i class="fas fa-tags"></i>
+                            </div>
+                            <div>
+                                <h3 style="margin: 0; font-family: 'Outfit', sans-serif; font-size: 1.1rem; font-weight: 800; color: #101828;">Store Exclusive Deals</h3>
+                                <p style="margin: 0; font-size: 0.78rem; color: #667085;">Special discounts available only when ordering from <?php echo htmlspecialchars($store_display_name); ?>.</p>
+                            </div>
                         </div>
-                    <?php endif; ?>
-                    
-                    <!-- Top Image Banner -->
-                    <div class="item-image">
-                        <img src="<?php echo htmlspecialchars($imageSrc); ?>" alt="<?php echo htmlspecialchars($item['name']); ?>" 
-                             onerror="this.src='https://via.placeholder.com/400x300?text=<?php echo $placeholderText; ?>'">
-                        <button
-                            type="button"
-                            class="product-favorite-btn<?php echo $is_product_favorite ? ' is-active' : ''; ?>"
-                            data-favorite-toggle="1"
-                            data-favorite-type="product"
-                            data-favorite-product-id="<?php echo (int)$item['id']; ?>"
-                            data-favorite-active="<?php echo $is_product_favorite ? '1' : '0'; ?>"
-                            aria-pressed="<?php echo $is_product_favorite ? 'true' : 'false'; ?>"
-                            title="<?php echo $is_product_favorite ? 'Remove from favorites' : 'Save to favorites'; ?>">
-                            <i class="<?php echo $is_product_favorite ? 'fas' : 'far'; ?> fa-heart"></i>
-                        </button>
-                        <?php if (($item['total_sold'] ?? 0) > 0): ?>
-                        <span class="top-seller-badge"><i class="fas fa-fire"></i> Top Seller</span>
-                        <?php endif; ?>
+                        <span style="font-size: 0.76rem; font-weight: 700; color: #027a48; background: #ecfdf3; border: 1px solid #abefc6; padding: 4px 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 5px;">
+                            <i class="fas fa-circle-check"></i> <?php echo count($store_deals); ?> Store Offer<?php echo count($store_deals) > 1 ? 's' : ''; ?> Available
+                        </span>
                     </div>
-                    
-                    <!-- Card Body Content -->
-                    <div class="item-content">
-                        <h3><?php echo htmlspecialchars($item['name']); ?></h3>
-                        
-                        <div class="item-rating">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px;">
+                        <?php foreach ($store_deals as $deal): ?>
                             <?php
-                            $rating = floatval($item['avg_rating']);
-                            $review_count = intval($item['review_count']);
-                            for ($i = 1; $i <= 5; $i++) {
-                                if ($i <= $rating) {
-                                    echo '<i class="fas fa-star"></i>';
-                                } elseif ($i - 0.5 <= $rating) {
-                                    echo '<i class="fas fa-star-half-alt"></i>';
-                                } else {
-                                    echo '<i class="far fa-star"></i>';
-                                }
-                            }
+                                $is_pct = strtolower((string)$deal['discount_type']) === 'percent';
+                                $val_text = $is_pct ? (rtrim(rtrim(number_format((float)$deal['discount_value'], 2), '0'), '.') . '% OFF') : ('₱' . number_format((float)$deal['discount_value'], 0) . ' OFF');
+                                $min_order = (float)$deal['min_order_amount'];
+                                $min_text = $min_order > 0 ? ('Min. spend ₱' . number_format($min_order, 0)) : 'No min. spend';
+                                $deal_code = htmlspecialchars((string)$deal['code']);
                             ?>
-                            <span class="review-count">(<?php echo $review_count; ?>)</span>
+                            <div style="background: #f8f9fa; border: 1px dashed #d0d5dd; border-radius: 12px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+                                <div>
+                                    <div style="font-weight: 800; color: #b3261e; font-size: 1.05rem;"><?php echo $val_text; ?></div>
+                                    <div style="font-size: 0.78rem; color: #344054; font-weight: 700; margin-top: 1px;"><?php echo htmlspecialchars((string)$deal['name']); ?></div>
+                                    <div style="font-size: 0.72rem; color: #667085;"><?php echo $min_text; ?></div>
+                                </div>
+                                <button type="button" onclick="claimStoreVoucher('<?php echo $deal_code; ?>', this)" style="background: #ffffff; border: 1px solid #d0d5dd; color: #344054; font-size: 0.76rem; font-weight: 700; padding: 7px 12px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; transition: all 0.15s ease;">
+                                    <i class="fas fa-copy"></i> <?php echo $deal_code; ?>
+                                </button>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+
+            <!-- Foodpanda Unified Sticky Category Navigation Bar -->
+            <div class="panda-menu-sticky-bar" id="pandaMenuStickyBar">
+                <div class="panda-menu-bar-inner">
+                    <!-- Search in Menu Input -->
+                    <div class="panda-menu-search-box">
+                        <i class="fas fa-magnifying-glass"></i>
+                        <input type="search" id="menuSearchInput" placeholder="Search in this store's menu" autocomplete="off">
+                    </div>
+
+                    <!-- Left Scroll Arrow -->
+                    <button type="button" class="panda-cat-arrow arrow-left" id="pandaCatScrollLeft" aria-label="Scroll categories left">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+
+                    <!-- Category Tabs Strip -->
+                    <div class="panda-cat-strip-wrap" id="pandaCatStripWrap">
+                        <div class="panda-cat-strip" id="pandaCatStrip">
+                            <?php $cat_index = 0; foreach ($menu_categories as $category => $items): ?>
+                                <?php
+                                $cat_slug = strtolower(str_replace(' ', '-', $category));
+                                $cat_count = count($items);
+                                $is_active_cat = ($cat_index === 0);
+                                ?>
+                                <a href="#<?php echo htmlspecialchars($cat_slug); ?>" class="panda-cat-tab<?php echo $is_active_cat ? ' active' : ''; ?>" data-category="<?php echo htmlspecialchars($cat_slug); ?>">
+                                    <?php echo htmlspecialchars($category); ?> <span class="panda-cat-count">(<?php echo $cat_count; ?>)</span>
+                                </a>
+                            <?php $cat_index++; endforeach; ?>
+                        </div>
+                    </div>
+
+                    <!-- Right Scroll Arrow -->
+                    <button type="button" class="panda-cat-arrow arrow-right" id="pandaCatScrollRight" aria-label="Scroll categories right">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                    
+                    <!-- Filter Dropdown -->
+                    <div class="panda-menu-filter-select-wrap">
+                        <select id="menuSortFilter" class="panda-menu-filter-select">
+                            <option value="default" selected>Default Sort</option>
+                            <option value="lowest_price">Lowest Price</option>
+                            <option value="highest_price">Highest Price</option>
+                            <option value="best_top_seller">Best / Top Seller</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <p id="menuSearchResultInfo" class="menu-search-result-info" style="display:none;"></p>
+
+            <div class="menu-layout">
+                <div class="menu-main-column">
+
+            <?php if (empty($menu_categories)): ?>
+            <div class="menu-filter-bar" style="margin-top:16px; background:#ffffff; border:1px dashed #d0d5dd; border-radius:14px; padding:32px 20px; text-align:center;">
+                <i class="fas fa-utensils" style="font-size:2.2rem; color:#98a2b3; margin-bottom:12px; display:block;"></i>
+                <h3 style="font-family:'Outfit',sans-serif; font-size:1.15rem; font-weight:800; color:#101828; margin:0 0 6px;">No Menu Items Currently Posted</h3>
+                <p style="color:#667085; font-size:0.88rem; margin:0 0 16px;">This store currently has no active products posted in the menu catalog.</p>
+                <a href="menu.php" class="btn-primary" style="display:inline-flex; align-items:center; gap:6px; padding:10px 20px; border-radius:10px; text-decoration:none;"><i class="fas fa-store"></i> Browse Other Shops</a>
+            </div>
+            <?php endif; ?>
+
+            <!-- Menu Items by Category -->
+            <?php foreach ($menu_categories as $category => $items): ?>
+            <div class="menu-category" id="<?php echo strtolower(str_replace(' ', '-', $category)); ?>">
+                <h2 class="category-title"><?php echo $category; ?></h2>
+                <div class="menu-items-grid">
+                    <?php foreach ($items as $item): ?>
+                    <?php
+                        $item_search_tokens = [
+                            (string)($item['name'] ?? ''),
+                            (string)($item['category'] ?? ''),
+                            (string)strip_tags((string)($item['description'] ?? '')),
+                            (string)($item['store_name'] ?? ''),
+                            implode(' ', array_filter(array_map('strval', (array)($item['sizes'] ?? [])))),
+                            implode(' ', array_filter(array_map('strval', (array)($item['addons'] ?? [])))),
+                            implode(' ', array_filter(array_map('strval', (array)($item['weights'] ?? [])))),
+                            implode(' ', array_filter(array_map('strval', (array)($item['good_for'] ?? []))))
+                        ];
+                        $item_search_text = strtolower(trim(preg_replace('/\s+/', ' ', implode(' ', array_filter($item_search_tokens)))));
+                        $is_product_favorite = !empty($favorite_product_ids[(int)$item['id']]);
+                    ?>
+                     <div class="menu-item <?php if ($item['stock'] <= 0) echo 'item-unavailable'; ?>"
+                         data-product-id="<?php echo $item['id']; ?>"
+                         data-min-price="<?php echo htmlspecialchars((string)min($item['size_prices'])); ?>"
+                         data-search="<?php echo htmlspecialchars($item_search_text); ?>"
+                         data-total-sold="<?php echo (int)$item['total_sold']; ?>">
+    <?php
+        $imagePath = $item['image'] ?? '';
+        $placeholderText = urlencode($item['name']);
+        if (empty($imagePath)) {
+            $imageSrc = 'https://via.placeholder.com/400x300?text=' . $placeholderText;
+        } elseif (stripos($imagePath, 'http://') === 0 || stripos($imagePath, 'https://') === 0) {
+            $imageSrc = $imagePath;
+        } elseif (strpos($imagePath, '/') === false) {
+            $imageSrc = 'images/menu/' . $imagePath;
+        } else {
+            $imageSrc = $imagePath;
+        }
+    ?>
+                        <?php if ($item['stock'] <= 0): ?>
+                            <div class="item-sold-out-overlay">
+                                <span>Sold Out</span>
+                            </div>
+                        <?php endif; ?>
+                        
+                        <!-- Top Image Banner -->
+                        <div class="item-image">
+                            <img src="<?php echo htmlspecialchars($imageSrc); ?>" alt="<?php echo htmlspecialchars($item['name']); ?>" 
+                                 onerror="this.src='https://via.placeholder.com/400x300?text=<?php echo $placeholderText; ?>'">
+                            <button
+                                type="button"
+                                class="product-favorite-btn<?php echo $is_product_favorite ? ' is-active' : ''; ?>"
+                                data-favorite-toggle="1"
+                                data-favorite-type="product"
+                                data-favorite-product-id="<?php echo (int)$item['id']; ?>"
+                                data-favorite-active="<?php echo $is_product_favorite ? '1' : '0'; ?>"
+                                aria-pressed="<?php echo $is_product_favorite ? 'true' : 'false'; ?>"
+                                title="<?php echo $is_product_favorite ? 'Remove from favorites' : 'Save to favorites'; ?>">
+                                <i class="<?php echo $is_product_favorite ? 'fas' : 'far'; ?> fa-heart"></i>
+                            </button>
+                            <?php if (($item['total_sold'] ?? 0) > 0): ?>
+                            <span class="top-seller-badge"><i class="fas fa-fire"></i> Top Seller</span>
+                            <?php endif; ?>
                         </div>
                         
-                        <p class="item-description"><?php echo htmlspecialchars($item['description']); ?></p>
-                        
-                        <!-- Bottom Action Bar: Price Pill + (+) Plus Button -->
-                        <div class="item-card-bottom">
-                            <div class="panda-price-pill">
-                                PHP <?php echo number_format(min($item['size_prices']), 2); ?>
+                        <!-- Card Body Content -->
+                        <div class="item-content">
+                            <?php 
+                            $is_whole_roast = stripos($item['name'], 'whole') !== false || stripos($item['category'], 'whole') !== false || stripos($item['name'], 'lechon baka') !== false;
+                            if ($is_whole_roast): 
+                            ?>
+                                <div style="margin-bottom: 6px;">
+                                    <span style="display:inline-flex; align-items:center; gap:4px; font-size:0.7rem; font-weight:800; color:#b54708; background:#fffaeb; border:1px solid #fedf89; padding:2px 8px; border-radius:6px;">
+                                        <i class="fas fa-clock"></i> 4–6 hrs Roasting • Advance Order
+                                    </span>
+                                </div>
+                            <?php endif; ?>
+                            
+                            <h3 class="item-title"><?php echo htmlspecialchars($item['name']); ?></h3>
+                            
+                            <div class="item-rating">
+                                <?php
+                                $rating = floatval($item['avg_rating']);
+                                $review_count = intval($item['review_count']);
+                                for ($i = 1; $i <= 5; $i++) {
+                                    if ($i <= $rating) {
+                                        echo '<i class="fas fa-star"></i>';
+                                    } elseif ($i - 0.5 <= $rating) {
+                                        echo '<i class="fas fa-star-half-alt"></i>';
+                                    } else {
+                                        echo '<i class="far fa-star"></i>';
+                                    }
+                                }
+                                ?>
+                                <span class="review-count">(<?php echo $review_count; ?>)</span>
                             </div>
                             
-                            <button type="button" class="panda-quick-add-btn view-details-btn add-to-cart"
-                                    data-id="<?php echo $item['id']; ?>"
-                                    data-product-id="<?php echo $item['product_id']; ?>"
-                                    data-name="<?php echo htmlspecialchars($item['name']); ?>"
-                                    data-description="<?php echo htmlspecialchars($item['description']); ?>"
-                                    data-image="<?php echo htmlspecialchars($imageSrc); ?>"
-                                    data-sizes='<?php echo json_encode($item['sizes']); ?>'
-                                    data-weights='<?php echo json_encode($item['weights']); ?>'
-                                    data-good-for='<?php echo json_encode($item['good_for']); ?>'
-                                    data-size-prices='<?php echo json_encode($item['size_prices']); ?>'
-                                    data-addons='<?php echo json_encode($item['addons']); ?>'
-                                    data-avg-rating='<?php echo $item['avg_rating']; ?>'
-                                    data-stock="<?php echo $item['stock']; ?>"
-                                    <?php if ($item['stock'] <= 0) echo 'disabled'; ?>
-                                    title="View details / Add to cart">
-                                <i class="fas fa-<?php echo ($item['stock'] <= 0) ? 'ban' : 'plus'; ?>"></i>
-                            </button>
+                            <p class="item-description"><?php echo htmlspecialchars($item['description']); ?></p>
+                            
+                            <!-- Stock & Inventory Status Indicator -->
+                            <div style="margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+                                <?php if ((int)$item['stock'] > 0): ?>
+                                    <span style="font-size: 0.72rem; font-weight: 700; color: #027a48; background: #ecfdf3; border: 1px solid #abefc6; padding: 2px 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;">
+                                        <i class="fas fa-boxes-stacked"></i> <?php echo (int)$item['stock']; ?> Available in Stock
+                                    </span>
+                                <?php else: ?>
+                                    <span style="font-size: 0.72rem; font-weight: 700; color: #b3261e; background: #fff1f0; border: 1px solid #fee4e2; padding: 2px 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;">
+                                        <i class="fas fa-ban"></i> Currently Sold Out
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+
+                            <!-- Bottom Action Bar: Price Pill + (+) Plus Button -->
+                            <div class="item-card-bottom">
+                                <div class="panda-price-pill">
+                                    PHP <?php echo number_format(min($item['size_prices']), 2); ?>
+                                </div>
+                                
+                                <button type="button" class="panda-quick-add-btn view-details-btn add-to-cart"
+                                        data-id="<?php echo $item['id']; ?>"
+                                        data-product-id="<?php echo $item['product_id']; ?>"
+                                        data-name="<?php echo htmlspecialchars($item['name']); ?>"
+                                        data-description="<?php echo htmlspecialchars($item['description']); ?>"
+                                        data-image="<?php echo htmlspecialchars($imageSrc); ?>"
+                                        data-sizes='<?php echo json_encode($item['sizes']); ?>'
+                                        data-weights='<?php echo json_encode($item['weights']); ?>'
+                                        data-good-for='<?php echo json_encode($item['good_for']); ?>'
+                                        data-size-prices='<?php echo json_encode($item['size_prices']); ?>'
+                                        data-addons='<?php echo json_encode($item['addons']); ?>'
+                                        data-avg-rating='<?php echo $item['avg_rating']; ?>'
+                                        data-stock="<?php echo $item['stock']; ?>"
+                                        <?php if ($item['stock'] <= 0) echo 'disabled'; ?>
+                                        title="View details / Add to cart">
+                                    <i class="fas fa-<?php echo ($item['stock'] <= 0) ? 'ban' : 'plus'; ?>"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
+                    <?php endforeach; ?>
                 </div>
-                <?php endforeach; ?>
             </div>
-        </div>
-        <?php endforeach; ?>
+            <?php endforeach; ?>
 
-            </div>
-
-            <aside class="menu-side-column">
-                <div class="menu-side-stack">
-                    <section class="quick-order-panel" id="quickOrderPanel">
-                        <div class="quick-order-tabs" role="tablist" aria-label="Order option">
-                            <button type="button"
-                                    class="quick-order-tab<?php echo ($_SESSION['delivery_option'] ?? 'pickup') === 'delivery' ? ' active' : ''; ?>"
-                                    data-delivery-option="delivery"
-                                    onclick="switchDeliveryOptionTab('delivery')">
-                                Delivery
-                            </button>
-                            <button type="button"
-                                    class="quick-order-tab<?php echo ($_SESSION['delivery_option'] ?? 'pickup') === 'pickup' ? ' active' : ''; ?>"
-                                    data-delivery-option="pickup"
-                                    onclick="switchDeliveryOptionTab('pickup')">
-                                Pick-up
-                            </button>
-                        </div>
-
-                        <div class="quick-order-hero">
-                            <div class="quick-order-hero-icon">
-                                <i class="fas fa-bag-shopping"></i>
-                            </div>
-                            <h3>Free delivery on your first order</h3>
-                            <p id="quickOrderHint">Add items to unlock free delivery</p>
-                        </div>
-
-                        <div class="quick-order-summary">
-                            <p class="quick-order-meta" id="quickOrderMeta">Pick-up selected</p>
-                            <div class="quick-order-items" id="quickOrderItems" aria-live="polite">
-                                <p class="quick-order-items-empty">No items in cart yet.</p>
-                            </div>
-                            <div class="summary-row">
-                                <span>Total <small>(incl. fees and tax)</small></span>
-                                <strong id="quickOrderTotal">&#8369;0.00</strong>
-                            </div>
-                            <button type="button" class="quick-order-link" id="quickSeeSummaryBtn">See summary</button>
-                        </div>
-
-                        <button type="button" class="quick-order-checkout" id="quickCheckoutBtn" disabled>
-                            Review payment and address
-                        </button>
-                    </section>
                 </div>
-            </aside>
-        </div>
+
+                <aside class="menu-side-column">
+                    <div class="menu-side-stack">
+                        <section class="quick-order-panel" id="quickOrderPanel">
+                            <div class="quick-order-tabs" role="tablist" aria-label="Order option">
+                                <button type="button"
+                                        class="quick-order-tab<?php echo ($_SESSION['delivery_option'] ?? 'pickup') === 'delivery' ? ' active' : ''; ?>"
+                                        data-delivery-option="delivery"
+                                        onclick="switchDeliveryOptionTab('delivery')">
+                                    Delivery
+                                </button>
+                                <button type="button"
+                                        class="quick-order-tab<?php echo ($_SESSION['delivery_option'] ?? 'pickup') === 'pickup' ? ' active' : ''; ?>"
+                                        data-delivery-option="pickup"
+                                        onclick="switchDeliveryOptionTab('pickup')">
+                                    Pick-up
+                                </button>
+                            </div>
+
+                            <div class="quick-order-hero">
+                                <div class="quick-order-hero-icon">
+                                    <i class="fas fa-bag-shopping"></i>
+                                </div>
+                                <h3>Free delivery on your first order</h3>
+                                <p id="quickOrderHint">Add items to unlock free delivery</p>
+                            </div>
+
+                            <div class="quick-order-summary">
+                                <p class="quick-order-meta" id="quickOrderMeta">Pick-up selected</p>
+                                <div class="quick-order-items" id="quickOrderItems" aria-live="polite">
+                                    <p class="quick-order-items-empty">No items in cart yet.</p>
+                                </div>
+                                <div class="summary-row">
+                                    <span>Total <small>(incl. fees and tax)</small></span>
+                                    <strong id="quickOrderTotal">&#8369;0.00</strong>
+                                </div>
+                                <button type="button" class="quick-order-link" id="quickSeeSummaryBtn">See summary</button>
+                            </div>
+
+                            <button type="button" class="quick-order-checkout" id="quickCheckoutBtn" disabled>
+                                Review payment and address
+                            </button>
+                        </section>
+                    </div>
+                </aside>
+            </div>
+        <?php endif; ?>
     </div>
 </section>
 
@@ -1120,32 +1679,19 @@ mysqli_close($conn);
     </div>
 </div>
 
-<!-- Mobile Compact Order Bar -->
-<div class="mobile-quick-order" id="mobileQuickOrder" aria-label="Quick order controls">
+<!-- Mobile Compact Order Bar (Screen 6 Reference: Clean glassmorphic capsule, only shown when items exist) -->
+<?php
+$initial_cart_items_count = (isset($_SESSION['cart']) && is_array($_SESSION['cart'])) ? count($_SESSION['cart']) : 0;
+$initial_cart_has_items = $initial_cart_items_count > 0;
+?>
+<div class="mobile-quick-order<?php echo $initial_cart_has_items ? ' has-items' : ''; ?>" id="mobileQuickOrder" aria-label="Quick order controls">
     <div class="mobile-quick-order-inner">
-        <div class="mobile-quick-order-top">
-            <div class="mobile-quick-order-tabs" role="tablist" aria-label="Mobile order option">
-                <button type="button"
-                        class="mobile-quick-order-tab<?php echo ($_SESSION['delivery_option'] ?? 'pickup') === 'delivery' ? ' active' : ''; ?>"
-                        data-delivery-option="delivery"
-                        onclick="switchDeliveryOptionTab('delivery')">
-                    Delivery
-                </button>
-                <button type="button"
-                        class="mobile-quick-order-tab<?php echo ($_SESSION['delivery_option'] ?? 'pickup') === 'pickup' ? ' active' : ''; ?>"
-                        data-delivery-option="pickup"
-                        onclick="switchDeliveryOptionTab('pickup')">
-                    Pick-up
-                </button>
-            </div>
-            <button type="button" class="mobile-quick-order-link" id="mobileSeeSummaryBtn">Summary</button>
-        </div>
         <div class="mobile-quick-order-bottom">
             <div class="mobile-quick-order-meta-wrap">
-                <p class="mobile-quick-order-meta" id="mobileQuickOrderMeta">Pick-up selected</p>
+                <p class="mobile-quick-order-meta" id="mobileQuickOrderMeta"><?php echo $initial_cart_has_items ? ($initial_cart_items_count . ' item' . ($initial_cart_items_count > 1 ? 's' : '') . ' • ' . (($_SESSION['delivery_option'] ?? 'pickup') === 'delivery' ? 'Delivery' : 'Pick-up')) : 'Pick-up selected'; ?></p>
                 <strong class="mobile-quick-order-total" id="mobileQuickOrderTotal">&#8369;0.00</strong>
             </div>
-            <button type="button" class="mobile-quick-order-checkout" id="mobileQuickCheckoutBtn" disabled>Checkout</button>
+            <button type="button" class="mobile-quick-order-checkout" id="mobileQuickCheckoutBtn" <?php echo $initial_cart_has_items ? '' : 'disabled'; ?>>Checkout &rarr;</button>
         </div>
     </div>
 </div>
@@ -1154,6 +1700,53 @@ mysqli_close($conn);
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <script>
+function claimStoreVoucher(code, btn) {
+    if (!code) return;
+    const textToCopy = String(code).trim();
+    try {
+        sessionStorage.setItem('pending_welcome_voucher', textToCopy);
+    } catch(e) {}
+
+    // Send to backend so PHP session records it immediately
+    fetch('apply_voucher.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ action: 'claim', code: textToCopy })
+    }).catch(() => {});
+
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(textToCopy).catch(() => {});
+    }
+
+    if (btn) {
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check"></i> Applied!';
+        btn.style.background = '#ecfdf3';
+        btn.style.color = '#027a48';
+        btn.style.borderColor = '#abefc6';
+        setTimeout(() => {
+            btn.innerHTML = originalHtml;
+            btn.style.background = '#ffffff';
+            btn.style.color = '#344054';
+            btn.style.borderColor = '#d0d5dd';
+        }, 2500);
+    }
+
+    if (typeof Swal !== 'undefined') {
+        const Toast = Swal.mixin({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 3000,
+            timerProgressBar: true
+        });
+        Toast.fire({
+            icon: 'success',
+            title: 'Store Voucher ' + textToCopy + ' activated! It will apply to this shop at checkout.'
+        });
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     // Product Preview Modal
     const productPreviewModal = document.getElementById('productPreviewModal');
@@ -1467,6 +2060,14 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         if (mobileQuickCheckoutBtn) {
             mobileQuickCheckoutBtn.disabled = itemCount <= 0;
+        }
+        const mobileQuickOrderEl = document.getElementById('mobileQuickOrder');
+        if (mobileQuickOrderEl) {
+            if (itemCount > 0 && finalTotal > 0) {
+                mobileQuickOrderEl.classList.add('has-items');
+            } else {
+                mobileQuickOrderEl.classList.remove('has-items');
+            }
         }
 
         setQuickOrderTabsActive(deliveryOption);
@@ -1913,8 +2514,20 @@ document.addEventListener('click', function(e) {
         } else {
             document.getElementById('previewAddonsSection').style.display = 'none';
         }
-              // Set initial price
+        // Set initial price
         updateOrderSummary();
+
+        // Toggle advance pre-order reservation link for whole roasts
+        const isWholeRoast = (product.name && (product.name.toLowerCase().includes('whole') || product.name.toLowerCase().includes('baka'))) || (product.category && product.category.toLowerCase().includes('whole'));
+        const preorderLink = document.getElementById('previewPreorderLink');
+        if (preorderLink) {
+            if (isWholeRoast) {
+                preorderLink.style.display = 'inline-flex';
+                preorderLink.href = 'preorder.php?product_id=' + encodeURIComponent(product.id || product.product_id || '');
+            } else {
+                preorderLink.style.display = 'none';
+            }
+        }
         
         // Show modal
         if (productPreviewModal) {
@@ -2029,7 +2642,9 @@ document.addEventListener('click', function(e) {
                     closeProductPreview();
                     updateCartSidebar();
 
-                    if (typeof Swal !== 'undefined') {
+                    if (window.showPopupAlert) {
+                        window.showPopupAlert(data.message || 'Item successfully added to your cart.', 'success', 2500);
+                    } else if (typeof Swal !== 'undefined') {
                         Swal.fire({
                             icon: 'success',
                             title: 'Added to Cart!',
@@ -2041,26 +2656,122 @@ document.addEventListener('click', function(e) {
                         });
                     }
                 } else {
-                    if (data.code === 'MIXED_TENANT_ADD_BLOCKED' || data.code === 'MIXED_TENANT_CART_EXISTING') {
-                        if (typeof Swal !== 'undefined') {
+                    if (data.code === 'MIXED_TENANT_ADD_BLOCKED') {
+                        if (window.showConfirmDialog) {
+                            window.showConfirmDialog({
+                                title: 'Switch Store Order?',
+                                text: data.message || 'Your cart has items from another store. Clear cart and start an order from this shop?',
+                                icon: 'warning',
+                                confirmText: 'Yes, Clear & Add Item',
+                                confirmColor: '#b3261e',
+                                cancelText: 'Keep Existing Cart'
+                            }).then(async (confirmed) => {
+                                if (confirmed) {
+                                    formData.append('clear_and_add', '1');
+                                    try {
+                                        const retryRes = await fetch('add_to_cart.php', {
+                                            method: 'POST',
+                                            body: formData
+                                        });
+                                        const retryData = await retryRes.json();
+                                        if (retryData.success) {
+                                            closeProductPreview();
+                                            updateCartSidebar();
+                                            if (window.showPopupAlert) {
+                                                window.showPopupAlert('Cart was cleared and your new item was added.', 'success', 2500);
+                                            }
+                                        } else {
+                                            if (window.showPopupAlert) {
+                                                window.showPopupAlert(retryData.message || 'Failed to add item.', 'error');
+                                            }
+                                        }
+                                    } catch (e) {
+                                        console.error(e);
+                                    }
+                                }
+                            });
+                        } else if (typeof Swal !== 'undefined') {
                             Swal.fire({
                                 icon: 'warning',
-                                title: 'Different Store Item',
+                                title: 'Switch Store Order?',
+                                text: data.message || 'Your cart has items from another store. Clear cart and start an order from this shop?',
+                                showCancelButton: true,
+                                confirmButtonColor: '#b3261e',
+                                cancelButtonColor: '#6c757d',
+                                confirmButtonText: '<i class="fas fa-rotate"></i> Yes, Clear &amp; Add Item',
+                                cancelButtonText: 'Keep Existing Cart'
+                            }).then(async (result) => {
+                                if (result.isConfirmed) {
+                                    formData.append('clear_and_add', '1');
+                                    try {
+                                        const retryRes = await fetch('add_to_cart.php', {
+                                            method: 'POST',
+                                            body: formData
+                                        });
+                                        const retryData = await retryRes.json();
+                                        if (retryData.success) {
+                                            closeProductPreview();
+                                            updateCartSidebar();
+                                            if (window.showPopupAlert) {
+                                                window.showPopupAlert('Cart was cleared and your new item was added.', 'success', 2500);
+                                            }
+                                        } else {
+                                            if (window.showPopupAlert) {
+                                                window.showPopupAlert(retryData.message || 'Failed to add item.', 'error');
+                                            }
+                                        }
+                                    } catch (e) {
+                                        console.error(e);
+                                    }
+                                }
+                            });
+                        } else {
+                            if (confirm(data.message + "\n\nClick OK to clear cart and add this item.")) {
+                                formData.append('clear_and_add', '1');
+                                fetch('add_to_cart.php', { method: 'POST', body: formData })
+                                    .then(r => r.json())
+                                    .then(rd => { if (rd.success) { location.reload(); } });
+                            }
+                        }
+                    } else if (data.code === 'MIXED_TENANT_CART_EXISTING') {
+                        if (window.showConfirmDialog) {
+                            window.showConfirmDialog({
+                                title: 'Cart Contains Multiple Stores',
+                                text: data.message,
+                                icon: 'warning',
+                                confirmText: 'Go to Cart',
+                                confirmColor: '#b3261e',
+                                cancelText: 'Close'
+                            }).then((confirmed) => {
+                                if (confirmed) {
+                                    openCartSidebar();
+                                }
+                            });
+                        } else if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                icon: 'warning',
+                                title: 'Cart Contains Multiple Stores',
                                 text: data.message,
                                 showCancelButton: true,
                                 confirmButtonColor: '#b3261e',
                                 confirmButtonText: 'Go to Cart',
-                                cancelButtonText: 'Keep Current Cart'
+                                cancelButtonText: 'Close'
                             }).then((result) => {
                                 if (result.isConfirmed) {
                                     openCartSidebar();
                                 }
                             });
                         } else {
-                            alert(data.message);
+                            if (window.showPopupAlert) {
+                                window.showPopupAlert(data.message, 'warning');
+                            } else {
+                                alert(data.message);
+                            }
                         }
                     } else {
-                        if (typeof Swal !== 'undefined') {
+                        if (window.showPopupAlert) {
+                            window.showPopupAlert(data.message || 'Failed to add item to cart.', 'error');
+                        } else if (typeof Swal !== 'undefined') {
                             Swal.fire({
                                 icon: 'error',
                                 title: 'Cannot Add Item',
@@ -2074,7 +2785,9 @@ document.addEventListener('click', function(e) {
                 }
             } catch (err) {
                 console.error('Add to cart error:', err);
-                if (typeof Swal !== 'undefined') {
+                if (window.showPopupAlert) {
+                    window.showPopupAlert('An error occurred while adding the item to cart. Please try again.', 'error');
+                } else if (typeof Swal !== 'undefined') {
                     Swal.fire({
                         icon: 'error',
                         title: 'Error',
@@ -2309,16 +3022,19 @@ document.addEventListener('click', function(e) {
                 if (data.success) {
                     updateCartSidebar();
                     
-                    // Show notification
-                    Swal.fire({
-                        icon: 'success',
-                        title: action === 'remove' ? 'Removed!' : 'Updated!',
-                        text: action === 'remove' ? 'Item removed from cart' : 'Cart updated',
-                        toast: true,
-                        position: 'top-end',
-                        showConfirmButton: false,
-                        timer: 1500
-                    });
+                    if (window.showPopupAlert) {
+                        window.showPopupAlert(action === 'remove' ? 'Item removed from cart' : 'Cart updated', 'success', 1500);
+                    } else if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: action === 'remove' ? 'Removed!' : 'Updated!',
+                            text: action === 'remove' ? 'Item removed from cart' : 'Cart updated',
+                            toast: true,
+                            position: 'top-end',
+                            showConfirmButton: false,
+                            timer: 1500
+                        });
+                    }
                 }
             } catch (error) {
                 console.error('Error:', error);
@@ -2327,18 +3043,10 @@ document.addEventListener('click', function(e) {
     });
     
     // Clear cart
-    document.getElementById('clearCart').addEventListener('click', async function() {
-        Swal.fire({
-            title: 'Clear Cart?',
-            text: 'Are you sure you want to clear your entire cart?',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#b3261e',
-            cancelButtonColor: '#6c757d',
-            confirmButtonText: 'Yes, clear cart',
-            cancelButtonText: 'Cancel'
-        }).then(async (result) => {
-            if (result.isConfirmed) {
+    const clearCartBtn = document.getElementById('clearCart');
+    if (clearCartBtn) {
+        clearCartBtn.addEventListener('click', async function() {
+            const handleClear = async () => {
                 try {
                     const response = await fetch('update_cart.php', {
                         method: 'POST',
@@ -2355,124 +3063,60 @@ document.addEventListener('click', function(e) {
                     if (data.success) {
                         updateCartSidebar();
                         
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Cart Cleared!',
-                            text: 'Your cart has been cleared.',
-                            toast: true,
-                            position: 'top-end',
-                            showConfirmButton: false,
-                            timer: 1500
-                        });
+                        if (window.showPopupAlert) {
+                            window.showPopupAlert('Your cart has been cleared.', 'success', 1500);
+                        } else if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Cart Cleared!',
+                                text: 'Your cart has been cleared.',
+                                toast: true,
+                                position: 'top-end',
+                                showConfirmButton: false,
+                                timer: 1500
+                            });
+                        }
                     }
                 } catch (error) {
                     console.error('Error:', error);
                 }
-            }
-        });
-    });
-    
-    // Close modals with Escape key
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
-            // closeProductPreview(); // This is handled by its own function now
-            closeCartSidebar();
-        }
-    });
-    
-    
-    // Cart item quantity controls
-    document.addEventListener('click', async function(e) {
-        if (e.target.closest('.qty-decrease') || e.target.closest('.qty-increase') || e.target.closest('.cart-item-remove')) {
-            const button = e.target.closest('.qty-decrease, .qty-increase, .cart-item-remove');
-            const index = button.getAttribute('data-index');
-            const action = button.classList.contains('qty-decrease') ? 'decrease' : 
-                          button.classList.contains('qty-increase') ? 'increase' : 'remove';
-            
-            try {
-                const response = await fetch('update_cart.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: new URLSearchParams({
-                        'index': index,
-                        'action': action
-                    })
+            };
+
+            if (window.showConfirmDialog) {
+                window.showConfirmDialog({
+                    title: 'Clear Cart?',
+                    text: 'Are you sure you want to clear your entire cart?',
+                    icon: 'warning',
+                    confirmText: 'Yes, clear cart',
+                    confirmColor: '#b3261e',
+                    cancelText: 'Cancel'
+                }).then((confirmed) => {
+                    if (confirmed) handleClear();
                 });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    updateCartSidebar();
-                    
-                    // Show notification
-                    Swal.fire({
-                        icon: 'success',
-                        title: action === 'remove' ? 'Removed!' : 'Updated!',
-                        text: action === 'remove' ? 'Item removed from cart' : 'Cart updated',
-                        toast: true,
-                        position: 'top-end',
-                        showConfirmButton: false,
-                        timer: 1500
-                    });
-                }
-            } catch (error) {
-                console.error('Error:', error);
-            }
-        }
-    });
-    
-    // Clear cart
-    document.getElementById('clearCart').addEventListener('click', async function() {
-        Swal.fire({
-            title: 'Clear Cart?',
-            text: 'Are you sure you want to clear your entire cart?',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#b3261e',
-            cancelButtonColor: '#6c757d',
-            confirmButtonText: 'Yes, clear cart',
-            cancelButtonText: 'Cancel'
-        }).then(async (result) => {
-            if (result.isConfirmed) {
-                try {
-                    const response = await fetch('update_cart.php', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                        },
-                        body: new URLSearchParams({
-                            'action': 'clear'
-                        })
-                    });
-                    
-                    const data = await response.json();
-                    
-                    if (data.success) {
-                        updateCartSidebar();
-                        
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Cart Cleared!',
-                            text: 'Your cart has been cleared.',
-                            toast: true,
-                            position: 'top-end',
-                            showConfirmButton: false,
-                            timer: 1500
-                        });
-                    }
-                } catch (error) {
-                    console.error('Error:', error);
+            } else if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    title: 'Clear Cart?',
+                    text: 'Are you sure you want to clear your entire cart?',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#b3261e',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: 'Yes, clear cart',
+                    cancelButtonText: 'Cancel'
+                }).then((result) => {
+                    if (result.isConfirmed) handleClear();
+                });
+            } else {
+                if (confirm('Are you sure you want to clear your entire cart?')) {
+                    handleClear();
                 }
             }
         });
-    });
+    }
     
     // Close modals with Escape key
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
-            // closeProductPreview(); // This is handled by its own function now
             closeCartSidebar();
         }
     });
@@ -2661,8 +3305,11 @@ document.addEventListener('click', function(e) {
 .panda-cat-strip-wrap {
     flex: 1 !important;
     overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-x pan-y !important;
     scroll-behavior: smooth !important;
     scrollbar-width: none !important;
+    scroll-snap-type: x proximity !important;
 }
 
 .panda-cat-strip-wrap::-webkit-scrollbar {
@@ -2688,6 +3335,9 @@ document.addEventListener('click', function(e) {
     border-bottom: 3px solid transparent !important;
     transition: all 0.2s ease !important;
     cursor: pointer !important;
+    flex-shrink: 0 !important;
+    scroll-snap-align: center !important;
+    touch-action: pan-x pan-y !important;
 }
 
 .panda-cat-tab:hover {
@@ -4134,6 +4784,37 @@ document.addEventListener('click', function(e) {
         grid-template-columns: 1fr;
     }
 
+    .menu-shops-directory-grid {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
+        touch-action: pan-x pan-y !important;
+        scroll-snap-type: x mandatory !important;
+        scroll-behavior: smooth !important;
+        gap: 14px !important;
+        padding: 4px 4px 16px 4px !important;
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    .menu-shops-directory-grid::-webkit-scrollbar {
+        display: none !important;
+    }
+
+    .menu-shops-directory-grid .menu-shop-card {
+        flex: 0 0 clamp(220px, 72vw, 270px) !important;
+        width: clamp(220px, 72vw, 270px) !important;
+        min-width: clamp(220px, 72vw, 270px) !important;
+        max-width: clamp(220px, 72vw, 270px) !important;
+        scroll-snap-align: start !important;
+        box-sizing: border-box !important;
+    }
+
     .menu-filter-bar {
         flex-direction: column;
         align-items: stretch;
@@ -4426,13 +5107,58 @@ body {
 
 @media (max-width: 768px) {
     .page-header {
-        padding-top: 108px;
-        padding-bottom: 62px;
+        padding-top: 24px !important;
+        padding-bottom: 14px !important;
+        text-align: left !important;
+    }
+
+    .page-header h1 {
+        font-size: 1.65rem !important;
+        margin: 0 0 4px 0 !important;
+    }
+
+    .page-header p {
+        display: none !important; /* Hide redundant filler description on mobile */
     }
 
     .category-nav {
         top: calc(var(--site-header-offset, 78px) + 8px);
-        border-radius: 12px;
+        border-radius: 999px !important;
+        padding: 6px 10px !important;
+        margin-bottom: 14px !important;
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+        gap: 6px !important;
+    }
+
+    .category-nav::-webkit-scrollbar {
+        display: none !important;
+    }
+
+    .category-btn {
+        flex: 0 0 auto !important;
+        white-space: nowrap !important;
+        padding: 7px 14px !important;
+        font-size: 0.8rem !important;
+        min-height: 38px !important;
+        border-radius: 999px !important;
+    }
+
+    .menu-section {
+        padding-top: 14px !important;
+        padding-bottom: 140px !important;
+    }
+
+    .category-title {
+        font-size: 1.25rem !important;
+        margin-bottom: 12px !important;
+    }
+
+    .category-desc {
+        display: none !important; /* Hide category description paragraphs on mobile */
     }
 }
 
@@ -4707,9 +5433,54 @@ body {
 }
 
 @media (max-width: 768px) {
+    .preview-modal-content {
+        width: 100% !important;
+        max-width: 100% !important;
+        height: 100% !important;
+        max-height: 100vh !important;
+        max-height: 100dvh !important;
+        border-radius: 0 !important;
+        top: 0 !important;
+        left: 0 !important;
+        transform: none !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+    .product-preview-modal.active .preview-modal-content {
+        transform: none !important;
+    }
     .preview-body {
-        flex-direction: column;
-        overflow-y: auto;
+        flex: 1 1 auto !important;
+        flex-direction: column !important;
+        overflow-y: auto !important;
+        max-height: none !important;
+        padding-bottom: 90px !important;
+    }
+    .preview-image {
+        min-width: 0 !important;
+        width: 100% !important;
+        height: 230px !important;
+        flex: 0 0 230px !important;
+    }
+    .preview-details {
+        padding: 16px 18px !important;
+    }
+    .preview-details h3 {
+        font-size: 1.25rem !important;
+    }
+    .preview-actions-wrap {
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        background: rgba(255, 255, 255, 0.98) !important;
+        backdrop-filter: blur(12px) !important;
+        -webkit-backdrop-filter: blur(12px) !important;
+        border-top: 1px solid #eaecf0 !important;
+        padding: 12px 16px !important;
+        margin: 0 !important;
+        z-index: 100 !important;
+        box-shadow: 0 -4px 16px rgba(16, 24, 40, 0.08) !important;
     }
 }
 
@@ -5498,16 +6269,49 @@ body {
 }
 .storefront-overview {
     display: flex !important;
-    flex-direction: column !important;
-    gap: 8px !important;
-    align-items: flex-start !important;
+    flex-direction: row !important;
+    gap: 20px !important;
+    align-items: center !important;
 }
 .store-logo-tile {
-    display: none !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 110px !important;
+    height: 110px !important;
+    min-width: 110px !important;
+    min-height: 110px !important;
+    border-radius: 18px !important;
+    background: #ffffff !important;
+    border: 1px solid #eaecf0 !important;
+    box-shadow: 0 4px 16px rgba(16, 24, 40, 0.08) !important;
+    overflow: hidden !important;
+    flex-shrink: 0 !important;
+    position: relative !important;
+}
+.store-logo-tile img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    display: block !important;
+}
+.store-logo-initials {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+    height: 100% !important;
+    background: linear-gradient(135deg, #b3261e 0%, #981b15 100%) !important;
+    color: #ffffff !important;
+    font-family: 'Outfit', sans-serif !important;
+    font-size: 2.2rem !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.5px !important;
 }
 .storefront-copy {
     padding: 0 !important;
-    width: 100% !important;
+    flex: 1 !important;
+    min-width: 0 !important;
 }
 .storefront-copy h1 {
     font-family: 'Outfit', sans-serif !important;
@@ -5641,12 +6445,106 @@ body {
     background: #ef6b2e !important;
 }
 @media (max-width: 768px) {
+    .menu-section {
+        padding-bottom: 200px !important;
+    }
     .menu-items-grid {
         grid-template-columns: 1fr !important;
-        gap: 16px !important;
+        gap: 12px !important;
+    }
+    .menu-item {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        padding: 10px 12px !important;
+        gap: 12px !important;
+        border-radius: 16px !important;
+        background: #ffffff !important;
+        border: 1px solid #eaecf0 !important;
+    }
+    .menu-item .item-image {
+        width: 88px !important;
+        height: 88px !important;
+        flex: 0 0 88px !important;
+        border-radius: 12px !important;
+        margin: 0 !important;
+        overflow: hidden !important;
+    }
+    .menu-item .item-content {
+        padding: 0 !important;
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+    }
+    .menu-item .item-title {
+        font-size: 0.94rem !important;
+        line-height: 1.25 !important;
+        margin: 0 0 3px 0 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+    .menu-item .item-description {
+        display: -webkit-box !important;
+        -webkit-line-clamp: 2 !important;
+        -webkit-box-orient: vertical !important;
+        overflow: hidden !important;
+        font-size: 0.76rem !important;
+        margin-bottom: 6px !important;
+        line-height: 1.35 !important;
+        color: #667085 !important;
+    }
+    .menu-item .item-card-bottom {
+        margin-top: 4px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+    }
+    .menu-item .panda-price-pill {
+        font-size: 0.88rem !important;
+        font-weight: 800 !important;
+        padding: 3px 8px !important;
+    }
+    .menu-item .panda-quick-add-btn {
+        width: 32px !important;
+        height: 32px !important;
+        padding: 0 !important;
+        font-size: 0.82rem !important;
+        border-radius: 8px !important;
     }
     .storefront-copy h1 {
-        font-size: 1.8rem !important;
+        font-size: 1.5rem !important;
+    }
+}
+@media (max-width: 480px) {
+    .menu-shops-directory-grid {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        touch-action: pan-x !important;
+        scroll-snap-type: x mandatory !important;
+        gap: 14px !important;
+        padding: 4px 2px 14px 2px !important;
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+        cursor: grab;
+        user-select: none;
+    }
+    .menu-shops-directory-grid::-webkit-scrollbar {
+        display: none !important;
+    }
+    .menu-shops-directory-grid:active,
+    .menu-shops-directory-grid.is-dragging {
+        cursor: grabbing !important;
+    }
+    .menu-shops-directory-grid .menu-shop-card {
+        flex: 0 0 240px !important;
+        width: 240px !important;
+        min-width: 240px !important;
+        max-width: 240px !important;
+        scroll-snap-align: start !important;
+        user-select: none;
     }
 }
 
@@ -5683,6 +6581,758 @@ body {
         z-index: 1050 !important;
     }
 }
+
+/* ==========================================================================
+   STOREFRONT MENU PAGE DARK MODE THEME ENGINE
+   ========================================================================== */
+body.dark-mode,
+html.dark-mode,
+body.dark-mode .storefront-header,
+body.dark-mode .menu-section,
+body.dark-mode .menu-container {
+    background: #0f172a !important;
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .store-breadcrumb a,
+body.dark-mode .store-breadcrumb span {
+    color: #94a3b8 !important;
+}
+body.dark-mode .store-breadcrumb .is-current {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .storefront-copy h1 {
+    color: #f8fafc !important;
+}
+body.dark-mode .storefront-categories {
+    color: #cbd5e1 !important;
+}
+body.dark-mode .storefront-subtitle {
+    color: #94a3b8 !important;
+}
+body.dark-mode .storefront-meta-row span,
+body.dark-mode .storefront-meta-row a {
+    color: #cbd5e1 !important;
+}
+body.dark-mode .storefront-meta-row a:hover {
+    color: #ffffff !important;
+}
+
+/* Store Deals Box */
+body.dark-mode .store-deals-strip {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+body.dark-mode .store-deals-strip h3 {
+    color: #f8fafc !important;
+}
+body.dark-mode .store-deals-strip p {
+    color: #94a3b8 !important;
+}
+body.dark-mode .store-deals-strip [style*="background: #f8f9fa"],
+body.dark-mode .store-deals-strip [style*="background:#f8f9fa"] {
+    background: #111827 !important;
+    border-color: #334155 !important;
+}
+body.dark-mode .store-deals-strip [style*="color: #344054"],
+body.dark-mode .store-deals-strip [style*="color:#344054"] {
+    color: #f8fafc !important;
+}
+body.dark-mode .store-deals-strip button {
+    background: #1e293b !important;
+    border-color: #475569 !important;
+    color: #f8fafc !important;
+}
+
+/* Foodpanda Sticky Category Nav Bar */
+body.dark-mode .panda-menu-sticky-bar {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35) !important;
+}
+body.dark-mode .panda-menu-search-box {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+}
+body.dark-mode .panda-menu-search-box input {
+    color: #f8fafc !important;
+}
+body.dark-mode .panda-cat-arrow {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+body.dark-mode .panda-cat-arrow:hover {
+    background: #334155 !important;
+    color: #ffffff !important;
+}
+body.dark-mode .panda-cat-tab {
+    color: #94a3b8 !important;
+}
+body.dark-mode .panda-cat-tab:hover {
+    color: #ffffff !important;
+}
+body.dark-mode .panda-cat-tab.active {
+    color: #ef4444 !important;
+    border-bottom-color: #ef4444 !important;
+}
+body.dark-mode .panda-cat-count {
+    color: #64748b !important;
+}
+body.dark-mode .panda-cat-tab.active .panda-cat-count {
+    color: #ef4444 !important;
+}
+body.dark-mode .panda-menu-filter-select {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+/* Menu Category Titles & Product Cards */
+body.dark-mode .category-title {
+    color: #f8fafc !important;
+}
+body.dark-mode .menu-item {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+body.dark-mode .menu-item:hover {
+    border-color: #b3261e !important;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4) !important;
+}
+body.dark-mode .menu-item h3,
+body.dark-mode .menu-item-title {
+    color: #f8fafc !important;
+}
+body.dark-mode .menu-item p,
+body.dark-mode .menu-item-desc {
+    color: #94a3b8 !important;
+}
+body.dark-mode .menu-item-price {
+    color: #ef4444 !important;
+}
+
+/* Empty State / Storefront Update Card */
+body.dark-mode [style*="Storefront update"],
+body.dark-mode div[style*="Storefront update"] {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+body.dark-mode .empty-menu-container,
+body.dark-mode .empty-cart-message {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+/* ==========================================================================
+   RIGHT CART SIDEBAR IN DARK MODE
+   ========================================================================== */
+body.dark-mode .cart-sidebar,
+body.dark-mode .panda-cart-sidebar,
+body.dark-mode .cart-container {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: -4px 0 25px rgba(0, 0, 0, 0.5) !important;
+}
+
+body.dark-mode .cart-header {
+    background: #1e293b !important;
+    border-bottom: 1px solid #334155 !important;
+}
+
+body.dark-mode .cart-close {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .cart-close:hover {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .cart-header span {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cart-header small {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .cart-body {
+    background: #1e293b !important;
+}
+
+body.dark-mode .cart-store-header h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cart-empty {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .cart-empty i {
+    color: #64748b !important;
+}
+
+body.dark-mode .cart-empty p {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .cart-item {
+    background: #111827 !important;
+    border: 1px solid #334155 !important;
+    border-radius: 10px !important;
+    padding: 10px !important;
+    margin-bottom: 10px !important;
+}
+
+body.dark-mode .cart-item-quantity button,
+body.dark-mode .qty-decrease,
+body.dark-mode .qty-increase {
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .cart-item-quantity button:hover,
+body.dark-mode .qty-decrease:hover,
+body.dark-mode .qty-increase:hover {
+    background: #334155 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .cart-item-quantity span {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cart-item-image {
+    background-color: #0f172a !important;
+}
+
+body.dark-mode .cart-item-name {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cart-item-size,
+body.dark-mode .cart-item-addons {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .cart-item-price-col,
+body.dark-mode .cart-item-price-col div {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .cart-item-remove {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .cart-item-remove:hover {
+    color: #f87171 !important;
+}
+
+body.dark-mode .cart-footer {
+    background: #1e293b !important;
+    border-top: 1px solid #334155 !important;
+}
+
+body.dark-mode .summary-row span,
+body.dark-mode .cart-summary .summary-row span {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode #cartSubtotal {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .summary-row.total,
+body.dark-mode .cart-summary .summary-row.total {
+    border-top: 1px solid #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode #cartTotal {
+    color: #ef4444 !important;
+}
+
+body.dark-mode #clearCart {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode #clearCart:hover {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .delivery-pickup-toggle,
+body.dark-mode .order-type-switch {
+    background: #0f172a !important;
+    border: 1px solid #334155 !important;
+}
+body.dark-mode .toggle-btn,
+body.dark-mode .order-type-btn {
+    color: #94a3b8 !important;
+}
+body.dark-mode .toggle-btn.active,
+body.dark-mode .order-type-btn.active {
+    background: #1e293b !important;
+    color: #ef4444 !important;
+    border: 1px solid #334155 !important;
+}
+body.dark-mode .cart-item-row {
+    border-color: #334155 !important;
+}
+body.dark-mode .cart-summary-line {
+    border-color: #334155 !important;
+}
+
+/* ==========================================================================
+   PRODUCT PREVIEW & REVIEWS MODAL DARK MODE ENGINE
+   ========================================================================== */
+body.dark-mode .product-preview-modal .preview-modal-content,
+body.dark-mode .preview-modal-content {
+    background-color: #1e293b !important;
+    border: 1px solid #334155 !important;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .preview-body {
+    background-color: #1e293b !important;
+}
+
+body.dark-mode .preview-image {
+    background-color: #0f172a !important;
+}
+
+body.dark-mode .preview-close {
+    background-color: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .preview-close:hover {
+    background-color: #b3261e !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .preview-details {
+    background-color: #1e293b !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .preview-details h3,
+body.dark-mode #previewProductName {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .preview-description,
+body.dark-mode #previewDescription {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .preview-price-section {
+    background-color: #111827 !important;
+    border: 1px solid #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .preview-price-section h4 {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .preview-price-section .price-amount,
+body.dark-mode #previewPrice {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .size-selection label,
+body.dark-mode .addons-selection label,
+body.dark-mode .quantity-selection label {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .size-preview-btn {
+    background-color: #111827 !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .size-preview-btn:hover {
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .size-preview-btn.active {
+    background-color: #b3261e !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 14px rgba(179, 38, 30, 0.4) !important;
+}
+
+body.dark-mode .size-preview-btn .size-info {
+    color: #cbd5e1 !important;
+    opacity: 0.9 !important;
+}
+
+body.dark-mode .addon-checkbox {
+    background-color: #111827 !important;
+    border: 1px solid #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .addon-checkbox:hover {
+    background-color: #1e293b !important;
+    border-color: #475569 !important;
+}
+
+body.dark-mode .addon-checkbox span {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .quantity-control {
+    border-color: #334155 !important;
+    background-color: #111827 !important;
+}
+
+body.dark-mode .quantity-control button,
+body.dark-mode .qty-minus,
+body.dark-mode .qty-plus {
+    background-color: #1e293b !important;
+    color: #f8fafc !important;
+    border: 1px solid #334155 !important;
+}
+
+body.dark-mode .quantity-control button:hover,
+body.dark-mode .qty-minus:hover,
+body.dark-mode .qty-plus:hover {
+    background-color: #334155 !important;
+}
+
+body.dark-mode .quantity-control input,
+body.dark-mode .qty-input {
+    background-color: #111827 !important;
+    color: #f8fafc !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .order-summary,
+body.dark-mode #previewOrderSummary {
+    background-color: #111827 !important;
+    border: 1px solid #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .order-summary h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .summary-details p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .summary-details p span {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .summary-details .summary-total {
+    border-top-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .summary-details .summary-total span,
+body.dark-mode #summaryTotal {
+    color: #ef4444 !important;
+}
+
+/* Reviews Modal Dark Mode */
+body.dark-mode #storefrontReviewsModal .preview-modal-content {
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode #storefrontReviewsModal h2 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode #storefrontReviewsModal [style*="background:#fff9f2"],
+body.dark-mode #storefrontReviewsModal [style*="background: #fff9f2"] {
+    background-color: #111827 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode #storefrontReviewsModal [style*="color:#171922"] {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .store-review-item {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .store-review-filter-btn {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .store-review-filter-btn.active {
+    background: #b3261e !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+}
+
+/* ==========================================================================
+   MOBILE VIEW FIXES (Screen 3 & 6 Reference):
+   Compact storefront header, sleek floating checkout bar, zero screen jamming
+   ========================================================================== */
+@media (max-width: 768px) {
+    .storefront-header {
+        padding: 12px 14px !important;
+        background: #ffffff !important;
+        border-bottom: 1px solid #eaecf0 !important;
+    }
+    .store-breadcrumb {
+        display: none !important;
+    }
+    .storefront-overview {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 12px !important;
+    }
+    .store-logo-tile {
+        width: 48px !important;
+        height: 48px !important;
+        min-width: 48px !important;
+        min-height: 48px !important;
+        max-width: 48px !important;
+        max-height: 48px !important;
+        border-radius: 12px !important;
+        box-shadow: 0 2px 6px rgba(16, 24, 40, 0.08) !important;
+        flex-shrink: 0 !important;
+    }
+    .store-logo-initials {
+        font-size: 1.15rem !important;
+    }
+    .storefront-copy h1 {
+        font-size: 1.15rem !important;
+        font-weight: 800 !important;
+        line-height: 1.25 !important;
+        margin: 0 !important;
+        color: #101828 !important;
+    }
+    .storefront-categories {
+        font-size: 0.68rem !important;
+        color: #b3261e !important;
+        margin: 0 0 2px 0 !important;
+        font-weight: 700 !important;
+    }
+    .storefront-subtitle {
+        display: none !important;
+    }
+    .storefront-meta-row {
+        gap: 4px 8px !important;
+        font-size: 0.70rem !important;
+        margin-top: 4px !important;
+    }
+    .storefront-meta-row span,
+    .storefront-meta-row-secondary a {
+        font-size: 0.70rem !important;
+        padding: 2px 6px !important;
+        background: #f8fafc !important;
+        border: 1px solid #eaecf0 !important;
+        border-radius: 999px !important;
+    }
+    .menu-shops-showcase-section {
+        margin-bottom: 20px !important;
+    }
+    .menu-shops-showcase-section > div {
+        padding: 16px 14px !important;
+        border-radius: 16px !important;
+    }
+    .menu-shops-showcase-section h2 {
+        font-size: 1.25rem !important;
+    }
+    .menu-shops-directory-grid {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
+        touch-action: pan-x pan-y !important;
+        scroll-snap-type: x mandatory !important;
+        scroll-behavior: smooth !important;
+        gap: 14px !important;
+        padding: 4px 4px 14px 4px !important;
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+        user-select: none;
+    }
+    .menu-shops-directory-grid::-webkit-scrollbar {
+        display: none !important;
+    }
+    .menu-shops-directory-grid .menu-shop-card {
+        flex: 0 0 clamp(225px, 70vw, 265px) !important;
+        width: clamp(225px, 70vw, 265px) !important;
+        min-width: clamp(225px, 70vw, 265px) !important;
+        max-width: clamp(225px, 70vw, 265px) !important;
+        scroll-snap-align: start !important;
+        scroll-snap-stop: normal !important;
+        touch-action: pan-x pan-y !important;
+    }
+    
+    /* Sleek Floating Quick Order Bar */
+    .mobile-quick-order {
+        display: none !important;
+    }
+    .mobile-quick-order.has-items {
+        display: block !important;
+        position: fixed !important;
+        left: 14px !important;
+        right: 14px !important;
+        bottom: 84px !important;
+        z-index: 1240 !important;
+    }
+    .mobile-quick-order-inner {
+        background: rgba(255, 255, 255, 0.94) !important;
+        backdrop-filter: blur(18px) !important;
+        -webkit-backdrop-filter: blur(18px) !important;
+        border: 1px solid rgba(234, 236, 240, 0.85) !important;
+        border-radius: 999px !important;
+        box-shadow: 0 10px 32px rgba(16, 24, 40, 0.15) !important;
+        padding: 6px 10px 6px 18px !important;
+    }
+    .mobile-quick-order-top {
+        display: none !important;
+    }
+    .mobile-quick-order-bottom {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 12px !important;
+    }
+    .mobile-quick-order-meta {
+        font-size: 0.70rem !important;
+        color: #64748b !important;
+        font-weight: 600 !important;
+        margin: 0 !important;
+    }
+    .mobile-quick-order-total {
+        font-size: 1.05rem !important;
+        font-weight: 800 !important;
+        color: #101828 !important;
+        line-height: 1.1 !important;
+    }
+    .mobile-quick-order-checkout {
+        background: #b3261e !important;
+        color: #ffffff !important;
+        font-weight: 800 !important;
+        font-size: 0.84rem !important;
+        padding: 10px 20px !important;
+        border-radius: 999px !important;
+        border: none !important;
+        box-shadow: 0 4px 12px rgba(179, 38, 30, 0.25) !important;
+        cursor: pointer !important;
+    }
+    .menu-items-grid {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+    }
+    .menu-item {
+        padding: 12px !important;
+        border-radius: 14px !important;
+    }
+    .menu-item .item-image {
+        width: 80px !important;
+        height: 80px !important;
+        min-width: 80px !important;
+        border-radius: 10px !important;
+    }
+    
+    
+    /* Product Preview Modal Mobile Fit (Ensures Add to Cart button is never cut off or covered) */
+    .preview-modal-content {
+        width: min(440px, 94vw) !important;
+        max-height: 86vh !important;
+        max-height: 86dvh !important;
+        display: flex !important;
+        flex-direction: column !important;
+        border-radius: 20px !important;
+        overflow: hidden !important;
+    }
+    .preview-image {
+        height: 160px !important;
+        min-height: 160px !important;
+        max-height: 160px !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        flex-shrink: 0 !important;
+    }
+    .preview-image img {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important;
+    }
+    .preview-body {
+        display: flex !important;
+        flex-direction: column !important;
+        flex: 1 !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+    .preview-details {
+        padding: 14px 16px 28px !important;
+        flex: none !important;
+        overflow: visible !important;
+        display: block !important;
+    }
+    .order-summary {
+        padding: 12px 14px !important;
+        margin-bottom: 12px !important;
+        border-radius: 12px !important;
+    }
+    .order-summary h4 {
+        font-size: 0.95rem !important;
+        margin-bottom: 8px !important;
+    }
+    .summary-details p {
+        margin-bottom: 4px !important;
+        font-size: 0.82rem !important;
+    }
+    .preview-actions-wrap {
+        margin-top: 12px !important;
+        margin-bottom: 24px !important;
+        padding-bottom: 20px !important;
+    }
+    .add-to-cart-confirm {
+        min-height: 48px !important;
+        font-size: 0.95rem !important;
+        font-weight: 800 !important;
+        border-radius: 12px !important;
+    }
+
+    /* Floating action button clutter suppression on mobile menu page */
+    .floating-order-btn,
+    #floatingOrderBtn {
+        display: none !important;
+    }
+    .floating-chat-btn,
+    #floatingChatBtn {
+        display: none !important;
+    }
+}
+
 </style>
 
 <?php include 'includes/footer.php'; ?>

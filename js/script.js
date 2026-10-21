@@ -4,17 +4,97 @@ document.addEventListener('DOMContentLoaded', function() {
     const mobileMenu = document.querySelector('.mobile-menu');
     
     if (mobileToggle) {
-        mobileToggle.addEventListener('click', function() {
-            mobileMenu.classList.toggle('active');
+        mobileToggle.addEventListener('click', function(e) {
+            if (typeof window.openMobileNavSidebar === 'function') {
+                window.openMobileNavSidebar(e);
+            } else if (mobileMenu) {
+                mobileMenu.classList.add('active');
+            }
         });
     }
     
     // Close mobile menu when clicking outside
     document.addEventListener('click', function(event) {
-        if (!event.target.closest('.mobile-toggle') && !event.target.closest('.mobile-menu')) {
-            mobileMenu.classList.remove('active');
-        }
+        if (!event.target.closest('.mobile-toggle, #mobileToggle, #mobileToggle2') && !event.target.closest('.mobile-menu, #mobileMenu')) {
+            if (typeof window.closeMobileNavSidebar === 'function') {
+                window.closeMobileNavSidebar(event);
+            } else if (mobileMenu) {
+                mobileMenu.classList.remove('active');
+            }
     });
+    
+    // Universal Touch & Mouse Horizontal Drag-to-Swipe for Carousels
+    function initHorizontalSwipeSliders() {
+        const sliderSelectors = [
+            '.panda-brand-slider',
+            '.menu-shops-directory-grid',
+            '.panda-cat-strip-wrap',
+            '.bestsellers-grid',
+            '.mobile-cat-carousel',
+            '.m-ref-categories-row',
+            '.m-ref-popular-chips-row',
+            '.top-shops-swipe-grid',
+            '.partner-store-deals-grid',
+            '.first-user-deals-grid',
+            '.market-store-list.store-list-grid'
+        ];
+        
+        sliderSelectors.forEach(function(selector) {
+            document.querySelectorAll(selector).forEach(function(slider) {
+                if (!slider || slider.dataset.swipeBound === 'true') return;
+                slider.dataset.swipeBound = 'true';
+                
+                let isDown = false;
+                let startX = 0;
+                let scrollLeft = 0;
+                let moved = false;
+                
+                slider.addEventListener('mousedown', function(e) {
+                    if (e.button !== 0) return;
+                    isDown = true;
+                    moved = false;
+                    startX = e.pageX - slider.offsetLeft;
+                    scrollLeft = slider.scrollLeft;
+                    slider.classList.add('is-dragging');
+                });
+                
+                slider.addEventListener('mouseleave', function() {
+                    isDown = false;
+                    slider.classList.remove('is-dragging');
+                });
+                
+                slider.addEventListener('mouseup', function() {
+                    isDown = false;
+                    slider.classList.remove('is-dragging');
+                    setTimeout(function() { moved = false; }, 60);
+                });
+                
+                slider.addEventListener('mousemove', function(e) {
+                    if (!isDown) return;
+                    e.preventDefault();
+                    const x = e.pageX - slider.offsetLeft;
+                    const walk = (x - startX) * 1.5;
+                    if (Math.abs(walk) > 4) {
+                        moved = true;
+                    }
+                    slider.scrollLeft = scrollLeft - walk;
+                });
+                
+                slider.querySelectorAll('a, button').forEach(function(el) {
+                    el.addEventListener('click', function(e) {
+                        if (moved) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                        }
+                    }, true);
+                });
+            });
+        });
+    }
+    
+    initHorizontalSwipeSliders();
+    window.addEventListener('load', initHorizontalSwipeSliders);
+    window.addEventListener('resize', initHorizontalSwipeSliders);
     
     // Form date validation
     const deliveryDateInput = document.getElementById('delivery_date');

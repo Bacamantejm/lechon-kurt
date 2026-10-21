@@ -13,6 +13,10 @@ $is_partner_scoped_admin = isApprovedFranchiseSellerAccount($conn, $current_user
 $seller_scope_id = $is_partner_scoped_admin ? getFranchiseSellerScopeOwnerId($conn, $current_user_id) : null;
 $is_partner_owner_admin = $seller_scope_id !== null && (int)$seller_scope_id === $current_user_id;
 
+$shop_sub_details = SubscriptionAccessService::getShopSubscriptionDetails($conn, $current_user_id);
+$can_change_store_name = !empty($shop_sub_details['can_change_store_name']);
+$can_change_store_logo = !empty($shop_sub_details['can_change_store_logo']);
+
 if (!$is_partner_scoped_admin || $seller_scope_id === null) {
     denyAdminAccess('Access denied: Business account settings are only available to approved business partner shops.');
 }
@@ -201,6 +205,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_business_account
     if ($has_business_name_col && $business_name === '') {
         $errors[] = 'Business name is required.';
     }
+    if ($has_business_name_col && !$can_change_store_name) {
+        $orig_name = trim((string)($business_user['business_name'] ?? ''));
+        if ($business_name !== $orig_name) {
+            $errors[] = 'Changing Store Name is restricted. Please upgrade to a Starter, Growth, or Pro Subscription Plan.';
+            $business_name = $orig_name;
+        }
+    }
     if (strlen($business_name) > 200) {
         $errors[] = 'Business name must be 200 characters or less.';
     }
@@ -243,19 +254,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_business_account
     $remove_logo = isset($_POST['remove_business_logo']) && (string)$_POST['remove_business_logo'] === '1';
 
     if ($logo_column !== '') {
-        if ($remove_logo) {
-            $next_logo_path = '';
-        }
-
         $logo_file = $_FILES['business_logo'] ?? null;
         $has_logo_upload = is_array($logo_file) && (int)($logo_file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE;
-        if ($has_logo_upload) {
-            $upload_result = baUploadBusinessLogo((int)$seller_scope_id, $logo_file);
-            if (!($upload_result['success'] ?? false)) {
-                $errors[] = (string)($upload_result['message'] ?? 'Unable to upload business logo.');
-            } else {
-                $next_logo_path = (string)$upload_result['path'];
-                $uploaded_new_logo = true;
+
+        if (!$can_change_store_logo && ($remove_logo || $has_logo_upload)) {
+            $errors[] = 'Changing or updating Store Logo is restricted. Please upgrade to a Starter, Growth, or Pro Subscription Plan.';
+        } else {
+            if ($remove_logo) {
+                $next_logo_path = '';
+            }
+
+            if ($has_logo_upload) {
+                $upload_result = baUploadBusinessLogo((int)$seller_scope_id, $logo_file);
+                if (!($upload_result['success'] ?? false)) {
+                    $errors[] = (string)($upload_result['message'] ?? 'Unable to upload business logo.');
+                } else {
+                    $next_logo_path = (string)$upload_result['path'];
+                    $uploaded_new_logo = true;
+                }
             }
         }
     }
@@ -605,13 +621,30 @@ unset($_SESSION['success'], $_SESSION['error']);
                     <h2 class="biz-title">Edit Business Profile</h2>
                     <p class="biz-subtitle">Update your brand identity and business credentials here without leaving the admin module.</p>
 
+                    <?php if (!$can_change_store_name || !$can_change_store_logo): ?>
+                    <div style="background:#fff8ef; border:1px solid #fedf89; border-radius:12px; padding:14px 16px; margin-bottom:18px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+                        <div style="color:#b54708; font-size:0.88rem; display:flex; align-items:center; gap:8px;">
+                            <i class="fas fa-lock" style="font-size:1.1rem; color:#b54708;"></i>
+                            <span><strong>Limited Access (Non-Subscribed):</strong> Store Name and Logo editing are locked. Subscribe to a plan to customize your store identity.</span>
+                        </div>
+                        <a href="subscription_plans.php?locked_feature=change_store_name&required_tier=starter" class="btn btn-sm" style="background:#b3261e; color:#ffffff; border-radius:999px; font-weight:700; padding:6px 16px; text-decoration:none;">
+                            <i class="fas fa-arrow-up"></i> Upgrade to Starter
+                        </a>
+                    </div>
+                    <?php endif; ?>
+
                     <form method="POST" enctype="multipart/form-data">
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
                         <input type="hidden" name="save_business_account" value="1">
 
                         <div class="biz-form-grid">
                             <div class="full">
-                                <label class="form-label fw-semibold">Business Logo</label>
+                                <label class="form-label fw-semibold">
+                                    Business Logo
+                                    <?php if (!$can_change_store_logo): ?>
+                                        <span class="badge ms-2" style="background:#fff1f0; color:#b3261e; border:1px solid #fee4e2; font-size:0.75rem;"><i class="fas fa-lock"></i> Locked</span>
+                                    <?php endif; ?>
+                                </label>
                                 <div class="biz-logo-row">
                                     <div class="biz-logo-preview">
                                         <?php if ($display_logo_url !== ''): ?>
@@ -625,12 +658,19 @@ unset($_SESSION['success'], $_SESSION['error']);
                                         <?php endif; ?>
                                     </div>
                                     <div class="w-100">
-                                        <input type="file" class="form-control" name="business_logo" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp">
-                                        <small class="text-muted d-block mt-1">Accepted formats: JPG, PNG, WEBP. Maximum size: 5MB.</small>
-                                        <?php if ($display_logo_url !== ''): ?>
-                                            <div class="form-check mt-2">
-                                                <input class="form-check-input" type="checkbox" name="remove_business_logo" id="remove_business_logo" value="1">
-                                                <label class="form-check-label" for="remove_business_logo">Remove current logo</label>
+                                        <?php if ($can_change_store_logo): ?>
+                                            <input type="file" class="form-control" name="business_logo" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp">
+                                            <small class="text-muted d-block mt-1">Accepted formats: JPG, PNG, WEBP. Maximum size: 5MB.</small>
+                                            <?php if ($display_logo_url !== ''): ?>
+                                                <div class="form-check mt-2">
+                                                    <input class="form-check-input" type="checkbox" name="remove_business_logo" id="remove_business_logo" value="1">
+                                                    <label class="form-check-label" for="remove_business_logo">Remove current logo</label>
+                                                </div>
+                                            <?php endif; ?>
+                                        <?php else: ?>
+                                            <input type="file" class="form-control" disabled style="background:#f8f9fa; cursor:not-allowed;">
+                                            <div class="form-text text-danger mt-1">
+                                                <i class="fas fa-lock"></i> Store Logo upload is locked. <a href="subscription_plans.php?locked_feature=change_store_logo&required_tier=starter" class="text-danger fw-bold text-decoration-underline">Upgrade to Starter Plan</a> to customize your store logo.
                                             </div>
                                         <?php endif; ?>
                                     </div>
@@ -639,8 +679,21 @@ unset($_SESSION['success'], $_SESSION['error']);
 
                             <?php if ($has_business_name_col): ?>
                             <div>
-                                <label class="form-label fw-semibold">Business Name</label>
-                                <input type="text" class="form-control" name="business_name" maxlength="200" required value="<?php echo htmlspecialchars((string)($business_user['business_name'] ?? '')); ?>">
+                                <label class="form-label fw-semibold">
+                                    Business Name
+                                    <?php if (!$can_change_store_name): ?>
+                                        <span class="badge ms-2" style="background:#fff1f0; color:#b3261e; border:1px solid #fee4e2; font-size:0.75rem;"><i class="fas fa-lock"></i> Locked</span>
+                                    <?php endif; ?>
+                                </label>
+                                <?php if ($can_change_store_name): ?>
+                                    <input type="text" class="form-control" name="business_name" maxlength="200" required value="<?php echo htmlspecialchars((string)($business_user['business_name'] ?? '')); ?>">
+                                <?php else: ?>
+                                    <input type="text" class="form-control" readonly style="background:#f8f9fa; cursor:not-allowed;" value="<?php echo htmlspecialchars((string)($business_user['business_name'] ?? '')); ?>">
+                                    <input type="hidden" name="business_name" value="<?php echo htmlspecialchars((string)($business_user['business_name'] ?? '')); ?>">
+                                    <div class="form-text text-danger mt-1">
+                                        <i class="fas fa-lock"></i> Store Name customization is locked. <a href="subscription_plans.php?locked_feature=change_store_name&required_tier=starter" class="text-danger fw-bold text-decoration-underline">Upgrade to Starter Plan</a>
+                                    </div>
+                                <?php endif; ?>
                             </div>
                             <?php endif; ?>
 

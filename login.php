@@ -3,6 +3,7 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 require_once 'includes/config.php';
+require_once __DIR__ . '/includes/rider_helper.php';
 
 function loginSessionUserExists($conn, $user_id) {
     $user_id = (int)$user_id;
@@ -55,6 +56,10 @@ function sanitizeRelativePhpRedirect($target) {
 if (isset($_SESSION['user_id'])) {
     $session_user_id = (int)$_SESSION['user_id'];
     if (loginSessionUserExists($conn, $session_user_id)) {
+        if (isDeliveryDriverUser($conn, $session_user_id)) {
+            header("Location: rider/index.php");
+            exit;
+        }
         $redirect = getUserDashboardRoute($conn, $session_user_id, $_SESSION['user_type'] ?? '');
         $custom_redirect = sanitizeRelativePhpRedirect($_GET['redirect'] ?? '');
         if ($custom_redirect !== null) {
@@ -112,7 +117,7 @@ if (isset($_SESSION['email_verification_error'])) {
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
     $email = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
-    $remember = isset($_POST['remember']);
+    $remember = !empty($_POST['remember']) && in_array(strtolower(trim((string)$_POST['remember'])), ['1', 'true', 'on', 'yes'], true);
     
     if (empty($email) || empty($password)) {
         $error = 'Please enter both email and password';
@@ -137,6 +142,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
             $_SESSION['has_backoffice_access'] = hasBackofficeAccess($conn, $result['user_id']);
             $_SESSION['permissions'] = getUserPermissions($conn, $result['user_id']);
             
+            // Flag first-time customer for mobile get-started splash
+            if (!empty($result['show_mobile_splash'])) {
+                $_SESSION['show_mobile_get_started'] = true;
+                $_SESSION['is_first_login'] = true;
+            } else {
+                $_SESSION['show_mobile_get_started'] = false;
+            }
+            
             $user_type = strtolower(trim($result['user_type']));
 
             // Check if user is an employee (exists in employees table)
@@ -153,14 +166,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
             }
             $check_emp->close();
             
-            // Determine default redirect from RBAC role permissions first, then legacy fallback
-            $redirect = getUserDashboardRoute($conn, $result['user_id'], $result['user_type']);
-            if ($redirect === 'index.php' && ($user_type === 'employee' || $is_employee_record)) {
-                $redirect = 'employee/dashboard.php';
-            }
-            
-            
             // Handle remember me
+            $is_secure_conn = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
             if ($remember) {
                 $token = bin2hex(random_bytes(32));
                 $expires = time() + (30 * 24 * 60 * 60);
@@ -169,9 +176,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
                     'expires' => $expires,
                     'path' => '/',
                     'domain' => '',
-                    'secure' => isset($_SERVER['HTTPS']),
+                    'secure' => $is_secure_conn,
                     'httponly' => true,
-                    'samesite' => 'Strict'
+                    'samesite' => 'Lax'
+                ]);
+
+                setcookie('remember_email', $result['email'], [
+                    'expires' => $expires,
+                    'path' => '/',
+                    'domain' => '',
+                    'secure' => $is_secure_conn,
+                    'httponly' => false,
+                    'samesite' => 'Lax'
                 ]);
                 
                 // Store in database
@@ -184,24 +200,52 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
                     mysqli_stmt_execute($token_stmt);
                     mysqli_stmt_close($token_stmt);
                 }
+            } else {
+                // User chose not to be remembered: clear cookies and stored token
+                setcookie('remember_token', '', time() - 3600, '/');
+                setcookie('remember_email', '', time() - 3600, '/');
+                $clear_token_query = "UPDATE users SET remember_token = NULL, remember_expires = NULL WHERE id = ?";
+                if ($clear_token_stmt = mysqli_prepare($conn, $clear_token_query)) {
+                    mysqli_stmt_bind_param($clear_token_stmt, "i", $result['user_id']);
+                    mysqli_stmt_execute($clear_token_stmt);
+                    mysqli_stmt_close($clear_token_stmt);
+                }
             }
-            
-            // Check for redirect URL (override role-based default if specific page requested)
-            if (isset($_GET['redirect']) && !empty($_GET['redirect'])) {
-                $custom_redirect = sanitizeRelativePhpRedirect($_GET['redirect']);
-                if ($custom_redirect !== null) {
-                    $custom_redirect_path = parse_url($custom_redirect, PHP_URL_PATH) ?: $custom_redirect;
-                    $is_admin_redirect = strpos($custom_redirect_path, 'admin/') === 0;
-                    $is_employee_redirect = strpos($custom_redirect_path, 'employee/') === 0;
-                    $can_access_admin = hasBackofficeAccess($conn, $result['user_id']);
-                    $can_access_employee = ($user_type === 'employee' || $is_employee_record);
-                    $target_exists = file_exists(__DIR__ . '/' . ltrim($custom_redirect_path, '/'));
 
-                    if (($is_admin_redirect && $can_access_admin) ||
-                        ($is_employee_redirect && $can_access_employee) ||
-                        (!$is_admin_redirect && !$is_employee_redirect)) {
-                        if ($target_exists) {
-                            $redirect = $custom_redirect;
+            // Strict check: if user is a delivery rider, direct ONLY to rider portal
+            $is_rider_account = isDeliveryDriverUser($conn, $result['user_id']);
+            if ($is_rider_account) {
+                $_SESSION['is_driver'] = true;
+                $r_fetch = mysqli_query($conn, "SELECT id, rider_code FROM riders WHERE user_id = " . (int)$result['user_id'] . " LIMIT 1");
+                if ($r_fetch && ($r_row = mysqli_fetch_assoc($r_fetch))) {
+                    $_SESSION['rider_id'] = (int)$r_row['id'];
+                    $_SESSION['rider_code'] = $r_row['rider_code'];
+                }
+                $redirect = 'rider/index.php';
+            } else {
+                // Determine default redirect from RBAC role permissions first, then legacy fallback
+                $redirect = getUserDashboardRoute($conn, $result['user_id'], $result['user_type']);
+                if ($redirect === 'index.php' && ($user_type === 'employee' || $is_employee_record)) {
+                    $redirect = 'employee/dashboard.php';
+                }
+                
+                // Check for redirect URL (override role-based default if specific page requested)
+                if (isset($_GET['redirect']) && !empty($_GET['redirect'])) {
+                    $custom_redirect = sanitizeRelativePhpRedirect($_GET['redirect']);
+                    if ($custom_redirect !== null) {
+                        $custom_redirect_path = parse_url($custom_redirect, PHP_URL_PATH) ?: $custom_redirect;
+                        $is_admin_redirect = strpos($custom_redirect_path, 'admin/') === 0;
+                        $is_employee_redirect = strpos($custom_redirect_path, 'employee/') === 0;
+                        $can_access_admin = hasBackofficeAccess($conn, $result['user_id']);
+                        $can_access_employee = ($user_type === 'employee' || $is_employee_record);
+                        $target_exists = file_exists(__DIR__ . '/' . ltrim($custom_redirect_path, '/'));
+
+                        if (($is_admin_redirect && $can_access_admin) ||
+                            ($is_employee_redirect && $can_access_employee) ||
+                            (!$is_admin_redirect && !$is_employee_redirect)) {
+                            if ($target_exists) {
+                                $redirect = $custom_redirect;
+                            }
                         }
                     }
                 }
@@ -1008,6 +1052,136 @@ body {
 .auth-link a:hover {
     text-decoration: underline !important;
 }
+
+/* ==========================================================================
+   LOGIN PAGE DARK MODE THEME
+   ========================================================================== */
+body.dark-mode,
+html.dark-mode,
+body.dark-mode .login-page-container {
+    background: #0f172a !important;
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .login-wrapper {
+    background: #0f172a !important;
+    background-color: #0f172a !important;
+}
+
+body.dark-mode .login-left {
+    background: linear-gradient(145deg, #182234 0%, #1e293b 60%, #0f172a 100%) !important;
+    border-right: 1px solid #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .login-left h2,
+body.dark-mode .brand-logo h1 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .login-left p,
+body.dark-mode .features-list li {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .login-right {
+    background: #0f172a !important;
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .login-header h2 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .login-header p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .form-group label {
+    color: #e2e8f0 !important;
+}
+
+body.dark-mode .form-control {
+    background: #1e293b !important;
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .form-control:focus {
+    background: #0b1120 !important;
+    border-color: #b3261e !important;
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.3) !important;
+}
+
+body.dark-mode input:-webkit-autofill,
+body.dark-mode input:-webkit-autofill:hover, 
+body.dark-mode input:-webkit-autofill:focus, 
+body.dark-mode input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 1000px #1e293b inset !important;
+    box-shadow: 0 0 0 1000px #1e293b inset !important;
+    -webkit-text-fill-color: #f8fafc !important;
+    color: #f8fafc !important;
+    transition: background-color 5000s ease-in-out 0s !important;
+    caret-color: #f8fafc !important;
+}
+
+body.dark-mode input:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0 1000px #0b1120 inset, 0 0 0 3px rgba(179, 38, 30, 0.3) !important;
+    box-shadow: 0 0 0 1000px #0b1120 inset, 0 0 0 3px rgba(179, 38, 30, 0.3) !important;
+    -webkit-text-fill-color: #ffffff !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .input-with-icon i,
+body.dark-mode #togglePassword {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .remember-checkbox span {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .forgot-link {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .auth-link {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .btn-secondary {
+    background: #1e293b !important;
+    color: #f8fafc !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .btn-secondary:hover {
+    background: #334155 !important;
+    border-color: #475569 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .social-divider span {
+    background: #0f172a !important;
+    color: #64748b !important;
+}
+
+body.dark-mode .social-btn {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .social-btn:hover {
+    background: #334155 !important;
+}
+
+body.dark-mode .floating-pig {
+    opacity: 0.25 !important;
+}
 </style>
 
 <div class="login-page-container">
@@ -1063,7 +1237,7 @@ body {
                             <i class="fas fa-envelope"></i>
                             <input type="email" id="email" name="email" class="form-control" required 
                                 placeholder="Enter your email address" 
-                                value="<?php echo htmlspecialchars($form_data['email'] ?? ''); ?>"
+                                value="<?php echo htmlspecialchars($form_data['email'] ?? ($_COOKIE['remember_email'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
                                 autocomplete="email">
                         </div>
                     </div>
@@ -1083,7 +1257,7 @@ body {
                     
                     <div class="remember-forgot">
                         <label class="remember-checkbox">
-                            <input type="checkbox" name="remember" id="rememberMe" value="1">
+                            <input type="checkbox" name="remember" id="rememberMe" value="1" <?php echo (!empty($remember) || !empty($_COOKIE['remember_email'])) ? 'checked' : ''; ?>>
                             <span>Remember me</span>
                         </label>
                         <a href="reset_password_request.php" class="forgot-link" id="switchToForgotView">Forgot password?</a>
@@ -1332,6 +1506,20 @@ document.addEventListener('DOMContentLoaded', function() {
             emailInput.focus();
         }
     }, 300);
+
+    // Password Visibility Toggle for Login
+    const togglePasswordBtn = document.getElementById('togglePassword');
+    const passwordInput = document.getElementById('password');
+    if (togglePasswordBtn && passwordInput) {
+        togglePasswordBtn.addEventListener('click', function() {
+            const isPass = passwordInput.type === 'password';
+            passwordInput.type = isPass ? 'text' : 'password';
+            const icon = this.querySelector('i');
+            if (icon) {
+                icon.className = isPass ? 'fas fa-eye-slash' : 'fas fa-eye';
+            }
+        });
+    }
     
     // In-Place View Switcher between Login and Forgot Password
     const loginView = document.getElementById('loginViewContainer');
@@ -1394,13 +1582,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         forgotViewAlert.innerHTML = '<i class="fas fa-check-circle"></i> <div>' + (data.message || 'Password reset link sent! Check your inbox.') + '</div>';
                         forgotViewAlert.style.display = 'flex';
                     }
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Reset Link Sent',
-                            text: data.message || 'Check your email inbox for password reset instructions.',
-                            confirmButtonColor: '#b3261e'
-                        });
+                    if (window.showPopupAlert) {
+                        window.showPopupAlert(data.message || 'Check your email inbox for password reset instructions.', 'success', 5000);
                     }
                 } else {
                     if (forgotViewAlert) {
@@ -1408,12 +1591,18 @@ document.addEventListener('DOMContentLoaded', function() {
                         forgotViewAlert.innerHTML = '<i class="fas fa-exclamation-circle"></i> <div>' + (data.message || 'Error processing request.') + '</div>';
                         forgotViewAlert.style.display = 'flex';
                     }
+                    if (window.showPopupAlert) {
+                        window.showPopupAlert(data.message || 'Failed to process password reset request.', 'error', 5000);
+                    }
                 }
             } catch (err) {
                 if (forgotViewAlert) {
                     forgotViewAlert.className = 'alert alert-error';
                     forgotViewAlert.innerHTML = '<i class="fas fa-exclamation-circle"></i> <div>An unexpected error occurred. Please try again.</div>';
                     forgotViewAlert.style.display = 'flex';
+                }
+                if (window.showPopupAlert) {
+                    window.showPopupAlert('An unexpected error occurred. Please try again.', 'error', 5000);
                 }
             } finally {
                 if (forgotViewSubmitBtn) {
@@ -1425,21 +1614,29 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     <?php if ($error): ?>
-    Swal.fire({
-        icon: 'error',
-        title: 'Login Error',
-        text: '<?php echo addslashes($error); ?>',
-        confirmButtonColor: '#b3261e'
-    });
+    if (window.showPopupAlert) {
+        window.showPopupAlert(<?php echo json_encode($error); ?>, 'error', 5000);
+    } else if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            icon: 'error',
+            title: 'Login Error',
+            text: <?php echo json_encode($error); ?>,
+            confirmButtonColor: '#b3261e'
+        });
+    }
     <?php endif; ?>
     
     <?php if ($success): ?>
-    Swal.fire({
-        icon: 'success',
-        title: 'Success!',
-        html: '<?php echo addslashes($success); ?>',
-        confirmButtonColor: '#b3261e'
-    });
+    if (window.showPopupAlert) {
+        window.showPopupAlert(<?php echo json_encode($success); ?>, 'success', 4000);
+    } else if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            icon: 'success',
+            title: 'Success!',
+            html: <?php echo json_encode($success); ?>,
+            confirmButtonColor: '#b3261e'
+        });
+    }
     <?php endif; ?>
 });
 </script>

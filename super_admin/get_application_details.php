@@ -120,53 +120,77 @@ if (saTableExists($conn, 'franchise_applications')) {
         <span class="status-chip <?php echo $app_status_chip; ?>"><?php echo htmlspecialchars(ucfirst($app_status !== '' ? $app_status : 'unknown')); ?></span>
     </div>
     
-    <div class="app-info-grid">
-        <div class="info-section">
-            <h6>Applicant Information</h6>
-            <p><strong>Name:</strong> <?php echo htmlspecialchars((string)($user['full_name'] ?? 'Unknown')); ?></p>
-            <p><strong>Email:</strong> <?php echo htmlspecialchars((string)($user['email'] ?? 'N/A')); ?></p>
-            <p><strong>Phone:</strong> <?php echo htmlspecialchars((string)($user['phone'] ?? 'N/A')); ?></p>
+    <div class="row g-3 mb-3">
+        <div class="col-md-6">
+            <div class="form-section-card h-100 mb-0">
+                <div class="form-section-head">
+                    <span class="form-section-title"><i class="fas fa-user"></i> Applicant Information</span>
+                    <span class="form-req-pill">Verified</span>
+                </div>
+                <div class="p-1">
+                    <div class="mb-2"><span class="text-muted small d-block">NAME</span><strong><?php echo htmlspecialchars((string)($user['full_name'] ?? 'Unknown')); ?></strong></div>
+                    <div class="mb-2"><span class="text-muted small d-block">EMAIL</span><strong><?php echo htmlspecialchars((string)($user['email'] ?? 'N/A')); ?></strong></div>
+                    <div><span class="text-muted small d-block">PHONE</span><strong><?php echo htmlspecialchars((string)($user['phone'] ?? 'N/A')); ?></strong></div>
+                </div>
+            </div>
         </div>
         
-        <div class="info-section">
-            <h6>Business Information</h6>
-            <p><strong>Business Name:</strong> <?php echo htmlspecialchars($app['business_name']); ?></p>
-            <p><strong>Business Type:</strong> <?php echo ucfirst($app['business_type']); ?></p>
-            <p><strong>TIN:</strong> <?php echo htmlspecialchars($app['tin_number']); ?></p>
+        <div class="col-md-6">
+            <div class="form-section-card h-100 mb-0">
+                <div class="form-section-head">
+                    <span class="form-section-title"><i class="fas fa-store"></i> Business Information</span>
+                    <span class="form-req-pill">Entity</span>
+                </div>
+                <div class="p-1">
+                    <div class="mb-2"><span class="text-muted small d-block">BUSINESS NAME</span><strong><?php echo htmlspecialchars($app['business_name']); ?></strong></div>
+                    <div class="mb-2"><span class="text-muted small d-block">BUSINESS TYPE</span><strong><?php echo ucfirst($app['business_type']); ?></strong></div>
+                    <div><span class="text-muted small d-block">TIN NUMBER</span><strong><?php echo htmlspecialchars($app['tin_number']); ?></strong></div>
+                </div>
+            </div>
         </div>
     </div>
 
-    <div class="app-section">
-        <h6>Application Workflow Status</h6>
-        <div class="detail-row">
-            <span>Total Attempts:</span>
-            <p><?php echo (int)$applicant_attempts; ?> / 2</p>
+    <!-- Workflow Status -->
+    <div class="form-section-card mb-3">
+        <div class="form-section-head">
+            <span class="form-section-title"><i class="fas fa-tasks"></i> Workflow Status</span>
+            <span class="form-opt-pill">Policy Rules</span>
         </div>
-        <div class="detail-row">
-            <span>Approved Attempts:</span>
-            <p><?php echo (int)$approved_attempts; ?></p>
-        </div>
-        <div class="detail-row">
-            <span>Rejected Attempts:</span>
-            <p><?php echo (int)$rejected_attempts; ?></p>
+        <div class="row g-2 mb-2">
+            <div class="col-4">
+                <div class="p-2 rounded bg-light border text-center">
+                    <span class="d-block text-muted" style="font-size: 11px; font-weight: 600;">ATTEMPTS</span>
+                    <strong><?php echo (int)$applicant_attempts; ?> / 2</strong>
+                </div>
+            </div>
+            <div class="col-4">
+                <div class="p-2 rounded bg-light border text-center">
+                    <span class="d-block text-muted" style="font-size: 11px; font-weight: 600;">APPROVED</span>
+                    <strong style="color: #027a48;"><?php echo (int)$approved_attempts; ?></strong>
+                </div>
+            </div>
+            <div class="col-4">
+                <div class="p-2 rounded bg-light border text-center">
+                    <span class="d-block text-muted" style="font-size: 11px; font-weight: 600;">REJECTED</span>
+                    <strong style="color: #b3261e;"><?php echo (int)$rejected_attempts; ?></strong>
+                </div>
+            </div>
         </div>
         <?php if ($next_reapply_at !== null): ?>
-        <div class="detail-row">
-            <span>Cooldown Ends:</span>
-            <p><?php echo htmlspecialchars($next_reapply_at); ?></p>
-        </div>
+            <div class="alert alert-warning py-2 px-3 small mb-2"><i class="fas fa-hourglass-half me-1"></i> Cooldown ends on <strong><?php echo htmlspecialchars($next_reapply_at); ?></strong></div>
         <?php endif; ?>
-        <div class="detail-row">
-            <span>Operational Rule:</span>
-            <p>Applicants get up to 2 total submissions. Rejected applicants wait 3 days before the final retry. Approved partners enter a 1-month trial and should not re-register.</p>
-        </div>
+        <p class="text-muted small mb-0"><i class="fas fa-info-circle me-1"></i> Applicants get up to 2 total submissions. Rejected applicants wait 3 days before final retry. Approved partners enter a 1-month trial.</p>
     </div>
     
-    <div class="app-section">
-        <h6>Business Details</h6>
-        <div class="detail-row">
-            <span>Business Address:</span>
-            <p><?php echo nl2br(htmlspecialchars($app['business_address'])); ?></p>
+    <!-- Business Details -->
+    <div class="form-section-card mb-3">
+        <div class="form-section-head">
+            <span class="form-section-title"><i class="fas fa-map-marker-alt"></i> Location & Capital</span>
+            <span class="form-req-pill">Commercial</span>
+        </div>
+        <div class="mb-2">
+            <span class="text-muted small d-block">BUSINESS ADDRESS</span>
+            <p class="mb-0" style="color: #101828; font-size: 13.5px;"><?php echo nl2br(htmlspecialchars($app['business_address'])); ?></p>
         </div>
         <?php
             $psgc_parts = array_filter([
@@ -180,27 +204,30 @@ if (saTableExists($conn, 'franchise_applications')) {
             $psgc_location_line = implode(', ', $psgc_parts);
         ?>
         <?php if ($psgc_location_line !== ''): ?>
-        <div class="detail-row">
-            <span>PSGC Location:</span>
-            <p><?php echo htmlspecialchars($psgc_location_line); ?></p>
-        </div>
+            <div class="mb-2">
+                <span class="text-muted small d-block">PSGC REGION / LOCATION</span>
+                <strong style="color: #101828; font-size: 13.5px;"><?php echo htmlspecialchars($psgc_location_line); ?></strong>
+            </div>
         <?php endif; ?>
-        <div class="detail-row">
-            <span>Capital Investment:</span>
-            <p>PHP <?php echo number_format((float)($app['capital_investment'] ?? 0), 2); ?></p>
+        <div class="mb-2">
+            <span class="text-muted small d-block">COMMITTED CAPITAL INVESTMENT</span>
+            <strong style="color: #b3261e; font-size: 15px;">PHP <?php echo number_format((float)($app['capital_investment'] ?? 0), 2); ?></strong>
         </div>
-        <div class="detail-row">
-            <span>Business Experience:</span>
-            <p><?php echo nl2br(htmlspecialchars($app['business_experience'])); ?></p>
-        </div>
-        <div class="detail-row">
-            <span>Marketing Plan:</span>
-            <p><?php echo nl2br(htmlspecialchars($app['marketing_plan'])); ?></p>
-        </div>
+        <?php if (!empty($app['business_experience'])): ?>
+            <div class="mb-2">
+                <span class="text-muted small d-block">BUSINESS EXPERIENCE</span>
+                <p class="mb-0 text-muted small"><?php echo nl2br(htmlspecialchars($app['business_experience'])); ?></p>
+            </div>
+        <?php endif; ?>
     </div>
     
     <div class="app-documents">
-        <h6>Submitted Documents</h6>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <h6 style="margin:0;">Submitted Documents (<?php echo $docs_result ? mysqli_num_rows($docs_result) : 0; ?>)</h6>
+            <?php if ($app['status'] === 'pending' || $app['status'] === 'incomplete'): ?>
+                <small class="text-muted"><i class="fas fa-info-circle"></i> Check individual documents that need re-upload (e.g. blurry image)</small>
+            <?php endif; ?>
+        </div>
         <div class="documents-list">
             <?php
             $doc_types = [
@@ -223,68 +250,185 @@ if (saTableExists($conn, 'franchise_applications')) {
                 'pagibig_registration' => 'Pag-IBIG Registration',
                 'industry_permit' => 'Industry-Specific Permit'
             ];
+
+            $incomplete_map = [];
+            if (!empty($app['incomplete_documents'])) {
+                $decoded_inc = json_decode((string)$app['incomplete_documents'], true);
+                if (is_array($decoded_inc)) {
+                    $incomplete_map = $decoded_inc;
+                }
+            }
             
-            if ($docs_result) {
+            if ($docs_result && mysqli_num_rows($docs_result) > 0) {
+                mysqli_data_seek($docs_result, 0);
                 while ($doc = mysqli_fetch_assoc($docs_result)) {
-                    $doc_type_name = $doc_types[$doc['document_type']] ?? $doc['document_type'];
-                    echo "
-                    <div class='doc-item'>
-                        <i class='fas fa-file-pdf'></i>
-                        <span>{$doc_type_name}</span>
-                        <a href='../" . htmlspecialchars($doc['file_path']) . "' target='_blank' class='btn btn-sm btn-outline-primary'>
-                            <i class='fas fa-download'></i>
-                        </a>
+                    $doc_type_key = (string)($doc['document_type'] ?? '');
+                    $doc_type_name = $doc_types[$doc_type_key] ?? $doc_type_key;
+                    $document_url = '../' . ltrim((string)($doc['file_path'] ?? ''), '/');
+                    $document_name = (string)($doc['file_name'] ?? $doc_type_name);
+                    $document_extension = strtolower(pathinfo($document_name, PATHINFO_EXTENSION));
+                    $image_extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'];
+                    $document_icon = in_array($document_extension, $image_extensions, true) ? 'fa-file-image' : 'fa-file-pdf';
+                    $doc_status = strtolower(trim((string)($doc['status'] ?? 'pending')));
+                    $is_flagged = ($doc_status === 'incomplete' || isset($incomplete_map[$doc_type_key]));
+                    $doc_remark = (string)($doc['admin_remarks'] ?? $incomplete_map[$doc_type_key] ?? '');
+                    ?>
+                    <div class="doc-card-item <?php echo $is_flagged ? 'is-flagged' : ''; ?>" id="doc_card_<?php echo htmlspecialchars($doc_type_key); ?>">
+                        <div class="doc-card-header">
+                            <div class="doc-title-wrap">
+                                <i class="fas <?php echo $document_icon; ?> doc-type-icon"></i>
+                                <div>
+                                    <span class="doc-type-title"><?php echo htmlspecialchars($doc_type_name); ?></span>
+                                    <small class="doc-filename text-muted d-block"><?php echo htmlspecialchars(basename($document_name)); ?></small>
+                                </div>
+                            </div>
+                            <div class="doc-actions-wrap">
+                                <?php if ($is_flagged): ?>
+                                    <span class="status-chip chip-danger" style="font-size:11px;padding:3px 8px;"><i class="fas fa-exclamation-circle"></i> Incomplete</span>
+                                <?php elseif ($doc_status === 'approved'): ?>
+                                    <span class="status-chip chip-success" style="font-size:11px;padding:3px 8px;"><i class="fas fa-check"></i> Verified</span>
+                                <?php else: ?>
+                                    <span class="status-chip chip-muted" style="font-size:11px;padding:3px 8px;"><i class="fas fa-file"></i> Submitted</span>
+                                <?php endif; ?>
+
+                                <button type="button"
+                                        class="btn btn-sm btn-outline-primary doc-preview-button"
+                                        data-preview-url="<?php echo htmlspecialchars($document_url, ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-preview-title="<?php echo htmlspecialchars($doc_type_name, ENT_QUOTES, 'UTF-8'); ?>"
+                                        onclick="openDocumentPreview(this)"
+                                        title="Preview Document">
+                                    <i class="fas fa-eye"></i> Preview
+                                </button>
+                            </div>
+                        </div>
+
+                        <?php if ($app['status'] === 'pending' || $app['status'] === 'incomplete'): ?>
+                        <div class="doc-flag-section">
+                            <label class="doc-flag-label">
+                                <input type="checkbox"
+                                       name="flagged_docs[]"
+                                       value="<?php echo htmlspecialchars($doc_type_key); ?>"
+                                       form="appForm"
+                                       class="doc-flag-checkbox"
+                                       data-doc-name="<?php echo htmlspecialchars($doc_type_name); ?>"
+                                       onchange="toggleDocFlagRemark(this, '<?php echo htmlspecialchars($doc_type_key); ?>')"
+                                       <?php echo ($is_flagged ? 'checked' : ''); ?>>
+                                <span class="doc-flag-text"><i class="fas fa-flag"></i> Mark for Re-upload (e.g. Blurry, Cut-off, Expired)</span>
+                            </label>
+                            <div class="doc-flag-remark-box" id="flag_remark_wrap_<?php echo htmlspecialchars($doc_type_key); ?>" style="<?php echo ($is_flagged ? '' : 'display:none;'); ?>">
+                                <input type="text"
+                                       name="doc_remarks[<?php echo htmlspecialchars($doc_type_key); ?>]"
+                                       form="appForm"
+                                       id="doc_remark_input_<?php echo htmlspecialchars($doc_type_key); ?>"
+                                       class="form-control form-control-sm doc-remark-input"
+                                       placeholder="Specific issue (e.g. Image is blurry, please upload clear copy)"
+                                       value="<?php echo htmlspecialchars($doc_remark); ?>">
+                                <div class="quick-reasons-row">
+                                    <button type="button" class="btn btn-xs btn-outline-secondary reason-btn" onclick="setDocRemark('<?php echo htmlspecialchars($doc_type_key); ?>', 'Image is blurry / unreadable')">Blurry Image</button>
+                                    <button type="button" class="btn btn-xs btn-outline-secondary reason-btn" onclick="setDocRemark('<?php echo htmlspecialchars($doc_type_key); ?>', 'Document is expired')">Expired</button>
+                                    <button type="button" class="btn btn-xs btn-outline-secondary reason-btn" onclick="setDocRemark('<?php echo htmlspecialchars($doc_type_key); ?>', 'Incomplete pages / cut off')">Cut Off</button>
+                                    <button type="button" class="btn btn-xs btn-outline-secondary reason-btn" onclick="setDocRemark('<?php echo htmlspecialchars($doc_type_key); ?>', 'Name / details do not match')">Mismatched</button>
+                                </div>
+                            </div>
+                        </div>
+                        <?php elseif (!empty($doc_remark)): ?>
+                        <div class="doc-past-remark">
+                            <i class="fas fa-info-circle text-warning"></i> <strong>Admin Note:</strong> <?php echo htmlspecialchars($doc_remark); ?>
+                        </div>
+                        <?php endif; ?>
                     </div>
-                    ";
+                    <?php
                 }
             } else {
-                echo "<div class='text-muted'>No documents found.</div>";
+                echo "<div class='text-muted' style='padding:12px;background:#f8f9fa;border-radius:8px;'>No documents attached to this application.</div>";
             }
             ?>
         </div>
     </div>
     
-    <?php if ($app['status'] === 'pending'): ?>
-        <div class="app-actions">
+    <?php if ($app['status'] === 'pending' || $app['status'] === 'incomplete'): ?>
+        <div class="form-section-card mt-3">
+            <div class="form-section-head">
+                <span class="form-section-title"><i class="fas fa-gavel"></i> Administrative Review & Decision</span>
+                <span class="form-req-pill">Action Required</span>
+            </div>
             <form method="POST" action="../super_admin/franchise_applications.php" id="appForm">
                 <input type="hidden" name="app_id" value="<?php echo $app_id; ?>">
                 <input type="hidden" name="app_action" id="app_action" value="">
                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token, ENT_QUOTES, 'UTF-8'); ?>">
                 
-                <div class="form-group">
-                    <label>Admin Notes</label>
-                    <textarea name="admin_notes" class="form-control" rows="3"><?php echo htmlspecialchars($app['admin_notes'] ?? ''); ?></textarea>
+                <div class="form-group-modern mb-3">
+                    <label class="form-label-modern">Overall Admin Feedback / Reason <span class="text-danger">*</span></label>
+                    <textarea name="admin_notes" id="admin_notes" class="form-control" rows="3" placeholder="Explain why the application is rejected or incomplete..."><?php echo htmlspecialchars($app['admin_notes'] ?? ''); ?></textarea>
+                    <div class="form-helper-text"><i class="fas fa-info-circle"></i> A reason is required for rejection or incomplete decisions. Mark at least one specific document for re-upload when choosing <strong>Mark Incomplete</strong>.</div>
                 </div>
                 
-                <div class="action-buttons">
+                <div class="action-buttons d-flex gap-2 flex-wrap pt-2 border-top">
                     <button type="submit"
                             name="app_action"
                             value="approve"
                             class="btn btn-outline-success"
                             data-sa-confirm="1"
                             data-sa-confirm-title="Approve Application?"
-                            data-sa-confirm-text="This will approve this business application and grant partner access controls."
+                            data-sa-confirm-text="This will approve this business application, notify the client via email, and grant partner access controls."
                             data-sa-confirm-confirm-text="Yes, Approve"
                             data-sa-confirm-confirm-color="#166534">
                         <i class="fas fa-check"></i> Approve Application
                     </button>
-                    <button type="button" class="btn btn-outline-danger" onclick="handleReject('<?php echo htmlspecialchars($app['application_number']); ?>', <?php echo $app_id; ?>)">
+                    <button type="button" class="btn btn-outline-warning" onclick="handleIncomplete('<?php echo htmlspecialchars($app['application_number']); ?>')">
+                        <i class="fas fa-exclamation-triangle"></i> Mark Incomplete
+                    </button>
+                    <button type="button" class="btn btn-outline-danger" onclick="handleReject('<?php echo htmlspecialchars($app['application_number']); ?>')">
                         <i class="fas fa-times"></i> Reject Application
                     </button>
                 </div>
             </form>
         </div>
     <?php else: ?>
-        <div class="app-notes">
-            <h6>Admin Notes</h6>
-            <p><?php echo nl2br(htmlspecialchars($app['admin_notes'] ?? 'No notes')); ?></p>
-            <small>
+        <div class="form-section-card mt-3">
+            <div class="form-section-head">
+                <span class="form-section-title"><i class="fas fa-clipboard-check"></i> Review Notes</span>
+                <span class="form-opt-pill">Completed</span>
+            </div>
+            <p class="mb-1 text-dark"><?php echo nl2br(htmlspecialchars($app['admin_notes'] ?? 'No notes recorded')); ?></p>
+            <small class="text-muted">
                 Reviewed by: <?php echo htmlspecialchars((string)($app['admin_id'] ?? 'N/A')); ?>
                 on <?php echo htmlspecialchars(saFormatDateTime($app['reviewed_at'] ?? null, 'M d, Y H:i', 'N/A')); ?>
             </small>
         </div>
     <?php endif; ?>
 </div>
+
+<script>
+function toggleDocFlagRemark(checkbox, docType) {
+    const wrap = document.getElementById('flag_remark_wrap_' + docType);
+    const card = document.getElementById('doc_card_' + docType);
+    if (wrap) {
+        wrap.style.display = checkbox.checked ? 'block' : 'none';
+        if (checkbox.checked) {
+            const input = document.getElementById('doc_remark_input_' + docType);
+            if (input && input.value.trim() === '') {
+                input.value = 'Image is blurry / please re-upload clear copy';
+            }
+        }
+    }
+    if (card) {
+        if (checkbox.checked) {
+            card.classList.add('is-flagged');
+        } else {
+            card.classList.remove('is-flagged');
+        }
+    }
+}
+
+function setDocRemark(docType, text) {
+    const input = document.getElementById('doc_remark_input_' + docType);
+    if (input) {
+        input.value = text;
+        input.focus();
+    }
+}
+</script>
 
 <style>
 .application-details {
@@ -338,7 +482,107 @@ if (saTableExists($conn, 'franchise_applications')) {
 .documents-list {
     display: flex;
     flex-direction: column;
+    gap: 12px;
+}
+.doc-card-item {
+    padding: 12px 14px;
+    background: #ffffff;
+    border: 1px solid #eaecf0;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+.doc-card-item.is-flagged {
+    border-color: #f59e0b;
+    background: #fffdf5;
+}
+.doc-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+.doc-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.doc-type-icon {
+    color: #b3261e;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+.doc-type-title {
+    font-weight: 600;
+    color: #101828;
+}
+.doc-filename {
+    font-size: 12px;
+}
+.doc-actions-wrap {
+    display: flex;
+    align-items: center;
     gap: 8px;
+}
+.doc-flag-section {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px dashed #eaecf0;
+}
+.doc-flag-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    color: #b3261e;
+    margin-bottom: 4px;
+    user-select: none;
+}
+.doc-flag-checkbox {
+    width: 16px;
+    height: 16px;
+    accent-color: #b3261e;
+    cursor: pointer;
+}
+.doc-flag-text {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.doc-flag-remark-box {
+    margin-top: 6px;
+    padding-left: 24px;
+}
+.quick-reasons-row {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin-top: 5px;
+}
+.reason-btn {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: #ffffff;
+    border: 1px solid #d0d5dd;
+    color: #344054;
+    cursor: pointer;
+}
+.reason-btn:hover {
+    background: #f2f4f7;
+    border-color: #98a2b3;
+    color: #101828;
+}
+.doc-past-remark {
+    margin-top: 8px;
+    padding: 6px 10px;
+    background: #fffaeb;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #b54708;
+    border: 1px solid #fedf89;
 }
 .doc-item {
     display: flex;
@@ -351,6 +595,41 @@ if (saTableExists($conn, 'franchise_applications')) {
 }
 .doc-item i {
     color: #dc3545;
+}
+.doc-item .doc-preview-button {
+    margin-left: auto;
+}
+.document-preview-controls {
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
+    margin-right: 12px;
+}
+.document-preview-controls[hidden] {
+    display: none;
+}
+.document-preview-body {
+    min-height: 70vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f8f9fa;
+    overflow: auto;
+}
+.document-preview-image {
+    display: block;
+    max-width: 100%;
+    max-height: 68vh;
+    height: auto;
+    object-fit: contain;
+    transform-origin: center center;
+    transition: transform 150ms ease;
+}
+.document-preview-frame {
+    width: 100%;
+    height: 68vh;
+    border: 0;
+    background: #fff;
 }
 .app-actions {
     margin-top: 20px;

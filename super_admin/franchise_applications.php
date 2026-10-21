@@ -83,11 +83,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_action'])) {
     $action = strtolower(trim((string)($_POST['app_action'] ?? '')));
     $notes = trim((string)($_POST['admin_notes'] ?? ''));
 
-    $status_map = ['approve' => 'approved', 'reject' => 'rejected'];
+    $status_map = ['approve' => 'approved', 'reject' => 'rejected', 'incomplete' => 'incomplete'];
     $new_status = $status_map[$action] ?? null;
 
     if ($app_id <= 0 || !$new_status) {
         saSetFlash('warning', 'Invalid franchise application action request.');
+        header('Location: ' . $page_file);
+        exit;
+    }
+
+    if (in_array($new_status, ['rejected', 'incomplete'], true) && $notes === '') {
+        saSetFlash('warning', 'A reason is required when rejecting or marking an application incomplete.');
         header('Location: ' . $page_file);
         exit;
     }
@@ -122,20 +128,78 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_action'])) {
             throw new RuntimeException('Application not found.');
         }
 
-        $update_query = "UPDATE franchise_applications
-                         SET status = ?, admin_notes = ?, admin_id = ?, reviewed_at = NOW()
-                         WHERE id = ?";
-        $stmt = mysqli_prepare($conn, $update_query);
-        if (!$stmt) {
-            throw new RuntimeException('Unable to prepare application status update.');
+        $flagged_docs = isset($_POST['flagged_docs']) && is_array($_POST['flagged_docs']) ? $_POST['flagged_docs'] : [];
+        $doc_remarks = isset($_POST['doc_remarks']) && is_array($_POST['doc_remarks']) ? $_POST['doc_remarks'] : [];
+
+        $incomplete_map = [];
+        if ($new_status === 'incomplete') {
+            foreach ($flagged_docs as $f_doc) {
+                $f_doc = trim((string)$f_doc);
+                if ($f_doc !== '') {
+                    $incomplete_map[$f_doc] = trim((string)($doc_remarks[$f_doc] ?? ''));
+                }
+            }
+
+            if (empty($incomplete_map)) {
+                throw new RuntimeException('Select at least one specific document to mark for re-upload before marking the application incomplete.');
+            }
         }
-        mysqli_stmt_bind_param($stmt, "ssii", $new_status, $notes, $current_admin_id, $app_id);
+        $incomplete_json = !empty($incomplete_map) ? json_encode($incomplete_map, JSON_UNESCAPED_UNICODE) : null;
+
+        $has_inc_col = saColumnExists($conn, 'franchise_applications', 'incomplete_documents');
+        if ($has_inc_col) {
+            $update_query = "UPDATE franchise_applications
+                             SET status = ?, admin_notes = ?, incomplete_documents = ?, admin_id = ?, reviewed_at = NOW()
+                             WHERE id = ?";
+            $stmt = mysqli_prepare($conn, $update_query);
+            if (!$stmt) {
+                throw new RuntimeException('Unable to prepare application status update.');
+            }
+            mysqli_stmt_bind_param($stmt, "sssii", $new_status, $notes, $incomplete_json, $current_admin_id, $app_id);
+        } else {
+            $update_query = "UPDATE franchise_applications
+                             SET status = ?, admin_notes = ?, admin_id = ?, reviewed_at = NOW()
+                             WHERE id = ?";
+            $stmt = mysqli_prepare($conn, $update_query);
+            if (!$stmt) {
+                throw new RuntimeException('Unable to prepare application status update.');
+            }
+            mysqli_stmt_bind_param($stmt, "ssii", $new_status, $notes, $current_admin_id, $app_id);
+        }
+
         if (!mysqli_stmt_execute($stmt)) {
             $msg = trim((string)mysqli_stmt_error($stmt));
             mysqli_stmt_close($stmt);
             throw new RuntimeException($msg !== '' ? $msg : 'Failed to update application status.');
         }
         mysqli_stmt_close($stmt);
+
+        // Update document statuses in franchise_documents
+        if (saTableExists($conn, 'franchise_documents')) {
+            if ($new_status === 'incomplete') {
+                $reset_stmt = mysqli_prepare($conn, "UPDATE franchise_documents SET status = 'approved', admin_remarks = NULL WHERE application_id = ?");
+                if ($reset_stmt) {
+                    mysqli_stmt_bind_param($reset_stmt, "i", $app_id);
+                    mysqli_stmt_execute($reset_stmt);
+                    mysqli_stmt_close($reset_stmt);
+                }
+                foreach ($incomplete_map as $f_type => $f_reason) {
+                    $doc_stmt = mysqli_prepare($conn, "UPDATE franchise_documents SET status = 'incomplete', admin_remarks = ? WHERE application_id = ? AND document_type = ?");
+                    if ($doc_stmt) {
+                        mysqli_stmt_bind_param($doc_stmt, "sis", $f_reason, $app_id, $f_type);
+                        mysqli_stmt_execute($doc_stmt);
+                        mysqli_stmt_close($doc_stmt);
+                    }
+                }
+            } elseif ($new_status === 'approved') {
+                $all_ok_stmt = mysqli_prepare($conn, "UPDATE franchise_documents SET status = 'approved', admin_remarks = NULL WHERE application_id = ?");
+                if ($all_ok_stmt) {
+                    mysqli_stmt_bind_param($all_ok_stmt, "i", $app_id);
+                    mysqli_stmt_execute($all_ok_stmt);
+                    mysqli_stmt_close($all_ok_stmt);
+                }
+            }
+        }
 
         if ($new_status === 'approved') {
             $approved_business_type = trim((string)($app_data['business_type'] ?? ''));
@@ -183,13 +247,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_action'])) {
 
         mysqli_commit($conn);
 
-        if ($new_status === 'approved') {
-            $title = "Franchise Application Approved!";
-            $message = "Congratulations! Your franchise application for " . htmlspecialchars($app_data['business_name']) . " has been approved. You can now access the admin portal and manage your own store products. Your 1-month platform trial starts today.";
-        } else {
-            $title = "Franchise Application Update";
-            $message = "Your franchise application has been reviewed. " . (!empty($notes) ? "Feedback: " . substr($notes, 0, 100) . "..." : "Please check your email for more details.");
-        }
+        $status_label = strtoupper($new_status === 'incomplete' ? 'INCOMPLETE' : $new_status);
+        $reason = $notes !== '' ? $notes : ($new_status === 'approved'
+            ? 'Your application passed the current review requirements. Your one-month platform trial starts today.'
+            : ($new_status === 'incomplete'
+                ? 'Please provide the missing requirements or corrected documents.'
+                : 'The application did not meet the current review requirements.'));
+        $business_name = trim((string)($app_data['business_name'] ?? ''));
+        $title = 'Franchise Application: ' . $status_label;
+        $message = "Status: {$status_label}\nReason: {$reason}\nBusiness: {$business_name}";
 
         createNotification(
             $conn,
@@ -201,12 +267,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_action'])) {
             'franchise_application'
         );
 
-        sendFranchiseNotification($app_data, $new_status, $notes);
+        sendFranchiseNotification($conn, $app_data, $new_status, $notes, $incomplete_map);
 
         if ($new_status === 'approved' && is_array($store_result)) {
             $store_note = !empty($store_result['created']) ? 'A new store location was created.' : 'Existing store location was updated.';
             $trial_note = $trial_started ? ' A 1-month trial subscription was also activated.' : ' Trial subscription setup was skipped because an active billing profile already exists.';
             saSetFlash('success', "Application approved successfully. {$store_note} Business partner now has admin access with store-scoped product management.{$trial_note}");
+        } elseif ($new_status === 'incomplete') {
+            $doc_count = count($incomplete_map);
+            $count_msg = $doc_count > 0 ? " ({$doc_count} document" . ($doc_count > 1 ? 's' : '') . " flagged for re-upload)" : "";
+            saSetFlash('warning', "Application marked as Incomplete Requirements{$count_msg}. Notification email sent to applicant.");
         } else {
             saSetFlash('success', 'Application status updated successfully. Notification email sent to applicant.');
         }
@@ -220,58 +290,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_action'])) {
     exit;
 }
 
-function sendFranchiseNotification($app_data, $status, $admin_notes) {
-    include '../email_service.php';
-
-    $subject = ($status === 'approved')
-        ? "Good News! Your Business Application Has Been Approved"
-        : "Update on Your Business Application";
-
-    if ($status === 'approved') {
-        $message = "
-        <h2>Congratulations!</h2>
-        <p>Dear " . htmlspecialchars($app_data['full_name']) . ",</p>
-        <p>We are pleased to inform you that your business application has been <strong>APPROVED</strong>!</p>
-        <p><strong>Application Number:</strong> " . htmlspecialchars($app_data['application_number']) . "</p>
-        <p><strong>Business Name:</strong> " . htmlspecialchars($app_data['business_name']) . "</p>
-        <p><strong>Capital Investment:</strong> PHP " . number_format((float)($app_data['capital_investment'] ?? 0), 2) . "</p>
-        ";
-
-        if (!empty($admin_notes)) {
-            $message .= "<p><strong>Admin Notes:</strong><br>" . nl2br(htmlspecialchars($admin_notes)) . "</p>";
+function sendFranchiseNotification($conn, $app_data, $status, $admin_notes, $incomplete_documents = []) {
+    try {
+        require_once dirname(__DIR__) . '/email_service.php';
+        $recipient_email = trim((string)($app_data['email'] ?? $app_data['contact_email'] ?? ''));
+        if ($recipient_email !== '') {
+            $mailer = new EmailService($conn);
+            $mailer->sendFranchiseStatusEmail($recipient_email, $status, $app_data, $admin_notes, $incomplete_documents);
         }
-
-        $message .= "
-        <p>Your account now has business-owner admin access so you can manage your own store and menu/products.</p>
-        <p>You also have a <strong>1-month platform trial</strong> starting from your approval date. During this trial, you can explore the partner modules and billing features before paid partner billing applies.</p>
-        <p>Our team will be in touch with you shortly to discuss the next steps and franchise agreement details.</p>
-        <p>Thank you for choosing to be part of our franchise family!</p>
-        <p>Best regards,<br>Lechong Sarao Management Team</p>
-        ";
-    } else {
-        $message = "
-        <h2>Update on Your Business Application</h2>
-        <p>Dear " . htmlspecialchars($app_data['full_name']) . ",</p>
-        <p>Thank you for your interest in becoming a Lechong Sarao franchisee. After careful review, we regret to inform you that your application status is <strong>REJECTED</strong>.</p>
-        <p><strong>Application Number:</strong> " . htmlspecialchars($app_data['application_number']) . "</p>
-        ";
-
-        if (!empty($admin_notes)) {
-            $message .= "<p><strong>Reason/Feedback:</strong><br>" . nl2br(htmlspecialchars($admin_notes)) . "</p>";
-        }
-
-        $message .= "
-        <p>You may submit <strong>one final application</strong> after a <strong>3-day cooldown period</strong>, provided you still have a remaining attempt. Please use this waiting time to complete or improve your compliance documents.</p>
-        <p>If you have any questions or would like feedback on your application, please feel free to contact us.</p>
-        <p>Best regards,<br>Lechong Sarao Management Team</p>
-        ";
+    } catch (Throwable $e) {
+        error_log("Failed to send franchise status email notification: " . $e->getMessage());
     }
-
-    $headers = "MIME-Version: 1.0" . "\r\n";
-    $headers .= "Content-type: text/html; charset=UTF-8" . "\r\n";
-    $headers .= "From: noreply@lechongsarao.com" . "\r\n";
-
-    @mail($app_data['email'], $subject, $message, $headers);
 }
 
 $app_stats = ['total' => 0, 'pending' => 0, 'approved' => 0, 'rejected' => 0];
@@ -321,7 +350,7 @@ if (!function_exists('saApplicationStatusChipClass')) {
         if ($status === 'approved') {
             return 'chip-success';
         }
-        if ($status === 'pending') {
+        if ($status === 'pending' || $status === 'incomplete') {
             return 'chip-warning';
         }
         if ($status === 'rejected') {
@@ -374,6 +403,7 @@ saRenderModuleHeader('Business Applications', 'Business Applications', $admin_in
             <option value="" <?php echo $status_filter === '' ? 'selected' : ''; ?>>All Status</option>
             <option value="pending" <?php echo $status_filter === 'pending' ? 'selected' : ''; ?>>Pending</option>
             <option value="approved" <?php echo $status_filter === 'approved' ? 'selected' : ''; ?>>Approved</option>
+            <option value="incomplete" <?php echo $status_filter === 'incomplete' ? 'selected' : ''; ?>>Incomplete Requirements</option>
             <option value="rejected" <?php echo $status_filter === 'rejected' ? 'selected' : ''; ?>>Rejected</option>
         </select>
         <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Search</button>
@@ -434,15 +464,53 @@ saRenderModuleHeader('Business Applications', 'Business Applications', $admin_in
     <?php endif; ?>
 </div>
 
-<div class="modal fade" id="appModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+<div class="modal fade modern-form-modal" id="appModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Application Details</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <div class="modal-header-icon">
+                    <i class="fas fa-store"></i>
+                </div>
+                <div>
+                    <h5 class="modal-title">Franchise Application Details</h5>
+                    <p class="modal-subtitle">Verify business credentials, submitted legal requirements, and capital capacity.</p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" id="appDetails">
                 <div class="text-muted">Loading application details...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade modern-form-modal" id="documentPreviewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-header-icon">
+                    <i class="fas fa-file-invoice"></i>
+                </div>
+                <div>
+                    <h5 class="modal-title" id="documentPreviewTitle">Document Preview</h5>
+                    <p class="modal-subtitle">High-resolution preview of submitted government permits and credentials.</p>
+                </div>
+                <div class="document-preview-controls ms-auto me-2" id="documentPreviewControls" aria-label="Image zoom controls">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="changeDocumentZoom(-0.25)" title="Zoom out" aria-label="Zoom out">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetDocumentZoom()" title="Reset zoom" aria-label="Reset zoom">100%</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="changeDocumentZoom(0.25)" title="Zoom in" aria-label="Zoom in">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body document-preview-body" id="documentPreviewBody">
+                <div class="text-muted text-center">Loading document preview...</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
     </div>
@@ -464,7 +532,138 @@ $extra_scripts = <<<'HTML'
         });
     }
 
+    function openDocumentPreview(button) {
+        const previewUrl = button.getAttribute('data-preview-url');
+        const previewTitle = button.getAttribute('data-preview-title') || 'Document Preview';
+        const previewTitleElement = document.getElementById('documentPreviewTitle');
+        const previewBody = document.getElementById('documentPreviewBody');
+        const previewModalElement = document.getElementById('documentPreviewModal');
+        const previewControls = document.getElementById('documentPreviewControls');
+
+        if (!previewUrl || !previewTitleElement || !previewBody || !previewModalElement) {
+            return;
+        }
+
+        const extension = previewUrl.split('?')[0].split('.').pop().toLowerCase();
+        const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'];
+        previewTitleElement.textContent = previewTitle;
+        previewBody.innerHTML = '';
+        resetDocumentZoom();
+
+        if (imageExtensions.includes(extension)) {
+            previewControls.hidden = false;
+            const image = document.createElement('img');
+            image.src = previewUrl;
+            image.alt = previewTitle;
+            image.className = 'document-preview-image';
+            image.addEventListener('error', function() {
+                previewBody.innerHTML = '<div class="alert alert-danger">Unable to load this document preview.</div>';
+            });
+            previewBody.appendChild(image);
+        } else {
+            previewControls.hidden = true;
+            const frame = document.createElement('iframe');
+            frame.src = previewUrl;
+            frame.title = previewTitle;
+            frame.className = 'document-preview-frame';
+            previewBody.appendChild(frame);
+        }
+
+        bootstrap.Modal.getOrCreateInstance(previewModalElement).show();
+    }
+
+    let documentZoom = 1;
+
+    function applyDocumentZoom() {
+        const image = document.querySelector('#documentPreviewBody .document-preview-image');
+        const zoomLabel = document.querySelector('#documentPreviewControls button:nth-child(2)');
+        if (image) {
+            image.style.transform = 'scale(' + documentZoom + ')';
+        }
+        if (zoomLabel) {
+            zoomLabel.textContent = Math.round(documentZoom * 100) + '%';
+        }
+    }
+
+    function changeDocumentZoom(amount) {
+        documentZoom = Math.min(3, Math.max(0.5, documentZoom + amount));
+        applyDocumentZoom();
+    }
+
+    function resetDocumentZoom() {
+        documentZoom = 1;
+        applyDocumentZoom();
+    }
+
+    function getActiveApplicationForm() {
+        const forms = Array.from(document.querySelectorAll('form[id="appForm"]'));
+        return forms.find(form => form.getClientRects().length > 0) || forms[forms.length - 1] || null;
+    }
+
+    function handleIncomplete(applicationNumber) {
+        const appForm = getActiveApplicationForm();
+        const checkedBoxes = appForm
+            ? Array.from(document.querySelectorAll('input[name="flagged_docs[]"]')).filter(checkbox => checkbox.checked && checkbox.form === appForm)
+            : [];
+        const flaggedNames = checkedBoxes.map(cb => cb.getAttribute('data-doc-name') || cb.value);
+        const notesField = appForm ? appForm.querySelector('#admin_notes') : null;
+        const notes = notesField ? notesField.value.trim() : '';
+
+        if (flaggedNames.length === 0) {
+            Swal.fire({
+                title: 'Select a document first',
+                text: 'Mark at least one specific document for re-upload before continuing.',
+                icon: 'warning',
+                confirmButtonColor: '#b3261e'
+            });
+            return;
+        }
+        
+        let docListHtml = '';
+        docListHtml = '<div style="background:#fff8ef;border:1px solid #fedf89;border-radius:8px;padding:10px 14px;margin:12px 0;text-align:left;color:#b54708;font-size:13px;">' +
+                      '<strong>Flagged for Re-upload (' + flaggedNames.length + ' item' + (flaggedNames.length > 1 ? 's' : '') + '):</strong><ul style="margin:4px 0 0;padding-left:18px;">' +
+                      flaggedNames.map(name => '<li>' + name + '</li>').join('') +
+                      '</ul></div>' +
+                      '<p style="font-size:12px;color:#667085;margin-bottom:0;">The applicant will only need to re-upload the flagged document(s). All approved files and application information will be preserved.</p>';
+
+        Swal.fire({
+            title: 'Mark Incomplete Requirements',
+            html: 'Are you sure you want to mark application <strong>' + applicationNumber + '</strong> as <strong>INCOMPLETE REQUIREMENTS</strong>?' + docListHtml,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#f59e0b',
+            cancelButtonColor: '#6c757d',
+            input: 'textarea',
+            inputValue: notes,
+            inputPlaceholder: 'Explain why this application is incomplete...',
+            inputAttributes: {
+                'aria-label': 'Reason for marking the application incomplete'
+            },
+            inputValidator: (value) => {
+                return value.trim() === '' ? 'A reason is required.' : undefined;
+            },
+            confirmButtonText: 'Yes, Mark Incomplete & Notify Client',
+            cancelButtonText: 'Cancel',
+            backdrop: 'rgba(0,0,0,0.5)'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                const appActionInput = appForm ? appForm.querySelector('#app_action') : null;
+                if (appActionInput && appForm) {
+                    if (notesField) {
+                        notesField.value = result.value.trim();
+                    }
+                    appActionInput.value = 'incomplete';
+                    appForm.submit();
+                }
+            }
+        });
+    }
+
     function handleReject(applicationNumber) {
+        const appForm = getActiveApplicationForm();
+        const notesField = appForm ? appForm.querySelector('#admin_notes') : null;
+        const notes = notesField ? notesField.value.trim() : '';
+
         Swal.fire({
             title: 'Confirm Rejection',
             html: 'Are you sure you want to <strong>REJECT</strong> this application?<br><br><strong>Application #:</strong> ' + applicationNumber + '<br><br>This action cannot be undone.',
@@ -472,14 +671,25 @@ $extra_scripts = <<<'HTML'
             showCancelButton: true,
             confirmButtonColor: '#dc3545',
             cancelButtonColor: '#6c757d',
+            input: 'textarea',
+            inputValue: notes,
+            inputPlaceholder: 'Explain why this application is rejected...',
+            inputAttributes: {
+                'aria-label': 'Reason for rejecting the application'
+            },
+            inputValidator: (value) => {
+                return value.trim() === '' ? 'A reason is required.' : undefined;
+            },
             confirmButtonText: 'Yes, Reject Application',
             cancelButtonText: 'Cancel',
             backdrop: 'rgba(0,0,0,0.5)'
         }).then((result) => {
             if (result.isConfirmed) {
-                const appActionInput = document.getElementById('app_action');
-                const appForm = document.getElementById('appForm');
+                const appActionInput = appForm ? appForm.querySelector('#app_action') : null;
                 if (appActionInput && appForm) {
+                    if (notesField) {
+                        notesField.value = result.value.trim();
+                    }
                     appActionInput.value = 'reject';
                     appForm.submit();
                 }

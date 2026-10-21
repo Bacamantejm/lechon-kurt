@@ -278,6 +278,13 @@ function sanitizeString($input) {
 }
 
 /**
+ * Sanitize generic input string (alias for sanitizeString)
+ */
+function sanitizeInput($input) {
+    return sanitizeString($input);
+}
+
+/**
  * Sanitize integer input
  */
 function sanitizeInt($input) {

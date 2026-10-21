@@ -39,28 +39,47 @@ $incidents = $opsService->getIncidents(30);
 saRenderModuleHeader('Operations Incidents', 'Operations Incidents & Alerts', $admin_info);
 ?>
 <div class="module-section">
-    <div class="module-section-header">
-        <div>
-            <h2>Create Incident</h2>
-            <p class="module-subtext">Log a new operational issue for investigation and accountability.</p>
+    <div class="form-section-card">
+        <div class="form-section-head mb-3">
+            <div class="form-section-title">
+                <i class="fas fa-exclamation-triangle text-danger"></i>
+                Create Incident Report
+            </div>
+            <span class="form-req-pill">Operations Audit</span>
         </div>
+        <p class="text-muted small mb-3">Log a new operational issue for investigation, tracking, and resolution accountability.</p>
+
+        <form method="post" class="module-form-grid">
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+            <input type="hidden" name="action" value="create_incident">
+            <div class="form-input-wrap">
+                <i class="fas fa-heading form-input-icon"></i>
+                <input type="text" name="title" class="form-control" placeholder="Incident title" required>
+            </div>
+            <div class="form-input-wrap">
+                <i class="fas fa-folder form-input-icon"></i>
+                <select name="category" class="form-select">
+                    <option value="system">System</option><option value="security">Security</option><option value="business">Business</option><option value="user">User</option><option value="content">Content</option><option value="data">Data</option>
+                </select>
+            </div>
+            <div class="form-input-wrap">
+                <i class="fas fa-shield-alt form-input-icon"></i>
+                <select name="severity" class="form-select">
+                    <option value="medium">Medium</option><option value="low">Low</option><option value="high">High</option><option value="critical">Critical</option>
+                </select>
+            </div>
+            <div class="form-input-wrap">
+                <i class="fas fa-cube form-input-icon"></i>
+                <input type="text" name="source_module" class="form-control" placeholder="Source module (optional)">
+            </div>
+            <div style="grid-column:1/-1;">
+                <textarea name="description" class="form-control" rows="3" placeholder="Describe the issue, impact, and what immediate attention is required."></textarea>
+            </div>
+            <div class="module-inline-actions" style="grid-column:1/-1;">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-plus-circle"></i> Create Incident</button>
+            </div>
+        </form>
     </div>
-    <form method="post" class="module-form-grid">
-        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
-        <input type="hidden" name="action" value="create_incident">
-        <input type="text" name="title" class="form-control" placeholder="Incident title" required>
-        <select name="category" class="form-select">
-            <option value="system">System</option><option value="security">Security</option><option value="business">Business</option><option value="user">User</option><option value="content">Content</option><option value="data">Data</option>
-        </select>
-        <select name="severity" class="form-select">
-            <option value="medium">Medium</option><option value="low">Low</option><option value="high">High</option><option value="critical">Critical</option>
-        </select>
-        <input type="text" name="source_module" class="form-control" placeholder="Source module (optional)">
-        <textarea name="description" class="form-control" style="grid-column:1/-1;" rows="3" placeholder="Describe the issue, impact, and what needs attention."></textarea>
-        <div class="module-inline-actions" style="grid-column:1/-1;">
-            <button type="submit" class="btn btn-primary"><i class="fas fa-plus-circle"></i> Create Incident</button>
-        </div>
-    </form>
 </div>
 
 <div class="module-section">

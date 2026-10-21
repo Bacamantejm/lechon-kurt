@@ -56,38 +56,87 @@ if ($view === 'receive') {
 <form method="POST" action="mrp.php">
     <input type="hidden" name="action" value="receive_stock">
     <input type="hidden" name="po_id" value="<?php echo $po_id; ?>">
-    <p><strong>PO Number:</strong> <?php echo $po['po_number']; ?></p>
-    <p><strong>Supplier:</strong> <?php echo $po['supplier_name']; ?></p>
-    <table class="table table-sm">
-        <thead>
-            <tr>
-                <th>Material</th>
-                <th>Ordered</th>
-                <th>Received so far</th>
-                <th>Receiving Now</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php while($item = mysqli_fetch_assoc($items_query)): 
-                $remaining = $item['quantity_ordered'] - $item['quantity_received'];
-            ?>
-            <tr>
-                <td>
-                    <?php echo htmlspecialchars($item['material_name']); ?>
-                    <input type="hidden" name="item_id[]" value="<?php echo $item['id']; ?>">
-                </td>
-                <td><?php echo $item['quantity_ordered'] . ' ' . $item['unit']; ?></td>
-                <td><?php echo $item['quantity_received'] . ' ' . $item['unit']; ?></td>
-                <td>
-                    <input type="number" name="quantity_received[]" class="form-control form-control-sm" step="0.01" min="0" max="<?php echo $remaining; ?>" placeholder="0.00">
-                </td>
-            </tr>
-            <?php endwhile; ?>
-        </tbody>
-    </table>
-    <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="submit" class="btn btn-primary">Receive Stock</button>
+
+    <!-- Section 1: Order Reference -->
+    <div class="form-section-card mb-3">
+        <div class="form-section-head">
+            <div class="form-section-title">
+                <i class="fas fa-file-invoice text-danger"></i>
+                Purchase Order Details
+            </div>
+            <span class="form-opt-pill">Inspection</span>
+        </div>
+
+        <div class="row g-2">
+            <div class="col-sm-6">
+                <div class="p-2 rounded" style="background: #f8f9fa; border: 1px solid #eaecf0;">
+                    <small class="text-muted d-block fw-semibold" style="font-size: 11px; text-transform: uppercase;">PO Number</small>
+                    <span class="fw-bold" style="color: #101828; font-size: 14px;"><?php echo htmlspecialchars($po['po_number']); ?></span>
+                </div>
+            </div>
+            <div class="col-sm-6">
+                <div class="p-2 rounded" style="background: #f8f9fa; border: 1px solid #eaecf0;">
+                    <small class="text-muted d-block fw-semibold" style="font-size: 11px; text-transform: uppercase;">Supplier Name</small>
+                    <span class="fw-semibold" style="color: #344054; font-size: 13px;"><?php echo htmlspecialchars($po['supplier_name']); ?></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 2: Items Inspection -->
+    <div class="form-section-card mb-3">
+        <div class="form-section-head">
+            <div class="form-section-title">
+                <i class="fas fa-boxes text-danger"></i>
+                Material Line Items
+            </div>
+            <span class="form-req-pill">Intake Verification</span>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead>
+                    <tr class="text-muted" style="font-size: 12px; border-bottom: 2px solid #eaecf0;">
+                        <th>Material</th>
+                        <th class="text-center" width="120">Ordered</th>
+                        <th class="text-center" width="130">Prev Received</th>
+                        <th width="150">Receiving Now</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php while($item = mysqli_fetch_assoc($items_query)): 
+                        $remaining = $item['quantity_ordered'] - $item['quantity_received'];
+                    ?>
+                    <tr>
+                        <td>
+                            <div class="fw-semibold" style="color: #101828; font-size: 13px;"><?php echo htmlspecialchars($item['material_name']); ?></div>
+                            <input type="hidden" name="item_id[]" value="<?php echo $item['id']; ?>">
+                        </td>
+                        <td class="text-center">
+                            <span class="badge" style="background: #f2f4f7; color: #344054; font-size: 12px; font-weight: 600;">
+                                <?php echo $item['quantity_ordered'] . ' ' . $item['unit']; ?>
+                            </span>
+                        </td>
+                        <td class="text-center">
+                            <span class="badge" style="background: #ecfdf3; color: #027a48; font-size: 12px; font-weight: 600;">
+                                <?php echo $item['quantity_received'] . ' ' . $item['unit']; ?>
+                            </span>
+                        </td>
+                        <td>
+                            <div class="form-input-wrap">
+                                <input type="number" name="quantity_received[]" class="form-control form-control-sm text-end fw-bold" step="0.01" min="0" max="<?php echo $remaining; ?>" placeholder="0.00" style="padding-left: 10px !important;">
+                            </div>
+                        </td>
+                    </tr>
+                    <?php endwhile; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="modal-footer px-0 pb-0">
+        <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn-modal-primary">Receive Stock</button>
     </div>
 </form>
 <?php

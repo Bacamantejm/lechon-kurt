@@ -231,11 +231,17 @@ if ($has_job_positions) {
     </div>
     
     <!-- Update Candidate Modal -->
-    <div class="modal fade" id="updateCandidateModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
+    <div class="modal fade modern-form-modal" id="updateCandidateModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Update Candidate Status</h5>
+                    <div class="modal-header-icon">
+                        <i class="fas fa-user-check"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title">Update Candidate Status</h5>
+                        <p class="modal-subtitle">Update recruitment stage, interview schedules, and evaluation notes.</p>
+                    </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <form method="POST">
@@ -243,32 +249,51 @@ if ($has_job_positions) {
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
                         <input type="hidden" id="candidateId" name="candidate_id">
                         
-                        <div class="mb-3">
-                            <label>Status</label>
-                            <select name="new_status" class="form-control" required>
-                                <option value="new">New</option>
-                                <option value="reviewed">Reviewed</option>
-                                <option value="interviewed">Interviewed</option>
-                                <option value="offered">Offered</option>
-                                <option value="hired">Hired</option>
-                                <option value="rejected">Rejected</option>
-                                <option value="withdrawn">Withdrawn</option>
-                            </select>
+                        <!-- Section 1: Stage & Schedule -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-tasks"></i> Recruitment Stage</span>
+                                <span class="form-req-pill">Required</span>
+                            </div>
+                            <div class="form-group-modern mb-3">
+                                <label class="form-label-modern">Application Status <span class="form-req-star">*</span></label>
+                                <div class="form-input-wrap">
+                                    <i class="fas fa-flag form-input-icon"></i>
+                                    <select name="new_status" class="form-select" required>
+                                        <option value="new">New</option>
+                                        <option value="reviewed">Reviewed</option>
+                                        <option value="interviewed">Interviewed</option>
+                                        <option value="offered">Offered</option>
+                                        <option value="hired">Hired</option>
+                                        <option value="rejected">Rejected</option>
+                                        <option value="withdrawn">Withdrawn</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Interview Date & Time</label>
+                                <div class="form-input-wrap">
+                                    <i class="fas fa-calendar-alt form-input-icon"></i>
+                                    <input type="datetime-local" name="interview_date" class="form-control" step="60">
+                                </div>
+                            </div>
                         </div>
                         
-                        <div class="mb-3">
-                            <label>Interview Date</label>
-                            <input type="datetime-local" name="interview_date" class="form-control" step="60">
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label>Interview Notes</label>
-                            <textarea name="interview_notes" class="form-control" rows="4"></textarea>
+                        <!-- Section 2: Assessment Notes -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <span class="form-section-title"><i class="fas fa-clipboard-list"></i> Evaluation Feedback</span>
+                                <span class="form-opt-pill">Optional</span>
+                            </div>
+                            <div class="form-group-modern">
+                                <label class="form-label-modern">Interview & Screening Notes</label>
+                                <textarea name="interview_notes" class="form-control" rows="3" placeholder="Candidate strengths, test scores, cultural fit observations..."></textarea>
+                            </div>
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" name="update_candidate_status" class="btn btn-primary">Update Status</button>
+                        <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" name="update_candidate_status" class="btn-modal-primary"><i class="fas fa-save"></i> Update Status</button>
                     </div>
                 </form>
             </div>

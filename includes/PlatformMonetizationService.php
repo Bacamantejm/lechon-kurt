@@ -638,25 +638,45 @@ class PlatformMonetizationService
 
     public function getApprovedPartners(): array
     {
-        if (!$this->tableExists('franchise_applications') || !$this->tableExists('users')) {
+        if (!$this->tableExists('users')) {
             return [];
         }
 
+        $hasFranchise = $this->tableExists('franchise_applications');
+        $hasStores = $this->tableExists('store_locations') && $this->columnExists('store_locations', 'owner_user_id');
+        $hasRoles = $this->tableExists('roles');
+
+        $whereConditions = [];
+        if ($hasFranchise) {
+            $whereConditions[] = "EXISTS (SELECT 1 FROM franchise_applications fa WHERE fa.user_id = u.id AND fa.status = 'approved')";
+        }
+        if ($hasStores) {
+            $whereConditions[] = "EXISTS (SELECT 1 FROM store_locations sl WHERE sl.owner_user_id = u.id)";
+        }
+        if ($hasRoles) {
+            $whereConditions[] = "LOWER(TRIM(COALESCE(r.name, ''))) IN ('business_owner', 'partner_owner', 'store_owner', 'shop_owner')";
+        }
+
+        if (empty($whereConditions)) {
+            return [];
+        }
+
+        $whereSql = implode(' OR ', $whereConditions);
+
+        $storeExpr = $hasStores ? "(SELECT sl.store_name FROM store_locations sl WHERE sl.owner_user_id = u.id LIMIT 1)" : "NULL";
+        $faExpr = $hasFranchise ? "(SELECT fa.business_name FROM franchise_applications fa WHERE fa.user_id = u.id AND fa.status = 'approved' ORDER BY fa.id DESC LIMIT 1)" : "NULL";
+        $rolesJoin = $hasRoles ? "LEFT JOIN roles r ON r.id = u.role_id" : "";
+
         return $this->rows(
-            "SELECT fa.user_id AS partner_user_id,
-                    COALESCE(fa.business_name, u.business_name, u.full_name) AS business_name,
+            "SELECT u.id AS partner_user_id,
+                    COALESCE({$storeExpr}, {$faExpr}, u.business_name, u.full_name) AS business_name,
                     u.full_name,
                     u.email,
                     u.is_active,
                     u.account_control_status
-             FROM franchise_applications fa
-             INNER JOIN users u ON u.id = fa.user_id
-             INNER JOIN (
-                 SELECT user_id, MAX(id) AS latest_id
-                 FROM franchise_applications
-                 GROUP BY user_id
-             ) latest_fa ON latest_fa.latest_id = fa.id
-             WHERE fa.status = 'approved'
+             FROM users u
+             {$rolesJoin}
+             WHERE ({$whereSql})
              ORDER BY business_name ASC"
         );
     }
@@ -1547,12 +1567,13 @@ class PlatformMonetizationService
         );
     }
 
-    public function completeInvoicePayment(int $invoice_id, int $partner_user_id, ?string $session_id = null, int $actor_user_id = 0): array
+    public function completeInvoicePayment(int $invoice_id, int $partner_user_id = 0, ?string $session_id = null, int $actor_user_id = 0): array
     {
-        $invoice = $this->getInvoiceById($invoice_id, $partner_user_id);
+        $invoice = $this->getInvoiceById($invoice_id, $partner_user_id > 0 ? $partner_user_id : null);
         if (!$invoice) {
             return ['success' => false, 'message' => 'Invoice not found.'];
         }
+        $partner_user_id = (int)($invoice['partner_user_id'] ?? $partner_user_id);
 
         if ((string)($invoice['invoice_status'] ?? '') === 'paid') {
             return ['success' => true, 'message' => 'Invoice is already marked paid.', 'invoice_status' => 'paid'];
@@ -1715,7 +1736,7 @@ class PlatformMonetizationService
                  ended_at = NULL,
                  updated_by = ?,
                  updated_at = NOW()
-             WHERE id = ? AND subscription_status IN ('trial', 'active', 'past_due', 'paused')
+             WHERE id = ?
              LIMIT 1"
         );
         if ($stmt) {
@@ -2600,7 +2621,11 @@ class PlatformMonetizationService
 
     private function buildAbsoluteUrl(string $base_url, string $path, array $query = []): string
     {
-        $base_url = rtrim(trim($base_url), '/');
+        $base_url = trim($base_url);
+        if ($base_url === '' && function_exists('appBaseUrl')) {
+            $base_url = appBaseUrl();
+        }
+        $base_url = rtrim($base_url, '/');
         $url = $base_url . '/' . ltrim($path, '/');
         if ($query !== []) {
             $url .= '?' . http_build_query($query);
@@ -2656,16 +2681,55 @@ class PlatformMonetizationService
 
     private function isApprovedPartner(int $userId): bool
     {
-        if ($userId <= 0 || !$this->tableExists('franchise_applications')) {
+        if ($userId <= 0) {
             return false;
         }
 
-        $row = $this->fetchOne(
-            "SELECT id FROM franchise_applications WHERE user_id = ? AND status = 'approved' LIMIT 1",
-            [$userId],
-            'i'
-        );
-        return $row !== null;
+        // 1. Franchise application check
+        if ($this->tableExists('franchise_applications')) {
+            $row = $this->fetchOne(
+                "SELECT id FROM franchise_applications WHERE user_id = ? AND status = 'approved' LIMIT 1",
+                [$userId],
+                'i'
+            );
+            if ($row !== null) {
+                return true;
+            }
+        }
+
+        // 2. Store location owner check
+        if ($this->tableExists('store_locations') && $this->columnExists('store_locations', 'owner_user_id')) {
+            $storeRow = $this->fetchOne(
+                "SELECT store_id FROM store_locations WHERE owner_user_id = ? LIMIT 1",
+                [$userId],
+                'i'
+            );
+            if ($storeRow !== null) {
+                return true;
+            }
+        }
+
+        // 3. User role check (business_owner, partner_owner, store_owner, shop_owner)
+        if ($this->tableExists('users') && $this->tableExists('roles')) {
+            $roleRow = $this->fetchOne(
+                "SELECT r.name FROM users u INNER JOIN roles r ON r.id = u.role_id WHERE u.id = ? LIMIT 1",
+                [$userId],
+                'i'
+            );
+            if ($roleRow !== null) {
+                $roleName = strtolower(trim((string)($roleRow['name'] ?? '')));
+                if (in_array($roleName, ['business_owner', 'partner_owner', 'store_owner', 'shop_owner'], true)) {
+                    return true;
+                }
+            }
+        }
+
+        // 4. Fallback to auth helper if declared
+        if (function_exists('isApprovedFranchiseSellerAccount')) {
+            return isApprovedFranchiseSellerAccount($this->conn, $userId);
+        }
+
+        return false;
     }
 
     private function columnExists(string $tableName, string $columnName): bool

@@ -34,6 +34,16 @@ if ($action === 'count') {
     exit;
 }
 
+if ($action === 'in_stock_reminders') {
+    $items = favoritesFetchUserInStockFavorites($conn, $user_id);
+    echo json_encode([
+        'success' => true,
+        'count' => count($items),
+        'items' => $items
+    ]);
+    exit;
+}
+
 if ($action !== 'toggle') {
     http_response_code(400);
     echo json_encode([

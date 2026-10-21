@@ -2,6 +2,14 @@
 if (session_status() === PHP_SESSION_NONE) session_start();
 if (!isset($current_page)) $current_page = basename($_SERVER['PHP_SELF'], '.php');
 
+global $conn;
+if (!isset($conn) || !($conn instanceof mysqli)) {
+    $config_file = __DIR__ . '/config.php';
+    if (file_exists($config_file)) {
+        require_once $config_file;
+    }
+}
+
 $page_title = $page_title ?? 'Lechon Delights';
 $script_parent = basename(dirname($_SERVER['PHP_SELF']));
 $path_prefix = ($script_parent === 'admin') ? '../' : '';
@@ -24,6 +32,25 @@ $cart_count = isset($_SESSION['cart']) && is_array($_SESSION['cart']) ? count($_
 
 $current_user_address = trim((string)($current_user_address ?? ($_SESSION['address'] ?? '')));
 $market_header_address_display = $current_user_address !== '' ? $current_user_address : 'Select your address';
+
+if (!function_exists('formatHeaderLocationText')) {
+    function formatHeaderLocationText($address, $maxLength = 38) {
+        $address = trim((string)$address);
+        if ($address === '' || $address === 'Select your address') {
+            return 'Select your address';
+        }
+        if (mb_strlen($address) > $maxLength) {
+            $cut = mb_substr($address, 0, $maxLength);
+            $lastComma = mb_strrpos($cut, ',');
+            if ($lastComma !== false && $lastComma > 18) {
+                $cut = mb_substr($cut, 0, $lastComma);
+            }
+            return rtrim($cut, ', ') . ' etc....';
+        }
+        return $address;
+    }
+}
+$market_header_address_display_short = formatHeaderLocationText($market_header_address_display);
 
 $viewer_name = trim((string)($_SESSION['full_name'] ?? ''));
 $viewer_email = trim((string)($_SESSION['email'] ?? ''));
@@ -65,6 +92,20 @@ if ($is_logged_in_user) {
     }
 }
 
+require_once __DIR__ . '/rider_helper.php';
+$is_driver_account = false;
+$is_rider_context = false;
+if ($is_logged_in_user) {
+    $header_db_conn = (isset($conn) && ($conn instanceof mysqli)) ? $conn : null;
+    $is_driver_account = isDeliveryDriverUser($header_db_conn, (int)$_SESSION['user_id']);
+    if ($is_driver_account) {
+        header("Location: " . $path_prefix . "rider/index.php");
+        exit();
+    }
+    $is_rider_context = isRiderSessionActive($header_db_conn);
+}
+$nav_logo_href = $is_rider_context ? ($path_prefix . 'rider/index.php') : ($path_prefix . 'index.php');
+
 $ongoing_order_id = 0;
 $ongoing_order_number = '';
 $ongoing_order_status = '';
@@ -91,10 +132,27 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
         $ongoing_stmt->close();
     }
 }
+$is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="<?php echo $is_initial_dark ? 'dark' : 'light'; ?>" class="<?php echo $is_initial_dark ? 'dark-mode' : ''; ?>">
 <head>
+    <script>
+        (function() {
+            try {
+                var cookieTheme = (document.cookie.match(/(?:^|;\s*)theme=([^;]*)/) || [])[1];
+                var savedTheme = localStorage.getItem('theme') || cookieTheme;
+                var isDark = (savedTheme === 'dark' || (!savedTheme && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches));
+                if (isDark) {
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                    document.documentElement.classList.add('dark-mode');
+                } else {
+                    document.documentElement.setAttribute('data-theme', 'light');
+                    document.documentElement.classList.remove('dark-mode');
+                }
+            } catch (e) {}
+        })();
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo htmlspecialchars($page_title . ' | Lechon Delights'); ?></title>
@@ -106,12 +164,559 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
-        :root { --ink:#171922; --muted:#667085; --line:#efddcd; --rose:#b3261e; --bg:#f8f9fa; --card:#fff; --shadow:0 12px 30px rgba(15,23,42,.1); --primary-color:#b3261e; --primary-dark:#8f261a; --motion-ease:cubic-bezier(.22,1,.36,1); --motion-fast:.22s; --motion-base:.28s; --transition-fast:all var(--motion-fast) var(--motion-ease); --transition-fade:opacity var(--motion-fast) var(--motion-ease), visibility var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease); --transition-lift:transform var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease); }
+        /* Anti-Flash Immediate Root Styles */
+        html.dark-mode,
+        html[data-theme="dark"],
+        html.dark-mode body,
+        body.dark-mode {
+            background-color: #121824 !important;
+            color: #f8fafc !important;
+        }
+
+        :root { --ink:#171922; --muted:#667085; --line:#efddcd; --rose:#b3261e; --bg:#f8f9fa; --card:#fff; --shadow:0 12px 30px rgba(15,23,42,.1); --primary-color:#b3261e; --primary-dark:#8f261a; --motion-ease:cubic-bezier(0.16, 1, 0.3, 1); --motion-fast:0.2s; --motion-base:0.24s; --transition-fast:all var(--motion-fast) var(--motion-ease); --transition-fade:opacity var(--motion-fast) var(--motion-ease), visibility var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease); --transition-lift:transform var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease); }
+        [data-theme="dark"], body.dark-mode { --ink:#f8fafc; --muted:#94a3b8; --line:#334155; --rose:#b3261e; --bg:#121824; --card:#1e293b; --shadow:0 12px 30px rgba(0,0,0,.45); --primary-color:#b3261e; --primary-dark:#981b15; }
+        
         * { box-sizing:border-box; }
         html, body { margin:0; padding:0; overflow-x:clip !important; max-width:100vw; width:100%; font-family:"Plus Jakarta Sans","Segoe UI",sans-serif; background:var(--bg); color:var(--ink); }
+        img, video, iframe, canvas { max-width:100%; height:auto; }
+        pre, code { max-width:100%; }
         h1,h2,h3,h4,h5,h6 { font-family:"Outfit","Plus Jakarta Sans",sans-serif; }
         .site-main { min-height:calc(100vh - 260px); }
-        .site-header { position:sticky; top:0; z-index:1200; background:#ffffff; border-bottom:1px solid var(--line); box-shadow:0 6px 20px rgba(15,23,42,.04); width:100%; }
+        .site-header { position:sticky; top:0; z-index:1200; background:var(--card); border-bottom:1px solid var(--line); box-shadow:0 6px 20px rgba(15,23,42,.04); width:100%; }
+
+        /* Global Dark Mode Rules & Components */
+        html.dark-mode .site-header,
+        body.dark-mode .site-header,
+        html.dark-mode .market-header-bottom,
+        body.dark-mode .market-header-bottom {
+            background-color: #1e293b !important;
+            border-color: #334155 !important;
+        }
+        body.dark-mode .logo-title { color: #f8fafc !important; }
+        body.dark-mode .logo-sub { color: #94a3b8 !important; }
+        body.dark-mode .nav-link,
+        body.dark-mode .market-home-link {
+            color: #cbd5e1 !important;
+        }
+        body.dark-mode .nav-link:hover,
+        body.dark-mode .nav-link.active,
+        body.dark-mode .market-home-link:hover,
+        body.dark-mode .market-home-link.active {
+            background: #334155 !important;
+            color: #ffffff !important;
+            border-color: #475569 !important;
+        }
+        body.dark-mode .icon-btn {
+            background: #1e293b !important;
+            color: #f8fafc !important;
+            border-color: #334155 !important;
+        }
+        body.dark-mode .icon-btn:hover {
+            background: #334155 !important;
+            color: #ffffff !important;
+            border-color: #475569 !important;
+        }
+        body.dark-mode .btn-signin {
+            background: #1e293b !important;
+            color: #f8fafc !important;
+            border-color: #334155 !important;
+        }
+        body.dark-mode .btn-signin:hover {
+            background: #334155 !important;
+            border-color: #475569 !important;
+            color: #ffffff !important;
+        }
+        body.dark-mode .user-dropdown,
+        body.dark-mode .notification-dropdown,
+        body.dark-mode .market-search-popover,
+        body.dark-mode .mobile-menu {
+            background: #1e293b !important;
+            border-color: #334155 !important;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5) !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .user-dropdown-header,
+        body.dark-mode .notification-header,
+        body.dark-mode .user-dropdown-item.logout-btn,
+        body.dark-mode .notification-pagination {
+            border-color: #334155 !important;
+        }
+        body.dark-mode .user-name,
+        body.dark-mode .user-dropdown-item,
+        body.dark-mode .market-search-title,
+        body.dark-mode .mobile-menu a {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .user-email,
+        body.dark-mode .notification-empty,
+        body.dark-mode .notification-reason,
+        body.dark-mode .notification-business,
+        body.dark-mode .notification-time,
+        body.dark-mode .notification-page-label {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode .notification-pagination { background:#111827 !important; }
+        body.dark-mode .notification-page-btn { background:#1e293b; border-color:#475569; color:#cbd5e1; }
+        body.dark-mode .user-dropdown-item:hover,
+        body.dark-mode .mobile-menu a:hover {
+            background: #334155 !important;
+        }
+        body.dark-mode .market-home-search {
+            background: #0f172a !important;
+            border-color: #334155 !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .market-home-search input {
+            background: transparent !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .market-search-suggestion {
+            background: #0f172a !important;
+            border-color: #334155 !important;
+            color: #cbd5e1 !important;
+        }
+        body.dark-mode .market-search-suggestion:hover {
+            background: #334155 !important;
+            color: #ffffff !important;
+        }
+        body.dark-mode,
+        html.dark-mode,
+        body.dark-mode .market-home,
+        body.dark-mode .main-content,
+        body.dark-mode .page-header,
+        body.dark-mode .site-content {
+            background-color: #0f172a !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .page-header h1,
+        body.dark-mode .page-header h2,
+        body.dark-mode .section-heading,
+        body.dark-mode h1,
+        body.dark-mode h2,
+        body.dark-mode h3,
+        body.dark-mode h4,
+        body.dark-mode h5,
+        body.dark-mode h6 {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .page-header p,
+        body.dark-mode .section-subheading {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode .market-sidebar,
+        body.dark-mode .page-sidebar,
+        body.dark-mode .sticky-sidebar {
+            background-color: #1e293b !important;
+            border-color: #334155 !important;
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35) !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .market-sidebar-section,
+        body.dark-mode .sidebar-section {
+            border-color: #334155 !important;
+        }
+        body.dark-mode .market-sidebar h3,
+        body.dark-mode .market-sidebar h4,
+        body.dark-mode .market-filter-title {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .market-radio,
+        body.dark-mode .market-check,
+        body.dark-mode .market-radio span,
+        body.dark-mode .market-check span {
+            color: #cbd5e1 !important;
+        }
+        body.dark-mode .market-radio:hover span,
+        body.dark-mode .market-check:hover span {
+            color: #ffffff !important;
+        }
+        body.dark-mode .panda-menu-sticky-bar,
+        body.dark-mode .sticky-category-bar,
+        body.dark-mode .category-nav-bar {
+            background-color: #1e293b !important;
+            border-color: #334155 !important;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3) !important;
+        }
+        body.dark-mode .panda-menu-search-box {
+            background: #0f172a !important;
+            border-color: #334155 !important;
+        }
+        body.dark-mode .panda-menu-search-box input {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .panda-cat-arrow {
+            background: #1e293b !important;
+            border-color: #334155 !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .card,
+        body.dark-mode .product-card,
+        body.dark-mode .modal-content,
+        body.dark-mode .favorites-card,
+        body.dark-mode .order-card,
+        body.dark-mode .account-card,
+        body.dark-mode .checkout-card,
+        body.dark-mode .cart-card,
+        body.dark-mode .help-card,
+        body.dark-mode .plan-card,
+        body.dark-mode .info-card,
+        body.dark-mode .store-card,
+        body.dark-mode .hero-card,
+        body.dark-mode .sticky-ongoing-link,
+        body.dark-mode .section-card,
+        body.dark-mode .sidebar-card,
+        body.dark-mode .fav-card,
+        body.dark-mode .market-store-row,
+        body.dark-mode .swimlane-item-card,
+        body.dark-mode .menu-item-card {
+            background-color: #1e293b !important;
+            border-color: #334155 !important;
+            color: #f8fafc !important;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25) !important;
+        }
+        body.dark-mode .cart-sidebar,
+        body.dark-mode .panda-cart-sidebar,
+        body.dark-mode .cart-container {
+            background: #1e293b !important;
+            border-color: #334155 !important;
+            color: #f8fafc !important;
+            box-shadow: -4px 0 25px rgba(0, 0, 0, 0.5) !important;
+        }
+        body.dark-mode .cart-header {
+            background: #1e293b !important;
+            border-bottom: 1px solid #334155 !important;
+        }
+        body.dark-mode .cart-close {
+            color: #cbd5e1 !important;
+        }
+        body.dark-mode .cart-close:hover {
+            color: #ef4444 !important;
+        }
+        body.dark-mode .cart-header span {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .cart-header small {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode .cart-body {
+            background: #1e293b !important;
+        }
+        body.dark-mode .cart-store-header h4 {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .cart-empty {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode .cart-empty i {
+            color: #64748b !important;
+        }
+        body.dark-mode .cart-empty p {
+            color: #cbd5e1 !important;
+        }
+        body.dark-mode .cart-item {
+            background: #111827 !important;
+            border: 1px solid #334155 !important;
+            border-radius: 10px !important;
+            padding: 10px !important;
+            margin-bottom: 10px !important;
+        }
+        body.dark-mode .cart-item-quantity button,
+        body.dark-mode .qty-decrease,
+        body.dark-mode .qty-increase {
+            background: #1e293b !important;
+            border: 1px solid #334155 !important;
+            color: #cbd5e1 !important;
+        }
+        body.dark-mode .cart-item-quantity button:hover,
+        body.dark-mode .qty-decrease:hover,
+        body.dark-mode .qty-increase:hover {
+            background: #334155 !important;
+            color: #ffffff !important;
+        }
+        body.dark-mode .cart-item-quantity span {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .cart-item-image {
+            background-color: #0f172a !important;
+        }
+        body.dark-mode .cart-item-name {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .cart-item-size,
+        body.dark-mode .cart-item-addons {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode .cart-item-price-col,
+        body.dark-mode .cart-item-price-col div {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .cart-item-remove {
+            color: #ef4444 !important;
+        }
+        body.dark-mode .cart-item-remove:hover {
+            color: #f87171 !important;
+        }
+        body.dark-mode .cart-footer {
+            background: #1e293b !important;
+            border-top: 1px solid #334155 !important;
+        }
+        body.dark-mode .summary-row span,
+        body.dark-mode .cart-summary .summary-row span {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode #cartSubtotal {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .summary-row.total,
+        body.dark-mode .cart-summary .summary-row.total {
+            border-top: 1px solid #334155 !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode #cartTotal {
+            color: #ef4444 !important;
+        }
+        body.dark-mode #clearCart {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode #clearCart:hover {
+            color: #ef4444 !important;
+        }
+        body.dark-mode .form-control,
+        body.dark-mode .form-select,
+        body.dark-mode input[type="text"],
+        body.dark-mode input[type="search"],
+        body.dark-mode input[type="email"],
+        body.dark-mode input[type="password"],
+        body.dark-mode input[type="tel"],
+        body.dark-mode input[type="number"],
+        body.dark-mode select,
+        body.dark-mode textarea {
+            background-color: #0f172a !important;
+            color: #f8fafc !important;
+            border-color: #334155 !important;
+        }
+        body.dark-mode .form-control:focus,
+        body.dark-mode .form-select:focus,
+        body.dark-mode input:focus,
+        body.dark-mode select:focus,
+        body.dark-mode textarea:focus {
+            border-color: #b3261e !important;
+            box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.25) !important;
+        }
+        body.dark-mode input:-webkit-autofill,
+        body.dark-mode input:-webkit-autofill:hover, 
+        body.dark-mode input:-webkit-autofill:focus, 
+        body.dark-mode input:-webkit-autofill:active,
+        body.dark-mode textarea:-webkit-autofill,
+        body.dark-mode select:-webkit-autofill {
+            -webkit-box-shadow: 0 0 0 1000px #0f172a inset !important;
+            box-shadow: 0 0 0 1000px #0f172a inset !important;
+            -webkit-text-fill-color: #f8fafc !important;
+            color: #f8fafc !important;
+            transition: background-color 5000s ease-in-out 0s !important;
+            caret-color: #f8fafc !important;
+        }
+        body.dark-mode input:-webkit-autofill:focus {
+            -webkit-box-shadow: 0 0 0 1000px #0b1120 inset, 0 0 0 3px rgba(179, 38, 30, 0.25) !important;
+            box-shadow: 0 0 0 1000px #0b1120 inset, 0 0 0 3px rgba(179, 38, 30, 0.25) !important;
+            -webkit-text-fill-color: #ffffff !important;
+            color: #ffffff !important;
+        }
+        body.dark-mode .text-muted,
+        body.dark-mode .sub-text,
+        body.dark-mode .meta-text,
+        body.dark-mode .text-secondary {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode table,
+        body.dark-mode th,
+        body.dark-mode td {
+            border-color: #334155 !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode th {
+            background-color: #1e293b !important;
+        }
+        body.dark-mode .footer {
+            background-color: #0f172a !important;
+            border-top: 1px solid #334155 !important;
+            color: #cbd5e1 !important;
+        }
+        body.dark-mode .footer a {
+            color: #cbd5e1 !important;
+        }
+        body.dark-mode .footer a:hover {
+            color: #ffffff !important;
+        }
+        body.dark-mode .footer-bottom {
+            border-top-color: #334155 !important;
+            color: #94a3b8 !important;
+        }
+        body.dark-mode .mobile-bottom-nav {
+            background: #1e293b !important;
+            border-top-color: #334155 !important;
+        }
+        body.dark-mode .mob-nav-item {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode .mob-nav-item.active {
+            color: #b3261e !important;
+        }
+        body.dark-mode .swal2-popup {
+            background-color: #1e293b !important;
+            color: #f8fafc !important;
+            border: 1px solid #334155 !important;
+        }
+        body.dark-mode .swal2-title {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .swal2-html-container {
+            color: #cbd5e1 !important;
+        }
+        body.dark-mode .swal2-html-container * {
+            color: inherit;
+        }
+        body.dark-mode .swal2-html-container strong,
+        body.dark-mode .swal2-html-container b {
+            color: #ffffff !important;
+        }
+        body.dark-mode .swal2-html-container [style*="color: #101828"],
+        body.dark-mode .swal2-html-container [style*="color:#101828"] {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .swal2-html-container [style*="color: #475467"],
+        body.dark-mode .swal2-html-container [style*="color:#475467"],
+        body.dark-mode .swal2-html-container [style*="color: #344054"],
+        body.dark-mode .swal2-html-container [style*="color:#344054"] {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode .swal2-html-container [style*="background: #fff1f0"],
+        body.dark-mode .swal2-html-container [style*="background:#fff1f0"] {
+            background: rgba(179, 38, 30, 0.22) !important;
+            border-color: rgba(240, 68, 56, 0.35) !important;
+            color: #fca5a5 !important;
+        }
+        body.dark-mode .swal2-html-container [style*="background: #ecfdf3"],
+        body.dark-mode .swal2-html-container [style*="background:#ecfdf3"] {
+            background: rgba(2, 122, 72, 0.22) !important;
+            border-color: rgba(18, 183, 106, 0.35) !important;
+            color: #86efac !important;
+        }
+        body.dark-mode .swal2-icon.swal2-error {
+            border-color: rgba(240, 68, 56, 0.35) !important;
+            background-color: rgba(179, 38, 30, 0.22) !important;
+            color: #f87171 !important;
+        }
+        body.dark-mode .swal2-icon.swal2-error [class^=swal2-x-mark-line] {
+            background-color: #f87171 !important;
+        }
+        body.dark-mode .swal2-icon.swal2-warning {
+            border-color: rgba(247, 144, 9, 0.35) !important;
+            background-color: rgba(181, 71, 8, 0.22) !important;
+            color: #fbbf24 !important;
+        }
+        body.dark-mode .swal2-icon.swal2-warning .swal2-icon-content {
+            color: #fbbf24 !important;
+        }
+        body.dark-mode .swal2-icon.swal2-success {
+            border-color: rgba(18, 183, 106, 0.35) !important;
+            background-color: rgba(2, 122, 72, 0.22) !important;
+            color: #4ade80 !important;
+        }
+        body.dark-mode .swal2-icon.swal2-success [class^=swal2-success-line] {
+            background-color: #4ade80 !important;
+        }
+        body.dark-mode .swal2-icon.swal2-info {
+            border-color: rgba(46, 144, 250, 0.35) !important;
+            background-color: rgba(23, 92, 211, 0.22) !important;
+            color: #60a5fa !important;
+        }
+        body.dark-mode .swal2-icon.swal2-info .swal2-icon-content {
+            color: #60a5fa !important;
+        }
+        body.dark-mode .swal2-icon.swal2-question {
+            border-color: #334155 !important;
+            background-color: #0f172a !important;
+            color: #cbd5e1 !important;
+        }
+        body.dark-mode .swal2-styled.swal2-cancel {
+            background-color: #1e293b !important;
+            color: #cbd5e1 !important;
+            border-color: #334155 !important;
+        }
+        body.dark-mode .swal2-styled.swal2-cancel:hover {
+            background-color: #334155 !important;
+            color: #ffffff !important;
+        }
+
+        /* Customer Chat Dark Theme */
+        body.dark-mode .chat-container,
+        body.dark-mode .chat-sidebar,
+        body.dark-mode .chat-header,
+        body.dark-mode .chat-input-container {
+            background-color: #1e293b !important;
+            border-color: #334155 !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .chat-messages {
+            background-color: #0f172a !important;
+        }
+        body.dark-mode .chat-bubble-agent,
+        body.dark-mode .message-agent {
+            background-color: #1e293b !important;
+            border: 1px solid #334155 !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .chat-user-item {
+            border-color: #334155 !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .chat-user-item:hover,
+        body.dark-mode .chat-user-item.active {
+            background-color: #334155 !important;
+        }
+        body.dark-mode .chat-input-container textarea,
+        body.dark-mode .chat-input-container input {
+            background-color: #0f172a !important;
+            border-color: #334155 !important;
+            color: #f8fafc !important;
+        }
+
+        /* Checkout, Orders, Help Center & Modals Dark Theme */
+        body.dark-mode .order-summary-box,
+        body.dark-mode .checkout-section,
+        body.dark-mode .payment-option-card,
+        body.dark-mode .delivery-option-card,
+        body.dark-mode .address-card,
+        body.dark-mode .pricing-plan-card,
+        body.dark-mode .faq-item,
+        body.dark-mode .accordion-item,
+        body.dark-mode .accordion-button,
+        body.dark-mode .dropdown-menu,
+        body.dark-mode .offcanvas,
+        body.dark-mode .modal-header,
+        body.dark-mode .modal-body,
+        body.dark-mode .modal-footer {
+            background-color: #1e293b !important;
+            border-color: #334155 !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .accordion-button:not(.collapsed) {
+            background-color: #273349 !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .dropdown-item {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .dropdown-item:hover {
+            background-color: #334155 !important;
+            color: #ffffff !important;
+        }
+        body.dark-mode .list-group-item {
+            background-color: #1e293b !important;
+            border-color: #334155 !important;
+            color: #f8fafc !important;
+        }
         .header-shell { max-width:1320px; margin:0 auto; padding:0 22px; width:100%; }
         .logo-link { display:inline-flex; gap:10px; align-items:center; text-decoration:none; flex-shrink:0; }
         .logo-icon { width:36px; height:36px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; color:#fff; background:linear-gradient(135deg,#b3261e,#ef6b2e); box-shadow:0 6px 16px rgba(179,38,30,.2); font-size:.95rem; }
@@ -120,6 +725,7 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
         .logo-sub { font-size:.65rem; text-transform:uppercase; letter-spacing:.12em; color:#7f879a; font-weight:700; }
         .header-actions,.auth-buttons,.main-nav,.market-home-nav { display:flex; align-items:center; gap:9px; flex-shrink:0; }
         .auth-buttons { gap:10px; display:flex !important; }
+        .mobile-user-btn { display:none; }
         .btn-signin,.btn-register { min-height:38px; padding:0 16px; border-radius:999px; border:1px solid; text-decoration:none; font-weight:700; font-size:.84rem; display:inline-flex; align-items:center; justify-content:center; transition:var(--transition-fast); white-space:nowrap; }
         .btn-signin { border-color:#d0d5dd; color:#344054; background:#ffffff; }
         .btn-signin:hover { background:#f8fafc; border-color:#98a2b3; color:#101828; }
@@ -127,16 +733,27 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
         .btn-register:hover { background:#981b15; border-color:#981b15; color:#ffffff; }
         .icon-btn { width:38px; height:38px; border-radius:10px; border:1px solid var(--line); background:#fff; color:#222a3d; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; transition:var(--transition-fast); position:relative; font-size:.9rem; }
         .icon-btn:hover { background:var(--ink); color:#fff; border-color:var(--ink); }
-        .user-avatar-btn { padding:0; overflow:hidden; }
-        .user-avatar-thumb { width:100%; height:100%; object-fit:cover; border-radius:10px; display:block; }
+        .user-avatar-btn { padding:0; overflow:hidden; border-radius:50% !important; border:2px solid #ffffff !important; box-shadow:0 2px 8px rgba(179,38,30,.2); }
+        .user-avatar-thumb { width:100%; height:100%; object-fit:cover; border-radius:50%; display:block; }
+        .user-avatar-initial { width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#b3261e,#d93829); color:#ffffff; font-weight:800; font-size:.95rem; border-radius:50%; user-select:none; }
         .badge { position:absolute; top:-5px; right:-5px; min-width:19px; height:19px; border-radius:999px; background:var(--rose); color:#fff; border:2px solid #fff; font-size:.68rem; font-weight:700; display:inline-flex; align-items:center; justify-content:center; padding:0 5px; }
         .standard-top { min-height:64px; display:flex; align-items:center; justify-content:space-between; gap:16px; }
         .nav-link,.market-home-link { text-decoration:none; color:#56617a; font-size:.88rem; font-weight:700; min-height:38px; padding:0 12px; border-radius:999px; border:1px solid transparent; display:inline-flex; gap:6px; align-items:center; transition:var(--transition-fast); }
         .nav-link:hover,.nav-link.active,.market-home-link:hover,.market-home-link.active { background:#fff4e8; border-color:var(--line); color:var(--ink); }
         .user-menu-wrapper,.notification-wrapper { position:relative; }
-        .user-dropdown,.notification-dropdown { position:absolute; top:calc(100% + 10px); right:0; min-width:260px; background:#fff; border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow); padding:8px 0; opacity:0; visibility:hidden; transform:translateY(8px); transition:var(--transition-fade); z-index:1500 !important; }
-        .notification-dropdown { min-width:310px; }
-        .user-menu-wrapper:hover .user-dropdown,.notification-wrapper:hover .notification-dropdown { opacity:1; visibility:visible; transform:translateY(0); }
+        .user-dropdown,.notification-dropdown { position:absolute; top:calc(100% + 10px); right:0; min-width:260px; background:#fff; border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow); padding:8px 0; opacity:0; visibility:hidden; pointer-events:none; transform:translateY(8px); transition:var(--transition-fade); z-index:1500 !important; }
+        .user-dropdown::before,.notification-dropdown::before { content:''; position:absolute; top:-14px; left:0; right:0; height:14px; background:transparent; }
+        .notification-dropdown { width:320px; min-width:320px; height:430px; max-height:calc(100vh - 90px); overflow:hidden; display:flex; flex-direction:column; }
+        .user-menu-wrapper:hover .user-dropdown,
+        .user-menu-wrapper.is-open .user-dropdown,
+        .user-menu-wrapper.active .user-dropdown,
+        .user-dropdown.is-open,
+        .user-dropdown.show,
+        .notification-wrapper:hover .notification-dropdown,
+        .notification-wrapper.is-open .notification-dropdown,
+        .notification-wrapper.active .notification-dropdown,
+        .notification-dropdown.is-open,
+        .notification-dropdown.show { opacity:1; visibility:visible; pointer-events:auto; transform:translateY(0); }
         .user-dropdown-header { padding:4px 15px 11px; border-bottom:1px solid var(--line); margin-bottom:8px; }
         .user-name { font-size:1rem; font-weight:800; }
         .user-email { font-size:.84rem; color:var(--muted); }
@@ -145,6 +762,26 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
         .user-dropdown-item.logout-btn { border-top:1px solid var(--line); color:#b4233c; margin-top:6px; }
         .notification-header { padding:10px 13px; border-bottom:1px solid var(--line); font-weight:800; font-size:.9rem; }
         .notification-empty { padding:18px 13px; font-size:.9rem; color:var(--muted); }
+        .notification-list { flex:1 1 auto; min-height:0; overflow-y:auto; }
+        .notification-status-item { display:block; padding:11px 13px; border-bottom:1px solid var(--line); color:inherit; text-decoration:none; }
+        .notification-status-item:hover { background:#fff8f3; }
+        .notification-status-line { display:flex; align-items:center; gap:7px; font-size:.78rem; font-weight:900; letter-spacing:.04em; }
+        .notification-status-line i { font-size:.8rem; }
+        .notification-status-line.is-approved { color:#027a48; }
+        .notification-status-line.is-rejected { color:#b42318; }
+        .notification-status-line.is-incomplete { color:#b54708; }
+        .notification-status-line.is-default { color:#475467; }
+        .notification-reason { margin-top:4px; color:#475467; font-size:.8rem; line-height:1.45; }
+        .notification-business { margin-top:5px; color:#667085; font-size:.74rem; font-weight:700; }
+        .notification-time { display:block; margin-top:6px; color:#98a2b3; font-size:.7rem; }
+        .notification-pagination { flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 10px; border-top:1px solid var(--line); background:#fff8f3; }
+        .notification-page-btn { width:28px; height:28px; border:1px solid var(--line); border-radius:8px; background:#fff; color:#475467; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; }
+        .notification-page-btn:hover:not(:disabled) { background:#b3261e; border-color:#b3261e; color:#fff; }
+        .notification-page-btn:disabled { opacity:.35; cursor:not-allowed; }
+        .notification-page-label { color:#667085; font-size:.7rem; font-weight:800; }
+        @media (max-width:480px) {
+            .notification-dropdown { width:min(320px, calc(100vw - 24px)); min-width:0; right:-48px; }
+        }
         .mobile-toggle { display:none !important; }
 
         /* Header Active Order Pill */
@@ -340,18 +977,28 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
             padding: 0 4px !important;
         }
         .swal2-icon {
-            width: 58px !important;
-            height: 58px !important;
-            margin: 0 auto 10px !important;
+            width: 60px !important;
+            height: 60px !important;
+            min-width: 60px !important;
+            min-height: 60px !important;
+            margin: 0 auto 12px !important;
             border-width: 2.5px !important;
             border-style: solid !important;
+            border-radius: 50% !important;
+            box-sizing: border-box !important;
+            position: relative !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
         }
         .swal2-icon .swal2-icon-content {
-            font-size: 2.2rem !important;
+            font-size: 1.85rem !important;
             font-weight: 800 !important;
             display: flex !important;
             align-items: center !important;
             justify-content: center !important;
+            line-height: 1 !important;
+            margin: 0 !important;
         }
         /* Error / Danger Icon */
         .swal2-icon.swal2-error {
@@ -359,11 +1006,31 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
             background-color: #fff1f0 !important;
             color: #b3261e !important;
         }
+        .swal2-icon.swal2-error .swal2-x-mark {
+            position: relative !important;
+            width: 100% !important;
+            height: 100% !important;
+            display: block !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
         .swal2-icon.swal2-error [class^=swal2-x-mark-line] {
-            background-color: #b3261e !important;
+            position: absolute !important;
             height: 3px !important;
+            width: 24px !important;
+            background-color: #b3261e !important;
             border-radius: 2px !important;
-            top: 28px !important;
+            top: calc(50% - 1.5px) !important;
+            left: calc(50% - 12px) !important;
+            right: auto !important;
+            margin: 0 !important;
+            transform-origin: center center !important;
+        }
+        .swal2-icon.swal2-error [class^=swal2-x-mark-line][class$=left] {
+            transform: rotate(45deg) !important;
+        }
+        .swal2-icon.swal2-error [class^=swal2-x-mark-line][class$=right] {
+            transform: rotate(-45deg) !important;
         }
         /* Warning Icon */
         .swal2-icon.swal2-warning {
@@ -380,13 +1047,33 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
             background-color: #ecfdf3 !important;
             color: #027a48 !important;
         }
+        .swal2-icon.swal2-success [class^=swal2-success-circular-line],
+        .swal2-icon.swal2-success .swal2-success-fix,
+        .swal2-icon.swal2-success .swal2-success-ring {
+            display: none !important;
+        }
         .swal2-icon.swal2-success [class^=swal2-success-line] {
             background-color: #027a48 !important;
             height: 3px !important;
             border-radius: 2px !important;
+            position: absolute !important;
+            z-index: 2 !important;
+            display: block !important;
         }
-        .swal2-icon.swal2-success .swal2-success-ring {
-            border: 3px solid rgba(2, 122, 72, 0.25) !important;
+        .swal2-icon.swal2-success .swal2-success-line-tip {
+            width: 14px !important;
+            top: 31px !important;
+            left: 14px !important;
+            transform: rotate(45deg) !important;
+            transform-origin: left bottom !important;
+        }
+        .swal2-icon.swal2-success .swal2-success-line-long {
+            width: 24px !important;
+            top: 26px !important;
+            left: 23px !important;
+            right: auto !important;
+            transform: rotate(-45deg) !important;
+            transform-origin: left bottom !important;
         }
         /* Info Icon */
         .swal2-icon.swal2-info {
@@ -401,6 +1088,9 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
         .swal2-icon.swal2-question {
             border-color: #eaecf0 !important;
             background-color: #f8f9fa !important;
+            color: #344054 !important;
+        }
+        .swal2-icon.swal2-question .swal2-icon-content {
             color: #344054 !important;
         }
         /* Modal Action Buttons */
@@ -508,12 +1198,20 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
             position: sticky;
             top: 0;
             z-index: 1200;
-            background: #ffffff !important;
+            background: #ffffff;
             backdrop-filter: none !important;
             -webkit-backdrop-filter: none !important;
             border-bottom: 1px solid var(--line);
             box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05);
             width: 100%;
+        }
+        body.dark-mode .site-header,
+        html.dark-mode .site-header,
+        body.dark-mode .market-header-bottom,
+        html.dark-mode .market-header-bottom {
+            background: #1e293b !important;
+            background-color: #1e293b !important;
+            border-color: #334155 !important;
         }
 
         .market-header-top, .market-header-bottom { max-width:1280px; margin:0 auto; padding:0 24px; width:100%; box-sizing:border-box; }
@@ -741,7 +1439,8 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
             transform: translateY(-1px);
         }
 
-        .market-address-trigger { border:1px solid var(--line); background:#fff7ef; border-radius:999px; min-height:38px; padding:0 12px; color:#2a3042; display:inline-flex; align-items:center; gap:7px; cursor:pointer; font-size:.84rem; font-weight:600; max-width:260px; transition:var(--transition-lift); flex-shrink:0; }
+        .market-address-trigger { border:1px solid var(--line); background:#fff7ef; border-radius:999px; min-height:38px; padding:0 14px; color:#2a3042; display:inline-flex; align-items:center; gap:7px; cursor:pointer; font-size:.84rem; font-weight:600; max-width:280px; transition:var(--transition-lift); flex-shrink:0; }
+        .market-address-trigger .address-text { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:210px; display:inline-block; vertical-align:middle; text-align:left; }
         .market-partner-cta { min-height:38px; padding:0 14px; border-radius:999px; border:1px solid #f0c4a8; background:linear-gradient(135deg,#171922,#2b3144); color:#fff; text-decoration:none; font-size:.82rem; font-weight:800; display:inline-flex; align-items:center; gap:8px; transition:var(--transition-lift); white-space:nowrap; }
         .market-search-popover {
             position: absolute;
@@ -796,7 +1495,11 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
         /* Foodpanda Style Mobile Ready Layout */
         @media (max-width: 768px) {
             .site-header {
-                box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05) !important;
+                box-shadow: 0 2px 10px rgba(16, 24, 40, 0.04) !important;
+                background: #ffffff !important;
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+                border-bottom: 1px solid #eaecf0 !important;
                 position: sticky !important;
                 top: 0 !important;
                 z-index: 1200 !important;
@@ -806,7 +1509,7 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
                 align-items: center !important;
                 justify-content: space-between !important;
                 gap: 8px !important;
-                min-height: 54px !important;
+                min-height: 48px !important;
                 padding: 6px 12px !important;
                 flex-wrap: nowrap !important;
             }
@@ -814,21 +1517,66 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
                 display: inline-flex !important;
                 width: 38px !important;
                 height: 38px !important;
-                border-radius: 10px !important;
+                border-radius: 50% !important;
                 border: 1px solid #eaecf0 !important;
-                background: #ffffff !important;
-                color: #101828 !important;
-                order: 1 !important;
+                background: #f4f5f7 !important;
+                color: #1e293b !important;
                 flex-shrink: 0 !important;
                 align-items: center !important;
                 justify-content: center !important;
+                font-size: 0.92rem !important;
+                transition: background 0.15s ease !important;
             }
-            .logo-link {
+            .mobile-toggle:active {
+                background: #e4e7ec !important;
+            }
+            .market-header-top.has-address-bar .logo-link {
+                display: none !important;
+            }
+            .market-header-top.no-address-bar .logo-link,
+            .market-header-top:not(:has(.market-address-wrap)) .logo-link {
+                display: inline-flex !important;
+                align-items: center !important;
+                gap: 8px !important;
+                min-width: 0 !important;
+                flex-shrink: 1 !important;
+            }
+            .market-header-top.no-address-bar .logo-copy,
+            .market-header-top:not(:has(.market-address-wrap)) .logo-copy {
+                display: flex !important;
+                flex-direction: column !important;
+                min-width: 0 !important;
+            }
+            .market-header-top.no-address-bar .logo-title,
+            .market-header-top:not(:has(.market-address-wrap)) .logo-title {
+                font-size: 0.92rem !important;
+                font-weight: 800 !important;
+                white-space: nowrap !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+                line-height: 1.2 !important;
+            }
+            .market-header-top.no-address-bar .logo-sub,
+            .market-header-top:not(:has(.market-address-wrap)) .logo-sub {
+                display: none !important;
+            }
+            .market-header-top.no-address-bar .logo-icon,
+            .market-header-top:not(:has(.market-address-wrap)) .logo-icon {
+                width: 32px !important;
+                height: 32px !important;
+                border-radius: 8px !important;
+                flex-shrink: 0 !important;
+            }
+            .standard-top .logo-link {
+                display: inline-flex !important;
+                gap: 8px !important;
+            }
+            .standard-top .logo-sub {
                 display: none !important;
             }
             .market-address-wrap {
-                order: 2 !important;
-                flex: 1 !important;
+                order: 1 !important;
+                flex: 1 1 auto !important;
                 min-width: 0 !important;
                 margin: 0 !important;
                 display: flex !important;
@@ -837,32 +1585,59 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
             .market-address-trigger {
                 width: 100% !important;
                 max-width: 100% !important;
-                min-height: 36px !important;
-                padding: 0 10px !important;
-                background: #f8fafc !important;
-                border: 1px solid #e2e8f0 !important;
+                min-height: 38px !important;
+                padding: 0 12px !important;
+                background: rgba(244, 245, 247, 0.85) !important;
+                backdrop-filter: blur(12px) !important;
+                -webkit-backdrop-filter: blur(12px) !important;
+                border: 1px solid rgba(234, 236, 240, 0.85) !important;
                 border-radius: 999px !important;
                 font-size: 0.8rem !important;
                 font-weight: 700 !important;
                 display: flex !important;
                 align-items: center !important;
                 gap: 6px !important;
+                min-width: 0 !important;
             }
             .market-address-trigger .address-text {
                 white-space: nowrap !important;
                 overflow: hidden !important;
                 text-overflow: ellipsis !important;
-                flex: 1 !important;
+                flex: 1 1 auto !important;
                 text-align: left !important;
                 font-size: 0.8rem !important;
                 color: #1e293b !important;
+                min-width: 0 !important;
+            }
+            .market-address-popover {
+                left: 0 !important;
+                right: auto !important;
+                width: min(340px, calc(100vw - 20px)) !important;
+                max-width: calc(100vw - 20px) !important;
+                padding: 14px 12px !important;
             }
             .header-actions {
-                order: 3 !important;
+                order: 2 !important;
                 display: flex !important;
                 align-items: center !important;
                 gap: 6px !important;
                 flex-shrink: 0 !important;
+            }
+            .header-actions .auth-buttons {
+                display: none !important;
+            }
+            .mobile-user-btn {
+                display: inline-flex !important;
+                width: 36px !important;
+                height: 36px !important;
+                border-radius: 10px !important;
+                align-items: center !important;
+                justify-content: center !important;
+            }
+            .header-actions #favoritesToggle,
+            .header-actions #chatBtn,
+            .header-actions .notification-wrapper {
+                display: none !important;
             }
             .header-actions .icon-btn {
                 width: 36px !important;
@@ -883,34 +1658,44 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
             }
             .market-home-search {
                 min-height: 40px !important;
-                background: #f1f5f9 !important;
-                border: 1px solid #e2e8f0 !important;
+                background: #f4f5f7 !important;
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+                border: 1px solid #eaecf0 !important;
                 border-radius: 999px !important;
-                padding: 0 14px !important;
+                padding: 0 16px !important;
             }
             .market-home-search input {
                 font-size: 0.88rem !important;
             }
-            .btn-signin, .btn-register {
-                padding: 0 10px !important;
-                font-size: 0.76rem !important;
-                min-height: 32px !important;
-            }
+        }
 
-            /* Foodpanda Style Slide-in Drawer */
-            .mobile-menu {
-                left: -360px !important;
-                right: auto !important;
-                transition: left var(--motion-base) var(--motion-ease) !important;
-                width: min(320px, 86vw) !important;
-                border-right: 1px solid var(--line) !important;
-                border-left: none !important;
-                box-shadow: 14px 0 34px rgba(15, 23, 42, 0.18) !important;
+        @media (max-width: 480px) {
+            .market-header-top, .standard-top {
+                padding: 6px 8px !important;
+                gap: 6px !important;
             }
-            .mobile-menu.active {
-                left: 0 !important;
-                right: auto !important;
+            .header-actions {
+                gap: 4px !important;
             }
+            .header-actions .icon-btn,
+            .mobile-user-btn,
+            .mobile-toggle {
+                width: 34px !important;
+                height: 34px !important;
+                font-size: 0.84rem !important;
+            }
+            .market-address-trigger {
+                min-height: 34px !important;
+                padding: 0 8px !important;
+                font-size: 0.76rem !important;
+            }
+            .market-address-trigger .address-text {
+                font-size: 0.76rem !important;
+            }
+        }
+
+            /* Unified Slide-in Drawer defined below */
             .mobile-profile-card {
                 padding: 16px 14px;
                 background: #f8fafc;
@@ -989,24 +1774,312 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
             .logo-title { font-size: 0.98rem; }
             .logo-sub { font-size: 0.58rem; }
         }
-    </style>
+        @media (max-width: 360px) {
+            .market-header-top {
+                padding: 8px 10px !important;
+                gap: 6px !important;
+            }
+            .header-actions {
+                gap: 4px !important;
+            }
+            .header-actions .icon-btn,
+            .header-actions .mobile-toggle {
+                width: 32px !important;
+                height: 32px !important;
+                min-width: 32px !important;
+                font-size: 0.78rem !important;
+                border-radius: 8px !important;
+            }
+            .user-avatar-btn .user-avatar-initial,
+            .user-avatar-btn .user-avatar-thumb {
+                width: 28px !important;
+                height: 28px !important;
+                font-size: 0.78rem !important;
+            }
+            .market-header-top.no-address-bar .logo-title,
+            .market-header-top:not(:has(.market-address-wrap)) .logo-title {
+                font-size: 0.84rem !important;
+            }
+            .market-header-top.no-address-bar .logo-icon,
+            .market-header-top:not(:has(.market-address-wrap)) .logo-icon {
+                width: 28px !important;
+                height: 28px !important;
+            }
+        }
+    
+        /* Guaranteed Mobile Drawer & Glassmorphic Overlay (Reference Screen 8) */
+        .mobile-menu-overlay {
+            position: fixed !important;
+            inset: 0 !important;
+            background: rgba(16, 24, 40, 0.5) !important;
+            backdrop-filter: blur(8px) !important;
+            -webkit-backdrop-filter: blur(8px) !important;
+            z-index: 99998 !important;
+            opacity: 0 !important;
+            visibility: hidden !important;
+            transition: opacity 0.25s ease, visibility 0.25s ease !important;
+            pointer-events: none !important;
+        }
+        .mobile-menu-overlay.active {
+            opacity: 1 !important;
+            visibility: visible !important;
+            pointer-events: auto !important;
+        }
+        .mobile-menu {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            bottom: 0 !important;
+            right: auto !important;
+            width: min(320px, 86vw) !important;
+            height: 100vh !important;
+            height: 100dvh !important;
+            background: rgba(255, 255, 255, 0.98) !important;
+            backdrop-filter: blur(20px) !important;
+            -webkit-backdrop-filter: blur(20px) !important;
+            border-right: 1px solid rgba(234, 236, 240, 0.85) !important;
+            border-left: none !important;
+            box-shadow: 14px 0 40px rgba(16, 24, 40, 0.18) !important;
+            z-index: 99999 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            transform: translateX(-100%) !important;
+            transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;
+            overflow-y: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+        }
+        .mobile-menu.active {
+            transform: translateX(0) !important;
+            visibility: visible !important;
+        }
+        .mobile-menu-header {
+            padding: 18px 16px;
+            border-bottom: 1px solid rgba(234, 236, 240, 0.85);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .mobile-menu-close {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: 1px solid #eaecf0;
+            background: #ffffff;
+            color: #475467;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.18s ease;
+        }
+        .mobile-menu-close:active {
+            transform: scale(0.92);
+            background: #fff1f0;
+            color: #b3261e;
+        }
+        .mobile-nav {
+            margin: 0;
+            padding: 12px;
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .mobile-nav a {
+            text-decoration: none;
+            color: #1d2939;
+            font-size: 0.92rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 14px;
+            border-radius: 12px;
+            transition: all 0.18s ease;
+        }
+        .mobile-nav a i:not(.chevron-icon) {
+            width: 22px;
+            text-align: center;
+            color: #b3261e;
+            font-size: 1rem;
+        }
+        .mobile-nav a .chevron-icon {
+            margin-left: auto;
+            color: #98a2b3;
+            font-size: 0.75rem;
+        }
+        .mobile-nav a:hover,
+        .mobile-nav a.active {
+            background: #fff1f0;
+            color: #b3261e;
+        }
+        body.dark-mode .mobile-menu {
+            background: rgba(30, 41, 59, 0.98) !important;
+            border-color: rgba(51, 65, 85, 0.85) !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .mobile-menu-header {
+            border-bottom-color: rgba(51, 65, 85, 0.85) !important;
+        }
+        body.dark-mode .mobile-menu-close {
+            background: #1e293b !important;
+            border-color: #334155 !important;
+            color: #cbd5e1 !important;
+        }
+        body.dark-mode .mobile-nav a {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .mobile-nav a:hover,
+        body.dark-mode .mobile-nav a.active {
+            background: #334155 !important;
+            color: #ffffff !important;
+        }
+
+        /* Mobile Header Popover Placement & Active Order Banner Fix */
+        @media (max-width: 768px) {
+            .user-dropdown {
+                position: fixed !important;
+                top: 64px !important;
+                right: 14px !important;
+                left: auto !important;
+                width: min(300px, calc(100vw - 28px)) !important;
+                max-width: calc(100vw - 28px) !important;
+                margin-left: auto !important;
+                box-shadow: 0 14px 40px rgba(16, 24, 40, 0.22) !important;
+                border-radius: 18px !important;
+                z-index: 99999 !important;
+                max-height: calc(100vh - 120px) !important;
+                max-height: calc(100dvh - 120px) !important;
+                overflow-y: auto !important;
+                -webkit-overflow-scrolling: touch !important;
+            }
+            .notification-dropdown {
+                position: fixed !important;
+                top: 64px !important;
+                right: 14px !important;
+                left: auto !important;
+                width: min(300px, calc(100vw - 28px)) !important;
+                max-width: calc(100vw - 28px) !important;
+                margin-left: auto !important;
+                box-shadow: 0 14px 40px rgba(16, 24, 40, 0.22) !important;
+                border-radius: 18px !important;
+                z-index: 99999 !important;
+            }
+            .sticky-ongoing-widget {
+                bottom: 84px !important;
+                right: 14px !important;
+                left: 14px !important;
+                width: auto !important;
+                max-width: none !important;
+                z-index: 1240 !important;
+            }
+        }
+        .sticky-ongoing-close-btn {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #171922;
+            color: #ffffff;
+            border: 2px solid #ffffff;
+            font-size: 13px;
+            font-weight: 700;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            z-index: 10;
+        }
+
+</style>
     <!-- Leaflet Map CSS and JS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-</head>
-<body class="<?php echo $is_market_home_header ? 'market-body' : 'site-body'; ?>">
+
+<script>
+window.openMobileNavSidebar = function(e) {
+    if (e) {
+        if (typeof e.preventDefault === 'function') e.preventDefault();
+        if (typeof e.stopPropagation === 'function') e.stopPropagation();
+    }
+    var m = document.getElementById('mobileMenu');
+    var o = document.getElementById('mobileOverlay');
+    if (m) {
+        m.classList.add('active');
+        m.style.setProperty('display', 'flex', 'important');
+        m.style.setProperty('transform', 'translateX(0)', 'important');
+        m.style.setProperty('visibility', 'visible', 'important');
+        m.style.setProperty('pointer-events', 'auto', 'important');
+        m.style.setProperty('opacity', '1', 'important');
+        m.style.setProperty('left', '0', 'important');
+        m.style.setProperty('right', 'auto', 'important');
+        m.style.setProperty('z-index', '999999', 'important');
+    }
+    if (o) {
+        o.classList.add('active');
+        o.style.setProperty('display', 'block', 'important');
+        o.style.setProperty('opacity', '1', 'important');
+        o.style.setProperty('visibility', 'visible', 'important');
+        o.style.setProperty('pointer-events', 'auto', 'important');
+        o.style.setProperty('z-index', '999998', 'important');
+    }
+    document.body.style.overflow = 'hidden';
+};
+window.closeMobileNavSidebar = function(e) {
+    if (e) {
+        if (typeof e.preventDefault === 'function') e.preventDefault();
+        if (typeof e.stopPropagation === 'function') e.stopPropagation();
+    }
+    var m = document.getElementById('mobileMenu');
+    var o = document.getElementById('mobileOverlay');
+    if (m) {
+        m.classList.remove('active');
+        m.style.setProperty('transform', 'translateX(-100%)', 'important');
+        m.style.setProperty('pointer-events', 'none', 'important');
+    }
+    if (o) {
+        o.classList.remove('active');
+        o.style.setProperty('opacity', '0', 'important');
+        o.style.setProperty('pointer-events', 'none', 'important');
+        setTimeout(function() {
+            if (o && !o.classList.contains('active')) {
+                o.style.setProperty('display', 'none', 'important');
+            }
+        }, 280);
+    }
+    document.body.style.overflow = '';
+};
+document.addEventListener('click', function(e) {
+    var toggle = e.target.closest('#mobileToggle, #mobileToggle2, .mobile-toggle');
+    if (toggle) {
+        window.openMobileNavSidebar(e);
+        return;
+    }
+    var close = e.target.closest('#mobileMenuClose, .mobile-menu-close, #mobileOverlay');
+    if (close) {
+        window.closeMobileNavSidebar(e);
+    }
+}, true);
+</script>
+
+<body class="<?php echo $is_market_home_header ? 'market-body' : 'site-body'; ?><?php echo $is_initial_dark ? ' dark-mode' : ''; ?>">
+<script>(function(){if(document.documentElement.classList.contains('dark-mode')&&document.body){document.body.classList.add('dark-mode');}})();</script>
 <?php if ($is_market_home_header): ?>
 <header class="site-header market-main-header">
-    <div class="market-header-top">
-        <a href="<?php echo $path_prefix; ?>index.php" class="logo-link">
+    <div class="market-header-top <?php echo in_array($current_page, ['index', 'home', 'pickup'], true) ? 'has-address-bar' : 'no-address-bar'; ?>">
+        <a href="<?php echo htmlspecialchars($nav_logo_href); ?>" class="logo-link">
             <span class="logo-icon"><img src="<?php echo $path_prefix; ?>assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block;"></span>
             <span class="logo-copy"><span class="logo-title">Lechon Delights</span><span class="logo-sub">Marketplace</span></span>
         </a>
 
         <?php if (in_array($current_page, ['index', 'home', 'pickup'], true)): ?>
         <div class="market-address-wrap" id="marketAddressWrap">
-            <button type="button" class="market-address-trigger" id="marketAddressToggle">
-                <i class="fas fa-location-dot"></i><span class="address-text" id="marketAddressDisplay"><?php echo htmlspecialchars($market_header_address_display); ?></span><i class="fas fa-chevron-down"></i>
+            <button type="button" class="market-address-trigger" id="marketAddressToggle" title="<?php echo htmlspecialchars($market_header_address_display); ?>">
+                <i class="fas fa-location-dot"></i><span class="address-text" id="marketAddressDisplay" title="<?php echo htmlspecialchars($market_header_address_display); ?>"><?php echo htmlspecialchars($market_header_address_display_short); ?></span><i class="fas fa-chevron-down"></i>
             </button>
             <div class="market-address-popover" id="marketAddressPopover">
                 <div class="market-address-input-row">
@@ -1045,26 +2118,31 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
 
         <div class="header-actions">
             <?php if ($is_logged_in_user): ?>
+            <button class="icon-btn cart-btn" id="cartToggle" onclick="location.href='<?php echo $path_prefix; ?>cart.php'"><i class="fas fa-shopping-cart"></i><span class="badge" id="cartBadge"><?php echo (int)$cart_count; ?></span></button>
+            <div class="notification-wrapper">
+                <button class="icon-btn"><i class="fas fa-bell"></i><span class="badge" id="notificationBadge" style="display:none;">0</span></button>
+                <div class="notification-dropdown" id="notificationDropdown"><div class="notification-header">Notifications</div><div class="notification-empty">No new notifications yet.</div></div>
+            </div>
             <div class="user-menu-wrapper">
-                <button class="icon-btn user-avatar-btn" aria-label="Open user menu">
+                <button class="icon-btn user-avatar-btn" aria-label="Open user menu" title="<?php echo htmlspecialchars($viewer_name !== '' ? $viewer_name : 'Profile Settings'); ?>">
                     <?php if ($viewer_profile_image_url !== ''): ?>
                     <img src="<?php echo htmlspecialchars($viewer_profile_image_url); ?>" alt="Profile picture" class="user-avatar-thumb">
                     <?php else: ?>
-                    <i class="fas fa-user-circle"></i>
+                    <span class="user-avatar-initial"><?php echo htmlspecialchars(strtoupper(substr($viewer_name !== '' ? $viewer_name : ($viewer_first_name !== '' ? $viewer_first_name : 'U'), 0, 1))); ?></span>
                     <?php endif; ?>
                 </button>
                 <div class="user-dropdown">
-                    <div class="user-dropdown-header"><div class="user-name"><?php echo htmlspecialchars($viewer_first_name); ?></div><?php if ($viewer_email !== ''): ?><div class="user-email"><?php echo htmlspecialchars($viewer_email); ?></div><?php endif; ?></div>
-                    <a href="<?php echo $path_prefix; ?>my_account.php" class="user-dropdown-item"><i class="fas fa-user"></i> My Profile</a>
-                    <a href="<?php echo $path_prefix; ?>my_account.php#addresses" class="user-dropdown-item"><i class="fas fa-address-book"></i> Address Book</a>
-                    <a href="<?php echo $path_prefix; ?>my_orders.php" class="user-dropdown-item"><i class="fas fa-shopping-bag"></i> My Orders</a>
-                    <a href="<?php echo $path_prefix; ?>help_center.php" class="user-dropdown-item"><i class="fas fa-life-ring"></i> Help Center</a>
+                    <div class="user-dropdown-header"><div class="user-name"><?php echo htmlspecialchars($viewer_name !== '' ? $viewer_name : $viewer_first_name); ?></div><?php if ($viewer_email !== ''): ?><div class="user-email"><?php echo htmlspecialchars($viewer_email); ?></div><?php endif; ?></div>
+                    <a href="<?php echo $path_prefix; ?>my_account.php" class="user-dropdown-item"><i class="fas fa-user-gear"></i> Profile Settings</a>
+                    <a href="<?php echo $path_prefix; ?>my_orders.php" class="user-dropdown-item"><i class="fas fa-shopping-bag"></i> Orders</a>
                     <?php if ($favorites_feature_enabled): ?>
-                    <a href="<?php echo $favorites_page_href; ?>" class="user-dropdown-item"><i class="fas fa-heart"></i> My Favorites</a>
+                    <a href="<?php echo $favorites_page_href; ?>" class="user-dropdown-item"><i class="fas fa-heart"></i> Favorites</a>
                     <?php endif; ?>
                     <?php if (!$is_shop_owner_or_partner): ?>
                     <a href="<?php echo $path_prefix; ?>franchise_application.php" class="user-dropdown-item"><i class="fas fa-store"></i> Apply for Business</a>
                     <?php endif; ?>
+                    <a href="javascript:void(0);" onclick="openCustomerTutorial(true)" class="user-dropdown-item"><i class="fas fa-compass"></i> Customer Guide</a>
+                    <a href="<?php echo $path_prefix; ?>help_center.php" class="user-dropdown-item"><i class="fas fa-life-ring"></i> Help Center</a>
                     <?php if (isset($_SESSION['account_type']) && $_SESSION['account_type'] === 'organization'): ?>
                     <a href="<?php echo $path_prefix; ?>subscription_plans.php" class="user-dropdown-item"><i class="fas fa-layer-group"></i> Subscription Plans</a>
                     <a href="<?php echo $path_prefix; ?>seller_products.php" class="user-dropdown-item"><i class="fas fa-box"></i> My Products</a>
@@ -1077,17 +2155,6 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
                     <a href="javascript:void(0);" onclick="confirmLogout()" class="user-dropdown-item logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
                 </div>
             </div>
-            <?php if ($favorites_feature_enabled): ?>
-            <a class="icon-btn" id="favoritesToggle" href="<?php echo $favorites_page_href; ?>" title="Favorites"><i class="far fa-heart"></i><span class="badge" id="favoritesBadge" style="display:none;">0</span></a>
-            <?php endif; ?>
-            <?php if ($is_customer_user): ?>
-            <button class="icon-btn" id="chatBtn" onclick="location.href='<?php echo $path_prefix; ?>help_center.php'" title="Help Center"><i class="fas fa-comment-dots"></i><span class="badge" id="chatBadge" style="display:none;">0</span></button>
-            <?php endif; ?>
-            <div class="notification-wrapper">
-                <button class="icon-btn"><i class="fas fa-bell"></i><span class="badge" id="notificationBadge" style="display:none;">0</span></button>
-                <div class="notification-dropdown" id="notificationDropdown"><div class="notification-header">Notifications</div><div class="notification-empty">No new notifications yet.</div></div>
-            </div>
-            <button class="icon-btn cart-btn" id="cartToggle" onclick="location.href='<?php echo $path_prefix; ?>cart.php'"><i class="fas fa-shopping-cart"></i><span class="badge" id="cartBadge"><?php echo (int)$cart_count; ?></span></button>
             <?php else: ?>
                 <?php if ($current_page !== 'register' && $current_page !== 'login'): ?>
                 <div class="auth-buttons">
@@ -1096,7 +2163,7 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
                 </div>
                 <?php endif; ?>
             <?php endif; ?>
-            <button class="icon-btn mobile-toggle" id="mobileToggle"><i class="fas fa-bars"></i></button>
+            <button type="button" class="icon-btn mobile-toggle" id="mobileToggle" onclick="openMobileNavSidebar(event)" aria-label="Open mobile menu"><i class="fas fa-bars"></i></button>
         </div>
     </div>
     
@@ -1104,7 +2171,6 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
     <div class="market-header-bottom">
         <nav class="market-home-nav">
             <a href="<?php echo $path_prefix; ?>index.php#marketplaceStores" class="market-home-link<?php echo ($current_page === 'home' || $current_page === 'index') ? ' active' : ''; ?>"><i class="fas fa-motorcycle"></i> Delivery</a>
-            <a href="<?php echo $path_prefix; ?>index.php?type=pickup#marketplaceStores" class="market-home-link<?php echo ($current_page === 'pickup') ? ' active' : ''; ?>"><i class="fas fa-person-walking"></i> Pick-up</a>
             <a href="<?php echo $path_prefix; ?>shops.php" class="market-home-link<?php echo ($current_page === 'shops') ? ' active' : ''; ?>"><i class="fas fa-shop"></i> Shops</a>
         </nav>
         <div class="market-home-search-wrap" id="marketHeaderSearchWrap">
@@ -1113,7 +2179,6 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
                 <div class="market-search-tabs">
                     <button type="button" class="market-search-tab active" data-tab="all">All</button>
                     <button type="button" class="market-search-tab" data-tab="delivery">Delivery</button>
-                    <button type="button" class="market-search-tab" data-tab="pickup">Pick-up</button>
                     <button type="button" class="market-search-tab" data-tab="shops">Shops</button>
                 </div>
                 <div class="market-search-panel active" data-panel="all">
@@ -1132,13 +2197,6 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
                         <button type="button" class="market-search-suggestion" data-term="Live menu">Live menu</button>
                     </div>
                 </div>
-                <div class="market-search-panel" data-panel="pickup">
-                    <p class="market-search-title">Pick-up searches</p>
-                    <div class="market-search-suggestions">
-                        <button type="button" class="market-search-suggestion" data-term="Pickup branch">Pickup branch</button>
-                        <button type="button" class="market-search-suggestion" data-term="Dasmarinas">Dasmarinas</button>
-                    </div>
-                </div>
                 <div class="market-search-panel" data-panel="shops">
                     <p class="market-search-title">Shops</p>
                     <div class="market-search-suggestions">
@@ -1152,42 +2210,82 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
     <?php endif; ?>
 
     <?php if ($ongoing_order_id > 0 && $current_page !== 'track_order'): ?>
-    <div id="stickyOngoingOrderWidget" class="sticky-ongoing-widget">
-        <a href="<?php echo $path_prefix; ?>track_order.php?order_id=<?php echo $ongoing_order_id; ?>" class="sticky-ongoing-link">
-            <div class="sticky-ongoing-icon">
-                <i class="fas fa-motorcycle"></i>
-                <span class="sticky-pulse-ring"></span>
-            </div>
-            <div class="sticky-ongoing-info">
-                <div class="sticky-ongoing-header">
-                    <strong style="font-weight:800; font-size:0.92rem; color:#171922;">Active Delivery Order</strong>
-                    <span class="sticky-live-tag">LIVE</span>
+    <div id="stickyOngoingOrderWidget" class="sticky-ongoing-widget" style="display: none;">
+        <div style="position: relative;">
+            <a href="<?php echo $path_prefix; ?>track_order.php?order_id=<?php echo $ongoing_order_id; ?>" class="sticky-ongoing-link" onclick="handleTrackOrderClick(<?php echo (int)$ongoing_order_id; ?>)">
+                <div class="sticky-ongoing-icon">
+                    <i class="fas fa-motorcycle"></i>
+                    <span class="sticky-pulse-ring"></span>
                 </div>
-                <div class="sticky-ongoing-status">
-                    #<?php echo htmlspecialchars($ongoing_order_number); ?> &bull; <span style="color:#b3261e; font-weight:700;"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $ongoing_order_status))); ?></span>
+                <div class="sticky-ongoing-info">
+                    <div class="sticky-ongoing-header">
+                        <strong style="font-weight:800; font-size:0.92rem; color:#171922;">Active Delivery Order</strong>
+                        <span class="sticky-live-tag">LIVE</span>
+                    </div>
+                    <div class="sticky-ongoing-status">
+                        #<?php echo htmlspecialchars($ongoing_order_number); ?> &bull; <span style="color:#b3261e; font-weight:700;"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $ongoing_order_status))); ?></span>
+                    </div>
                 </div>
-            </div>
-            <div class="sticky-ongoing-btn">
-                Track <i class="fas fa-arrow-right"></i>
-            </div>
-        </a>
+                <div class="sticky-ongoing-btn">
+                    Track <i class="fas fa-arrow-right"></i>
+                </div>
+            </a>
+            <button type="button" class="sticky-ongoing-close-btn" onclick="dismissStickyOngoingOrder(event, <?php echo (int)$ongoing_order_id; ?>)" aria-label="Dismiss">&times;</button>
+        </div>
     </div>
     <script>
     (function() {
+        var orderId = <?php echo (int)$ongoing_order_id; ?>;
+        var key = 'sticky_order_seen_' + orderId;
+        var stickyWidget = document.getElementById('stickyOngoingOrderWidget');
+        if (!stickyWidget) return;
+        
+        // Show once logic: if already seen or dismissed in this session, do NOT show again
+        if (sessionStorage.getItem(key) === '1' || sessionStorage.getItem('sticky_order_dismissed_' + orderId) === '1') {
+            stickyWidget.style.display = 'none';
+            return;
+        }
+        
+        // Mark as seen immediately so navigating away or clicking back won't show it again
+        sessionStorage.setItem(key, '1');
+        stickyWidget.style.display = 'block';
+        
+        // Auto fade out after 6 seconds
+        setTimeout(function() {
+            if (stickyWidget) {
+                stickyWidget.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+                stickyWidget.style.opacity = '0';
+                stickyWidget.style.transform = 'translateY(16px)';
+                setTimeout(function() {
+                    if (stickyWidget) stickyWidget.style.display = 'none';
+                }, 400);
+            }
+        }, 6000);
+    })();
+    
+    window.handleTrackOrderClick = function(orderId) {
+        try {
+            sessionStorage.setItem('sticky_order_seen_' + orderId, '1');
+            sessionStorage.setItem('sticky_order_dismissed_' + orderId, '1');
+        } catch(e) {}
+    };
+    
+    window.dismissStickyOngoingOrder = function(e, orderId) {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        try {
+            sessionStorage.setItem('sticky_order_seen_' + orderId, '1');
+            sessionStorage.setItem('sticky_order_dismissed_' + orderId, '1');
+        } catch(e) {}
         var stickyWidget = document.getElementById('stickyOngoingOrderWidget');
         if (stickyWidget) {
+            stickyWidget.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+            stickyWidget.style.opacity = '0';
+            stickyWidget.style.transform = 'translateY(16px)';
             setTimeout(function() {
-                stickyWidget.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
-                stickyWidget.style.opacity = '0';
-                stickyWidget.style.transform = 'translateY(20px)';
-                setTimeout(function() {
-                    if (stickyWidget && stickyWidget.parentNode) {
-                        stickyWidget.style.display = 'none';
-                    }
-                }, 500);
-            }, 5000);
+                if (stickyWidget) stickyWidget.style.display = 'none';
+            }, 300);
         }
-    })();
+    };
     </script>
     <?php endif; ?>
     
@@ -1222,9 +2320,9 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
 <?php else: ?>
 <header class="site-header standard-header">
     <div class="header-shell standard-top">
-        <a href="<?php echo $path_prefix; ?>index.php" class="logo-link">
+        <a href="<?php echo htmlspecialchars($nav_logo_href); ?>" class="logo-link">
             <span class="logo-icon"><img src="<?php echo $path_prefix; ?>assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block;"></span>
-            <span class="logo-copy"><span class="logo-title">Lechon Delights</span><span class="logo-sub">Marketplace</span></span>
+            <span class="logo-copy"><span class="logo-title">Lechon Delights</span><span class="logo-sub"><?php echo $is_rider_context ? 'Rider Portal' : 'Marketplace'; ?></span></span>
         </a>
         <?php if (!$is_auth_page): ?>
         <nav class="main-nav">
@@ -1240,26 +2338,34 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
         </nav>
         <div class="header-actions">
             <?php if ($is_logged_in_user): ?>
+            <button class="icon-btn cart-btn" id="cartToggle" onclick="location.href='<?php echo $path_prefix; ?>cart.php'"><i class="fas fa-shopping-cart"></i><span class="badge" id="cartBadge"><?php echo (int)$cart_count; ?></span></button>
+            <div class="notification-wrapper">
+                <button class="icon-btn"><i class="fas fa-bell"></i><span class="badge" id="notificationBadge" style="display:none;">0</span></button>
+                <div class="notification-dropdown" id="notificationDropdown"><div class="notification-header">Notifications</div><div class="notification-empty">No new notifications yet.</div></div>
+            </div>
             <div class="user-menu-wrapper">
-                <button class="icon-btn user-avatar-btn" aria-label="Open user menu">
+                <button class="icon-btn user-avatar-btn" aria-label="Open user menu" title="<?php echo htmlspecialchars($viewer_name !== '' ? $viewer_name : 'Profile Settings'); ?>">
                     <?php if ($viewer_profile_image_url !== ''): ?>
                     <img src="<?php echo htmlspecialchars($viewer_profile_image_url); ?>" alt="Profile picture" class="user-avatar-thumb">
                     <?php else: ?>
-                    <i class="fas fa-user-circle"></i>
+                    <span class="user-avatar-initial"><?php echo htmlspecialchars(strtoupper(substr($viewer_name !== '' ? $viewer_name : ($viewer_first_name !== '' ? $viewer_first_name : 'U'), 0, 1))); ?></span>
                     <?php endif; ?>
                 </button>
                 <div class="user-dropdown">
-                    <div class="user-dropdown-header"><div class="user-name"><?php echo htmlspecialchars($viewer_first_name); ?></div><?php if ($viewer_email !== ''): ?><div class="user-email"><?php echo htmlspecialchars($viewer_email); ?></div><?php endif; ?></div>
-                    <a href="<?php echo $path_prefix; ?>my_account.php" class="user-dropdown-item"><i class="fas fa-user"></i> My Profile</a>
-                    <a href="<?php echo $path_prefix; ?>my_account.php#addresses" class="user-dropdown-item"><i class="fas fa-address-book"></i> Address Book</a>
-                    <a href="<?php echo $path_prefix; ?>my_orders.php" class="user-dropdown-item"><i class="fas fa-shopping-bag"></i> My Orders</a>
-                    <a href="<?php echo $path_prefix; ?>help_center.php" class="user-dropdown-item"><i class="fas fa-life-ring"></i> Help Center</a>
+                    <div class="user-dropdown-header"><div class="user-name"><?php echo htmlspecialchars($viewer_name !== '' ? $viewer_name : $viewer_first_name); ?></div><?php if ($viewer_email !== ''): ?><div class="user-email"><?php echo htmlspecialchars($viewer_email); ?></div><?php endif; ?></div>
+                    <?php if ($is_rider_context): ?>
+                    <a href="<?php echo $path_prefix; ?>admin/logistics.php" class="user-dropdown-item" style="color:#b3261e; font-weight:700;"><i class="fas fa-motorcycle"></i> Delivery Rider Dashboard</a>
+                    <?php endif; ?>
+                    <a href="<?php echo $path_prefix; ?>my_account.php<?php echo $is_rider_context ? '?from=logistics' : ''; ?>" class="user-dropdown-item"><i class="fas fa-user-gear"></i> Profile Settings</a>
+                    <a href="<?php echo $path_prefix; ?>my_orders.php" class="user-dropdown-item"><i class="fas fa-shopping-bag"></i> Orders</a>
                     <?php if ($favorites_feature_enabled): ?>
-                    <a href="<?php echo $favorites_page_href; ?>" class="user-dropdown-item"><i class="fas fa-heart"></i> My Favorites</a>
+                    <a href="<?php echo $favorites_page_href; ?>" class="user-dropdown-item"><i class="fas fa-heart"></i> Favorites</a>
                     <?php endif; ?>
                     <?php if (!$is_shop_owner_or_partner): ?>
                     <a href="<?php echo $path_prefix; ?>franchise_application.php" class="user-dropdown-item"><i class="fas fa-store"></i> Apply for Business</a>
                     <?php endif; ?>
+                    <a href="javascript:void(0);" onclick="openCustomerTutorial(true)" class="user-dropdown-item"><i class="fas fa-compass"></i> Customer Guide</a>
+                    <a href="<?php echo $path_prefix; ?>help_center.php" class="user-dropdown-item"><i class="fas fa-life-ring"></i> Help Center</a>
                     <?php if (isset($_SESSION['account_type']) && $_SESSION['account_type'] === 'organization'): ?>
                     <a href="<?php echo $path_prefix; ?>subscription_plans.php" class="user-dropdown-item"><i class="fas fa-layer-group"></i> Subscription Plans</a>
                     <a href="<?php echo $path_prefix; ?>seller_products.php" class="user-dropdown-item"><i class="fas fa-box"></i> My Products</a>
@@ -1279,28 +2385,21 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
                 </div>
                 <?php endif; ?>
             <?php endif; ?>
-            <?php if ($favorites_feature_enabled): ?>
-            <a class="icon-btn" id="favoritesToggle" href="<?php echo $favorites_page_href; ?>" title="Favorites"><i class="far fa-heart"></i><span class="badge" id="favoritesBadge" style="display:none;">0</span></a>
-            <?php endif; ?>
-            <?php if ($is_customer_user): ?>
-            <button class="icon-btn" id="chatBtn" onclick="location.href='<?php echo $path_prefix; ?>help_center.php'" title="Help Center"><i class="fas fa-comment-dots"></i><span class="badge" id="chatBadge" style="display:none;">0</span></button>
-            <?php endif; ?>
-            <button class="icon-btn cart-btn" id="cartToggle" onclick="location.href='<?php echo $path_prefix; ?>cart.php'"><i class="fas fa-shopping-cart"></i><span class="badge" id="cartBadge"><?php echo (int)$cart_count; ?></span></button>
-            <button class="icon-btn mobile-toggle" id="mobileToggle"><i class="fas fa-bars"></i></button>
+            <button type="button" class="icon-btn mobile-toggle" id="mobileToggle2" onclick="openMobileNavSidebar(event)" aria-label="Open mobile menu"><i class="fas fa-bars"></i></button>
         </div>
         <?php endif; ?>
     </div>
 </header>
 <?php endif; ?>
 
-<div class="mobile-menu-overlay" id="mobileOverlay"></div>
+<div class="mobile-menu-overlay" id="mobileOverlay" onclick="closeMobileNavSidebar(event)"></div>
 <aside class="mobile-menu" id="mobileMenu">
     <div class="mobile-menu-header">
-        <a href="<?php echo $path_prefix; ?>index.php" class="logo-link" style="display:flex !important;">
+        <a href="<?php echo htmlspecialchars($nav_logo_href); ?>" class="logo-link" style="display:flex !important;">
             <span class="logo-icon" style="width:34px;height:34px;font-size:.88rem;"><img src="<?php echo $path_prefix; ?>assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block;"></span>
-            <span class="logo-copy"><span class="logo-title" style="font-size:0.98rem;">Lechon Delights</span><span class="logo-sub" style="font-size:0.58rem;">Marketplace</span></span>
+            <span class="logo-copy"><span class="logo-title" style="font-size:0.98rem;">Lechon Delights</span><span class="logo-sub" style="font-size:0.58rem;"><?php echo $is_rider_context ? 'Rider Portal' : 'Marketplace'; ?></span></span>
         </a>
-        <button class="mobile-menu-close" id="mobileMenuClose" aria-label="Close menu"><i class="fas fa-times"></i></button>
+        <button type="button" class="mobile-menu-close" id="mobileMenuClose" onclick="closeMobileNavSidebar(event)" aria-label="Close menu"><i class="fas fa-times"></i></button>
     </div>
     
     <?php if ($is_logged_in_user): ?>
@@ -1329,16 +2428,16 @@ if ($is_logged_in_user && isset($conn) && $conn instanceof mysqli) {
         <li><a href="<?php echo $path_prefix; ?>about.php" class="<?php echo $current_page === 'about' ? 'active' : ''; ?>"><i class="fas fa-book-open"></i> Our Story</a></li>
         <li><a href="<?php echo $path_prefix; ?>faq.php" class="<?php echo $current_page === 'faq' ? 'active' : ''; ?>"><i class="fas fa-circle-question"></i> FAQ</a></li>
         <?php if ($is_logged_in_user): ?>
-        <li><a href="<?php echo $path_prefix; ?>my_account.php"><i class="fas fa-user-circle"></i> My Profile</a></li>
-        <li><a href="<?php echo $path_prefix; ?>my_account.php#addresses"><i class="fas fa-address-book"></i> Address Book</a></li>
-        <li><a href="<?php echo $path_prefix; ?>my_orders.php"><i class="fas fa-bag-shopping"></i> My Orders</a></li>
+        <li><a href="<?php echo $path_prefix; ?>my_account.php"><i class="fas fa-user-gear"></i> Profile Settings</a></li>
+        <li><a href="<?php echo $path_prefix; ?>my_orders.php"><i class="fas fa-bag-shopping"></i> Orders</a></li>
         <?php if ($favorites_feature_enabled): ?>
-        <li><a href="<?php echo $favorites_page_href; ?>"><i class="fas fa-heart"></i> My Favorites</a></li>
+        <li><a href="<?php echo $favorites_page_href; ?>"><i class="fas fa-heart"></i> Favorites</a></li>
         <?php endif; ?>
-        <li><a href="<?php echo $path_prefix; ?>help_center.php"><i class="fas fa-life-ring"></i> Help Center</a></li>
         <?php if (!$is_shop_owner_or_partner): ?>
-        <li><a href="<?php echo $path_prefix; ?>franchise_application.php"><i class="fas fa-briefcase"></i> Partner with Us</a></li>
+        <li><a href="<?php echo $path_prefix; ?>franchise_application.php"><i class="fas fa-store"></i> Apply for Business</a></li>
         <?php endif; ?>
+        <li><a href="javascript:void(0);" onclick="openCustomerTutorial(true)"><i class="fas fa-compass"></i> Customer Guide</a></li>
+        <li><a href="<?php echo $path_prefix; ?>help_center.php"><i class="fas fa-life-ring"></i> Help Center</a></li>
         <?php if (isset($_SESSION['account_type']) && $_SESSION['account_type'] === 'organization'): ?>
         <li><a href="<?php echo $path_prefix; ?>subscription_plans.php" class="<?php echo $current_page === 'subscription_plans' ? 'active' : ''; ?>"><i class="fas fa-layer-group"></i> Subscription Plans</a></li>
         <li><a href="<?php echo $path_prefix; ?>seller_products.php"><i class="fas fa-box"></i> My Products</a></li>
@@ -1436,9 +2535,55 @@ document.addEventListener('DOMContentLoaded', function () {
     const mobileOverlay = document.getElementById('mobileOverlay');
     const mobileMenuClose = document.getElementById('mobileMenuClose');
 
+    // Global Dark / Light Mode Theme Manager
+    window.applyMarketThemeUI = function (isDark) {
+        if (isDark) {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            document.documentElement.classList.add('dark-mode');
+            if (document.body) {
+                document.body.classList.add('dark-mode');
+            }
+        } else {
+            document.documentElement.setAttribute('data-theme', 'light');
+            document.documentElement.classList.remove('dark-mode');
+            if (document.body) {
+                document.body.classList.remove('dark-mode');
+            }
+        }
+        try {
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            document.cookie = "theme=" + (isDark ? "dark" : "light") + "; path=/; max-age=31536000; SameSite=Lax";
+        } catch (e) {}
+
+        document.querySelectorAll('#marketThemeToggler, .market-theme-btn, #themeToggler, .theme-toggler').forEach(function(btn) {
+            const icon = btn.querySelector('i');
+            if (icon) {
+                icon.className = isDark ? 'fas fa-sun' : 'fas fa-moon';
+            }
+            btn.setAttribute('title', isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode');
+        });
+        window.dispatchEvent(new CustomEvent('themeChanged', { detail: { isDark: isDark } }));
+    };
+
+    const storedTheme = localStorage.getItem('theme') || (document.cookie.match(/(?:^|;\s*)theme=([^;]*)/) || [])[1];
+    window.applyMarketThemeUI(storedTheme === 'dark');
+
+    document.addEventListener('click', function (e) {
+        const toggler = e.target.closest('#marketThemeToggler, .market-theme-btn, #themeToggler, .theme-toggler');
+        if (!toggler) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        const isCurrentlyDark = document.documentElement.classList.contains('dark-mode') || document.body.classList.contains('dark-mode');
+        window.applyMarketThemeUI(!isCurrentlyDark);
+    }, true);
+
     const showSwalError = function (message, title) {
         const alertTitle = title || 'Error';
         const alertMessage = message || 'Please check your input and try again.';
+        if (window.showToast) {
+            window.showToast((alertTitle !== 'Error' ? alertTitle + ': ' : '') + alertMessage, 'error');
+            return;
+        }
         if (typeof Swal !== 'undefined') {
             Swal.fire({
                 icon: 'error',
@@ -1561,6 +2706,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const isLoggedInUser = <?php echo $is_logged_in_user ? 'true' : 'false'; ?>;
     const marketSearchBaseUrl = <?php echo json_encode($path_prefix . 'index.php'); ?>;
     const favoritesApiUrl = <?php echo json_encode($favorites_api_href); ?>;
+    const favoritesPageUrl = <?php echo json_encode($favorites_page_href); ?>;
     const favoritesFeatureEnabled = <?php echo $favorites_feature_enabled ? 'true' : 'false'; ?>;
     const favoritesBadge = document.getElementById('favoritesBadge');
     const googleMapsApiKey = <?php echo json_encode((string)$google_maps_api_key); ?>;
@@ -1594,17 +2740,43 @@ document.addEventListener('DOMContentLoaded', function () {
         return { lat: lat, lng: lng };
     };
 
-    const buildMarketAddressPayload = function (streetAddress, city, postalCode) {
+    const getCityCoordinatesFallback = function (cityName) {
+        const norm = String(cityName || '').toLowerCase();
+        if (norm.includes('dasma') || norm.includes('salawag')) return { lat: 14.3294, lng: 120.9367 };
+        if (norm.includes('bacoor') || norm.includes('habay') || norm.includes('molino')) return { lat: 14.4445, lng: 120.9439 };
+        if (norm.includes('imus') || norm.includes('anabu') || norm.includes('poblacion')) return { lat: 14.4296, lng: 120.9367 };
+        if (norm.includes('tagaytay')) return { lat: 14.1153, lng: 120.9621 };
+        if (norm.includes('trias') || norm.includes('manggahan') || norm.includes('gentri')) return { lat: 14.2818, lng: 120.8800 };
+        if (norm.includes('silang')) return { lat: 14.2307, lng: 120.9749 };
+        if (norm.includes('trece')) return { lat: 14.2820, lng: 120.8670 };
+        if (norm.includes('kawit')) return { lat: 14.4450, lng: 120.9020 };
+        if (norm.includes('rosario')) return { lat: 14.4167, lng: 120.8500 };
+        if (norm.includes('tanza')) return { lat: 14.3940, lng: 120.8540 };
+        if (norm.includes('naic')) return { lat: 14.3167, lng: 120.7667 };
+        if (norm.includes('carmona')) return { lat: 14.3167, lng: 121.0500 };
+        return { lat: 14.3294, lng: 120.9367 };
+    };
+
+    const buildMarketAddressPayload = function (streetAddress, city, postalCode, latitude, longitude) {
         const street = String(streetAddress || '').trim();
         const cityName = String(city || '').trim();
         const zip = normalizePostalCode(postalCode);
         const cityWithZip = [cityName, zip].filter(Boolean).join(' ');
         const fullAddress = [street, cityWithZip].filter(Boolean).join(', ');
+        let lat = (latitude !== undefined && latitude !== null && latitude !== '') ? parseFloat(latitude) : null;
+        let lng = (longitude !== undefined && longitude !== null && longitude !== '') ? parseFloat(longitude) : null;
+        if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat === 0 || lng === 0) {
+            const fallback = getCityCoordinatesFallback(cityName || street);
+            lat = fallback.lat;
+            lng = fallback.lng;
+        }
         return {
             street_address: street,
             city: cityName,
             postal_code: zip,
-            full_address: fullAddress
+            full_address: fullAddress,
+            latitude: lat,
+            longitude: lng
         };
     };
 
@@ -1779,10 +2951,13 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     const persistMarketAddressPayload = function (payload) {
-        const normalized = buildMarketAddressPayload(payload?.street_address, payload?.city, payload?.postal_code);
+        const lat = payload?.latitude ?? payload?.lat ?? null;
+        const lng = payload?.longitude ?? payload?.lng ?? null;
+        const normalized = buildMarketAddressPayload(payload?.street_address, payload?.city, payload?.postal_code, lat, lng);
         try {
             localStorage.setItem(marketAddressStorageKey, JSON.stringify(normalized));
             localStorage.setItem('market_address', normalized.full_address);
+            window.dispatchEvent(new CustomEvent('marketAddressChanged', { detail: normalized }));
         } catch (error) {
             // Best-effort persistence only.
         }
@@ -1806,10 +2981,32 @@ document.addEventListener('DOMContentLoaded', function () {
         return normalized;
     };
 
+    const formatHeaderLocationDisplay = function (address, maxLength) {
+        maxLength = maxLength || 38;
+        if (!address || address === 'Select your address') {
+            return 'Select your address';
+        }
+        const trimmed = String(address).trim();
+        if (trimmed.length > maxLength) {
+            let cut = trimmed.slice(0, maxLength);
+            const lastComma = cut.lastIndexOf(',');
+            if (lastComma > 18) {
+                cut = cut.slice(0, lastComma);
+            }
+            return cut.replace(/,\s*$/, '').trim() + ' etc....';
+        }
+        return trimmed;
+    };
+
     const renderMarketAddressDisplay = function (payload) {
         if (!marketAddressDisplay) return;
         const normalized = buildMarketAddressPayload(payload?.street_address, payload?.city, payload?.postal_code);
-        marketAddressDisplay.textContent = normalized.full_address || 'Select your address';
+        const fullAddress = normalized.full_address || 'Select your address';
+        marketAddressDisplay.textContent = formatHeaderLocationDisplay(fullAddress);
+        marketAddressDisplay.title = fullAddress;
+        if (marketAddressToggle) {
+            marketAddressToggle.title = fullAddress;
+        }
     };
 
     const applyAddress = function () {
@@ -2289,8 +3486,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     };
 
-    const applyQuickAddressSelection = function (street, city) {
-        const payload = buildMarketAddressPayload(street || '', city || 'Cavite', '');
+    const applyQuickAddressSelection = function (street, city, lat, lng) {
+        const payload = buildMarketAddressPayload(street || '', city || 'Cavite', '', lat, lng);
         fillMarketAddressInputs(payload, { includeMapFields: true });
         const stored = persistMarketAddressPayload(payload);
         renderMarketAddressDisplay(stored);
@@ -2302,8 +3499,9 @@ document.addEventListener('DOMContentLoaded', function () {
         pill.addEventListener('click', function () {
             const city = pill.dataset.city || 'Cavite';
             const street = pill.dataset.street || (city + ', Cavite');
+            const fallback = getCityCoordinatesFallback(city);
             if (marketQuickStreetInput) marketQuickStreetInput.value = street;
-            applyQuickAddressSelection(street, city);
+            applyQuickAddressSelection(street, city, fallback.lat, fallback.lng);
         });
     });
 
@@ -2387,7 +3585,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 marketLocateMeBtn.disabled = false;
                 marketLocateMeBtn.innerHTML = originalBtnHtml;
 
-                const finalPayload = resolvedPayload || { street_address: 'General Trias, Cavite', city: 'General Trias', postal_code: '' };
+                if (!resolvedPayload) {
+                    if (marketQuickStreetInput) {
+                        marketQuickStreetInput.focus();
+                        marketQuickStreetInput.placeholder = 'Please enter your address manually...';
+                    }
+                    return;
+                }
+
+                const finalPayload = resolvedPayload;
                 if (marketQuickStreetInput) {
                     marketQuickStreetInput.value = finalPayload.street_address;
                 }
@@ -2398,12 +3604,10 @@ document.addEventListener('DOMContentLoaded', function () {
             }).catch(function (error) {
                 marketLocateMeBtn.disabled = false;
                 marketLocateMeBtn.innerHTML = originalBtnHtml;
-                const defaultPayload = { street_address: 'General Trias, Cavite', city: 'General Trias', postal_code: '' };
-                if (marketQuickStreetInput) marketQuickStreetInput.value = defaultPayload.street_address;
-                fillMarketAddressInputs(defaultPayload, { includeMapFields: true });
-                const storedPayload = persistMarketAddressPayload(defaultPayload);
-                renderMarketAddressDisplay(storedPayload);
-                closeAddressPopover();
+                if (marketQuickStreetInput) {
+                    marketQuickStreetInput.focus();
+                    marketQuickStreetInput.placeholder = 'Location access denied. Type address manually...';
+                }
             });
         });
     }
@@ -2650,6 +3854,44 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     };
 
+    const checkStockReminders = async function () {
+        if (!favoritesFeatureEnabled || !favoritesApiUrl) return;
+        if (sessionStorage.getItem('fav_stock_reminder_shown') === '1') return;
+        try {
+            const response = await fetch(favoritesApiUrl + '?action=in_stock_reminders', {
+                method: 'GET',
+                headers: { 'Accept': 'application/json' }
+            });
+            if (!response.ok) return;
+            const payload = await response.json();
+            if (payload && payload.success && payload.count > 0) {
+                sessionStorage.setItem('fav_stock_reminder_shown', '1');
+                if (typeof Swal !== 'undefined' && Swal) {
+                    const firstItem = payload.items[0];
+                    const itemText = payload.count === 1
+                        ? `"${firstItem.name}" is back in stock!`
+                        : `${payload.count} of your favorite dishes are back in stock!`;
+                    Swal.fire({
+                        toast: true,
+                        position: 'top-end',
+                        icon: 'success',
+                        title: '⚡ Favorite Stock Alert',
+                        text: itemText,
+                        showConfirmButton: true,
+                        confirmButtonText: 'View Favorites',
+                        confirmButtonColor: '#15803d',
+                        timer: 8000,
+                        timerProgressBar: true
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            window.location.href = favoritesPageUrl;
+                        }
+                    });
+                }
+            }
+        } catch (e) {}
+    };
+
     const requestFavoritesCount = async function () {
         if (!favoritesFeatureEnabled || !favoritesApiUrl) return;
         try {
@@ -2661,6 +3903,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const payload = await response.json();
             if (!payload || !payload.success) return;
             updateFavoritesBadge(payload.count || 0);
+            checkStockReminders();
         } catch (error) {
             // Ignore transient count fetch failures.
         }
@@ -2743,10 +3986,193 @@ document.addEventListener('DOMContentLoaded', function () {
         const favoriteButton = event.target.closest('[data-favorite-toggle]');
         if (!favoriteButton) return;
         event.preventDefault();
+        event.stopPropagation();
         toggleFavorite(favoriteButton);
     });
 
     requestFavoritesCount();
+
+    // User Profile Menu & Notifications Dropdown toggles
+    const userMenuWrappers = Array.from(document.querySelectorAll('.user-menu-wrapper'));
+    const notificationWrappers = Array.from(document.querySelectorAll('.notification-wrapper'));
+    const notificationDropdown = document.getElementById('notificationDropdown');
+    const notificationBadge = document.getElementById('notificationBadge');
+    const notificationApiPath = <?php echo json_encode($path_prefix . 'api/get_notifications.php'); ?>;
+
+    function escapeNotificationText(value) {
+        return String(value ?? '').replace(/[&<>'"]/g, function (character) {
+            return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character];
+        });
+    }
+
+    function getNotificationStatus(notification) {
+        const type = String(notification.type || '').toLowerCase();
+        if (type.includes('approved')) return { label: 'APPROVED', className: 'is-approved', icon: 'fa-circle-check' };
+        if (type.includes('rejected')) return { label: 'REJECTED', className: 'is-rejected', icon: 'fa-circle-xmark' };
+        if (type.includes('incomplete')) return { label: 'INCOMPLETE', className: 'is-incomplete', icon: 'fa-triangle-exclamation' };
+        return { label: 'UPDATE', className: 'is-default', icon: 'fa-circle-info' };
+    }
+
+    let userNotifications = [];
+    let userNotificationPage = 0;
+    const userNotificationPageSize = 3;
+
+    function renderUserNotifications(notifications) {
+        if (!notificationDropdown) return;
+        userNotifications = Array.isArray(notifications) ? notifications : [];
+        const totalPages = Math.max(1, Math.ceil(userNotifications.length / userNotificationPageSize));
+        userNotificationPage = Math.min(Math.max(0, userNotificationPage), totalPages - 1);
+        if (userNotifications.length === 0) {
+            notificationDropdown.innerHTML = '<div class="notification-header">Notifications</div><div class="notification-empty">No new notifications yet.</div>';
+            return;
+        }
+
+        const pageStart = userNotificationPage * userNotificationPageSize;
+        const pageNotifications = userNotifications.slice(pageStart, pageStart + userNotificationPageSize);
+        const html = pageNotifications.map(function (notification) {
+            const status = getNotificationStatus(notification);
+            const rawMessage = String(notification.message || '');
+            const reasonMatch = rawMessage.match(/(?:^|\n)Reason:\s*([^\n]*)/i);
+            const businessMatch = rawMessage.match(/(?:^|\n)Business:\s*([^\n]*)/i);
+            const reason = reasonMatch ? reasonMatch[1].trim() : rawMessage.replace(/^Status:\s*[^\n]*\n?/i, '').trim();
+            const business = businessMatch ? businessMatch[1].trim() : '';
+            const relatedId = parseInt(notification.related_id || '0', 10) || 0;
+            const target = relatedId > 0 ? 'my_account.php#profile' : 'my_account.php';
+            const createdAt = notification.created_at ? new Date(String(notification.created_at).replace(' ', 'T')) : null;
+            const timeLabel = createdAt && !Number.isNaN(createdAt.getTime()) ? createdAt.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '';
+            return '<a href="' + target + '" class="notification-status-item js-user-notification" data-notification-id="' + (parseInt(notification.id || '0', 10) || 0) + '">' +
+                '<div class="notification-status-line ' + status.className + '"><i class="fas ' + status.icon + '"></i><span>' + status.label + '</span></div>' +
+                '<div class="notification-reason"><strong>Reason:</strong> ' + escapeNotificationText(reason || 'No additional reason provided.') + '</div>' +
+                (business ? '<div class="notification-business">' + escapeNotificationText(business) + '</div>' : '') +
+                (timeLabel ? '<time class="notification-time">' + escapeNotificationText(timeLabel) + '</time>' : '') +
+                '</a>';
+        }).join('');
+        notificationDropdown.innerHTML = '<div class="notification-header">Notifications</div><div class="notification-list">' + html + '</div>' +
+            '<div class="notification-pagination">' +
+            '<button type="button" class="notification-page-btn js-notification-prev" aria-label="Previous notifications"' + (userNotificationPage === 0 ? ' disabled' : '') + '><i class="fas fa-chevron-left"></i></button>' +
+            '<span class="notification-page-label">' + (userNotificationPage + 1) + ' / ' + totalPages + '</span>' +
+            '<button type="button" class="notification-page-btn js-notification-next" aria-label="Next notifications"' + (userNotificationPage >= totalPages - 1 ? ' disabled' : '') + '><i class="fas fa-chevron-right"></i></button>' +
+            '</div>';
+    }
+
+    function loadUserNotifications() {
+        if (!notificationDropdown || !notificationApiPath) return;
+        fetch(notificationApiPath + '?action=get_unread', { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+            .then(function (response) { return response.json(); })
+            .then(function (payload) {
+                const notifications = Array.isArray(payload.notifications) ? payload.notifications : [];
+                renderUserNotifications(notifications);
+                if (notificationBadge) {
+                    notificationBadge.textContent = notifications.length > 99 ? '99+' : String(notifications.length);
+                    notificationBadge.style.display = notifications.length > 0 ? 'inline-flex' : 'none';
+                }
+            })
+            .catch(function (error) { console.error('User notification load error:', error); });
+    }
+
+    if (notificationDropdown) {
+        loadUserNotifications();
+        window.setInterval(loadUserNotifications, 30000);
+        notificationDropdown.addEventListener('click', function (event) {
+            const previousButton = event.target.closest('.js-notification-prev');
+            const nextButton = event.target.closest('.js-notification-next');
+            if (previousButton || nextButton) {
+                event.preventDefault();
+                if (previousButton && userNotificationPage > 0) userNotificationPage--;
+                if (nextButton && userNotificationPage < Math.ceil(userNotifications.length / userNotificationPageSize) - 1) userNotificationPage++;
+                renderUserNotifications(userNotifications);
+                return;
+            }
+            const notificationLink = event.target.closest('.js-user-notification');
+            if (!notificationLink) return;
+            const notificationId = parseInt(notificationLink.dataset.notificationId || '0', 10);
+            if (notificationId > 0) {
+                fetch(notificationApiPath + '?action=mark_read&id=' + encodeURIComponent(notificationId), { credentials: 'same-origin' }).catch(function () {});
+            }
+        });
+    }
+
+    const closeAllUserMenus = function () {
+        userMenuWrappers.forEach(function (wrap) {
+            wrap.classList.remove('is-open', 'active');
+            const btn = wrap.querySelector('.user-avatar-btn');
+            if (btn) btn.setAttribute('aria-expanded', 'false');
+        });
+    };
+
+    const closeAllNotificationMenus = function () {
+        notificationWrappers.forEach(function (wrap) {
+            wrap.classList.remove('is-open', 'active');
+            const btn = wrap.querySelector('.icon-btn');
+            if (btn) btn.setAttribute('aria-expanded', 'false');
+        });
+    };
+
+    document.addEventListener('click', function (event) {
+        const userAvatarBtn = event.target.closest('.user-avatar-btn');
+        if (userAvatarBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            const wrapper = userAvatarBtn.closest('.user-menu-wrapper');
+            if (wrapper) {
+                const isCurrentlyOpen = wrapper.classList.contains('is-open') || wrapper.classList.contains('active');
+                closeAllUserMenus();
+                closeAllNotificationMenus();
+                if (!isCurrentlyOpen) {
+                    wrapper.classList.add('is-open', 'active');
+                    userAvatarBtn.setAttribute('aria-expanded', 'true');
+                }
+            }
+            return;
+        }
+
+        const notifBtn = event.target.closest('.notification-wrapper > .icon-btn');
+        if (notifBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            const wrapper = notifBtn.closest('.notification-wrapper');
+            if (wrapper) {
+                const isCurrentlyOpen = wrapper.classList.contains('is-open') || wrapper.classList.contains('active');
+                closeAllUserMenus();
+                closeAllNotificationMenus();
+                if (!isCurrentlyOpen) {
+                    wrapper.classList.add('is-open', 'active');
+                    notifBtn.setAttribute('aria-expanded', 'true');
+                }
+            }
+            return;
+        }
+
+        let clickedInsideUserMenu = false;
+        userMenuWrappers.forEach(function (wrap) {
+            if (wrap.contains(event.target)) {
+                clickedInsideUserMenu = true;
+                if (event.target.closest('.user-dropdown-item')) {
+                    closeAllUserMenus();
+                }
+            }
+        });
+        if (!clickedInsideUserMenu) {
+            closeAllUserMenus();
+        }
+
+        let clickedInsideNotifMenu = false;
+        notificationWrappers.forEach(function (wrap) {
+            if (wrap.contains(event.target)) {
+                clickedInsideNotifMenu = true;
+            }
+        });
+        if (!clickedInsideNotifMenu) {
+            closeAllNotificationMenus();
+        }
+    });
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') {
+            closeAllUserMenus();
+            closeAllNotificationMenus();
+        }
+    });
 
     document.addEventListener('click', function (event) {
         if (marketAddressWrap && marketAddressWrap.classList.contains('is-open')) {

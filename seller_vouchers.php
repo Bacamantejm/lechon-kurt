@@ -30,33 +30,50 @@ function getLatestApprovedFranchiseForVoucherPage($conn, $user_id) {
 }
 
 $user_id = (int)$_SESSION['user_id'];
-$user_stmt = mysqli_prepare($conn, "SELECT id, account_type, business_name FROM users WHERE id = ? LIMIT 1");
+$user_stmt = mysqli_prepare($conn, "SELECT id, user_type, account_type, business_name, full_name FROM users WHERE id = ? LIMIT 1");
 mysqli_stmt_bind_param($user_stmt, "i", $user_id);
 mysqli_stmt_execute($user_stmt);
 $user_result = mysqli_stmt_get_result($user_stmt);
 $user_info = $user_result ? mysqli_fetch_assoc($user_result) : null;
 mysqli_stmt_close($user_stmt);
 
-$has_seller_access = $user_info && (($user_info['account_type'] ?? '') === 'organization');
-if (!$has_seller_access) {
-    $approved = getLatestApprovedFranchiseForVoucherPage($conn, $user_id);
-    if ($approved) {
-        $business_name = trim((string)($approved['business_name'] ?? ''));
-        $business_type = trim((string)($approved['business_type'] ?? ''));
-
-        $promote_query = "UPDATE users
-                          SET account_type = 'organization',
-                              business_name = COALESCE(NULLIF(business_name, ''), ?),
-                              business_type = COALESCE(NULLIF(business_type, ''), ?)
-                          WHERE id = ?";
-        $promote_stmt = mysqli_prepare($conn, $promote_query);
-        if ($promote_stmt) {
-            mysqli_stmt_bind_param($promote_stmt, "ssi", $business_name, $business_type, $user_id);
-            mysqli_stmt_execute($promote_stmt);
-            mysqli_stmt_close($promote_stmt);
-        }
-        $_SESSION['account_type'] = 'organization';
+$has_seller_access = false;
+if ($user_info) {
+    if (($user_info['account_type'] ?? '') === 'organization' || ($user_info['user_type'] ?? '') === 'admin' || ($user_info['user_type'] ?? '') === 'employee') {
         $has_seller_access = true;
+    } else {
+        $approved = getLatestApprovedFranchiseForVoucherPage($conn, $user_id);
+        if ($approved) {
+            $business_name = trim((string)($approved['business_name'] ?? ''));
+            $business_type = trim((string)($approved['business_type'] ?? ''));
+
+            $promote_query = "UPDATE users
+                              SET account_type = 'organization',
+                                  business_name = COALESCE(NULLIF(business_name, ''), ?),
+                                  business_type = COALESCE(NULLIF(business_type, ''), ?)
+                              WHERE id = ?";
+            $promote_stmt = mysqli_prepare($conn, $promote_query);
+            if ($promote_stmt) {
+                mysqli_stmt_bind_param($promote_stmt, "ssi", $business_name, $business_type, $user_id);
+                mysqli_stmt_execute($promote_stmt);
+                mysqli_stmt_close($promote_stmt);
+            }
+            $_SESSION['account_type'] = 'organization';
+            $has_seller_access = true;
+        } else {
+            // Check if user has any assigned products in catalog
+            $prod_chk = mysqli_prepare($conn, "SELECT 1 FROM products WHERE seller_id = ? LIMIT 1");
+            if ($prod_chk) {
+                mysqli_stmt_bind_param($prod_chk, "i", $user_id);
+                mysqli_stmt_execute($prod_chk);
+                $prod_res = mysqli_stmt_get_result($prod_chk);
+                if ($prod_res && mysqli_num_rows($prod_res) > 0) {
+                    $has_seller_access = true;
+                }
+                if ($prod_res) mysqli_free_result($prod_res);
+                mysqli_stmt_close($prod_chk);
+            }
+        }
     }
 }
 

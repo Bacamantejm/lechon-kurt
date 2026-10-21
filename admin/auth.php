@@ -4,6 +4,7 @@
 if (!function_exists('hasPermission')) {
     require_once __DIR__ . '/../includes/rbac.php';
 }
+require_once __DIR__ . '/../includes/SubscriptionAccessService.php';
 
 /**
  * Ensure session exists before reading/writing auth state.
@@ -243,15 +244,32 @@ function getFranchiseSellerScopeOwnerId($conn, $user_id) {
         return $cache[$user_id];
     }
 
+    // 1. Direct check: Is this user a registered store owner, business owner, or approved franchise partner?
     $query = "SELECT u.id
               FROM users u
+              LEFT JOIN roles r ON u.role_id = r.id
               WHERE u.id = ?
-                AND u.account_type = 'organization'
-                AND EXISTS (
-                    SELECT 1
-                    FROM franchise_applications fa
-                    WHERE fa.user_id = u.id
-                      AND fa.status = 'approved'
+                AND (
+                    -- Approved franchise application
+                    EXISTS (
+                        SELECT 1
+                        FROM franchise_applications fa
+                        WHERE fa.user_id = u.id
+                          AND fa.status = 'approved'
+                    )
+                    -- Or registered owner in store_locations
+                    OR EXISTS (
+                        SELECT 1
+                        FROM store_locations sl
+                        WHERE sl.owner_user_id = u.id
+                    )
+                    -- Or shop owner / business owner role
+                    OR LOWER(TRIM(COALESCE(r.name, ''))) IN ('business_owner', 'partner_owner', 'store_owner', 'shop_owner')
+                )
+                -- Super admins are platform administrators, not single-store scoped unless explicitly owning a store
+                AND (
+                    LOWER(TRIM(COALESCE(r.name, ''))) != 'super_admin'
+                    OR EXISTS (SELECT 1 FROM store_locations sl WHERE sl.owner_user_id = u.id)
                 )
               LIMIT 1";
     $stmt = mysqli_prepare($conn, $query);
@@ -268,20 +286,28 @@ function getFranchiseSellerScopeOwnerId($conn, $user_id) {
         return $cache[$user_id] = (int)$row['id'];
     }
 
-    // Partner-managed sub-users inherit the partner owner's seller scope.
+    // 2. Partner/Shop-managed sub-users inherit the partner/shop owner's seller scope.
     if (adminAuthTableExists($conn, 'partner_user_links')
         && adminAuthColumnExists($conn, 'partner_user_links', 'owner_user_id')
         && adminAuthColumnExists($conn, 'partner_user_links', 'managed_user_id')) {
         $link_query = "SELECT pul.owner_user_id
                        FROM partner_user_links pul
                        INNER JOIN users owner_u ON owner_u.id = pul.owner_user_id
+                       LEFT JOIN roles owner_r ON owner_u.role_id = owner_r.id
                        WHERE pul.managed_user_id = ?
-                         AND owner_u.account_type = 'organization'
-                         AND EXISTS (
-                             SELECT 1
-                             FROM franchise_applications fa
-                             WHERE fa.user_id = pul.owner_user_id
-                               AND fa.status = 'approved'
+                         AND (
+                             EXISTS (
+                                 SELECT 1
+                                 FROM franchise_applications fa
+                                 WHERE fa.user_id = pul.owner_user_id
+                                   AND fa.status = 'approved'
+                             )
+                             OR EXISTS (
+                                 SELECT 1
+                                 FROM store_locations sl
+                                 WHERE sl.owner_user_id = pul.owner_user_id
+                             )
+                             OR LOWER(TRIM(COALESCE(owner_r.name, ''))) IN ('business_owner', 'partner_owner', 'store_owner', 'shop_owner')
                          )
                        LIMIT 1";
         $link_stmt = mysqli_prepare($conn, $link_query);
@@ -298,7 +324,7 @@ function getFranchiseSellerScopeOwnerId($conn, $user_id) {
         }
     }
 
-    // Fallback: infer partner owner scope from role ownership (`roles.owner_user_id`).
+    // 3. Fallback: infer partner owner scope from role ownership (`roles.owner_user_id`).
     // This keeps tenant isolation working for partner-managed staff accounts
     // even when partner_user_links rows were not created historically.
     if (adminAuthColumnExists($conn, 'roles', 'owner_user_id') && adminAuthColumnExists($conn, 'users', 'role_id')) {
@@ -306,14 +332,22 @@ function getFranchiseSellerScopeOwnerId($conn, $user_id) {
                              FROM users managed_u
                              INNER JOIN roles r ON r.id = managed_u.role_id
                              INNER JOIN users owner_u ON owner_u.id = r.owner_user_id
+                             LEFT JOIN roles owner_r ON owner_u.role_id = owner_r.id
                              WHERE managed_u.id = ?
                                AND r.owner_user_id IS NOT NULL
-                               AND owner_u.account_type = 'organization'
-                               AND EXISTS (
-                                   SELECT 1
-                                   FROM franchise_applications fa
-                                   WHERE fa.user_id = r.owner_user_id
-                                     AND fa.status = 'approved'
+                               AND (
+                                   EXISTS (
+                                       SELECT 1
+                                       FROM franchise_applications fa
+                                       WHERE fa.user_id = r.owner_user_id
+                                         AND fa.status = 'approved'
+                                   )
+                                   OR EXISTS (
+                                       SELECT 1
+                                       FROM store_locations sl
+                                       WHERE sl.owner_user_id = r.owner_user_id
+                                   )
+                                   OR LOWER(TRIM(COALESCE(owner_r.name, ''))) IN ('business_owner', 'partner_owner', 'store_owner', 'shop_owner')
                                )
                              LIMIT 1";
         $role_owner_stmt = mysqli_prepare($conn, $role_owner_query);
@@ -447,23 +481,38 @@ if (!function_exists('getFranchiseScopedOrderExistsSql')) {
             return '1=0';
         }
 
-        $seller_scope_condition = getFranchiseSellerScopeConditionSql($conn, 'p_scope.seller_id', $seller_scope_owner_id);
-        if ($seller_scope_condition === '1=0') {
+        $owner_id = (int)$seller_scope_owner_id;
+        if ($owner_id <= 0) {
             return '1=0';
         }
 
-        return "EXISTS (
+        $seller_scope_condition = getFranchiseSellerScopeConditionSql($conn, 'p_scope.seller_id', $owner_id);
+
+        return "((EXISTS (
             SELECT 1
             FROM order_items oi_scope
             INNER JOIN products p_scope
                 ON (
-                    oi_scope.product_id = p_scope.product_id
-                    OR oi_scope.product_id = CAST(p_scope.id AS CHAR)
+                    oi_scope.product_id COLLATE utf8mb4_general_ci = p_scope.product_id COLLATE utf8mb4_general_ci
+                    OR oi_scope.product_id COLLATE utf8mb4_general_ci = CAST(p_scope.id AS CHAR) COLLATE utf8mb4_general_ci
                     OR CAST(oi_scope.product_id AS UNSIGNED) = p_scope.id
                 )
             WHERE oi_scope.order_id = {$order_id_expr}
               AND {$seller_scope_condition}
-        )";
+        )) OR (EXISTS (
+            SELECT 1
+            FROM orders o_scope
+            WHERE o_scope.id = {$order_id_expr}
+              AND (
+                  o_scope.seller_id = {$owner_id}
+                  OR o_scope.store_id IN (SELECT store_id FROM store_locations WHERE owner_user_id = {$owner_id})
+                  OR o_scope.pickup_location IN (SELECT store_id FROM store_locations WHERE owner_user_id = {$owner_id})
+                  OR (
+                      o_scope.special_instructions IS NOT NULL 
+                      AND o_scope.special_instructions LIKE CONCAT('%', (SELECT store_name FROM store_locations WHERE owner_user_id = {$owner_id} LIMIT 1), '%')
+                  )
+              )
+        )))";
     }
 }
 
@@ -482,23 +531,38 @@ if (!function_exists('getFranchiseScopedPreOrderExistsSql')) {
             return '1=0';
         }
 
-        $seller_scope_condition = getFranchiseSellerScopeConditionSql($conn, 'p_scope.seller_id', $seller_scope_owner_id);
-        if ($seller_scope_condition === '1=0') {
+        $owner_id = (int)$seller_scope_owner_id;
+        if ($owner_id <= 0) {
             return '1=0';
         }
 
-        return "EXISTS (
+        $seller_scope_condition = getFranchiseSellerScopeConditionSql($conn, 'p_scope.seller_id', $owner_id);
+
+        return "((EXISTS (
             SELECT 1
             FROM pre_orders po_scope
             INNER JOIN products p_scope
                 ON (
                     po_scope.product_id = p_scope.id
-                    OR CAST(po_scope.product_id AS CHAR) = p_scope.product_id
+                    OR CAST(po_scope.product_id AS CHAR) COLLATE utf8mb4_general_ci = p_scope.product_id COLLATE utf8mb4_general_ci
                     OR CAST(po_scope.product_id AS UNSIGNED) = p_scope.id
                 )
             WHERE po_scope.id = {$pre_order_id_expr}
               AND {$seller_scope_condition}
-        )";
+        )) OR (EXISTS (
+            SELECT 1
+            FROM pre_orders po_scope
+            WHERE po_scope.id = {$pre_order_id_expr}
+              AND EXISTS (
+                  SELECT 1 FROM store_locations sl
+                  WHERE sl.owner_user_id = {$owner_id}
+                    AND (
+                        po_scope.pickup_location LIKE CONCAT('%', sl.store_name, '%')
+                        OR po_scope.pickup_location LIKE CONCAT('%', sl.city, '%')
+                        OR (po_scope.special_instructions IS NOT NULL AND po_scope.special_instructions LIKE CONCAT('%', sl.store_name, '%'))
+                    )
+              )
+        )))";
     }
 }
 
@@ -918,16 +982,21 @@ function getAdminModuleByPage($page_name) {
         'orders.php' => 'orders',
         'get_order_details.php' => 'orders',
         'reviews.php' => 'orders',
+        'cancellations.php' => 'orders',
+        'refunds.php' => 'orders',
         'preorders.php' => 'preorders',
         'get_preorder_details.php' => 'preorders',
+        'preorder_schedule.php' => 'preorders',
         'logistics.php' => 'logistics',
         'logistics_settings.php' => 'logistics',
         'assign_driver.php' => 'logistics',
         'cancel_delivery.php' => 'logistics',
         'update_delivery_status.php' => 'logistics',
         'ajax_get_driver_status.php' => 'logistics',
+        'ajax_accept_delivery.php' => 'logistics',
         'products.php' => 'products',
         'vouchers.php' => 'products',
+        'seller_vouchers.php' => 'products',
         'inventory.php' => 'inventory',
         'get_inventory_details.php' => 'inventory',
         'get_inventory_history.php' => 'inventory',
@@ -1098,7 +1167,8 @@ function enforcePartnerRoleScopedPageAccess($conn, $user_id, $current_page) {
 
     $partner_scope_owner_id = (int)(getFranchiseSellerScopeOwnerId($conn, $user_id) ?? 0);
     $is_partner_owner_admin = $partner_scope_owner_id > 0 && $partner_scope_owner_id === $user_id;
-    if ($is_partner_owner_admin) {
+    $is_business_owner_role = isset($_SESSION['role_name']) && strtolower(trim($_SESSION['role_name'])) === 'business_owner';
+    if ($is_partner_owner_admin || $is_business_owner_role) {
         return;
     }
 
@@ -1488,6 +1558,11 @@ function checkAdminAccess() {
     if ($conn) {
         adminEnsureBillingPermissions($conn);
         adminEnsureBusinessOwnerFullPermissions($conn);
+        require_once __DIR__ . '/../includes/rider_helper.php';
+        if (isDeliveryDriverUser($conn, $user_id) && !hasBackofficeAccess($conn, $user_id)) {
+            header("Location: ../rider/index.php");
+            exit();
+        }
     }
     enforceSuperAdminOnlyPageAccess($conn, $user_id);
 
@@ -1509,22 +1584,31 @@ function checkAdminAccess() {
             'index.php',
             'products.php',
             'vouchers.php',
+            'seller_vouchers.php',
             'orders.php',
             'get_order_details.php',
             'print_order_receipt.php',
             'chat.php',
+            'chat_endpoint.php',
+            'chat_widget.php',
             'cancellations.php',
+            'refunds.php',
             'reviews.php',
             'preorders.php',
             'get_preorder_details.php',
             'print_preorder_receipt.php',
             'ajax_update_preorder.php',
+            'preorder_schedule.php',
             'logistics.php',
+            'logistics_settings.php',
             'assign_driver.php',
             'cancel_delivery.php',
             'update_delivery_status.php',
+            'ajax_confirm_pickup.php',
+            'ajax_handover_action.php',
             'get_logistics_details.php',
             'ajax_get_driver_status.php',
+            'ajax_accept_delivery.php',
             'get_driver_locations.php',
             'get_available_drivers.php',
             'kiosk.php',
@@ -1534,6 +1618,8 @@ function checkAdminAccess() {
             'mrp.php',
             'purchase_order.php',
             'get_po_details.php',
+            'materials.php',
+            'bom.php',
             'finance.php',
             'expenses.php',
             'order_policy_settings.php',
@@ -1543,10 +1629,12 @@ function checkAdminAccess() {
             'receipt_settings.php',
             'partner_banking.php',
             'business_account.php',
+            'partner_operations_flow.php',
             'forecasting_dashboard.php',
             'dss_reports.php',
             'statistics.php',
             'events.php',
+            'update_recommendation_status.php',
             'rbac_management.php',
             'hr.php',
             'employees.php',
@@ -1568,35 +1656,53 @@ function checkAdminAccess() {
             'candidates.php',
             'turnover.php',
             'hr_reports.php',
+            'hr_migration_checker.php',
+            'hr_module_common.php',
+            'hr_workspace_nav.php',
             'get_employee_details.php',
             'get_leave_details.php',
             'get_performance_details.php',
-            'get_po_details.php',
             'get_products_for_kiosk.php',
             'create_walkin_order.php',
             'logout.php',
-            'get_notifications.php'
+            'get_notifications.php',
+            'billing_invoice_payment_success.php',
+            'billing_invoice_payment_cancel.php',
+            'billing_invoice_view.php',
+            'billing_invoice_pdf.php',
+            'shop_owner_tutorial_modal.php',
+            'tenant_scope_migration.php'
         ];
-        if (!$is_super_admin_session_user && !in_array($current_page, $partner_allowed_pages, true)) {
+
+        $super_admin_pages = getSuperAdminOnlyAdminPages();
+        $is_super_admin_page = in_array($current_page, $super_admin_pages, true) || isCurrentPageSuperAdminOnly();
+
+        // Any non-super-admin store module in admin/ is valid for partner accounts
+        $is_allowed_partner_page = in_array($current_page, $partner_allowed_pages, true) 
+            || (!$is_super_admin_page && strpos($_SERVER['PHP_SELF'] ?? '', '/admin/') !== false);
+
+        if (!$is_super_admin_session_user && (!$is_allowed_partner_page || $is_super_admin_page)) {
+            $fallback_redirect = (strpos($_SERVER['PHP_SELF'] ?? '', '/admin/') !== false) ? 'index.php' : 'admin/index.php';
             if (isAjaxRequest()) {
                 http_response_code(403);
                 header('Content-Type: application/json');
                 echo json_encode([
                     'success' => false,
                     'message' => 'This module is not available for partner admin accounts.',
-                    'redirect' => 'products.php'
+                    'redirect' => $fallback_redirect
                 ]);
                 exit;
             }
 
             $_SESSION['error'] = 'This module is not available for partner admin accounts.';
-            header("Location: products.php");
+            header("Location: " . $fallback_redirect);
             exit;
         }
 
         if (!$is_super_admin_session_user) {
             enforcePartnerRoleScopedPageAccess($conn, $user_id, $current_page);
             enforcePartnerTenantScopedRequestAccess($conn, $user_id, $current_page);
+            SubscriptionAccessService::enforcePageAccess($conn, $user_id, $current_page, 'subscription_plans.php');
         }
 
         if (!$is_super_admin_session_user && $account_control_status === 'restricted') {
@@ -1747,6 +1853,12 @@ function requirePermission($permission_name) {
     if (isset($_SESSION['role_name']) && $_SESSION['role_name'] === 'business_owner') {
         return; // Business owner has full admin dashboard access.
     }
+    if ($conn && $user_id > 0 && function_exists('getFranchiseSellerScopeOwnerId')) {
+        $owner_id = (int)(getFranchiseSellerScopeOwnerId($conn, $user_id) ?? 0);
+        if ($owner_id > 0 && $owner_id === $user_id) {
+            return; // Partner shop owner has full store permissions.
+        }
+    }
 
     if (!is_string($permission_name) || $permission_name === '') {
         denyAdminAccess('Access Denied: Invalid permission requirement.');
@@ -1786,6 +1898,12 @@ function requireAnyPermission(array $permission_names) {
     }
     if (isset($_SESSION['role_name']) && $_SESSION['role_name'] === 'business_owner') {
         return;
+    }
+    if ($conn && $user_id > 0 && function_exists('getFranchiseSellerScopeOwnerId')) {
+        $owner_id = (int)(getFranchiseSellerScopeOwnerId($conn, $user_id) ?? 0);
+        if ($owner_id > 0 && $owner_id === $user_id) {
+            return; // Partner shop owner has full store permissions.
+        }
     }
 
     $session_permissions = getSessionPermissions();

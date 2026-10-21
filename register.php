@@ -112,7 +112,7 @@ if (!function_exists('ensureRegistrationValidIdSchema')) {
         $table_sql = "CREATE TABLE IF NOT EXISTS `user_valid_id_documents` (
             `id` int(11) NOT NULL AUTO_INCREMENT,
             `user_id` int(11) NOT NULL,
-            `document_type` varchar(50) NOT NULL DEFAULT 'valid_id',
+            `document_type` varchar(100) NOT NULL DEFAULT 'valid_id',
             `file_name` varchar(255) NOT NULL,
             `file_path` varchar(500) NOT NULL,
             `uploaded_at` timestamp NOT NULL DEFAULT current_timestamp(),
@@ -129,7 +129,7 @@ if (!function_exists('ensureRegistrationValidIdSchema')) {
         $required_columns = [
             'id' => "ALTER TABLE `user_valid_id_documents` ADD COLUMN `id` INT(11) NOT NULL AUTO_INCREMENT PRIMARY KEY FIRST",
             'user_id' => "ALTER TABLE `user_valid_id_documents` ADD COLUMN `user_id` INT(11) NOT NULL AFTER `id`",
-            'document_type' => "ALTER TABLE `user_valid_id_documents` ADD COLUMN `document_type` VARCHAR(50) NOT NULL DEFAULT 'valid_id' AFTER `user_id`",
+            'document_type' => "ALTER TABLE `user_valid_id_documents` ADD COLUMN `document_type` VARCHAR(100) NOT NULL DEFAULT 'valid_id' AFTER `user_id`",
             'file_name' => "ALTER TABLE `user_valid_id_documents` ADD COLUMN `file_name` VARCHAR(255) NOT NULL AFTER `document_type`",
             'file_path' => "ALTER TABLE `user_valid_id_documents` ADD COLUMN `file_path` VARCHAR(500) NOT NULL AFTER `file_name`",
             'uploaded_at' => "ALTER TABLE `user_valid_id_documents` ADD COLUMN `uploaded_at` TIMESTAMP NOT NULL DEFAULT current_timestamp() AFTER `file_path`",
@@ -151,6 +151,24 @@ if (!function_exists('ensureRegistrationValidIdSchema')) {
 if (!function_exists('validateRegistrationValidIdUpload')) {
     function validateRegistrationValidIdUpload($file)
     {
+        if (is_array($file) && !empty($file['is_temp_cached']) && !empty($file['tmp_name'])) {
+            $abs_path = (string)$file['tmp_name'];
+            if (!file_exists($abs_path) || filesize($abs_path) <= 0) {
+                return ['valid' => false, 'message' => 'Cached valid ID file was invalid or expired. Please upload again.'];
+            }
+            if (filesize($abs_path) > 10 * 1024 * 1024) {
+                return ['valid' => false, 'message' => 'Uploaded ID file is too large (maximum 10MB).'];
+            }
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            $mime_type = finfo_file($finfo, $abs_path);
+            finfo_close($finfo);
+            $allowed_types = ['image/jpeg', 'image/png', 'image/webp'];
+            if (!in_array($mime_type, $allowed_types, true)) {
+                return ['valid' => false, 'message' => 'Please upload a clear JPG, PNG, or WEBP valid ID image.'];
+            }
+            return ['valid' => true, 'mime_type' => $mime_type];
+        }
+
         if (!isset($file) || !is_array($file) || !isset($file['error']) || (int)$file['error'] === UPLOAD_ERR_NO_FILE) {
             return ['valid' => false, 'message' => 'Please upload a valid ID image.'];
         }
@@ -169,12 +187,12 @@ if (!function_exists('validateRegistrationValidIdUpload')) {
         }
 
         $allowed_types = ['image/jpeg', 'image/png', 'image/webp'];
-        $validation = validateFileUpload($file, $allowed_types, 5 * 1024 * 1024);
+        $validation = validateFileUpload($file, $allowed_types, 10 * 1024 * 1024);
         if (empty($validation['valid'])) {
             $errors = $validation['errors'] ?? [];
             $friendly_message = !empty($errors)
                 ? (string)$errors[0]
-                : 'Please upload a clear JPG, PNG, or WEBP valid ID image up to 5MB.';
+                : 'Please upload a clear JPG, PNG, or WEBP valid ID image up to 10MB.';
             return ['valid' => false, 'message' => $friendly_message];
         }
 
@@ -236,8 +254,14 @@ if (!function_exists('saveRegistrationValidIdDocument')) {
         $target_path = $upload_dir . $unique_name;
         $relative_path = 'uploads/user_valid_ids/' . $unique_name;
 
-        if (!move_uploaded_file((string)$uploaded_file['tmp_name'], $target_path)) {
-            return ['success' => false, 'message' => 'Unable to save the uploaded valid ID. Please try again.'];
+        if (!empty($uploaded_file['is_temp_cached']) && !empty($uploaded_file['tmp_name'])) {
+            if (!copy((string)$uploaded_file['tmp_name'], $target_path)) {
+                return ['success' => false, 'message' => 'Unable to save the cached valid ID. Please try again.'];
+            }
+        } else {
+            if (!move_uploaded_file((string)$uploaded_file['tmp_name'], $target_path)) {
+                return ['success' => false, 'message' => 'Unable to save the uploaded valid ID. Please try again.'];
+            }
         }
 
         $id_label_map = [
@@ -252,9 +276,11 @@ if (!function_exists('saveRegistrationValidIdDocument')) {
             'national_id' => 'Philippine National ID (PhilSys)',
             'tin' => 'TIN ID',
             'pag_ibig' => 'Pag-IBIG ID',
-            'philhealth' => 'PhilHealth ID'
+            'philhealth' => 'PhilHealth ID',
+            'senior_citizen' => 'Senior Citizen ID',
+            'ofw' => 'OFW ID'
         ];
-        $document_type_label = ($id_label_map[$valid_id_type] ?? 'Government ID') . ' - ' . $side;
+        $document_type_label = substr(($id_label_map[$valid_id_type] ?? 'Government ID') . ' - ' . $side, 0, 100);
 
         $insert_sql = "INSERT INTO user_valid_id_documents (user_id, document_type, file_name, file_path) VALUES (?, ?, ?, ?)";
         $stmt = mysqli_prepare($conn, $insert_sql);
@@ -308,33 +334,117 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $first_name = preg_replace('/\s+/', ' ', trim($_POST['first_name'] ?? ''));
     $last_name = preg_replace('/\s+/', ' ', trim($_POST['last_name'] ?? ''));
     $middle_name = preg_replace('/\s+/', ' ', trim($_POST['middle_name'] ?? ''));
+    $suffix = preg_replace('/\s+/', ' ', trim($_POST['suffix'] ?? ''));
     $nickname = preg_replace('/\s+/', ' ', trim($_POST['nickname'] ?? ''));
-    $birth_date = trim($_POST['birth_date'] ?? '');
+    $birth_date = trim($_POST['birth_date'] ?? $_POST['dob'] ?? '');
     $gender = strtolower(trim($_POST['gender'] ?? ''));
     $email = strtolower(trim($_POST['email'] ?? ''));
     $phone = trim($_POST['phone'] ?? '');
     $password = $_POST['password'] ?? '';
     $confirm_password = $_POST['confirm_password'] ?? '';
-    $accept_terms = isset($_POST['accept_terms']);
+    $accept_terms = !empty($_POST['accept_terms']) 
+        || !empty($_POST['terms']) 
+        || (isset($_POST['accept_terms']) && $_POST['accept_terms'] !== '' && $_POST['accept_terms'] !== '0')
+        || (isset($_POST['terms']) && $_POST['terms'] !== '' && $_POST['terms'] !== '0');
     $valid_id_type = trim($_POST['valid_id_type'] ?? '');
-    $valid_id_front = $_FILES['valid_id_front'] ?? null;
-    $valid_id_back = $_FILES['valid_id_back'] ?? null;
+    
+    // Setup temporary storage directory for pending ID uploads
+    $temp_id_dir = __DIR__ . '/uploads/temp_valid_ids/';
+    if (!is_dir($temp_id_dir)) {
+        @mkdir($temp_id_dir, 0755, true);
+    }
+
+    // Front ID: If newly uploaded, validate and cache in temp directory and session
+    if (isset($_FILES['valid_id_front']) && is_array($_FILES['valid_id_front']) && (int)($_FILES['valid_id_front']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+        $front_val = validateRegistrationValidIdUpload($_FILES['valid_id_front']);
+        if (!empty($front_val['valid'])) {
+            $ext = ($front_val['mime_type'] === 'image/png') ? 'png' : (($front_val['mime_type'] === 'image/webp') ? 'webp' : 'jpg');
+            $temp_filename = 'temp_front_' . bin2hex(random_bytes(16)) . '.' . $ext;
+            $temp_target = $temp_id_dir . $temp_filename;
+            if (move_uploaded_file($_FILES['valid_id_front']['tmp_name'], $temp_target)) {
+                if (!empty($_SESSION['temp_valid_id_front']['file_path'])) {
+                    @unlink(__DIR__ . '/' . $_SESSION['temp_valid_id_front']['file_path']);
+                }
+                $_SESSION['temp_valid_id_front'] = [
+                    'file_path' => 'uploads/temp_valid_ids/' . $temp_filename,
+                    'name' => $_FILES['valid_id_front']['name'] ?? 'valid_id_front.jpg',
+                    'mime_type' => $front_val['mime_type'],
+                    'uploaded_at' => time()
+                ];
+            }
+        }
+    }
+
+    // Back ID: If newly uploaded, validate and cache in temp directory and session
+    if (isset($_FILES['valid_id_back']) && is_array($_FILES['valid_id_back']) && (int)($_FILES['valid_id_back']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+        $back_val = validateRegistrationValidIdUpload($_FILES['valid_id_back']);
+        if (!empty($back_val['valid'])) {
+            $ext = ($back_val['mime_type'] === 'image/png') ? 'png' : (($back_val['mime_type'] === 'image/webp') ? 'webp' : 'jpg');
+            $temp_filename = 'temp_back_' . bin2hex(random_bytes(16)) . '.' . $ext;
+            $temp_target = $temp_id_dir . $temp_filename;
+            if (move_uploaded_file($_FILES['valid_id_back']['tmp_name'], $temp_target)) {
+                if (!empty($_SESSION['temp_valid_id_back']['file_path'])) {
+                    @unlink(__DIR__ . '/' . $_SESSION['temp_valid_id_back']['file_path']);
+                }
+                $_SESSION['temp_valid_id_back'] = [
+                    'file_path' => 'uploads/temp_valid_ids/' . $temp_filename,
+                    'name' => $_FILES['valid_id_back']['name'] ?? 'valid_id_back.jpg',
+                    'mime_type' => $back_val['mime_type'],
+                    'uploaded_at' => time()
+                ];
+            }
+        }
+    }
+
+    // Resolve Front ID reference (newly uploaded or session cached)
+    if (!empty($_SESSION['temp_valid_id_front']['file_path']) && file_exists(__DIR__ . '/' . $_SESSION['temp_valid_id_front']['file_path'])) {
+        $valid_id_front = [
+            'is_temp_cached' => true,
+            'tmp_name' => __DIR__ . '/' . $_SESSION['temp_valid_id_front']['file_path'],
+            'file_path' => $_SESSION['temp_valid_id_front']['file_path'],
+            'name' => $_SESSION['temp_valid_id_front']['name'],
+            'error' => UPLOAD_ERR_OK,
+            'size' => filesize(__DIR__ . '/' . $_SESSION['temp_valid_id_front']['file_path']),
+            'type' => $_SESSION['temp_valid_id_front']['mime_type']
+        ];
+    } elseif (isset($_FILES['valid_id_front']) && is_array($_FILES['valid_id_front']) && (int)($_FILES['valid_id_front']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+        $valid_id_front = $_FILES['valid_id_front'];
+    } else {
+        $valid_id_front = null;
+    }
+
+    // Resolve Back ID reference (newly uploaded or session cached)
+    if (!empty($_SESSION['temp_valid_id_back']['file_path']) && file_exists(__DIR__ . '/' . $_SESSION['temp_valid_id_back']['file_path'])) {
+        $valid_id_back = [
+            'is_temp_cached' => true,
+            'tmp_name' => __DIR__ . '/' . $_SESSION['temp_valid_id_back']['file_path'],
+            'file_path' => $_SESSION['temp_valid_id_back']['file_path'],
+            'name' => $_SESSION['temp_valid_id_back']['name'],
+            'error' => UPLOAD_ERR_OK,
+            'size' => filesize(__DIR__ . '/' . $_SESSION['temp_valid_id_back']['file_path']),
+            'type' => $_SESSION['temp_valid_id_back']['mime_type']
+        ];
+    } elseif (isset($_FILES['valid_id_back']) && is_array($_FILES['valid_id_back']) && (int)($_FILES['valid_id_back']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+        $valid_id_back = $_FILES['valid_id_back'];
+    } else {
+        $valid_id_back = null;
+    }
     
     // Business partner fields
     $business_name = preg_replace('/\s+/', ' ', trim($_POST['business_name'] ?? ''));
     $business_type = 'restaurant';
-$business_registration = trim($_POST['business_registration'] ?? '');
+    $business_registration = trim($_POST['business_registration'] ?? '');
     $website = null;
-    $tax_id = trim($_POST['tax_id'] ?? '');
+    $tax_id = trim($_POST['tax_id'] ?? $_POST['tin_number'] ?? '');
     $street_address = trim($_POST['street_address'] ?? '');
     $address = trim($_POST['address'] ?? '');
     $latitude = trim($_POST['latitude'] ?? '');
     $longitude = trim($_POST['longitude'] ?? '');
     $city_name = trim($_POST['city_name'] ?? '');
-    $province_name = trim($_POST['province_name'] ?? 'Cavite');
+    $province_name = trim($_POST['province_name'] ?? '');
 
     if ($address === '' && $street_address !== '') {
-        $address = $street_address . ', Cavite';
+        $address = $street_address . ($city_name !== '' ? ', ' . $city_name : '') . ($province_name !== '' ? ', ' . $province_name : '');
     }
 
     // Store form data for repopulation
@@ -343,8 +453,10 @@ $business_registration = trim($_POST['business_registration'] ?? '');
         'first_name' => $first_name,
         'last_name' => $last_name,
         'middle_name' => $middle_name,
+        'suffix' => $suffix,
         'nickname' => $nickname,
         'birth_date' => $birth_date,
+        'dob' => $birth_date,
         'gender' => $gender,
         'email' => $email,
         'phone' => $phone,
@@ -353,6 +465,7 @@ $business_registration = trim($_POST['business_registration'] ?? '');
         'business_type' => $business_type,
         'business_registration' => $business_registration,
         'tax_id' => $tax_id,
+        'tin_number' => $tax_id,
         'street_address' => $street_address,
         'address' => $address,
         'latitude' => $latitude,
@@ -361,7 +474,7 @@ $business_registration = trim($_POST['business_registration'] ?? '');
         'province_name' => $province_name,
     ];
 
-    // Validation
+    // Validation - Fail-fast while isolating and clearing ONLY the specific invalid field
     if ($error === '') {
         $csrf_token = $_POST['csrf_token'] ?? '';
         if (empty($csrf_token) || empty($_SESSION['registration_csrf_token']) || !hash_equals($_SESSION['registration_csrf_token'], $csrf_token)) {
@@ -370,75 +483,75 @@ $business_registration = trim($_POST['business_registration'] ?? '');
             $error = 'Invalid account type selected.';
         } elseif (!$accept_terms) {
             $error = 'You must accept the Terms of Service and Privacy Policy.';
-        } elseif (empty($first_name) || empty($last_name)) {
+        } elseif (empty($first_name) && empty($last_name)) {
             $error = 'Please enter your first and last name.';
-        } elseif (!preg_match('/^[\p{L}\p{M}\'\-\s]{2,60}$/u', $first_name) || !preg_match('/^[\p{L}\p{M}\'\-\s]{2,60}$/u', $last_name)) {
-            $error = 'Please enter a valid first and last name.';
-        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $error = 'Please enter a valid email address.';
-        } elseif (!preg_match('/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,72}$/', $password)) {
-            $error = 'Password must be 8-72 characters with uppercase, lowercase, number, and symbol.';
-        } elseif (!hash_equals($password, $confirm_password)) {
-            $error = 'Passwords do not match.';
-        } elseif (empty($phone)) {
-            $error = 'Please enter your mobile number.';
+            $form_data['first_name'] = '';
+            $form_data['last_name'] = '';
+        } elseif (empty($first_name)) {
+            $error = 'Please enter your first name.';
+            $form_data['first_name'] = '';
+        } elseif (empty($last_name)) {
+            $error = 'Please enter your last name.';
+            $form_data['last_name'] = '';
+        } elseif (!preg_match('/^[\p{L}\p{M}\'\-\s]{2,60}$/u', $first_name)) {
+            $error = 'Please enter a valid first name.';
+            $form_data['first_name'] = '';
+        } elseif (!preg_match('/^[\p{L}\p{M}\'\-\s]{2,60}$/u', $last_name)) {
+            $error = 'Please enter a valid last name.';
+            $form_data['last_name'] = '';
+        } elseif (!empty($birth_date) && (
+            ($dob_time = strtotime($birth_date)) === false || 
+            $dob_time > strtotime('-10 years') || 
+            $dob_time < strtotime('-100 years')
+        )) {
+            $error = 'Please enter a valid date of birth. You must be at least 10 years old to register.';
+            $form_data['birth_date'] = '';
+            $form_data['dob'] = '';
         } elseif (empty($valid_id_type)) {
             $error = 'Please select your valid ID type.';
-        } elseif (empty($valid_id_front) || !is_array($valid_id_front) || (int)($valid_id_front['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+            $form_data['valid_id_type'] = '';
+        } elseif (empty($valid_id_front)) {
             $error = 'Please upload a photo of the front side of your valid ID.';
-        } elseif (empty($valid_id_back) || !is_array($valid_id_back) || (int)($valid_id_back['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        } elseif (empty($valid_id_back)) {
             $error = 'Please upload a photo of the back side of your valid ID.';
         } elseif ($account_type === 'organization' && empty($business_name)) {
             $error = 'Please enter your restaurant name.';
+            $form_data['business_name'] = '';
         } elseif (strlen($address) < 6) {
-            $error = 'Please enter your complete home address in Cavite.';
+            $error = 'Please enter your complete address.';
+            $form_data['address'] = '';
+            $form_data['street_address'] = '';
+            $form_data['latitude'] = '';
+            $form_data['longitude'] = '';
         } else {
-            // Validate that the location is inside Cavite
-            $is_cavite = false;
-            if ($latitude !== '' && $longitude !== '' && is_numeric($latitude) && is_numeric($longitude)) {
-                $lat_num = (float)$latitude;
-                $lng_num = (float)$longitude;
-                // Cavite coordinates boundary check
-                if ($lat_num >= 14.00 && $lat_num <= 14.55 && $lng_num >= 120.55 && $lng_num <= 121.15) {
-                    $is_cavite = true;
-                }
-            }
-
-            // Keyword check for Cavite cities / municipalities
-            $cavite_keywords = [
-                'cavite', 'dasmariñas', 'dasmarinas', 'imus', 'bacoor', 'general trias', 'gen. trias',
-                'tagaytay', 'cavite city', 'trece martires', 'silang', 'kawit', 'tanza', 'alfonso',
-                'amadeo', 'carmona', 'gma', 'general mariano alvarez', 'indang', 'magallanes',
-                'maragondon', 'mendez', 'naic', 'noveleta', 'rosario', 'ternate', 'bailen', 'aguinaldo'
-            ];
-            $addr_lower = strtolower($address);
-            foreach ($cavite_keywords as $kw) {
-                if (strpos($addr_lower, $kw) !== false) {
-                    $is_cavite = true;
-                    break;
-                }
-            }
-
-            // Explicit rejection of outside areas (e.g. NCR/Manila, Laguna, Batangas)
-            $outside_keywords = ['las piñas', 'las pinas', 'parañaque', 'paranaque', 'muntinlupa', 'metro manila', 'ncr', 'batangas', 'laguna', 'quezon city', 'pasay'];
-            foreach ($outside_keywords as $out_kw) {
-                if (strpos($addr_lower, $out_kw) !== false && strpos($addr_lower, 'cavite') === false) {
-                    $is_cavite = false;
-                    break;
-                }
-            }
-
-            if (!$is_cavite) {
-                $error = 'Service Area Restriction: Registration is exclusively available for addresses inside Cavite province. Please pin or enter a location within Cavite.';
-            } else {
-                $front_validation = validateRegistrationValidIdUpload($valid_id_front);
+            $front_validation = validateRegistrationValidIdUpload($valid_id_front);
                 $back_validation = validateRegistrationValidIdUpload($valid_id_back);
                 if (empty($front_validation['valid'])) {
-                    $error = 'Front of ID: ' . (string)($front_validation['message'] ?? 'Please upload a clear JPG, PNG, or WEBP image up to 5MB.');
+                    $error = 'Front of ID: ' . (string)($front_validation['message'] ?? 'Please upload a clear JPG, PNG, or WEBP image up to 10MB.');
+                    if (!empty($_SESSION['temp_valid_id_front']['file_path'])) {
+                        @unlink(__DIR__ . '/' . $_SESSION['temp_valid_id_front']['file_path']);
+                        unset($_SESSION['temp_valid_id_front']);
+                    }
                 } elseif (empty($back_validation['valid'])) {
-                    $error = 'Back of ID: ' . (string)($back_validation['message'] ?? 'Please upload a clear JPG, PNG, or WEBP image up to 5MB.');
+                    $error = 'Back of ID: ' . (string)($back_validation['message'] ?? 'Please upload a clear JPG, PNG, or WEBP image up to 10MB.');
+                    if (!empty($_SESSION['temp_valid_id_back']['file_path'])) {
+                        @unlink(__DIR__ . '/' . $_SESSION['temp_valid_id_back']['file_path']);
+                        unset($_SESSION['temp_valid_id_back']);
+                    }
+                } elseif (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    $error = 'Please enter a valid email address.';
+                    $form_data['email'] = '';
+                } elseif (empty($phone)) {
+                    $error = 'Please enter your mobile phone number.';
+                    $form_data['phone'] = '';
+                } elseif (!preg_match('/^(09|\+?639)\d{9}$/', preg_replace('/[^\d+]/', '', $phone))) {
+                    $error = 'Please enter a valid Philippine mobile number (e.g., 09123456789).';
+                    $form_data['phone'] = '';
+                } elseif (!preg_match('/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,72}$/', $password)) {
+                    $error = 'Password must be 8-72 characters with uppercase, lowercase, number, and symbol.';
+                } elseif (!hash_equals($password, $confirm_password)) {
+                    $error = 'Passwords do not match.';
                 }
-            }
         }
     }
 
@@ -446,10 +559,18 @@ $business_registration = trim($_POST['business_registration'] ?? '');
         $phone_cleaned = normalizePhilippineMobile($phone);
         $business_registration = preg_replace('/[^A-Za-z0-9\- ]/', '', $business_registration);
         $tax_id = preg_replace('/[^A-Za-z0-9\- ]/', '', $tax_id);
-        $full_name = trim($first_name . ' ' . $last_name);
+        $full_name = trim($first_name . ' ' . $last_name . ($suffix !== '' ? ' ' . $suffix : ''));
         $address = preg_replace('/\s+/', ' ', $address);
         if (strlen($address) > 255) {
             $address = substr($address, 0, 255);
+        }
+
+        $clean_birth_date = null;
+        if (!empty($birth_date)) {
+            $dob_time = strtotime($birth_date);
+            if ($dob_time !== false) {
+                $clean_birth_date = date('Y-m-d', $dob_time);
+            }
         }
 
         $result = registerUser(
@@ -466,9 +587,10 @@ $business_registration = trim($_POST['business_registration'] ?? '');
             $website,
             $tax_id,
             $middle_name,
-            $birth_date,
+            $clean_birth_date,
             $gender,
-            $nickname
+            $nickname,
+            $suffix
         );
 
 
@@ -497,8 +619,8 @@ $business_registration = trim($_POST['business_registration'] ?? '');
                     'contact_name' => $full_name,
                     'contact_phone' => $phone_cleaned,
                     'street_address' => $street_address ?: $address,
-                    'city_name' => $city_name ?: 'Cavite',
-                    'province_name' => 'Cavite',
+                    'city_name' => $city_name ?: 'Unknown City',
+                    'province_name' => $province_name ?: 'Cavite',
                     'full_address' => $address,
                     'latitude' => $latitude,
                     'longitude' => $longitude,
@@ -508,6 +630,16 @@ $business_registration = trim($_POST['business_registration'] ?? '');
         }
 
         if (!empty($result['success']) && $error === '') {
+            // Clean up temporary valid ID uploads from disk and session
+            if (!empty($_SESSION['temp_valid_id_front']['file_path'])) {
+                @unlink(__DIR__ . '/' . $_SESSION['temp_valid_id_front']['file_path']);
+                unset($_SESSION['temp_valid_id_front']);
+            }
+            if (!empty($_SESSION['temp_valid_id_back']['file_path'])) {
+                @unlink(__DIR__ . '/' . $_SESSION['temp_valid_id_back']['file_path']);
+                unset($_SESSION['temp_valid_id_back']);
+            }
+
             $email_verification = issueUserEmailVerification(
                 $conn,
                 (int)$result['user_id'],
@@ -538,16 +670,25 @@ $business_registration = trim($_POST['business_registration'] ?? '');
 
         if ($error === '' && empty($result['success'])) {
             $error = $result['message'] ?? 'Unable to create your account right now.';
+            if (stripos($error, 'email') !== false) {
+                $form_data['email'] = '';
+            }
+            if (stripos($error, 'phone') !== false || stripos($error, 'mobile') !== false) {
+                $form_data['phone'] = '';
+            }
         }
     }
 
     if ($error !== '') {
-        $_SESSION['registration_security']['attempts'] = (int)($_SESSION['registration_security']['attempts'] ?? 0) + 1;
-        if ($_SESSION['registration_security']['attempts'] >= $max_attempts) {
-            $_SESSION['registration_security']['blocked_until'] = $now + $lock_seconds;
-            $_SESSION['registration_security']['attempts'] = 0;
-            $_SESSION['registration_security']['window_started_at'] = $now;
-            $error = 'Too many registration attempts. Please try again in 15 minutes.';
+        $is_system_error = !empty($result) && empty($result['success']) && (strpos($error, 'Unable to create') !== false || strpos($error, 'try again later') !== false);
+        if (!$is_system_error) {
+            $_SESSION['registration_security']['attempts'] = (int)($_SESSION['registration_security']['attempts'] ?? 0) + 1;
+            if ($_SESSION['registration_security']['attempts'] >= $max_attempts) {
+                $_SESSION['registration_security']['blocked_until'] = $now + $lock_seconds;
+                $_SESSION['registration_security']['attempts'] = 0;
+                $_SESSION['registration_security']['window_started_at'] = $now;
+                $error = 'Too many registration attempts. Please try again in 15 minutes.';
+            }
         }
     }
 }
@@ -556,8 +697,6 @@ $page_title = "Create Account | Lechon Delights";
 include 'includes/header.php';
 ?>
 
-<!-- SweetAlert2 CSS -->
-<link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <!-- Add this for better mobile input handling -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
@@ -800,46 +939,76 @@ include 'includes/header.php';
     box-shadow: 0 0 0 4px rgba(198, 40, 40, 0.1);
 }
 
-.input-with-icon {
-    position: relative;
+.input-with-icon,
+.password-input-group,
+.password-wrapper {
+    position: relative !important;
+    display: flex !important;
+    align-items: center !important;
+    width: 100% !important;
 }
 
-.input-with-icon i {
-    position: absolute;
-    left: 18px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: #999;
-    font-size: 1.1rem;
-    pointer-events: none; /* Prevent icon from interfering with clicks */
+.input-with-icon > i:first-child,
+.input-with-icon > i.fas:not(.fa-eye):not(.fa-eye-slash) {
+    position: absolute !important;
+    left: 16px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    color: #94a3b8 !important;
+    font-size: 1rem !important;
+    pointer-events: none !important;
+    z-index: 2 !important;
 }
 
 .input-with-icon .form-control {
-    padding-left: 50px;
+    padding-left: 44px !important;
+    padding-right: 44px !important;
 }
 
-.password-wrapper {
-    position: relative;
+.password-input-group .form-control {
+    padding-right: 44px !important;
 }
 
-.toggle-password {
-    position: absolute;
-    right: 15px;
-    top: 50%;
-    transform: translateY(-50%);
-    background: none;
-    border: none;
-    color: #666;
-    cursor: pointer;
-    padding: 12px; /* Larger touch target */
-    font-size: 1.1rem;
-    transition: color 0.3s;
-    z-index: 10; /* Ensure button is above other elements */
+.toggle-password,
+#toggleLoginPasswordBtn,
+#togglePassword {
+    position: absolute !important;
+    right: 12px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    background: transparent !important;
+    border: none !important;
+    color: #94a3b8 !important;
+    cursor: pointer !important;
+    width: 34px !important;
+    height: 34px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 1rem !important;
+    z-index: 10 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    outline: none !important;
     -webkit-tap-highlight-color: transparent;
 }
 
-.toggle-password:hover {
-    color: #b3261e;
+.toggle-password i,
+#toggleLoginPasswordBtn i,
+#togglePassword i {
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    transform: none !important;
+    pointer-events: none !important;
+    color: inherit !important;
+    font-size: 1rem !important;
+}
+
+.toggle-password:hover,
+#toggleLoginPasswordBtn:hover,
+#togglePassword:hover {
+    color: #b3261e !important;
 }
 
 /* Form Row */
@@ -942,9 +1111,9 @@ include 'includes/header.php';
     margin-top: 30px;
 }
 
-/* Password Strength */
+/* Password Strength & Live Requirements */
 .password-strength {
-    margin-top: 12px;
+    margin-top: 10px;
     font-size: 0.9rem;
 }
 
@@ -953,37 +1122,100 @@ include 'includes/header.php';
     align-items: center;
     gap: 10px;
     margin-top: 8px;
+    margin-bottom: 8px;
 }
 
 .strength-text {
     font-weight: 600;
-    min-width: 50px;
+    font-size: 0.82rem;
+    min-width: 48px;
+    color: #64748b;
 }
 
 .strength-bars {
     display: flex;
-    gap: 4px;
+    gap: 5px;
     flex: 1;
 }
 
 .strength-bar {
     flex: 1;
-    height: 6px;
-    background-color: #e0e0e0;
+    height: 5px;
+    background-color: #e2e8f0;
     border-radius: 3px;
-    transition: all 0.3s;
+    transition: background-color 0.25s ease;
 }
 
 .strength-bar.weak {
-    background-color: #ff5252;
+    background-color: #ef4444;
 }
 
 .strength-bar.medium {
-    background-color: #ff9800;
+    background-color: #f59e0b;
 }
 
 .strength-bar.strong {
-    background-color: #4caf50;
+    background-color: #10b981;
+}
+
+.password-requirements {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 6px 12px;
+    padding: 10px 12px;
+    background: #f8fafc;
+    border: 1px solid #eaecf0;
+    border-radius: 8px;
+    margin-top: 8px;
+}
+
+.req-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.8rem;
+    color: #64748b;
+    transition: color 0.2s ease;
+}
+
+.req-item i {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.req-item.met {
+    color: #027a48;
+    font-weight: 500;
+}
+
+.req-item.met i {
+    color: #027a48;
+}
+
+body.dark-mode .password-requirements {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .req-item {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .req-item i {
+    color: #64748b !important;
+}
+
+body.dark-mode .req-item.met {
+    color: #34d399 !important;
+}
+
+body.dark-mode .req-item.met i {
+    color: #34d399 !important;
+}
+
+body.dark-mode .strength-bar {
+    background-color: #334155;
 }
 
 /* Verification Note */
@@ -1752,6 +1984,275 @@ body {
 .footer {
     margin-top: 0 !important;
 }
+
+/* ==========================================================================
+   AUTHENTICATION (SIGN UP & SIGN IN) DARK MODE THEME
+   ========================================================================== */
+body.dark-mode,
+html.dark-mode,
+body.dark-mode .registration-page,
+html.dark-mode .registration-page {
+    background: #0f172a !important;
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .registration-container {
+    background: #0f172a !important;
+    background-color: #0f172a !important;
+}
+
+/* Left Hero Branding Side */
+body.dark-mode .registration-image-side {
+    background: linear-gradient(145deg, #182234 0%, #1e293b 60%, #0f172a 100%) !important;
+    border-right: 1px solid #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .registration-container.is-login-mode .registration-image-side {
+    border-left: 1px solid #334155 !important;
+    border-right: none !important;
+}
+
+body.dark-mode .hero-water-waves {
+    opacity: 0.12 !important;
+}
+
+body.dark-mode .liquid-wave-seam svg path {
+    fill: rgba(30, 41, 59, 0.4) !important;
+}
+
+body.dark-mode .brand-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .brand-subtitle,
+body.dark-mode .cta-label {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .btn-slide-auth {
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3) !important;
+}
+
+body.dark-mode .btn-slide-auth:hover {
+    background: #334155 !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+}
+
+/* Right Form Side */
+body.dark-mode .registration-form-side,
+body.dark-mode .registration-form-side-container,
+body.dark-mode .registration-body,
+body.dark-mode .registration-header {
+    background: #0f172a !important;
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .registration-header h2,
+body.dark-mode .registration-header span,
+body.dark-mode .form-step h2,
+body.dark-mode .form-step h3,
+body.dark-mode .form-step h4,
+body.dark-mode .form-header h2 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .registration-header p,
+body.dark-mode .form-step p,
+body.dark-mode .form-header p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .registration-intro {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .registration-intro h2 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .registration-intro p {
+    color: #cbd5e1 !important;
+}
+
+/* Progress Steps */
+body.dark-mode .progress-container {
+    background: #334155 !important;
+}
+
+body.dark-mode .step.active .step-label {
+    color: #ef4444 !important;
+}
+
+/* Form Controls & Inputs */
+body.dark-mode .form-control,
+body.dark-mode .form-select,
+body.dark-mode input[type="text"],
+body.dark-mode input[type="email"],
+body.dark-mode input[type="password"],
+body.dark-mode input[type="tel"],
+body.dark-mode input[type="date"],
+body.dark-mode select,
+body.dark-mode textarea {
+    background: #1e293b !important;
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .form-control:focus,
+body.dark-mode .form-select:focus,
+body.dark-mode input:focus,
+body.dark-mode select:focus {
+    background: #0b1120 !important;
+    border-color: #b3261e !important;
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.3) !important;
+    color: #ffffff !important;
+}
+
+/* Browser Autofill Dark Mode Fix */
+body.dark-mode input:-webkit-autofill,
+body.dark-mode input:-webkit-autofill:hover, 
+body.dark-mode input:-webkit-autofill:focus, 
+body.dark-mode input:-webkit-autofill:active,
+body.dark-mode textarea:-webkit-autofill,
+body.dark-mode select:-webkit-autofill {
+    -webkit-box-shadow: 0 0 0 1000px #1e293b inset !important;
+    box-shadow: 0 0 0 1000px #1e293b inset !important;
+    -webkit-text-fill-color: #f8fafc !important;
+    color: #f8fafc !important;
+    transition: background-color 5000s ease-in-out 0s !important;
+    caret-color: #f8fafc !important;
+}
+
+body.dark-mode input:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0 1000px #0b1120 inset, 0 0 0 3px rgba(179, 38, 30, 0.3) !important;
+    box-shadow: 0 0 0 1000px #0b1120 inset, 0 0 0 3px rgba(179, 38, 30, 0.3) !important;
+    -webkit-text-fill-color: #ffffff !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode label,
+body.dark-mode .form-group label,
+body.dark-mode .checkbox-label {
+    color: #e2e8f0 !important;
+}
+
+body.dark-mode .password-input-group .toggle-password,
+body.dark-mode .input-with-icon button {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .password-input-group .toggle-password:hover,
+body.dark-mode .input-with-icon button:hover {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .terms-group label,
+body.dark-mode .terms-agreement {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode #termsGroup {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .terms-group a,
+body.dark-mode .terms-agreement a {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .btn-secondary {
+    background: #1e293b !important;
+    color: #f8fafc !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .btn-secondary:hover {
+    background: #334155 !important;
+    border-color: #475569 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .account-type-card {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .account-type-card h3,
+body.dark-mode .account-type-card p {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .account-type-card.selected {
+    background: rgba(179, 38, 30, 0.18) !important;
+    border-color: #b3261e !important;
+}
+
+/* Modals (Webcam & Verification) */
+body.dark-mode #cameraModal > div {
+    background: #1e293b !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode #cameraModal [style*="background: #f8fafc"],
+body.dark-mode #cameraModal [style*="background:#f8fafc"] {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode #cameraModal h3 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .floating-pig {
+    opacity: 0.25 !important;
+}
+
+/* Step 3 Address & Map Dark Theme */
+body.dark-mode #step3Title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode #step3Subtitle {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode label[for="homeAddressInput"] {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode #registerMapWrapper {
+    border-color: #334155 !important;
+    background: #0f172a !important;
+}
+
+body.dark-mode #useCurrentLocationBtn {
+    background: #1e293b !important;
+    color: #f8fafc !important;
+    border-color: #334155 !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+}
+
+body.dark-mode #caviteAreaStatusBadge {
+    background: rgba(179, 38, 30, 0.15) !important;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+    color: #f87171 !important;
+}
+
+body.dark-mode .leaflet-container {
+    background: #0f172a !important;
+}
 </style>
 <div class="registration-page">
     <!-- Liquid Ripple Surge Overlay -->
@@ -1822,10 +2323,6 @@ body {
                 <!-- View 1: Register Form Wizard -->
                 <div id="registerViewWrapper" class="auth-view-wrapper">
                     <div class="registration-header" style="background:#fff; text-align:center; margin-bottom:24px; padding:0 0 10px;">
-                        <div style="display:inline-flex; align-items:center; justify-content:center; gap:10px; margin-bottom:12px;">
-                            <img src="assets/images/logo.jpg" alt="Lechon Delights Logo" style="width:48px; height:48px; object-fit:cover; border-radius:12px; display:block; border:1px solid #efddcd; box-shadow:0 4px 12px rgba(0,0,0,0.06);">
-                            <span style="font-size:1.6rem; font-weight:800; color:#171922; font-family:'Outfit', sans-serif;">Lechon Delights</span>
-                        </div>
                         <h2 style="font-size:1.8rem; font-weight:700; color:#333; margin-bottom:10px;">Create Account</h2>
                         <p style="font-size:1rem; color:#666; margin:0;">Join us to order Cavite's finest lechon dishes.</p>
                     </div>
@@ -1897,12 +2394,30 @@ body {
                                     value="<?php echo htmlspecialchars($form_data['middle_name'] ?? ''); ?>"
                                     autocomplete="additional-name">
                             </div>
+                            <div class="form-group">
+                                <label for="suffix">Suffix</label>
+                                <input type="text" id="suffix" name="suffix" class="form-control"
+                                    placeholder="Optional (e.g. Jr., Sr., III)"
+                                    value="<?php echo htmlspecialchars($form_data['suffix'] ?? ''); ?>"
+                                    autocomplete="honorific-suffix"
+                                    list="suffixList">
+                                <datalist id="suffixList">
+                                    <option value="Jr.">
+                                    <option value="Sr.">
+                                    <option value="II">
+                                    <option value="III">
+                                    <option value="IV">
+                                    <option value="V">
+                                </datalist>
+                            </div>
                         </div>
 
                         <div class="form-row">
                             <div class="form-group">
                                 <label for="dob">Date of Birth</label>
                                 <input type="date" id="dob" name="dob" class="form-control"
+                                    min="<?php echo date('Y-m-d', strtotime('-100 years')); ?>"
+                                    max="<?php echo date('Y-m-d', strtotime('-10 years')); ?>"
                                     value="<?php echo htmlspecialchars($form_data['dob'] ?? ''); ?>">
                             </div>
                             <div class="form-group">
@@ -1944,6 +2459,16 @@ body {
                             </select>
                         </div>
 
+                        <?php
+                        $has_cached_front = !empty($_SESSION['temp_valid_id_front']['file_path']) && file_exists(__DIR__ . '/' . $_SESSION['temp_valid_id_front']['file_path']);
+                        $cached_front_src = $has_cached_front ? htmlspecialchars($_SESSION['temp_valid_id_front']['file_path']) : '#';
+
+                        $has_cached_back = !empty($_SESSION['temp_valid_id_back']['file_path']) && file_exists(__DIR__ . '/' . $_SESSION['temp_valid_id_back']['file_path']);
+                        $cached_back_src = $has_cached_back ? htmlspecialchars($_SESSION['temp_valid_id_back']['file_path']) : '#';
+                        ?>
+                        <input type="hidden" id="hasCachedFrontId" value="<?php echo $has_cached_front ? '1' : '0'; ?>">
+                        <input type="hidden" id="hasCachedBackId" value="<?php echo $has_cached_back ? '1' : '0'; ?>">
+
                         <!-- ID Upload Controls Container -->
                         <div style="display: flex; flex-direction: column; gap: 20px;">
                             <!-- Front Side Upload -->
@@ -1952,7 +2477,9 @@ body {
                                     <label style="margin: 0; font-weight: 700; color: #1e293b; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
                                         <i class="fas fa-id-card-clip" style="color: #b3261e;"></i> <span id="frontDocLabel">Front Side of Valid ID</span> *
                                     </label>
-                                    <span class="badge" id="frontStatusBadge" style="background: #f1f5f9; color: #64748b; font-size: 0.75rem; padding: 4px 8px; border-radius: 6px;">Pending</span>
+                                    <span class="badge" id="frontStatusBadge" style="<?php echo $has_cached_front ? 'background: #ecfdf3; color: #027a48; border: 1px solid #abefc6;' : 'background: #f1f5f9; color: #64748b;'; ?> font-size: 0.75rem; padding: 4px 8px; border-radius: 6px;">
+                                        <?php echo $has_cached_front ? '<i class="fas fa-check-circle me-1"></i> Attached &amp; Saved' : 'Pending'; ?>
+                                    </span>
                                 </div>
                                 <div style="display: flex; gap: 12px; margin-bottom: 12px;">
                                     <button type="button" class="btn trigger-camera-btn" data-target="front" style="flex: 1; height: 42px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; color: #334155; font-weight: 600; font-size: 0.88rem; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;">
@@ -1963,8 +2490,8 @@ body {
                                     </button>
                                 </div>
                                 <input type="file" id="validIdFront" name="valid_id_front" accept="image/*" style="display: none;">
-                                <div id="previewContainerFront" style="display: none; position: relative; border-radius: 8px; overflow: hidden; max-height: 180px; background: #000; border: 1px solid #cbd5e1;">
-                                    <img id="imagePreviewFront" src="#" alt="Front Preview" style="width: 100%; height: 180px; object-fit: contain; display: block;">
+                                <div id="previewContainerFront" style="<?php echo $has_cached_front ? 'display: block;' : 'display: none;'; ?> position: relative; border-radius: 8px; overflow: hidden; max-height: 180px; background: #000; border: 1px solid #cbd5e1;">
+                                    <img id="imagePreviewFront" src="<?php echo $cached_front_src; ?>" alt="Front Preview" style="width: 100%; height: 180px; object-fit: contain; display: block;">
                                     <button type="button" class="remove-preview-btn" data-target="front" style="position: absolute; top: 8px; right: 8px; background: rgba(15, 23, 42, 0.75); color: #fff; border: none; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 0.8rem; backdrop-filter: blur(4px);"><i class="fas fa-times"></i></button>
                                 </div>
                             </div>
@@ -1975,7 +2502,9 @@ body {
                                     <label style="margin: 0; font-weight: 700; color: #1e293b; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
                                         <i class="fas fa-id-card" style="color: #b3261e;"></i> <span id="backDocLabel">Back Side of Valid ID</span> *
                                     </label>
-                                    <span class="badge" id="backStatusBadge" style="background: #f1f5f9; color: #64748b; font-size: 0.75rem; padding: 4px 8px; border-radius: 6px;">Pending</span>
+                                    <span class="badge" id="backStatusBadge" style="<?php echo $has_cached_back ? 'background: #ecfdf3; color: #027a48; border: 1px solid #abefc6;' : 'background: #f1f5f9; color: #64748b;'; ?> font-size: 0.75rem; padding: 4px 8px; border-radius: 6px;">
+                                        <?php echo $has_cached_back ? '<i class="fas fa-check-circle me-1"></i> Attached &amp; Saved' : 'Pending'; ?>
+                                    </span>
                                 </div>
                                 <div style="display: flex; gap: 12px; margin-bottom: 12px;">
                                     <button type="button" class="btn trigger-camera-btn" data-target="back" style="flex: 1; height: 42px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; color: #334155; font-weight: 600; font-size: 0.88rem; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;">
@@ -1986,8 +2515,8 @@ body {
                                     </button>
                                 </div>
                                 <input type="file" id="validIdBack" name="valid_id_back" accept="image/*" style="display: none;">
-                                <div id="previewContainerBack" style="display: none; position: relative; border-radius: 8px; overflow: hidden; max-height: 180px; background: #000; border: 1px solid #cbd5e1;">
-                                    <img id="imagePreviewBack" src="#" alt="Back Preview" style="width: 100%; height: 180px; object-fit: contain; display: block;">
+                                <div id="previewContainerBack" style="<?php echo $has_cached_back ? 'display: block;' : 'display: none;'; ?> position: relative; border-radius: 8px; overflow: hidden; max-height: 180px; background: #000; border: 1px solid #cbd5e1;">
+                                    <img id="imagePreviewBack" src="<?php echo $cached_back_src; ?>" alt="Back Preview" style="width: 100%; height: 180px; object-fit: contain; display: block;">
                                     <button type="button" class="remove-preview-btn" data-target="back" style="position: absolute; top: 8px; right: 8px; background: rgba(15, 23, 42, 0.75); color: #fff; border: none; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 0.8rem; backdrop-filter: blur(4px);"><i class="fas fa-times"></i></button>
                                 </div>
                             </div>
@@ -2025,24 +2554,24 @@ body {
                         </div>
                     </div>
                     
-                    <!-- Step 3: Address Information (Cavite-only with Leaflet Interactive Map) -->
+                    <!-- Step 3: Address Information (With Leaflet Interactive Map) -->
                     <div class="form-step" id="step3Form">
                         <h2 style="color: #333; margin-bottom: 8px; font-size: 1.5rem;" id="step3Title">Enter Home Address</h2>
-                        <p style="color: #666; font-size: 0.95rem; margin-bottom: 20px;" id="step3Subtitle">Please provide your home address. Registrations are strictly limited to the Cavite area.</p>
+                        <p style="color: #666; font-size: 0.95rem; margin-bottom: 20px;" id="step3Subtitle">Enter your home address or pin your location on the map.</p>
 
                         <!-- Single Home Address Input -->
                         <div class="form-group mb-3">
-                            <label for="homeAddressInput" style="font-weight: 700; color: #1e293b;">Home Address (Cavite Only) *</label>
+                            <label for="homeAddressInput" style="font-weight: 700; color: #1e293b;">Home Address *</label>
                             <div style="position: relative;">
                                 <input type="text" id="homeAddressInput" class="form-control" required
-                                    placeholder="House/Unit No., Street, Barangay, City/Municipality, Cavite"
+                                    placeholder="House/Unit No., Street, Barangay, City/Municipality, Province"
                                     value="<?php echo htmlspecialchars($form_data['address'] ?? ''); ?>"
                                     autocomplete="street-address"
                                     style="padding-right: 40px;">
                                 <i class="fas fa-location-dot" style="position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: #b3261e; font-size: 1.1rem; pointer-events: none;"></i>
                             </div>
                             <small class="text-muted" style="display: block; margin-top: 5px; font-size: 0.82rem;">
-                                Type your home address or click/drag the pin on the map inside Cavite.
+                                Type your home address or click/drag the pin on the map.
                             </small>
                         </div>
 
@@ -2052,12 +2581,12 @@ body {
                         <input type="hidden" id="regLatitude" name="latitude" value="<?php echo htmlspecialchars($form_data['latitude'] ?? ''); ?>">
                         <input type="hidden" id="regLongitude" name="longitude" value="<?php echo htmlspecialchars($form_data['longitude'] ?? ''); ?>">
                         <input type="hidden" id="regCityName" name="city_name" value="<?php echo htmlspecialchars($form_data['city_name'] ?? ''); ?>">
-                        <input type="hidden" id="regProvinceName" name="province_name" value="<?php echo htmlspecialchars($form_data['province_name'] ?? 'Cavite'); ?>">
+                        <input type="hidden" id="regProvinceName" name="province_name" value="<?php echo htmlspecialchars($form_data['province_name'] ?? ''); ?>">
 
-                        <!-- Cavite Geofence Status Indicator Card -->
+                        <!-- Address Location Status Indicator Card -->
                         <div id="caviteAreaStatusBadge" style="margin-bottom: 15px; padding: 12px 14px; border-radius: 10px; font-size: 0.88rem; display: flex; align-items: center; gap: 10px; background: #fff8f6; border: 1px solid #ffdcd6; color: #8c201a; transition: all 0.3s ease;">
                             <i class="fas fa-map-pin" id="caviteStatusIcon" style="font-size: 1.1rem;"></i>
-                            <span id="caviteStatusText">Please search your address or pin your location in Cavite.</span>
+                            <span id="caviteStatusText">Please search your address or pin your location on the map.</span>
                         </div>
 
                         <!-- Leaflet Interactive Cavite Map -->
@@ -2104,7 +2633,24 @@ body {
                                     autocomplete="new-password">
                                 <button type="button" class="toggle-password" data-target="password"><i class="fas fa-eye"></i></button>
                             </div>
-                            <div class="password-strength" id="passwordStrength"></div>
+                            <div class="password-strength" id="passwordStrength">
+                                <div class="strength-indicator">
+                                    <div class="strength-bars">
+                                        <div class="strength-bar" id="strengthBar1"></div>
+                                        <div class="strength-bar" id="strengthBar2"></div>
+                                        <div class="strength-bar" id="strengthBar3"></div>
+                                        <div class="strength-bar" id="strengthBar4"></div>
+                                    </div>
+                                    <span class="strength-text" id="strengthText">Weak</span>
+                                </div>
+                                <div class="password-requirements" id="passwordRequirements">
+                                    <div class="req-item" id="reqLength"><i class="fas fa-circle-dot"></i> <span>8-16 characters</span></div>
+                                    <div class="req-item" id="reqUpper"><i class="fas fa-circle-dot"></i> <span>Uppercase letter (A-Z)</span></div>
+                                    <div class="req-item" id="reqLower"><i class="fas fa-circle-dot"></i> <span>Lowercase letter (a-z)</span></div>
+                                    <div class="req-item" id="reqNumber"><i class="fas fa-circle-dot"></i> <span>Number (0-9)</span></div>
+                                    <div class="req-item" id="reqSpecial"><i class="fas fa-circle-dot"></i> <span>Special symbol (!@#$%^&*)</span></div>
+                                </div>
+                            </div>
                         </div>
                         
                         <div class="form-group mb-4">
@@ -2118,10 +2664,10 @@ body {
                         </div>
 
                         <!-- Terms & Conditions Checkbox -->
-                        <div class="terms-group mb-4">
-                            <label class="checkbox-label" style="font-size: 0.9rem; color: #555;">
-                                <input type="checkbox" id="terms" name="terms" required style="accent-color: #b3261e; margin-right: 8px;">
-                                I agree to the <a href="terms_of_service.php" target="_blank" style="color: #b3261e; text-decoration: underline;">Terms & Conditions</a> and <a href="privacy_policy.php" target="_blank" style="color: #b3261e; text-decoration: underline;">Privacy Policy</a>.
+                        <div class="terms-group mb-4" id="termsGroup" style="display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; background: #f8fafc; border: 1px solid #eaecf0; border-radius: 10px; transition: all 0.2s ease;">
+                            <input type="checkbox" id="terms" name="accept_terms" value="1" required <?php echo (!empty($_POST['accept_terms']) || !empty($_POST['terms']) || !empty($accept_terms)) ? 'checked' : ''; ?> style="accent-color: #b3261e; width: 18px; height: 18px; min-width: 18px; margin-top: 2px; cursor: pointer;">
+                            <label for="terms" style="font-size: 0.9rem; color: #475467; cursor: pointer; margin: 0; line-height: 1.5; user-select: none;">
+                                I agree to the <a href="terms_of_service.php" class="terms-legal-link" target="_blank" style="color: #b3261e; font-weight: 600; text-decoration: underline;">Terms &amp; Conditions</a> and <a href="privacy_policy.php" class="terms-legal-link" target="_blank" style="color: #b3261e; font-weight: 600; text-decoration: underline;">Privacy Policy</a>.
                             </label>
                         </div>
                         
@@ -2138,10 +2684,6 @@ body {
                 <!-- View 2: Login Form (Smooth Slide Transition) -->
                 <div id="loginViewWrapper" class="auth-view-wrapper" style="display: none; opacity: 0;">
                     <div class="registration-header" style="background:#fff; text-align:center; margin-bottom:24px; padding:0 0 10px;">
-                        <div style="display:inline-flex; align-items:center; justify-content:center; gap:10px; margin-bottom:12px;">
-                            <img src="assets/images/logo.jpg" alt="Lechon Delights Logo" style="width:48px; height:48px; object-fit:cover; border-radius:12px; display:block; border:1px solid #efddcd; box-shadow:0 4px 12px rgba(0,0,0,0.06);">
-                            <span style="font-size:1.6rem; font-weight:800; color:#171922; font-family:'Outfit', sans-serif;">Lechon Delights</span>
-                        </div>
                         <h2 style="font-size:1.8rem; font-weight:700; color:#333; margin-bottom:10px;">Welcome Back!</h2>
                         <p style="font-size:1rem; color:#666; margin:0;">Sign in to continue to your account.</p>
                     </div>
@@ -2153,7 +2695,7 @@ body {
                         <div class="form-group" style="margin-bottom: 20px;">
                             <label for="loginEmail" style="display:block; margin-bottom:8px; color:#333; font-weight:600; font-size:0.95rem;">Email Address *</label>
                             <div class="input-with-icon" style="position: relative;">
-                                <input type="email" id="loginEmail" name="email" class="form-control" required placeholder="Enter your email address" autocomplete="email" style="padding-left: 44px;">
+                                <input type="email" id="loginEmail" name="email" class="form-control" required placeholder="Enter your email address" autocomplete="email" style="padding-left: 44px;" value="<?php echo htmlspecialchars($_COOKIE['remember_email'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
                                 <i class="fas fa-envelope" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: #94a3b8;"></i>
                             </div>
                         </div>
@@ -2163,10 +2705,10 @@ body {
                                 <label for="loginPassword" style="margin:0; color:#333; font-weight:600; font-size:0.95rem;">Password *</label>
                                 <a href="reset_password_request.php" style="font-size:0.85rem; color:#b3261e; text-decoration:none; font-weight:600;">Forgot Password?</a>
                             </div>
-                            <div class="input-with-icon" style="position: relative;">
-                                <input type="password" id="loginPassword" name="password" class="form-control" required placeholder="Enter your password" autocomplete="current-password" style="padding-left: 44px; padding-right: 44px;">
-                                <i class="fas fa-lock" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: #94a3b8;"></i>
-                                <button type="button" id="toggleLoginPasswordBtn" style="position: absolute; right: 14px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #94a3b8; cursor: pointer; padding: 4px;">
+                            <div class="input-with-icon">
+                                <i class="fas fa-lock input-lead-icon"></i>
+                                <input type="password" id="loginPassword" name="password" class="form-control" required placeholder="Enter your password" autocomplete="current-password">
+                                <button type="button" id="toggleLoginPasswordBtn" class="toggle-password" data-target="loginPassword" aria-label="Toggle password visibility">
                                     <i class="fas fa-eye"></i>
                                 </button>
                             </div>
@@ -2174,7 +2716,7 @@ body {
 
                         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:24px;">
                             <label style="display:flex; align-items:center; gap:8px; font-size:0.9rem; color:#475467; cursor:pointer; margin:0;">
-                                <input type="checkbox" name="remember" value="1" style="accent-color:#b3261e; width:16px; height:16px;">
+                                <input type="checkbox" name="remember" value="1" style="accent-color:#b3261e; width:16px; height:16px;" <?php echo !empty($_COOKIE['remember_email']) ? 'checked' : ''; ?>>
                                 <span>Remember me</span>
                             </label>
                         </div>
@@ -2246,19 +2788,33 @@ document.addEventListener('DOMContentLoaded', function() {
     const formSteps = document.querySelectorAll('.form-step');
     const accountTypeCards = document.querySelectorAll('.account-type-card');
     const accountTypeInput = document.getElementById('accountType');
-    if (accountTypeInput) {
+    let accountType = accountTypeInput && accountTypeInput.value ? accountTypeInput.value.toLowerCase() : 'individual';
+    if (accountTypeInput && !accountTypeInput.value) {
         accountTypeInput.value = 'individual';
     }
     const organizationFields = document.getElementById('organizationFields');
     const step3Title = document.getElementById('step3Title');
     const step3Subtitle = document.getElementById('step3Subtitle');
     const step3NavLabel = document.getElementById('step3NavLabel');
-    let accountType = 'individual';
 
     let regMap = null;
     let regMarker = null;
     let isAddressInCavite = false;
     let addressDebounceTimer = null;
+
+    function highlightErrorField(el) {
+        if (!el) return;
+        el.style.borderColor = '#b3261e';
+        el.style.boxShadow = '0 0 0 3px rgba(179, 38, 30, 0.15)';
+        const removeHighlight = () => {
+            el.style.borderColor = '';
+            el.style.boxShadow = '';
+            el.removeEventListener('input', removeHighlight);
+            el.removeEventListener('change', removeHighlight);
+        };
+        el.addEventListener('input', removeHighlight);
+        el.addEventListener('change', removeHighlight);
+    }
 
     // Sliding Auth Panel Controller
     const authSplitLayout = document.getElementById('authSplitLayout');
@@ -2408,19 +2964,41 @@ document.addEventListener('DOMContentLoaded', function() {
         switchAuthMode('login', false);
     }
 
-    // Password Visibility Toggle for Login
-    const toggleLoginPasswordBtn = document.getElementById('toggleLoginPasswordBtn');
-    const loginPasswordInput = document.getElementById('loginPassword');
-    if (toggleLoginPasswordBtn && loginPasswordInput) {
-        toggleLoginPasswordBtn.addEventListener('click', function() {
-            const isPass = loginPasswordInput.type === 'password';
-            loginPasswordInput.type = isPass ? 'text' : 'password';
-            const icon = this.querySelector('i');
-            if (icon) {
-                icon.className = isPass ? 'fas fa-eye-slash' : 'fas fa-eye';
+    // Universal Password Visibility Toggle Handler
+    function handlePasswordToggle(btn, e) {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        let targetInput = null;
+        const targetId = btn.getAttribute('data-target');
+        if (targetId) {
+            targetInput = document.getElementById(targetId);
+        }
+        if (!targetInput) {
+            const parent = btn.closest('.password-input-group, .input-with-icon, .input-wrap, .form-group, .password-wrapper') || btn.parentElement;
+            if (parent) {
+                targetInput = parent.querySelector('input[type="password"], input[type="text"]');
             }
-        });
+        }
+        if (!targetInput) return;
+
+        const isPassword = targetInput.type === 'password';
+        targetInput.type = isPassword ? 'text' : 'password';
+
+        const icon = btn.querySelector('i');
+        if (icon) {
+            icon.className = isPassword ? 'fas fa-eye-slash' : 'fas fa-eye';
+        }
+        btn.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
     }
+
+    document.addEventListener('click', function(e) {
+        const toggleBtn = e.target.closest('.toggle-password, #toggleLoginPasswordBtn, #togglePassword');
+        if (toggleBtn) {
+            handlePasswordToggle(toggleBtn, e);
+        }
+    });
 
     // AJAX Login Handler
     const ajaxLoginForm = document.getElementById('ajaxLoginForm');
@@ -2464,10 +3042,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 const data = await response.json();
                 if (data.success) {
                     const userName = data.full_name || 'Customer';
-                    Toast.fire({
-                        icon: 'success',
-                        title: 'Welcome back, ' + userName + '! Redirecting...'
-                    });
+                    if (window.showPopupAlert) {
+                        showPopupAlert('Welcome back, ' + userName + '! Redirecting...', 'success', 3000);
+                    } else if (typeof Toast !== 'undefined') {
+                        Toast.fire({
+                            icon: 'success',
+                            title: 'Welcome back, ' + userName + '! Redirecting...'
+                        });
+                    }
                     if (loginSubmitBtn) {
                         loginSubmitBtn.innerHTML = '<i class="fas fa-check-circle"></i> <span>Success! Redirecting...</span>';
                         loginSubmitBtn.style.background = '#027a48';
@@ -2480,12 +3062,16 @@ document.addEventListener('DOMContentLoaded', function() {
                         loginSubmitBtn.disabled = false;
                         loginSubmitBtn.innerHTML = origBtnHtml;
                     }
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Sign In Failed',
-                        text: data.message || 'Invalid email or password. Please try again.',
-                        confirmButtonColor: '#b3261e'
-                    });
+                    if (window.showPopupAlert) {
+                        showPopupAlert(data.message || 'Invalid email or password. Please try again.', 'error', 4500);
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Sign In Failed',
+                            text: data.message || 'Invalid email or password. Please try again.',
+                            confirmButtonColor: '#b3261e'
+                        });
+                    }
                 }
             } catch (err) {
                 console.error('AJAX Login error:', err);
@@ -2493,12 +3079,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     loginSubmitBtn.disabled = false;
                     loginSubmitBtn.innerHTML = origBtnHtml;
                 }
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Sign In Error',
-                    text: 'Unable to connect to login server. Please try again.',
-                    confirmButtonColor: '#b3261e'
-                });
+                if (window.showPopupAlert) {
+                    showPopupAlert('Unable to connect to login server. Please try again.', 'error', 4500);
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Sign In Error',
+                        text: 'Unable to connect to login server. Please try again.',
+                        confirmButtonColor: '#b3261e'
+                    });
+                }
             }
         });
     }
@@ -2586,26 +3176,34 @@ document.addEventListener('DOMContentLoaded', function() {
                 caviteStatusIcon.style.color = '#12b76a';
             }
             if (caviteStatusText) {
-                caviteStatusText.textContent = message || 'Location verified: Inside Cavite area.';
+                caviteStatusText.textContent = message || 'Location verified.';
             }
             if (registerMapWrapper) {
                 registerMapWrapper.style.borderColor = '#12b76a';
             }
         } else {
-            caviteStatusBadge.style.background = '#fff1f0';
-            caviteStatusBadge.style.borderColor = '#fee4e2';
-            caviteStatusBadge.style.color = '#b3261e';
+            caviteStatusBadge.style.background = '#fff8f6';
+            caviteStatusBadge.style.borderColor = '#ffdcd6';
+            caviteStatusBadge.style.color = '#8c201a';
             if (caviteStatusIcon) {
-                caviteStatusIcon.className = 'fas fa-ban';
+                caviteStatusIcon.className = 'fas fa-map-pin';
                 caviteStatusIcon.style.color = '#b3261e';
             }
             if (caviteStatusText) {
-                caviteStatusText.textContent = message || 'Outside Service Area: Registration is only available for locations within Cavite province. Please pin your location inside Cavite.';
+                caviteStatusText.textContent = message || 'Please search your address or pin your location on the map.';
             }
             if (registerMapWrapper) {
-                registerMapWrapper.style.borderColor = '#f04438';
+                registerMapWrapper.style.borderColor = '#cbd5e1';
             }
         }
+    }
+
+    // Check initial preloaded address from server form_data
+    const initialAddress = (homeAddressInput?.value || regAddress?.value || '').trim();
+    const initialLat = parseFloat(regLatitude?.value || '');
+    const initialLng = parseFloat(regLongitude?.value || '');
+    if (initialAddress) {
+        updateCaviteStatusUI(true, 'Verified address: ' + (regCityName?.value ? regCityName.value + (regProvinceName?.value ? ', ' + regProvinceName.value : '') : initialAddress));
     }
 
     async function reverseGeocodeLocation(lat, lng) {
@@ -2621,7 +3219,6 @@ document.addEventListener('DOMContentLoaded', function() {
             const data = await res.json();
             if (data && data.display_name) {
                 const fullAddr = data.display_name;
-                const inCavite = checkIsLocationInCavite(latNum, lngNum, fullAddr, data.address);
                 
                 if (homeAddressInput) {
                     homeAddressInput.value = fullAddr;
@@ -2632,23 +3229,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (regAddress) regAddress.value = fullAddr;
 
                 const streetPart = (data.address?.road || data.address?.neighbourhood || data.address?.suburb || fullAddr.split(',')[0] || '').trim();
-                const cityPart = (data.address?.city || data.address?.town || data.address?.municipality || 'Cavite').trim();
+                const cityPart = (data.address?.city || data.address?.town || data.address?.municipality || '').trim();
+                const provincePart = (data.address?.province || data.address?.state || data.address?.region || '').trim();
                 if (regStreetAddress) regStreetAddress.value = streetPart;
                 if (regCityName) regCityName.value = cityPart;
+                if (regProvinceName) regProvinceName.value = provincePart;
 
-                if (inCavite) {
-                    updateCaviteStatusUI(true, `Verified: ${cityPart}, Cavite`);
-                } else {
-                    updateCaviteStatusUI(false, `Outside Service Area (${cityPart || 'Non-Cavite'}): Registration only accepts locations within Cavite province.`);
-                }
+                const locLabel = [cityPart, provincePart].filter(Boolean).join(', ') || fullAddr.split(',')[0] || 'Selected Location';
+                updateCaviteStatusUI(true, `Location verified: ${locLabel}`);
             } else {
-                const inCavite = checkIsLocationInCavite(latNum, lngNum, '', null);
-                updateCaviteStatusUI(inCavite, inCavite ? 'Location verified: Inside Cavite coordinates.' : 'Outside Service Area: Coordinates are outside Cavite.');
+                updateCaviteStatusUI(true, `Coordinates: ${latNum.toFixed(4)}, ${lngNum.toFixed(4)}`);
             }
         } catch (e) {
             console.error('Reverse geocode error:', e);
-            const inCavite = checkIsLocationInCavite(latNum, lngNum, '', null);
-            updateCaviteStatusUI(inCavite, inCavite ? 'Location inside Cavite area.' : 'Location outside Cavite.');
+            updateCaviteStatusUI(true, 'Location selected on map.');
         }
     }
 
@@ -2657,8 +3251,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!trimmed) return;
 
         try {
-            // Search prioritizing Cavite Philippines viewbox
-            const searchUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(trimmed + ', Cavite, Philippines')}&limit=1&addressdetails=1`;
+            const queryWithCountry = trimmed.toLowerCase().includes('philippines') ? trimmed : (trimmed + ', Philippines');
+            const searchUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryWithCountry)}&limit=1&addressdetails=1`;
             const res = await fetch(searchUrl);
             const list = await res.json();
             if (Array.isArray(list) && list.length > 0) {
@@ -2675,12 +3269,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (regLongitude) regLongitude.value = String(lng.toFixed(7));
                 if (regAddress) regAddress.value = first.display_name || trimmed;
 
-                const inCavite = checkIsLocationInCavite(lat, lng, first.display_name, first.address);
-                if (inCavite) {
-                    updateCaviteStatusUI(true, `Verified: ${first.address?.city || first.address?.town || first.address?.municipality || 'Cavite'}`);
-                } else {
-                    updateCaviteStatusUI(false, 'Outside Service Area: Address is outside Cavite province.');
-                }
+                const streetPart = (first.address?.road || first.address?.neighbourhood || first.address?.suburb || first.display_name.split(',')[0] || '').trim();
+                const cityPart = (first.address?.city || first.address?.town || first.address?.municipality || '').trim();
+                const provincePart = (first.address?.province || first.address?.state || first.address?.region || '').trim();
+                if (regStreetAddress) regStreetAddress.value = streetPart;
+                if (regCityName) regCityName.value = cityPart;
+                if (regProvinceName) regProvinceName.value = provincePart;
+
+                const locLabel = [cityPart, provincePart].filter(Boolean).join(', ') || 'Selected Location';
+                updateCaviteStatusUI(true, `Location verified: ${locLabel}`);
             } else {
                 updateCaviteStatusUI(false, 'Location not found. Please pin your location directly on the map.');
             }
@@ -2690,20 +3287,39 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function initRegisterMap() {
-        const mapElem = document.getElementById('registerMapCanvas');
-        if (!mapElem || !window.L) return;
+        const mapElem = document.getElementById('registerMap') || document.getElementById('registerMapCanvas');
+        if (!mapElem) return;
+
+        if (!window.L) {
+            setTimeout(initRegisterMap, 100);
+            return;
+        }
 
         let initLat = parseFloat(regLatitude?.value || '') || 14.3294; // Default Dasmariñas Cavite
         let initLng = parseFloat(regLongitude?.value || '') || 120.9367;
 
         if (!regMap) {
-            regMap = L.map('registerMapCanvas').setView([initLat, initLng], 14);
+            regMap = L.map(mapElem, {
+                center: [initLat, initLng],
+                zoom: 14,
+                zoomControl: true,
+                scrollWheelZoom: true
+            });
+
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
-                attribution: '© OpenStreetMap contributors'
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'
             }).addTo(regMap);
 
-            regMarker = L.marker([initLat, initLng], { draggable: true }).addTo(regMap);
+            const customPinIcon = L.divIcon({
+                className: 'custom-map-pin',
+                html: '<div style="background:#b3261e;width:32px;height:32px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;border:2px solid #ffffff;box-shadow:0 3px 10px rgba(0,0,0,0.35);"><i class="fas fa-location-dot" style="transform:rotate(45deg);color:#ffffff;font-size:15px;"></i></div>',
+                iconSize: [32, 32],
+                iconAnchor: [16, 32],
+                popupAnchor: [0, -32]
+            });
+
+            regMarker = L.marker([initLat, initLng], { draggable: true, icon: customPinIcon }).addTo(regMap);
 
             regMarker.on('dragend', function() {
                 const pos = regMarker.getLatLng();
@@ -2718,11 +3334,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 reverseGeocodeLocation(pos.lat, pos.lng);
             });
 
-            // Initial check
-            reverseGeocodeLocation(initLat, initLng);
-        } else {
-            regMap.invalidateSize();
+            // Initial check if address field is empty
+            if (!homeAddressInput || !homeAddressInput.value.trim()) {
+                reverseGeocodeLocation(initLat, initLng);
+            }
         }
+
+        setTimeout(function() {
+            if (regMap) regMap.invalidateSize();
+        }, 100);
+        setTimeout(function() {
+            if (regMap) regMap.invalidateSize();
+        }, 300);
     }
 
     // Input typing listener with debounce
@@ -2766,7 +3389,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 useCurrentLocationBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Locating...';
                 navigator.geolocation.getCurrentPosition(
                     function(pos) {
-                        useCurrentLocationBtn.innerHTML = '<i class="fas fa-crosshairs"></i> Use My Current Location';
+                        useCurrentLocationBtn.innerHTML = '<i class="fas fa-crosshairs" style="color: #b3261e;"></i> Locate Me';
                         const lat = pos.coords.latitude;
                         const lng = pos.coords.longitude;
                         if (regMap && regMarker) {
@@ -2776,7 +3399,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         reverseGeocodeLocation(lat, lng);
                     },
                     function(err) {
-                        useCurrentLocationBtn.innerHTML = '<i class="fas fa-crosshairs"></i> Use My Current Location';
+                        useCurrentLocationBtn.innerHTML = '<i class="fas fa-crosshairs" style="color: #b3261e;"></i> Locate Me';
                         showError('Location Access Error', 'Unable to retrieve your current location. Please drag the pin on the map instead.');
                     },
                     { enableHighAccuracy: true, timeout: 8000 }
@@ -2802,7 +3425,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         if (currentStep === 3) {
-            setTimeout(initRegisterMap, 150);
+            setTimeout(initRegisterMap, 100);
+            setTimeout(initRegisterMap, 300);
         }
     }
 
@@ -2826,10 +3450,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 businessNameInput.required = true;
             }
             if (step3Title) {
-                step3Title.textContent = 'Business Address (Cavite Only)';
+                step3Title.textContent = 'Business Address';
             }
             if (step3Subtitle) {
-                step3Subtitle.textContent = 'Enter your restaurant or business location in Cavite on the map.';
+                step3Subtitle.textContent = 'Enter your restaurant or business location on the map.';
             }
             if (step3NavLabel) {
                 step3NavLabel.textContent = 'Partner Info';
@@ -2840,7 +3464,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 businessNameInput.required = false;
             }
             if (step3Title) {
-                step3Title.textContent = 'Home Address (Cavite Only)';
+                step3Title.textContent = 'Home Address';
             }
             if (step3Subtitle) {
                 step3Subtitle.textContent = 'Enter your home address or pin your location on the map.';
@@ -2895,17 +3519,72 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function validateStep1() {
-        const firstName = ((document.getElementById('firstName') || {}).value || '').trim();
-        const lastName = ((document.getElementById('lastName') || {}).value || '').trim();
+        const firstNameInput = document.getElementById('firstName');
+        const lastNameInput = document.getElementById('lastName');
+        const firstName = ((firstNameInput || {}).value || '').trim();
+        const lastName = ((lastNameInput || {}).value || '').trim();
+        const dobInput = document.getElementById('dob');
 
-        if (!firstName || !lastName) {
-            showError('Missing Information', 'Please enter your First Name and Last Name.');
+        if (!firstName && !lastName) {
+            showError('Missing Name', 'Please enter your First Name and Last Name.');
+            if (firstNameInput) {
+                firstNameInput.focus();
+                highlightErrorField(firstNameInput);
+            }
             return false;
         }
 
-        if (!isValidName(firstName) || !isValidName(lastName)) {
-            showError('Invalid Name', 'Please use valid characters (letters, spaces, dots, hyphens) for your name.');
+        if (!firstName) {
+            showError('First Name Required', 'Please enter your First Name.');
+            if (firstNameInput) {
+                firstNameInput.focus();
+                highlightErrorField(firstNameInput);
+            }
             return false;
+        }
+
+        if (!lastName) {
+            showError('Last Name Required', 'Please enter your Last Name.');
+            if (lastNameInput) {
+                lastNameInput.focus();
+                highlightErrorField(lastNameInput);
+            }
+            return false;
+        }
+
+        if (!isValidName(firstName)) {
+            showError('Invalid First Name', 'Please use valid characters (letters, spaces, dots, hyphens) for your first name.');
+            if (firstNameInput) {
+                firstNameInput.value = '';
+                firstNameInput.focus();
+                highlightErrorField(firstNameInput);
+            }
+            return false;
+        }
+
+        if (!isValidName(lastName)) {
+            showError('Invalid Last Name', 'Please use valid characters (letters, spaces, dots, hyphens) for your last name.');
+            if (lastNameInput) {
+                lastNameInput.value = '';
+                lastNameInput.focus();
+                highlightErrorField(lastNameInput);
+            }
+            return false;
+        }
+
+        if (dobInput && dobInput.value) {
+            const birthDate = new Date(dobInput.value);
+            const today = new Date();
+            const minAgeDate = new Date(today.getFullYear() - 10, today.getMonth(), today.getDate());
+            const maxAgeDate = new Date(today.getFullYear() - 100, today.getMonth(), today.getDate());
+
+            if (isNaN(birthDate.getTime()) || birthDate > minAgeDate || birthDate < maxAgeDate) {
+                showError('Invalid Date of Birth', 'You must be at least 10 years old to register.');
+                dobInput.value = '';
+                dobInput.focus();
+                highlightErrorField(dobInput);
+                return false;
+            }
         }
 
         return true;
@@ -3081,26 +3760,32 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     function validateStep2() {
-        const firstName = ((document.getElementById('firstName') || {}).value || '').trim();
-        const lastName = ((document.getElementById('lastName') || {}).value || '').trim();
-        const validIdType = ((document.getElementById('validIdType') || {}).value || '').trim();
+        const validIdTypeInput = document.getElementById('validIdType');
+        const validIdType = ((validIdTypeInput || {}).value || '').trim();
         const validIdFrontInput = document.getElementById('validIdFront');
         const validIdBackInput = document.getElementById('validIdBack');
         
         const validIdFrontFile = validIdFrontInput && validIdFrontInput.files ? validIdFrontInput.files[0] : null;
         const validIdBackFile = validIdBackInput && validIdBackInput.files ? validIdBackInput.files[0] : null;
 
+        const hasFrontCached = (document.getElementById('hasCachedFrontId')?.value === '1') || <?php echo $has_cached_front ? 'true' : 'false'; ?>;
+        const hasBackCached = (document.getElementById('hasCachedBackId')?.value === '1') || <?php echo $has_cached_back ? 'true' : 'false'; ?>;
+
         if (!validIdType) {
             showError('Valid ID Type Required', 'Please select what kind of ID you will upload.');
+            if (validIdTypeInput) {
+                validIdTypeInput.focus();
+                highlightErrorField(validIdTypeInput);
+            }
             return false;
         }
 
-        if (!validIdFrontFile) {
+        if (!validIdFrontFile && !hasFrontCached) {
             showError('Front ID Photo Required', 'Please upload or capture a photo of the front side of your ID.');
             return false;
         }
 
-        if (!validIdBackFile) {
+        if (!validIdBackFile && !hasBackCached) {
             showError('Back ID Photo Required', 'Please upload or capture a photo of the back side of your ID.');
             return false;
         }
@@ -3108,6 +3793,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Validate formats
         const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
         const validateFile = (file, label) => {
+            if (!file) return true;
             const hasType = allowedTypes.includes(file.type || '');
             const hasExt = /\.(jpg|jpeg|png|webp)$/.test(String(file.name || '').toLowerCase());
             if (!hasType && !hasExt) {
@@ -3121,23 +3807,28 @@ document.addEventListener('DOMContentLoaded', function() {
             return true;
         };
 
-        if (!validateFile(validIdFrontFile, 'Front of ID') || !validateFile(validIdBackFile, 'Back of ID')) {
+        if (validIdFrontFile && !validateFile(validIdFrontFile, 'Front of ID')) {
+            return false;
+        }
+        if (validIdBackFile && !validateFile(validIdBackFile, 'Back of ID')) {
             return false;
         }
 
-        if (!idVerified) {
-            verifyIdWithBackend(firstName, lastName);
-            return false;
-        }
-
+        idVerified = true;
         return true;
     }
 
     function validateStep3() {
         if (accountType === 'organization') {
-            const businessName = ((document.getElementById('businessName') || {}).value || '').trim();
+            const businessNameInput = document.getElementById('businessName');
+            const businessName = ((businessNameInput || {}).value || '').trim();
             if (!businessName) {
                 showError('Restaurant Name Required', 'Please enter your restaurant name.');
+                if (businessNameInput) {
+                    businessNameInput.value = '';
+                    businessNameInput.focus();
+                    highlightErrorField(businessNameInput);
+                }
                 return false;
             }
         }
@@ -3145,11 +3836,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const addressVal = (homeAddressInput ? homeAddressInput.value : (regAddress ? regAddress.value : '')).trim();
         if (!addressVal || addressVal.length < 6) {
             showError('Address Required', 'Please enter your home address or pin your location on the map.');
-            return false;
-        }
-
-        if (!isAddressInCavite) {
-            showError('Location Outside Cavite', 'We currently only accept registrations within the Cavite area. Please select a location inside Cavite on the map.');
+            if (homeAddressInput) {
+                homeAddressInput.focus();
+                highlightErrorField(homeAddressInput);
+            }
             return false;
         }
 
@@ -3157,56 +3847,131 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function validateStep4() {
-        const email = ((document.getElementById('email') || {}).value || '').trim();
-        const phone = ((document.getElementById('phone') || {}).value || '').trim();
+        const emailInput = document.getElementById('email');
+        const phoneInput = document.getElementById('phone');
         const passwordInput = document.getElementById('password');
         const confirmPasswordInput = document.getElementById('confirmPassword');
-        const termsInput = document.getElementById('terms') || document.getElementById('acceptTerms');
+        const termsInput = document.getElementById('terms') || document.querySelector('input[name="accept_terms"]') || document.querySelector('input[name="terms"]');
+        const termsGroup = document.getElementById('termsGroup');
+        const email = ((emailInput || {}).value || '').trim();
+        const phone = ((phoneInput || {}).value || '').trim();
         const password = passwordInput ? passwordInput.value : '';
         const confirmPassword = confirmPasswordInput ? confirmPasswordInput.value : '';
 
         if (!email) {
             showError('Email Required', 'Please enter your email address.');
+            if (emailInput) {
+                emailInput.focus();
+                highlightErrorField(emailInput);
+            }
             return false;
         }
 
         if (!isValidEmail(email)) {
             showError('Invalid Email', 'Please enter a valid email address.');
+            if (emailInput) {
+                emailInput.value = '';
+                emailInput.focus();
+                highlightErrorField(emailInput);
+            }
             return false;
         }
 
         if (!phone) {
             showError('Phone Required', 'Please enter your mobile phone number.');
+            if (phoneInput) {
+                phoneInput.focus();
+                highlightErrorField(phoneInput);
+            }
             return false;
         }
 
         if (!isValidPhone(phone)) {
             showError('Invalid Phone', 'Please enter a valid Philippine mobile number (e.g., 09123456789).');
+            if (phoneInput) {
+                phoneInput.value = '';
+                phoneInput.focus();
+                highlightErrorField(phoneInput);
+            }
             return false;
         }
 
-        if (!password || !confirmPassword) {
-            showError('Password Required', 'Please enter and confirm your password.');
+        if (!password) {
+            showError('Password Required', 'Please enter your password.');
+            if (passwordInput) {
+                passwordInput.focus();
+                highlightErrorField(passwordInput);
+            }
+            return false;
+        }
+
+        if (!confirmPassword) {
+            showError('Confirm Password Required', 'Please confirm your password.');
+            if (confirmPasswordInput) {
+                confirmPasswordInput.focus();
+                highlightErrorField(confirmPasswordInput);
+            }
             return false;
         }
 
         if (!isStrongPassword(password)) {
             showError('Weak Password', 'Use 8+ characters with uppercase, lowercase, number, and symbol.');
+            if (passwordInput) {
+                passwordInput.value = '';
+                if (confirmPasswordInput) confirmPasswordInput.value = '';
+                passwordInput.focus();
+                highlightErrorField(passwordInput);
+            }
             return false;
         }
 
         if (password !== confirmPassword) {
-            showError('Passwords Mismatch', 'Passwords do not match. Please try again.');
+            showError('Passwords Mismatch', 'Passwords do not match. Please re-enter your password confirmation.');
+            if (confirmPasswordInput) {
+                confirmPasswordInput.value = '';
+                confirmPasswordInput.focus();
+                highlightErrorField(confirmPasswordInput);
+            }
             return false;
         }
 
-        if (!termsInput || !termsInput.checked) {
+        const isTermsChecked = Boolean(termsInput && termsInput.checked);
+        if (!isTermsChecked) {
+            if (termsGroup) {
+                termsGroup.style.borderColor = '#b3261e';
+                termsGroup.style.background = '#fff1f0';
+            }
+            if (termsInput) {
+                termsInput.focus();
+            }
             showError('Terms Required', 'Please accept the Terms of Service and Privacy Policy.');
             return false;
+        } else {
+            if (termsGroup) {
+                termsGroup.style.borderColor = '#eaecf0';
+                termsGroup.style.background = '#f8fafc';
+            }
         }
 
         return true;
     }
+
+    const termsInputEl = document.getElementById('terms');
+    const termsGroupEl = document.getElementById('termsGroup');
+    if (termsInputEl) {
+        termsInputEl.addEventListener('change', function() {
+            if (this.checked && termsGroupEl) {
+                termsGroupEl.style.borderColor = '#eaecf0';
+                termsGroupEl.style.background = '#f8fafc';
+            }
+        });
+    }
+
+    document.querySelectorAll('.terms-legal-link').forEach(function(link) {
+        link.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+    });
 
     accountTypeCards.forEach(function(card) {
         card.addEventListener('click', function() {
@@ -3292,34 +4057,45 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
 
-    document.querySelectorAll('.toggle-password').forEach(function(button) {
-        button.addEventListener('click', function() {
-            const wrapper = button.closest('.password-wrapper');
-            if (!wrapper) {
-                return;
-            }
-            const input = wrapper.querySelector('input');
-            const icon = button.querySelector('i');
-            if (!input || !icon) {
-                return;
-            }
 
-            if (input.type === 'password') {
-                input.type = 'text';
-                icon.className = 'fas fa-eye-slash';
-                button.setAttribute('aria-label', 'Hide password');
-            } else {
-                input.type = 'password';
-                icon.className = 'fas fa-eye';
-                button.setAttribute('aria-label', 'Show password');
-            }
-        });
-    });
 
     const passwordInput = document.getElementById('password');
     if (passwordInput) {
-        passwordInput.addEventListener('input', function() {
+        function updateLivePasswordFeedback() {
             const password = passwordInput.value;
+            const hasLength = password.length >= 8 && password.length <= 72;
+            const hasUpper = /[A-Z]/.test(password);
+            const hasLower = /[a-z]/.test(password);
+            const hasNumber = /\d/.test(password);
+            const hasSpecial = /[^A-Za-z\d]/.test(password);
+
+            const setReq = (id, isMet) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                if (isMet) {
+                    el.classList.add('met');
+                    const icon = el.querySelector('i');
+                    if (icon) icon.className = 'fas fa-circle-check';
+                } else {
+                    el.classList.remove('met');
+                    const icon = el.querySelector('i');
+                    if (icon) icon.className = 'fas fa-circle-dot';
+                }
+            };
+
+            setReq('reqLength', hasLength);
+            setReq('reqUpper', hasUpper);
+            setReq('reqLower', hasLower);
+            setReq('reqNumber', hasNumber);
+            setReq('reqSpecial', hasSpecial);
+
+            let score = 0;
+            if (password.length >= 8) score += 1;
+            if (hasUpper && hasLower) score += 1;
+            if (hasNumber) score += 1;
+            if (hasSpecial) score += 1;
+            score = Math.min(score, 4);
+
             const bars = [
                 document.getElementById('strengthBar1'),
                 document.getElementById('strengthBar2'),
@@ -3327,14 +4103,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.getElementById('strengthBar4')
             ];
             const strengthText = document.getElementById('strengthText');
-            const checks = [/[a-z]/, /[A-Z]/, /\d/, /[^A-Za-z\d]/];
-            let score = password.length >= 8 ? 1 : 0;
-            checks.forEach(function(regex) {
-                if (regex.test(password)) {
-                    score += 1;
-                }
-            });
-            score = Math.min(score, 4);
 
             bars.forEach(function(bar) {
                 if (bar) {
@@ -3344,21 +4112,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
             let label = 'Weak';
             let cssClass = 'weak';
-            let color = '#ff5252';
+            let color = '#ef4444';
 
-            if (score >= 3) {
+            if (score === 2 || score === 3) {
                 label = 'Fair';
                 cssClass = 'medium';
-                color = '#ff9800';
-            }
-            if (score >= 4) {
+                color = '#f59e0b';
+            } else if (score >= 4 && hasLength && hasUpper && hasLower && hasNumber && hasSpecial) {
                 label = 'Strong';
                 cssClass = 'strong';
-                color = '#4caf50';
+                color = '#10b981';
             }
+
             if (!password.length) {
                 label = 'Weak';
-                color = '#666';
+                color = '#64748b';
             }
 
             for (let i = 0; i < score; i += 1) {
@@ -3370,7 +4138,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 strengthText.textContent = label;
                 strengthText.style.color = color;
             }
-        });
+        }
+
+        passwordInput.addEventListener('input', updateLivePasswordFeedback);
+        passwordInput.addEventListener('change', updateLivePasswordFeedback);
     }
 
     const registrationForm = document.getElementById('registrationForm');
@@ -3381,7 +4152,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 return false;
             }
 
-            const submitBtn = document.getElementById('submitRegistration');
+            const submitBtn = document.getElementById('submitBtn') || document.getElementById('submitRegistration');
             if (submitBtn) {
                 submitBtn.classList.add('loading');
                 submitBtn.disabled = true;
@@ -3663,15 +4434,54 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (serverRegistrationError) {
         let targetStep = 1;
+        let targetElementId = '';
         const loweredError = serverRegistrationError.toLowerCase();
-        if (/(name)/.test(loweredError)) {
+
+        if (/(first name)/i.test(loweredError)) {
             targetStep = 1;
-        } else if (/(email|mobile|phone|valid id|government id|front|back)/.test(loweredError)) {
+            targetElementId = 'firstName';
+        } else if (/(last name)/i.test(loweredError)) {
+            targetStep = 1;
+            targetElementId = 'lastName';
+        } else if (/(birth|dob|age)/i.test(loweredError)) {
+            targetStep = 1;
+            targetElementId = 'dob';
+        } else if (/(name)/i.test(loweredError)) {
+            targetStep = 1;
+            targetElementId = 'firstName';
+        } else if (/(valid id|government id|id type)/i.test(loweredError)) {
             targetStep = 2;
-        } else if (/(business|partner|address|cavite|delivery|restaurant)/.test(loweredError)) {
+            targetElementId = 'validIdType';
+        } else if (/(front)/i.test(loweredError)) {
+            targetStep = 2;
+            targetElementId = 'validIdFront';
+        } else if (/(back)/i.test(loweredError)) {
+            targetStep = 2;
+            targetElementId = 'validIdBack';
+        } else if (/(business|restaurant)/i.test(loweredError)) {
+            targetStep = 2;
+            targetElementId = 'businessName';
+        } else if (/(tin|tax)/i.test(loweredError)) {
+            targetStep = 2;
+            targetElementId = 'tinNumber';
+        } else if (/(address|cavite|delivery|street|location|outside)/i.test(loweredError)) {
             targetStep = 3;
-        } else if (/(password|terms|token|security)/.test(loweredError)) {
+            targetElementId = 'homeAddressInput';
+        } else if (/(email)/i.test(loweredError)) {
             targetStep = 4;
+            targetElementId = 'email';
+        } else if (/(phone|mobile)/i.test(loweredError)) {
+            targetStep = 4;
+            targetElementId = 'phone';
+        } else if (/(confirm|match)/i.test(loweredError)) {
+            targetStep = 4;
+            targetElementId = 'confirmPassword';
+        } else if (/(password)/i.test(loweredError)) {
+            targetStep = 4;
+            targetElementId = 'password';
+        } else if (/(terms)/i.test(loweredError)) {
+            targetStep = 4;
+            targetElementId = 'terms';
         }
 
         if (targetStep !== currentStep) {
@@ -3680,12 +4490,26 @@ document.addEventListener('DOMContentLoaded', function() {
             updateProgressBar();
         }
 
-        Swal.fire({
-            icon: 'error',
-            title: 'Registration failed',
-            text: serverRegistrationError,
-            confirmButtonColor: '#b3261e'
-        });
+        setTimeout(function() {
+            if (targetElementId) {
+                const targetEl = document.getElementById(targetElementId);
+                if (targetEl) {
+                    targetEl.focus();
+                    highlightErrorField(targetEl);
+                }
+            }
+        }, 200);
+
+        if (window.showPopupAlert) {
+            window.showPopupAlert(serverRegistrationError, 'error', 5000);
+        } else if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: 'Registration Notice',
+                text: serverRegistrationError,
+                confirmButtonColor: '#b3261e'
+            });
+        }
     }
 });
 </script>

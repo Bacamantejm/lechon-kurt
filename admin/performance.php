@@ -242,81 +242,173 @@ if ($has_performance_table) {
     </div>
     
     <!-- Add Review Modal -->
-    <div class="modal fade" id="addReviewModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
+    <div class="modal fade modern-form-modal" id="addReviewModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Create Performance Review</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
                 <form method="POST">
+                    <div class="modal-header">
+                        <div class="modal-header-icon">
+                            <i class="fas fa-star-half-alt"></i>
+                        </div>
+                        <div>
+                            <h5 class="modal-title">Create Performance Review</h5>
+                            <p class="modal-subtitle">Formal periodic evaluation and goal setting for staff members.</p>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
                     <div class="modal-body">
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <label>Employee *</label>
-                                <select name="employee_id" class="form-select" required>
-                                    <option value="">Select employee</option>
-                                    <?php foreach ($employees as $emp): ?>
-                                        <option value="<?php echo $emp['id']; ?>"><?php echo htmlspecialchars($emp['first_name'] . ' ' . $emp['last_name']); ?></option>
-                                    <?php endforeach; ?>
-                                </select>
+
+                        <!-- Section 1: Employee & Period -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <div class="form-section-title">
+                                    <i class="fas fa-user-check text-danger"></i>
+                                    Employee & Review Period
+                                </div>
+                                <span class="form-req-pill">Required</span>
                             </div>
-                            <div class="col-md-3">
-                                <label>Period Start *</label>
-                                <input type="date" name="period_start" class="form-control" required>
-                            </div>
-                            <div class="col-md-3">
-                                <label>Period End *</label>
-                                <input type="date" name="period_end" class="form-control" required>
+
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern" for="reviewEmployeeSelect">Employee</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-user form-input-icon"></i>
+                                            <select name="employee_id" id="reviewEmployeeSelect" class="form-select" required>
+                                                <option value="">Select employee</option>
+                                                <?php foreach ($employees as $emp): ?>
+                                                    <option value="<?php echo $emp['id']; ?>"><?php echo htmlspecialchars($emp['first_name'] . ' ' . $emp['last_name']); ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern" for="periodStart">Period Start</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-calendar-alt form-input-icon"></i>
+                                            <input type="date" name="period_start" id="periodStart" class="form-control" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern" for="periodEnd">Period End</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-calendar-check form-input-icon"></i>
+                                            <input type="date" name="period_end" id="periodEnd" class="form-control" required>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <div class="row g-3 mt-3">
-                            <div class="col-md-3">
-                                <label>Attendance</label>
-                                <input type="number" name="attendance_rating" class="form-control" min="1" max="5" value="4" required>
+
+                        <!-- Section 2: Core Competencies -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <div class="form-section-title">
+                                    <i class="fas fa-award text-danger"></i>
+                                    Core Competency Ratings (1 to 5)
+                                </div>
+                                <span class="form-req-pill">Required</span>
                             </div>
-                            <div class="col-md-3">
-                                <label>Performance</label>
-                                <input type="number" name="performance_rating" class="form-control" min="1" max="5" value="4" required>
+
+                            <div class="row g-3">
+                                <div class="col-md-3">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern" for="attRating">Attendance</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-clock form-input-icon"></i>
+                                            <input type="number" name="attendance_rating" id="attRating" class="form-control" min="1" max="5" value="4" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern" for="perfRating">Performance</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-tasks form-input-icon"></i>
+                                            <input type="number" name="performance_rating" id="perfRating" class="form-control" min="1" max="5" value="4" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern" for="teamRating">Teamwork</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-users form-input-icon"></i>
+                                            <input type="number" name="teamwork_rating" id="teamRating" class="form-control" min="1" max="5" value="4" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern" for="commRating">Communication</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-comments form-input-icon"></i>
+                                            <input type="number" name="communication_rating" id="commRating" class="form-control" min="1" max="5" value="4" required>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="col-md-3">
-                                <label>Teamwork</label>
-                                <input type="number" name="teamwork_rating" class="form-control" min="1" max="5" value="4" required>
+                        </div>
+
+                        <!-- Section 3: Feedback & Goals -->
+                        <div class="form-section-card">
+                            <div class="form-section-head">
+                                <div class="form-section-title">
+                                    <i class="fas fa-comment-dots text-danger"></i>
+                                    Feedback & Development
+                                </div>
+                                <span class="form-opt-pill">Evaluation Details</span>
                             </div>
-                            <div class="col-md-3">
-                                <label>Communication</label>
-                                <input type="number" name="communication_rating" class="form-control" min="1" max="5" value="4" required>
+
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern" for="strengthsInput">Strengths</label>
+                                        <textarea name="strengths" id="strengthsInput" class="form-control" rows="2" placeholder="Key strengths displayed during the period..."></textarea>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern" for="improveInput">Areas for Improvement</label>
+                                        <textarea name="areas_for_improvement" id="improveInput" class="form-control" rows="2" placeholder="Specific areas needing refinement or training..."></textarea>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern" for="goalsInput">Goals for Next Period</label>
+                                        <textarea name="goals_for_next_period" id="goalsInput" class="form-control" rows="2" placeholder="Key milestones and targets to achieve..."></textarea>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern" for="commentsInput">General Comments</label>
+                                        <textarea name="comments" id="commentsInput" class="form-control" rows="2" placeholder="Additional reviewer observations..."></textarea>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <div class="form-group-modern">
+                                        <label class="form-label-modern" for="reviewStatusSelect">Review Status</label>
+                                        <div class="form-input-wrap">
+                                            <i class="fas fa-check-double form-input-icon"></i>
+                                            <select name="status" id="reviewStatusSelect" class="form-select">
+                                                <option value="completed">Completed</option>
+                                                <option value="in_progress">In Progress</option>
+                                                <option value="draft">Draft</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                        <div class="mt-3">
-                            <label>Strengths</label>
-                            <textarea name="strengths" class="form-control" rows="2"></textarea>
-                        </div>
-                        <div class="mt-3">
-                            <label>Areas for Improvement</label>
-                            <textarea name="areas_for_improvement" class="form-control" rows="2"></textarea>
-                        </div>
-                        <div class="mt-3">
-                            <label>Goals for Next Period</label>
-                            <textarea name="goals_for_next_period" class="form-control" rows="2"></textarea>
-                        </div>
-                        <div class="mt-3">
-                            <label>Comments</label>
-                            <textarea name="comments" class="form-control" rows="2"></textarea>
-                        </div>
-                        <div class="mt-3">
-                            <label>Status</label>
-                            <select name="status" class="form-select">
-                                <option value="completed">Completed</option>
-                                <option value="in_progress">In Progress</option>
-                                <option value="draft">Draft</option>
-                            </select>
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Save Review</button>
+                        <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn-modal-primary">Save Review</button>
                     </div>
                 </form>
             </div>
@@ -324,15 +416,24 @@ if ($has_performance_table) {
     </div>
     
     <!-- Review Details Modal -->
-    <div class="modal fade" id="reviewModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
+    <div class="modal fade modern-form-modal" id="reviewModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Performance Review Details</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <div class="modal-header-icon">
+                        <i class="fas fa-clipboard-check"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title">Performance Review Report</h5>
+                        <p class="modal-subtitle">Detailed evaluation metrics, competencies, and development goals.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body" id="reviewDetails">
                     <!-- Loaded via JS -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Close</button>
                 </div>
             </div>
         </div>

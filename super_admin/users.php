@@ -259,15 +259,24 @@ saRenderModuleHeader('Users Management', 'Users Management', $admin_info);
     <?php endif; ?>
 </div>
 
-<div class="modal fade" id="userModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
+<div class="modal fade modern-form-modal" id="userModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">User Details</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <div class="modal-header-icon">
+                    <i class="fas fa-user-shield"></i>
+                </div>
+                <div>
+                    <h5 class="modal-title">Customer Profile Details</h5>
+                    <p class="modal-subtitle">Account credentials, verification status, and order history.</p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" id="userDetails">
                 <div class="text-muted">Loading user details...</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
     </div>

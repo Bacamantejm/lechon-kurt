@@ -1,17 +1,16 @@
 <?php
-// Optional local credentials file for XAMPP/local development.
-// These should take precedence when running on localhost.
+// Optional deployment credentials file (Justine's configuration / production settings)
+$deployment_credentials_path = __DIR__ . '/deployment_credentials.php';
+if (file_exists($deployment_credentials_path)) {
+    require_once $deployment_credentials_path;
+}
+
+// Optional local credentials file for local development fallbacks.
 $local_credentials_path = __DIR__ . '/local_credentials.php';
 if (file_exists($local_credentials_path)) {
     require_once $local_credentials_path;
 }
 
-// Optional deployment credentials file for production hosting.
-// Only use it as a fallback when local values are not defined.
-$deployment_credentials_path = __DIR__ . '/deployment_credentials.php';
-if (file_exists($deployment_credentials_path)) {
-    require_once $deployment_credentials_path;
-}
 
 if (!function_exists('appConfigValue')) {
     function appConfigValue($key, $default = '') {
@@ -70,6 +69,44 @@ if (!function_exists('appConfigBool')) {
         }
 
         return (bool)$default;
+    }
+}
+
+if (!function_exists('appBaseUrl')) {
+    function appBaseUrl($path = '') {
+        $configured_base = appConfigValue('APP_BASE_URL', '');
+        if ($configured_base !== '') {
+            $base = rtrim($configured_base, '/');
+            $path = ltrim((string)$path, '/');
+            return $path !== '' ? $base . '/' . $path : $base;
+        }
+
+        $is_https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+            || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')
+            || (isset($_SERVER['HTTP_CF_VISITOR']) && strpos((string)$_SERVER['HTTP_CF_VISITOR'], '"https"') !== false)
+            || (isset($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 443);
+        $scheme = $is_https ? 'https' : 'http';
+        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+
+        $subDir = '';
+        $docRoot = isset($_SERVER['DOCUMENT_ROOT']) ? str_replace('\\', '/', realpath($_SERVER['DOCUMENT_ROOT']) ?: $_SERVER['DOCUMENT_ROOT']) : '';
+        $projectRoot = str_replace('\\', '/', realpath(dirname(__DIR__)) ?: dirname(__DIR__));
+
+        if ($docRoot !== '' && strpos($projectRoot, $docRoot) === 0) {
+            $subDir = trim(substr($projectRoot, strlen($docRoot)), '/');
+        } elseif (isset($_SERVER['SCRIPT_NAME'])) {
+            $scriptDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME']));
+            $cleanScriptDir = preg_replace('#/(admin|super_admin|rider|employee|controllers|api|includes|thesis_revision)$#i', '', $scriptDir);
+            $subDir = trim($cleanScriptDir, '/');
+        }
+
+        $base = $scheme . '://' . $host;
+        if ($subDir !== '') {
+            $base .= '/' . $subDir;
+        }
+
+        $path = ltrim((string)$path, '/');
+        return $path !== '' ? $base . '/' . $path : $base;
     }
 }
 
@@ -192,16 +229,16 @@ if (!defined('SMTP_PORT')) {
     define('SMTP_PORT', appConfigValue('SMTP_PORT', '587'));
 }
 if (!defined('SMTP_USERNAME')) {
-    define('SMTP_USERNAME', appConfigValue('SMTP_USERNAME', ''));
+    define('SMTP_USERNAME', appConfigValue('SMTP_USERNAME', 'justinehero03@gmail.com'));
 }
 if (!defined('SMTP_PASSWORD')) {
-    define('SMTP_PASSWORD', appConfigValue('SMTP_PASSWORD', ''));
+    define('SMTP_PASSWORD', appConfigValue('SMTP_PASSWORD', 'cuvyfacmfrdveblj'));
 }
 if (!defined('SMTP_SECURE')) {
     define('SMTP_SECURE', appConfigValue('SMTP_SECURE', 'tls'));
 }
 if (!defined('MAIL_FROM_ADDRESS')) {
-    define('MAIL_FROM_ADDRESS', appConfigValue('MAIL_FROM_ADDRESS', 'orders@lechondelights.com'));
+    define('MAIL_FROM_ADDRESS', appConfigValue('MAIL_FROM_ADDRESS', 'justinehero03@gmail.com'));
 }
 if (!defined('MAIL_FROM_NAME')) {
     define('MAIL_FROM_NAME', appConfigValue('MAIL_FROM_NAME', 'Lechon Delights'));
@@ -263,6 +300,7 @@ function normalizeUserAvatarPath($value) {
 function ensureUserPersonalInfoSchema($conn) {
     $columns = [
         'middle_name' => "ALTER TABLE users ADD COLUMN middle_name VARCHAR(80) NULL DEFAULT NULL",
+        'suffix' => "ALTER TABLE users ADD COLUMN suffix VARCHAR(30) NULL DEFAULT NULL",
         'birth_date' => "ALTER TABLE users ADD COLUMN birth_date DATE NULL DEFAULT NULL",
         'gender' => "ALTER TABLE users ADD COLUMN gender VARCHAR(30) NULL DEFAULT NULL",
         'nickname' => "ALTER TABLE users ADD COLUMN nickname VARCHAR(80) NULL DEFAULT NULL",
@@ -271,6 +309,21 @@ function ensureUserPersonalInfoSchema($conn) {
     foreach ($columns as $column_name => $sql) {
         if (!userAccountControlColumnExists($conn, $column_name)) {
             @mysqli_query($conn, $sql);
+        }
+    }
+}
+
+if (!function_exists('ensureUserMobileSplashSchema')) {
+    function ensureUserMobileSplashSchema($conn) {
+        static $checked = false;
+        if ($checked || !$conn) return;
+        $checked = true;
+
+        if (!userAccountControlColumnExists($conn, 'mobile_splash_seen')) {
+            $res = @mysqli_query($conn, "ALTER TABLE users ADD COLUMN mobile_splash_seen TINYINT(1) NOT NULL DEFAULT 0 AFTER is_active");
+            if ($res) {
+                @mysqli_query($conn, "UPDATE users SET mobile_splash_seen = 1 WHERE last_login IS NOT NULL");
+            }
         }
     }
 }
@@ -392,24 +445,46 @@ function getUserAccountControlMessage($state) {
 }
 
 // Enhanced user authentication functions
-function registerUser($conn, $email, $password, $full_name, $phone = '', $address = '', $account_type = 'individual', $business_name = null, $business_type = null, $business_registration = null, $website = null, $tax_id = null, $middle_name = null, $birth_date = null, $gender = null, $nickname = null) {
+function registerUser($conn, $email, $password, $full_name, $phone = '', $address = '', $account_type = 'individual', $business_name = null, $business_type = null, $business_registration = null, $website = null, $tax_id = null, $middle_name = null, $birth_date = null, $gender = null, $nickname = null, $suffix = null) {
     ensureUserEmailVerificationSchema($conn);
     ensureUserPersonalInfoSchema($conn);
 
     $email = strtolower(trim((string)$email));
     $full_name = preg_replace('/\s+/', ' ', trim((string)$full_name));
+    if (strlen($full_name) > 100) {
+        $full_name = substr($full_name, 0, 100);
+    }
     $phone = trim((string)$phone);
+    if (strlen($phone) > 20) {
+        $phone = substr($phone, 0, 20);
+    }
     $address = preg_replace('/\s+/', ' ', trim((string)$address));
     $account_type = strtolower(trim((string)$account_type));
-    $business_name = $business_name !== null ? preg_replace('/\s+/', ' ', trim((string)$business_name)) : null;
-    $business_type = $business_type !== null ? trim((string)$business_type) : null;
-    $business_registration = $business_registration !== null ? trim((string)$business_registration) : null;
-    $website = $website !== null ? trim((string)$website) : null;
-    $tax_id = $tax_id !== null ? trim((string)$tax_id) : null;
-    $middle_name = $middle_name !== null ? preg_replace('/\s+/', ' ', trim((string)$middle_name)) : '';
-    $nickname = $nickname !== null ? preg_replace('/\s+/', ' ', trim((string)$nickname)) : '';
-    $birth_date = $birth_date !== null ? trim((string)$birth_date) : '';
-    $gender = $gender !== null ? strtolower(trim((string)$gender)) : '';
+    if ($account_type !== 'organization') {
+        $account_type = 'individual';
+        $business_name = null;
+        $business_type = null;
+        $business_registration = null;
+        $website = null;
+        $tax_id = null;
+    } else {
+        $business_name = ($business_name !== null && trim((string)$business_name) !== '') ? substr(preg_replace('/\s+/', ' ', trim((string)$business_name)), 0, 200) : null;
+        $business_type = ($business_type !== null && trim((string)$business_type) !== '') ? substr(trim((string)$business_type), 0, 100) : null;
+        $business_registration = ($business_registration !== null && trim((string)$business_registration) !== '') ? substr(trim((string)$business_registration), 0, 100) : null;
+        $website = ($website !== null && trim((string)$website) !== '') ? substr(trim((string)$website), 0, 200) : null;
+        $tax_id = ($tax_id !== null && trim((string)$tax_id) !== '') ? substr(trim((string)$tax_id), 0, 50) : null;
+    }
+
+    $middle_name = ($middle_name !== null && trim((string)$middle_name) !== '') ? substr(preg_replace('/\s+/', ' ', trim((string)$middle_name)), 0, 80) : null;
+    $nickname = ($nickname !== null && trim((string)$nickname) !== '') ? substr(preg_replace('/\s+/', ' ', trim((string)$nickname)), 0, 80) : null;
+    $gender = ($gender !== null && trim((string)$gender) !== '') ? substr(strtolower(trim((string)$gender)), 0, 30) : null;
+
+    if ($birth_date !== null && trim((string)$birth_date) !== '') {
+        $dob_time = strtotime(trim((string)$birth_date));
+        $birth_date = ($dob_time !== false) ? date('Y-m-d', $dob_time) : null;
+    } else {
+        $birth_date = null;
+    }
 
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         return ['success' => false, 'message' => 'Please provide a valid email address.'];
@@ -565,13 +640,35 @@ function registerUser($conn, $email, $password, $full_name, $phone = '', $addres
     if (mysqli_stmt_execute($stmt)) {
         $user_id = mysqli_insert_id($conn);
         mysqli_stmt_close($stmt);
+
+        if ($suffix !== null && trim((string)$suffix) !== '' && userAccountControlColumnExists($conn, 'suffix')) {
+            $clean_suffix = substr(trim((string)$suffix), 0, 30);
+            $suffix_stmt = mysqli_prepare($conn, "UPDATE users SET suffix = ? WHERE id = ? LIMIT 1");
+            if ($suffix_stmt) {
+                mysqli_stmt_bind_param($suffix_stmt, "si", $clean_suffix, $user_id);
+                mysqli_stmt_execute($suffix_stmt);
+                mysqli_stmt_close($suffix_stmt);
+            }
+        }
+
         return ['success' => true, 'user_id' => $user_id];
     }
 
-    $sql_state = mysqli_stmt_sqlstate($stmt);
-    $db_error = mysqli_stmt_error($stmt);
+    $sql_state = (string)mysqli_stmt_sqlstate($stmt);
+    $db_error = (string)mysqli_stmt_error($stmt);
+    $errno = (int)mysqli_errno($conn);
     mysqli_stmt_close($stmt);
     error_log('Registration insert failed [' . $sql_state . ']: ' . $db_error);
+
+    if ($sql_state === '23000' || $errno === 1062) {
+        if (stripos($db_error, 'email') !== false) {
+            return ['success' => false, 'message' => 'This email address is already registered. Please log in or use a different email.'];
+        }
+        if (stripos($db_error, 'phone') !== false) {
+            return ['success' => false, 'message' => 'This mobile number is already registered. Please log in or use a different number.'];
+        }
+        return ['success' => false, 'message' => 'An account with these details already exists. Please log in or verify your inputs.'];
+    }
 
     return ['success' => false, 'message' => 'Unable to create your account right now. Please try again later.'];
 }
@@ -659,17 +756,22 @@ function syncApprovedFranchisePartnerAccess($conn, $user_id) {
 
 function loginUser($conn, $email, $password) {
     ensureUserEmailVerificationSchema($conn);
+    ensureUserMobileSplashSchema($conn);
 
     // Updated to support RBAC - includes role_id
-    $select_fields = "id, email, password, full_name, user_type, is_active, account_type, role_id";
+    $select_fields = "id, email, password, full_name, user_type, is_active, account_type, role_id, last_login";
     $has_profile_image_column = userAccountControlColumnExists($conn, 'profile_image');
     $has_business_logo_column = userAccountControlColumnExists($conn, 'business_logo');
+    $has_splash_column = userAccountControlColumnExists($conn, 'mobile_splash_seen');
 
     if ($has_profile_image_column) {
         $select_fields .= ", profile_image";
     }
     if ($has_business_logo_column) {
         $select_fields .= ", business_logo";
+    }
+    if ($has_splash_column) {
+        $select_fields .= ", mobile_splash_seen";
     }
     $query = "SELECT {$select_fields} FROM users WHERE email = ?";
     $stmt = mysqli_prepare($conn, $query);
@@ -750,6 +852,11 @@ function loginUser($conn, $email, $password) {
                 $normalized_user_type = 'customer';
             }
 
+            // Determine if first login for customer
+            $is_first_login = empty($row['last_login']);
+            $db_splash_seen = isset($row['mobile_splash_seen']) ? (int)$row['mobile_splash_seen'] : 1;
+            $show_first_time_splash = ($normalized_user_type === 'customer') && ($is_first_login || $db_splash_seen === 0);
+
             // Update last login
             $update_query = "UPDATE users SET last_login = NOW() WHERE id = ?";
             $update_stmt = mysqli_prepare($conn, $update_query);
@@ -778,6 +885,8 @@ function loginUser($conn, $email, $password) {
                 'user_type' => $normalized_user_type,
                 'account_type' => $row['account_type'],
                 'role_id' => $row['role_id'],
+                'is_first_login' => $is_first_login,
+                'show_mobile_splash' => $show_first_time_splash,
                 'profile_image' => resolveUserAvatarPathFromRow($row),
                 'business_logo' => $row['business_logo'] ?? null
             ];
@@ -1245,5 +1354,163 @@ function createNotification($conn, $user_id, $type, $title, $message, $related_i
         mysqli_stmt_close($stmt);
         return false;
     }
+}
+
+/**
+ * Ensure remember_token and remember_expires columns exist in users table
+ */
+function ensureRememberMeSchema($conn) {
+    static $checked = false;
+    if ($checked || !$conn) return;
+    $checked = true;
+
+    if (!userAccountControlColumnExists($conn, 'remember_token')) {
+        @mysqli_query($conn, "ALTER TABLE users ADD COLUMN remember_token VARCHAR(100) NULL DEFAULT NULL");
+    }
+    if (!userAccountControlColumnExists($conn, 'remember_expires')) {
+        @mysqli_query($conn, "ALTER TABLE users ADD COLUMN remember_expires TIMESTAMP NULL DEFAULT NULL");
+    }
+}
+
+/**
+ * Authenticate and restore user session from remember_token cookie
+ */
+function authenticateRememberMeUser($conn) {
+    if (!$conn || !($conn instanceof mysqli)) {
+        return false;
+    }
+
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+
+    // Already authenticated in current session
+    if (!empty($_SESSION['user_id'])) {
+        return true;
+    }
+
+    if (empty($_COOKIE['remember_token'])) {
+        return false;
+    }
+
+    $token = trim((string)$_COOKIE['remember_token']);
+    if ($token === '' || !preg_match('/^[a-f0-9]{32,100}$/i', $token)) {
+        if (!headers_sent()) {
+            setcookie('remember_token', '', time() - 3600, '/');
+        }
+        return false;
+    }
+
+    ensureRememberMeSchema($conn);
+
+    $has_profile_img = userAccountControlColumnExists($conn, 'profile_image');
+    $has_business_logo = userAccountControlColumnExists($conn, 'business_logo');
+    $select_fields = "id, email, full_name, user_type, is_active, account_type, role_id";
+    if ($has_profile_img) {
+        $select_fields .= ", profile_image";
+    }
+    if ($has_business_logo) {
+        $select_fields .= ", business_logo";
+    }
+
+    $query = "SELECT {$select_fields} FROM users WHERE remember_token = ? AND remember_expires > NOW() LIMIT 1";
+    $stmt = mysqli_prepare($conn, $query);
+    if (!$stmt) {
+        return false;
+    }
+
+    mysqli_stmt_bind_param($stmt, "s", $token);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($stmt);
+
+    if (!$row) {
+        if (!headers_sent()) {
+            setcookie('remember_token', '', time() - 3600, '/');
+        }
+        return false;
+    }
+
+    $account_control_state = getUserAccountControlState($conn, (int)$row['id']);
+    if (isUserAccessBlockedByControlState($account_control_state) || empty($row['is_active'])) {
+        if (!headers_sent()) {
+            setcookie('remember_token', '', time() - 3600, '/');
+        }
+        return false;
+    }
+
+    $normalized_user_type = strtolower(trim((string)($row['user_type'] ?? '')));
+    if (!in_array($normalized_user_type, ['admin', 'employee', 'customer'], true)) {
+        $normalized_user_type = 'customer';
+    }
+
+    // Populate full user session
+    $_SESSION['user_id'] = (int)$row['id'];
+    $_SESSION['email'] = $row['email'];
+    $_SESSION['full_name'] = $row['full_name'];
+    $_SESSION['user_type'] = $normalized_user_type;
+    $_SESSION['account_type'] = $row['account_type'];
+    $_SESSION['profile_image'] = $row['profile_image'] ?? null;
+    $_SESSION['business_logo'] = $row['business_logo'] ?? null;
+    $_SESSION['role_id'] = $row['role_id'] ?? null;
+    $_SESSION['has_backoffice_access'] = hasBackofficeAccess($conn, (int)$row['id']);
+    $_SESSION['permissions'] = getUserPermissions($conn, (int)$row['id']);
+
+    // Check if employee
+    $check_emp = mysqli_prepare($conn, "SELECT id FROM employees WHERE user_id = ? LIMIT 1");
+    if ($check_emp) {
+        mysqli_stmt_bind_param($check_emp, "i", $row['id']);
+        mysqli_stmt_execute($check_emp);
+        $emp_res = mysqli_stmt_get_result($check_emp);
+        if ($emp_res && ($emp_row = mysqli_fetch_assoc($emp_res))) {
+            $_SESSION['employee_id'] = (int)$emp_row['id'];
+        }
+        mysqli_stmt_close($check_emp);
+    }
+
+    // Check if rider
+    $r_check = mysqli_query($conn, "SELECT id, rider_code FROM riders WHERE user_id = " . (int)$row['id'] . " LIMIT 1");
+    if ($r_check && ($r_row = mysqli_fetch_assoc($r_check))) {
+        $_SESSION['is_driver'] = true;
+        $_SESSION['rider_id'] = (int)$r_row['id'];
+        $_SESSION['rider_code'] = $r_row['rider_code'];
+    }
+
+    // Refresh token expiry to a rolling 30-day window
+    $up_stmt = mysqli_prepare($conn, "UPDATE users SET remember_expires = DATE_ADD(NOW(), INTERVAL 30 DAY), last_login = NOW() WHERE id = ?");
+    if ($up_stmt) {
+        mysqli_stmt_bind_param($up_stmt, "i", $row['id']);
+        mysqli_stmt_execute($up_stmt);
+        mysqli_stmt_close($up_stmt);
+    }
+
+    if (!headers_sent()) {
+        $is_secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
+        setcookie('remember_token', $token, [
+            'expires' => time() + (30 * 24 * 60 * 60),
+            'path' => '/',
+            'domain' => '',
+            'secure' => $is_secure,
+            'httponly' => true,
+            'samesite' => 'Lax'
+        ]);
+
+        setcookie('remember_email', $row['email'], [
+            'expires' => time() + (30 * 24 * 60 * 60),
+            'path' => '/',
+            'domain' => '',
+            'secure' => $is_secure,
+            'httponly' => false,
+            'samesite' => 'Lax'
+        ]);
+    }
+
+    return true;
+}
+
+// Automatically check and restore user session from remember cookie
+if (isset($conn) && $conn instanceof mysqli) {
+    authenticateRememberMeUser($conn);
 }
 ?>

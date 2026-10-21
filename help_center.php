@@ -663,7 +663,12 @@ include 'includes/header.php';
                             <h2>Report an issue</h2>
                             <p>Pick the closest category so we can route your case to the right team faster.</p>
                         </div>
-                        <a class="help-secondary-link" href="customer_chat.php">Open existing support chat</a>
+                        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                            <button type="button" class="help-secondary-link" onclick="openCustomerTutorial(true)" style="background:none; border:none; cursor:pointer; font-size:0.86rem; color:#b3261e; font-weight:700; display:inline-flex; align-items:center; gap:6px; padding:0;">
+                                <i class="fas fa-compass"></i> Platform Guide
+                            </button>
+                            <a class="help-secondary-link" href="customer_chat.php">Open existing support chat</a>
+                        </div>
                     </div>
 
                     <div class="issue-cards" id="issueCards">
@@ -1391,7 +1396,34 @@ include 'includes/header.php';
 }
 
 @media (max-width: 768px) {
-    .issue-cards,
+    .help-card-head p,
+    #orderFieldHint,
+    #shopFieldHint,
+    .issue-card span:last-child {
+        display: none !important;
+    }
+
+    .issue-cards {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 8px !important;
+    }
+
+    .issue-card {
+        padding: 10px 12px !important;
+        gap: 4px !important;
+        border-radius: 10px !important;
+    }
+
+    .issue-card strong {
+        font-size: 0.85rem !important;
+    }
+
+    .issue-card-icon {
+        width: 30px !important;
+        height: 30px !important;
+        font-size: 0.85rem !important;
+    }
+
     .help-form-grid {
         grid-template-columns: 1fr;
     }
@@ -1411,6 +1443,95 @@ include 'includes/header.php';
     .btn-help-secondary {
         width: 100%;
     }
+
+    .help-center-section {
+        padding-bottom: 200px !important;
+    }
+}
+
+/* ==========================================================================
+   HELP CENTER DARK THEME ENGINE
+   ========================================================================== */
+body.dark-mode .help-center-section {
+    background: #0f172a !important;
+}
+
+body.dark-mode .help-card {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+body.dark-mode .help-card-head {
+    border-bottom-color: #334155 !important;
+}
+
+body.dark-mode .help-card-head h2,
+body.dark-mode .help-faq-item summary,
+body.dark-mode .quick-order-item strong,
+body.dark-mode .help-label {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .help-card-head p,
+body.dark-mode .help-faq-item p,
+body.dark-mode .case-priority,
+body.dark-mode .help-empty-text {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .issue-card {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .issue-card.active,
+body.dark-mode .issue-card:hover {
+    border-color: #ef4444 !important;
+    background: rgba(179, 38, 30, 0.15) !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .help-input,
+body.dark-mode .help-select,
+body.dark-mode .help-textarea {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .help-input:focus,
+body.dark-mode .help-select:focus,
+body.dark-mode .help-textarea:focus {
+    border-color: #b3261e !important;
+    background: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .quick-order-item {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .btn-help-secondary {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .btn-help-secondary:hover {
+    background: #334155 !important;
+    border-color: #475569 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .case-card {
+    background: #111827 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
 }
 </style>
 

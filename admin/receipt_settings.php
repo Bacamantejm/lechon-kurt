@@ -220,56 +220,109 @@ if ($previewBodyStart !== false && $previewBodyEnd !== false && $previewBodyEnd 
             <?php endif; ?>
 
             <div class="settings-grid">
-                <div class="settings-card">
-                    <h2 class="settings-title">Official Receipt / BIR Fields</h2>
-                    <p class="settings-sub">These details appear on walk-in, order, and pre-order sales receipts for your shop.</p>
-                    <div class="settings-note">
-                        Enter only your real registered tax and permit details. These fields affect invoices and should match your official BIR or business registration documents.
+                <div class="form-section-card" style="box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);">
+                    <div class="form-section-head mb-3">
+                        <div class="form-section-title">
+                            <i class="fas fa-file-invoice-dollar text-danger"></i>
+                            Official Receipt &amp; BIR Fields
+                        </div>
+                        <span class="form-req-pill">Tax Compliance</span>
+                    </div>
+                    <p class="text-muted small mb-3">These details appear on walk-in POS, online delivery, and pre-order sales receipts for your shop.</p>
+                    
+                    <div class="p-3 rounded mb-3" style="background: #fff8f8; border: 1px solid #fee4e2; color: #b3261e; font-size: 13px;">
+                        <i class="fas fa-shield-alt me-1"></i> Enter your registered business permit and tax credentials. These fields must match your official BIR Certificate of Registration (Form 2303).
                     </div>
 
                     <form method="post">
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
                         <div class="settings-form-grid">
                             <div>
-                                <label class="form-label" for="store_display_name">Store / Branch Display Name</label>
-                                <input type="text" class="form-control" id="store_display_name" name="store_display_name" maxlength="180" value="<?php echo htmlspecialchars((string)($settings['store_display_name'] ?? '')); ?>" placeholder="Example: Lechon Delights - Pacita Branch">
+                                <div class="form-group-modern">
+                                    <label class="form-label-modern" for="store_display_name">Store / Branch Display Name</label>
+                                    <div class="form-input-wrap">
+                                        <i class="fas fa-store form-input-icon"></i>
+                                        <input type="text" class="form-control" id="store_display_name" name="store_display_name" maxlength="180" value="<?php echo htmlspecialchars((string)($settings['store_display_name'] ?? '')); ?>" placeholder="e.g. Lechon Delights - Pacita Branch">
+                                    </div>
+                                </div>
                             </div>
                             <div>
-                                <label class="form-label" for="branch_name">Branch Name</label>
-                                <input type="text" class="form-control" id="branch_name" name="branch_name" maxlength="180" value="<?php echo htmlspecialchars((string)($settings['branch_name'] ?? '')); ?>" placeholder="Example: Pacita Branch">
+                                <div class="form-group-modern">
+                                    <label class="form-label-modern" for="branch_name">Branch Location Name</label>
+                                    <div class="form-input-wrap">
+                                        <i class="fas fa-map-marker-alt form-input-icon"></i>
+                                        <input type="text" class="form-control" id="branch_name" name="branch_name" maxlength="180" value="<?php echo htmlspecialchars((string)($settings['branch_name'] ?? '')); ?>" placeholder="e.g. Pacita Complex">
+                                    </div>
+                                </div>
                             </div>
                             <div>
-                                <label class="form-label" for="vat_tin">VAT TIN</label>
-                                <input type="text" class="form-control" id="vat_tin" name="vat_tin" maxlength="80" value="<?php echo htmlspecialchars((string)($settings['vat_tin'] ?? '')); ?>" placeholder="Example: 123-456-789-00000">
+                                <div class="form-group-modern">
+                                    <label class="form-label-modern" for="vat_tin">VAT Registered TIN</label>
+                                    <div class="form-input-wrap">
+                                        <i class="fas fa-id-card form-input-icon"></i>
+                                        <input type="text" class="form-control" id="vat_tin" name="vat_tin" maxlength="80" value="<?php echo htmlspecialchars((string)($settings['vat_tin'] ?? '')); ?>" placeholder="e.g. 123-456-789-00000">
+                                    </div>
+                                </div>
                             </div>
                             <div>
-                                <label class="form-label" for="business_style">Business Style</label>
-                                <input type="text" class="form-control" id="business_style" name="business_style" maxlength="180" value="<?php echo htmlspecialchars((string)($settings['business_style'] ?? '')); ?>" placeholder="Example: Restaurant / Food Service">
+                                <div class="form-group-modern">
+                                    <label class="form-label-modern" for="business_style">Line of Business / Style</label>
+                                    <div class="form-input-wrap">
+                                        <i class="fas fa-briefcase form-input-icon"></i>
+                                        <input type="text" class="form-control" id="business_style" name="business_style" maxlength="180" value="<?php echo htmlspecialchars((string)($settings['business_style'] ?? '')); ?>" placeholder="e.g. Restaurant / Lechon Roaster">
+                                    </div>
+                                </div>
                             </div>
                             <div>
-                                <label class="form-label" for="permit_no">Permit / Permit to Operate No.</label>
-                                <input type="text" class="form-control" id="permit_no" name="permit_no" maxlength="120" value="<?php echo htmlspecialchars((string)($settings['permit_no'] ?? '')); ?>" placeholder="Example: PERMIT-2026-001">
+                                <div class="form-group-modern">
+                                    <label class="form-label-modern" for="permit_no">Permit to Operate No.</label>
+                                    <div class="form-input-wrap">
+                                        <i class="fas fa-certificate form-input-icon"></i>
+                                        <input type="text" class="form-control" id="permit_no" name="permit_no" maxlength="120" value="<?php echo htmlspecialchars((string)($settings['permit_no'] ?? '')); ?>" placeholder="e.g. PERMIT-2026-001">
+                                    </div>
+                                </div>
                             </div>
                             <div>
-                                <label class="form-label" for="ptu_no">PTU No.</label>
-                                <input type="text" class="form-control" id="ptu_no" name="ptu_no" maxlength="120" value="<?php echo htmlspecialchars((string)($settings['ptu_no'] ?? '')); ?>" placeholder="Example: PTU-123456-2026">
+                                <div class="form-group-modern">
+                                    <label class="form-label-modern" for="ptu_no">PTU (Permit to Use) No.</label>
+                                    <div class="form-input-wrap">
+                                        <i class="fas fa-stamp form-input-icon"></i>
+                                        <input type="text" class="form-control" id="ptu_no" name="ptu_no" maxlength="120" value="<?php echo htmlspecialchars((string)($settings['ptu_no'] ?? '')); ?>" placeholder="e.g. PTU-123456-2026">
+                                    </div>
+                                </div>
                             </div>
                             <div>
-                                <label class="form-label" for="accreditation_no">Accreditation No.</label>
-                                <input type="text" class="form-control" id="accreditation_no" name="accreditation_no" maxlength="120" value="<?php echo htmlspecialchars((string)($settings['accreditation_no'] ?? '')); ?>" placeholder="Example: ACCR-2026-001">
+                                <div class="form-group-modern">
+                                    <label class="form-label-modern" for="accreditation_no">Accreditation No.</label>
+                                    <div class="form-input-wrap">
+                                        <i class="fas fa-award form-input-icon"></i>
+                                        <input type="text" class="form-control" id="accreditation_no" name="accreditation_no" maxlength="120" value="<?php echo htmlspecialchars((string)($settings['accreditation_no'] ?? '')); ?>" placeholder="e.g. ACCR-2026-001">
+                                    </div>
+                                </div>
                             </div>
                             <div>
-                                <label class="form-label" for="serial_no">Serial / Terminal No.</label>
-                                <input type="text" class="form-control" id="serial_no" name="serial_no" maxlength="120" value="<?php echo htmlspecialchars((string)($settings['serial_no'] ?? '')); ?>" placeholder="Example: SN-STORE-0001">
+                                <div class="form-group-modern">
+                                    <label class="form-label-modern" for="serial_no">POS Machine Serial No.</label>
+                                    <div class="form-input-wrap">
+                                        <i class="fas fa-cash-register form-input-icon"></i>
+                                        <input type="text" class="form-control" id="serial_no" name="serial_no" maxlength="120" value="<?php echo htmlspecialchars((string)($settings['serial_no'] ?? '')); ?>" placeholder="e.g. SN-STORE-0001">
+                                    </div>
+                                </div>
                             </div>
                             <div class="full-span">
-                                <label class="form-label" for="footer_text">Receipt Footer Text</label>
-                                <textarea class="form-control" id="footer_text" name="footer_text" rows="5" placeholder="Example: Thank you for dining with us.&#10;Please keep this receipt for your records."><?php echo htmlspecialchars((string)($settings['footer_text'] ?? '')); ?></textarea>
-                                <div class="form-text-muted">Each line you enter here will appear at the bottom of your receipts.</div>
+                                <div class="form-group-modern">
+                                    <label class="form-label-modern" for="footer_text">Receipt Footer Notice</label>
+                                    <textarea class="form-control" id="footer_text" name="footer_text" rows="3" placeholder="Thank you for dining with Lechon Delights!&#10;Please keep this official receipt for your warranty and tax records."><?php echo htmlspecialchars((string)($settings['footer_text'] ?? '')); ?></textarea>
+                                    <small class="text-muted d-block mt-1" style="font-size: 11px;">Lines will print directly at the bottom margin of the customer slip.</small>
+                                </div>
                             </div>
                             <div class="full-span d-flex gap-2 flex-wrap pt-2">
-                                <button type="submit" class="btn btn-danger"><i class="fas fa-save"></i> Save Receipt Settings</button>
-                                <a href="partner_billing.php" class="btn btn-outline-secondary">Back to Billing</a>
+                                <button type="submit" class="btn-modal-primary" style="padding: 10px 22px;">
+                                    <i class="fas fa-save me-1"></i> Save Receipt Settings
+                                </button>
+                                <a href="partner_billing.php" class="btn-modal-cancel text-decoration-none d-inline-flex align-items-center" style="padding: 10px 18px;">
+                                    Back to Billing
+                                </a>
                             </div>
                         </div>
                     </form>

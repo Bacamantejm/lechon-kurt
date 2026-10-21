@@ -51,7 +51,7 @@
                     </ul>
                 </div>
                 
-                <div class="footer-col">
+                <div class="footer-col footer-col-partner">
                     <h4>Business Partner</h4>
                     <ul>
                         <li><a href="<?php echo $footer_path_prefix; ?>franchise_application.php">Become a Partner</a></li>
@@ -73,19 +73,18 @@
         </div>
     </footer>
 
-    <!-- Foodpanda Style Mobile Bottom Navigation Bar -->
+    <!-- Modern Mobile Glassmorphic Bottom Navigation Bar (Reference Screen 2) -->
     <nav class="mobile-bottom-nav" aria-label="Mobile Navigation">
         <a href="<?php echo $footer_path_prefix; ?>index.php" class="mob-nav-item <?php echo in_array($current_page ?? '', ['home', 'index', ''], true) ? 'active' : ''; ?>">
             <div class="mob-nav-icon"><i class="fas fa-house"></i></div>
             <span class="mob-nav-label">Home</span>
         </a>
-        <a href="<?php echo $footer_path_prefix; ?>menu.php" class="mob-nav-item <?php echo ($current_page ?? '') === 'menu' ? 'active' : ''; ?>">
-            <div class="mob-nav-icon"><i class="fas fa-utensils"></i></div>
-            <span class="mob-nav-label">Menu</span>
+        <a href="<?php echo $footer_path_prefix; ?>shops.php" class="mob-nav-item <?php echo ($current_page ?? '') === 'shops' ? 'active' : ''; ?>">
+            <div class="mob-nav-icon"><i class="fas fa-store"></i></div>
+            <span class="mob-nav-label">Stores</span>
         </a>
-        <a href="<?php echo $footer_path_prefix; ?>preorder.php" class="mob-nav-item <?php echo ($current_page ?? '') === 'preorder' ? 'active' : ''; ?>">
-            <div class="mob-nav-icon"><i class="fas fa-calendar-check"></i></div>
-            <span class="mob-nav-label">Pre-Order</span>
+        <a href="<?php echo $footer_path_prefix; ?>menu.php" class="mob-nav-item mob-center-action <?php echo ($current_page ?? '') === 'menu' ? 'active' : ''; ?>" title="Order Now">
+            <div class="mob-nav-icon"><i class="fas fa-utensils"></i></div>
         </a>
         <a href="<?php echo $footer_path_prefix; ?><?php echo $is_customer_user_footer ? 'my_orders.php' : 'register.php?mode=login'; ?>" class="mob-nav-item <?php echo in_array($current_page ?? '', ['my_orders', 'orders'], true) ? 'active' : ''; ?>">
             <div class="mob-nav-icon">
@@ -103,24 +102,31 @@
     </nav>
 
     <style>
-    /* Foodpanda Style Mobile Bottom Navigation Styles */
+    /* Universal Floating Glassmorphic Mobile Bottom Nav Pill */
     .mobile-bottom-nav {
         display: none;
         position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        height: 60px;
-        background: #ffffff;
-        border-top: 1px solid #eaecf0;
+        bottom: 16px;
+        left: 16px;
+        right: 16px;
+        height: 64px;
+        background: rgba(255, 255, 255, 0.85) !important;
+        backdrop-filter: blur(16px) saturate(180%);
+        -webkit-backdrop-filter: blur(16px) saturate(180%);
+        border: 1px solid rgba(234, 236, 240, 0.85);
+        border-radius: 26px;
         z-index: 1250;
-        box-shadow: 0 -4px 16px rgba(16, 24, 40, 0.06);
-        padding: 4px 8px max(4px, env(safe-area-inset-bottom));
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.08);
+        padding: 4px 12px;
         justify-content: space-around;
         align-items: center;
+        transform: translate3d(0, 0, 0);
+        will-change: transform;
     }
     .mob-nav-item {
         flex: 1;
+        min-height: 44px;
+        min-width: 44px;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -130,9 +136,13 @@
         font-family: 'Plus Jakarta Sans', sans-serif;
         padding: 4px 0;
         gap: 2px;
-        transition: color 0.2s ease, transform 0.2s ease;
+        transition: color 0.15s ease-out, transform 0.15s ease-out;
         -webkit-tap-highlight-color: transparent;
         position: relative;
+    }
+    .mob-nav-item:active {
+        transform: scale(0.97);
+        transition-duration: 0.15s;
     }
     .mob-nav-icon {
         position: relative;
@@ -151,7 +161,33 @@
         color: #b3261e;
     }
     .mob-nav-item.active .mob-nav-icon {
-        transform: scale(1.08);
+        transform: scale(1.1);
+    }
+    /* Floating Center Highlight Action Button */
+    .mob-nav-item.mob-center-action {
+        width: 50px;
+        height: 50px;
+        flex: 0 0 50px;
+        min-height: 50px;
+        min-width: 50px;
+        background: #b3261e !important;
+        border-radius: 50%;
+        color: #ffffff !important;
+        box-shadow: 0 6px 20px rgba(179, 38, 30, 0.38);
+        transform: translateY(-8px) translate3d(0, 0, 0);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 2.5px solid #ffffff;
+        transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
+    }
+    .mob-nav-item.mob-center-action:active {
+        transform: translateY(-6px) scale(0.97) !important;
+        transition-duration: 0.15s;
+    }
+    .mob-nav-item.mob-center-action .mob-nav-icon {
+        font-size: 1.25rem;
+        color: #ffffff;
     }
     .mob-nav-dot {
         position: absolute;
@@ -163,18 +199,41 @@
         border-radius: 50%;
         border: 1.5px solid #ffffff;
     }
+    body.dark-mode .mobile-bottom-nav {
+        background: rgba(30, 41, 59, 0.85) !important;
+        border-color: rgba(51, 65, 85, 0.8) !important;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.35);
+    }
+    body.dark-mode .mob-nav-item.mob-center-action {
+        border-color: #1e293b !important;
+    }
     @media (max-width: 768px) {
         .mobile-bottom-nav {
             display: flex;
         }
         .site-main, main, .main-content {
-            padding-bottom: 84px !important;
+            padding-bottom: 0 !important;
         }
-        .floating-chat-btn, .floating-order-btn, #backToTopBtn {
-            bottom: 72px !important;
+        .floating-chat-btn {
+            bottom: 88px !important;
+            right: 14px !important;
+            width: 44px !important;
+            height: 44px !important;
+            font-size: 17px !important;
+            z-index: 1200 !important;
+        }
+        .floating-order-btn {
+            display: none !important;
+        }
+        #backToTopBtn {
+            bottom: 198px !important;
+            right: 14px !important;
+            width: 40px !important;
+            height: 40px !important;
+            z-index: 1199 !important;
         }
         .footer {
-            padding-bottom: 90px !important;
+            padding: 16px 14px 92px 14px !important;
         }
     }
     </style>
@@ -751,21 +810,21 @@
         .footer-container {
             max-width: 1280px;
             margin: 0 auto;
-            padding: 28px 24px 16px;
+            padding: 18px 24px 12px;
             box-sizing: border-box;
         }
 
         .footer-grid {
             display: grid;
             grid-template-columns: 1.3fr 1fr 1fr 1fr;
-            gap: 24px;
+            gap: 18px;
         }
 
         .footer-col h4 {
             color: #ffffff;
-            font-size: 0.86rem;
+            font-size: 0.82rem;
             font-weight: 800;
-            margin: 0 0 10px;
+            margin: 0 0 8px;
             letter-spacing: 0.02em;
             text-transform: uppercase;
         }
@@ -873,13 +932,13 @@
         }
 
         .footer-bottom {
-            margin-top: 20px;
-            padding-top: 14px;
+            margin-top: 14px;
+            padding-top: 10px;
             border-top: 1px solid #232734;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            gap: 14px;
+            gap: 10px;
             flex-wrap: wrap;
         }
 
@@ -908,24 +967,103 @@
         }
 
         @media (max-width: 860px) {
-            .footer-grid {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-                gap: 20px;
+            .footer {
+                font-size: 0.78rem !important;
+                padding: 16px 14px 92px 14px !important;
             }
             .footer-container {
-                padding: 20px 16px 14px;
+                padding: 0 !important;
+                max-width: 100% !important;
+            }
+            .footer-grid {
+                grid-template-columns: repeat(2, 1fr) !important;
+                gap: 10px 16px !important;
+                margin-bottom: 8px !important;
+            }
+            .footer-brand-col {
+                grid-column: span 2 !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: space-between !important;
+                flex-wrap: wrap !important;
+                gap: 8px !important;
+                margin-bottom: 4px !important;
+                padding-bottom: 8px !important;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+            }
+            .footer-brand-desc {
+                display: none !important;
+            }
+            .footer-logo {
+                margin-bottom: 0 !important;
+            }
+            .footer-col {
+                padding: 0 !important;
+            }
+            .footer-col h4 {
+                font-size: 0.76rem !important;
+                margin: 0 0 4px !important;
+                color: #f8fafc !important;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+            }
+            .footer-col ul {
+                gap: 3px !important;
+            }
+            .footer-col a {
+                font-size: 0.74rem !important;
+                color: #94a3b8 !important;
+            }
+            .footer-col.footer-col-partner {
+                grid-column: span 2 !important;
+                margin-top: 4px !important;
+                padding-top: 8px !important;
+                border-top: 1px solid rgba(255, 255, 255, 0.06) !important;
+            }
+            .footer-col.footer-col-partner ul {
+                display: grid !important;
+                grid-template-columns: 1fr 1fr !important;
+                gap: 3px 14px !important;
+            }
+            .social-links {
+                gap: 6px !important;
+                margin-top: 0 !important;
+            }
+            .social-links a,
+            .social-link {
+                width: 28px !important;
+                height: 28px !important;
+                font-size: 0.75rem !important;
+            }
+            .footer-bottom {
+                margin-top: 8px !important;
+                padding-top: 8px !important;
+                border-top: 1px solid rgba(255, 255, 255, 0.06) !important;
+                flex-direction: column !important;
+                align-items: center !important;
+                text-align: center !important;
+                gap: 6px !important;
+                font-size: 0.72rem !important;
+            }
+            .footer-bottom p {
+                font-size: 0.7rem !important;
+                color: #64748b !important;
+                margin: 0 !important;
+            }
+            .footer-links {
+                gap: 12px !important;
+                justify-content: center !important;
+            }
+            .footer-links a {
+                font-size: 0.72rem !important;
+                color: #94a3b8 !important;
             }
         }
 
         @media (max-width: 520px) {
             .footer-grid {
-                grid-template-columns: 1fr;
-                gap: 18px;
-            }
-            .footer-bottom {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 8px;
+                grid-template-columns: 1fr 1fr !important;
+                gap: 8px 12px !important;
             }
         }
 
@@ -1098,6 +1236,14 @@
             box-shadow: 0 16px 28px rgba(12, 18, 28, 0.33);
         }
 
+        #backToTopBtn:active,
+        .floating-cart-btn:active,
+        .floating-order-btn:active,
+        .floating-chat-btn:active {
+            transform: scale(0.92) !important;
+            transition-duration: 0.08s !important;
+        }
+
         .floating-chat-btn.with-timestamp {
             width: 60px;
             height: 60px;
@@ -1161,34 +1307,30 @@
 
         @media (max-width: 768px) {
             .footer .container {
-                padding-top: 32px;
-            }
-
-            .footer-grid {
-                grid-template-columns: 1fr;
+                padding-top: 14px;
             }
 
             .footer-col {
-                padding: 16px;
+                padding: 0;
             }
 
-            .footer-bottom {
-                flex-direction: column;
-                align-items: flex-start;
+            #backToTopBtn {
+                bottom: 92px !important;
+                right: 14px !important;
+                width: 42px !important;
+                height: 42px !important;
+                font-size: 16px !important;
+                z-index: 1190 !important;
+                box-shadow: 0 4px 14px rgba(16, 24, 40, 0.18) !important;
             }
 
-            #backToTopBtn,
             .floating-cart-btn,
             .floating-order-btn,
             .floating-chat-btn {
                 right: 16px;
-                width: 56px;
-                height: 56px;
-                font-size: 20px;
-            }
-
-            #backToTopBtn {
-                bottom: 14px;
+                width: 52px;
+                height: 52px;
+                font-size: 19px;
             }
 
             .floating-chat-btn {
@@ -1493,8 +1635,11 @@
                         ? `<div class="ongoing-order-driver"><i class="fas fa-box-open"></i> ${itemSummary}</div>`
                         : '<div class="ongoing-order-driver"><i class="fas fa-calendar-check"></i> Pre-order update in progress</div>';
                 } else {
+                    const driverRatingHtml = (order.driver_rating && parseFloat(order.driver_rating) > 0)
+                        ? ` <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:700;color:#f59e0b;background:#fffbeb;padding:1px 6px;border-radius:4px;border:1px solid #fef3c7;margin-left:4px;"><i class="fas fa-star" style="font-size:10px;"></i> ${parseFloat(order.driver_rating).toFixed(1)}</span>`
+                        : '';
                     driver = order.driver_name
-                        ? `<div class="ongoing-order-driver"><i class="fas fa-user"></i> Driver: ${escapeOrderHtml(order.driver_name)}</div>`
+                        ? `<div class="ongoing-order-driver"><i class="fas fa-user"></i> Driver: ${escapeOrderHtml(order.driver_name)}${driverRatingHtml}</div>`
                         : '<div class="ongoing-order-driver"><i class="fas fa-user-clock"></i> Driver assignment in progress</div>';
                 }
                 const total = formatOrderCurrency(order.total_amount);
@@ -1784,30 +1929,7 @@
         }
     }
     </style>
-    <?php if (!empty($_SESSION['login_success_flash'])): ?>
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        if (typeof Swal !== 'undefined') {
-            const Toast = Swal.mixin({
-                toast: true,
-                position: 'top-end',
-                backdrop: false,
-                showConfirmButton: false,
-                timer: 4000,
-                timerProgressBar: true,
-                didOpen: (toast) => {
-                    toast.addEventListener('mouseenter', Swal.stopTimer);
-                    toast.addEventListener('mouseleave', Swal.resumeTimer);
-                }
-            });
-            Toast.fire({
-                icon: 'success',
-                title: <?php echo json_encode($_SESSION['login_success_flash']); ?>
-            });
-        }
-    });
-    </script>
-    <?php unset($_SESSION['login_success_flash']); ?>
-    <?php endif; ?>
+    <?php require_once __DIR__ . '/customer_tutorial_modal.php'; ?>
+    <?php require_once __DIR__ . '/popup_alert.php'; ?>
 </body>
 </html>

@@ -381,7 +381,7 @@ class AdminLogisticsManager {
         }
         
         const mapOptions = {
-            center: { lat: 14.5546, lng: 121.0242 }, // Metro Manila
+            center: { lat: 14.3294, lng: 120.9367 }, // Cavite
             zoom: 12,
             mapTypeId: 'roadmap'
         };
