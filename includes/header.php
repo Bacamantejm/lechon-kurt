@@ -155,7 +155,20 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
     </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
-    <title><?php echo htmlspecialchars($page_title . ' | Lechon Delights'); ?></title>
+    <?php
+    $brand_tab_title = 'Lechon Delight';
+    $rendered_tab_title = $brand_tab_title;
+    if (!empty($page_title) && !in_array(strtolower(trim((string)$page_title)), ['home', 'index', 'marketplace home', 'lechon delight', 'lechon delights', 'lechon & meat supply shops'], true)) {
+        $rendered_tab_title = $brand_tab_title . ' — ' . trim((string)$page_title);
+    }
+    ?>
+    <title><?php echo htmlspecialchars($rendered_tab_title); ?></title>
+    <!-- Favicon & Brand Logo Icons -->
+    <link rel="icon" type="image/x-icon" href="<?php echo $path_prefix; ?>favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="<?php echo $path_prefix; ?>favicon-32x32.png">
+    <link rel="icon" type="image/jpeg" href="<?php echo $path_prefix; ?>assets/images/logo.jpg">
+    <link rel="shortcut icon" type="image/x-icon" href="<?php echo $path_prefix; ?>favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="<?php echo $path_prefix; ?>apple-touch-icon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">

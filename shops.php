@@ -5,7 +5,7 @@ require_once __DIR__ . '/includes/favorites_helper.php';
 require_once __DIR__ . '/includes/store_availability_helper.php';
 
 $current_page = 'shops';
-$page_title = 'Lechon & Meat Supply Shops';
+$page_title = 'Lechon Delight';
 
 $current_user_address = '';
 if (!empty($_SESSION['user_id'])) {

@@ -18,9 +18,13 @@ if (isset($rider['id'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title><?php echo htmlspecialchars($page_title); ?> — Rider Portal</title>
-    <!-- Favicon -->
+    <title>Lechon Delight | <?php echo htmlspecialchars($page_title); ?> — Rider Portal</title>
+    <!-- Favicon & Brand Logo Icons -->
     <link rel="icon" type="image/x-icon" href="../favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32x32.png">
+    <link rel="icon" type="image/jpeg" href="../assets/images/logo.jpg">
+    <link rel="shortcut icon" type="image/x-icon" href="../favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png">
     <!-- Bootstrap 5 CSS -->
     <link href="../css/bootstrap.min.css" rel="stylesheet">
     <!-- FontAwesome 6 -->
