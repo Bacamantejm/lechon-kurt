@@ -2043,7 +2043,7 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
 <script>
 window.openMobileNavSidebar = function(e) {
     if (e) {
-        if (typeof e.preventDefault === 'function') e.preventDefault();
+        if (e.cancelable && typeof e.preventDefault === 'function') e.preventDefault();
         if (typeof e.stopPropagation === 'function') e.stopPropagation();
     }
     var m = document.getElementById('mobileMenu');
@@ -2071,7 +2071,7 @@ window.openMobileNavSidebar = function(e) {
 };
 window.closeMobileNavSidebar = function(e) {
     if (e) {
-        if (typeof e.preventDefault === 'function') e.preventDefault();
+        if (e.cancelable && typeof e.preventDefault === 'function') e.preventDefault();
         if (typeof e.stopPropagation === 'function') e.stopPropagation();
     }
     var m = document.getElementById('mobileMenu');
@@ -2113,17 +2113,6 @@ document.addEventListener('click', function(e) {
 }, true);
 
 document.addEventListener('pointerdown', function(e) {
-    var toggle = e.target.closest('#mobileToggle, #mobileToggle2, .mobile-toggle');
-    if (toggle) {
-        window.openMobileNavSidebar(e);
-        return;
-    }
-    var close = e.target.closest('#mobileMenuClose, .mobile-menu-close, #mobileOverlay');
-    if (close) {
-        window.closeMobileNavSidebar(e);
-        return;
-    }
-
     // Instant tactile feedback on any touchable element
     var touchable = e.target.closest('a, button, [role="button"], .mob-nav-item, .rider-nav-item, .menu-item, .btn, .icon-btn, .tab-btn');
     if (touchable) {
