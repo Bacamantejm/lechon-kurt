@@ -264,7 +264,7 @@ saRenderModuleHeader('Notification Center', 'Notification Center', $admin_info);
                     data-sa-confirm-title="Send Notification?"
                     data-sa-confirm-text="This will deliver the notification to selected recipients based on the chosen scope."
                     data-sa-confirm-confirm-text="Yes, Send"
-                    data-sa-confirm-confirm-color="#9f1239">
+                    data-sa-confirm-confirm-color="#b3261e">
                 <i class="fas fa-paper-plane"></i> Send Notification
             </button>
         </form>

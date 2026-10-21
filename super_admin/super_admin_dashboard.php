@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 require_once __DIR__ . '/module_common.php';
 
 $current_user_id = $current_admin_id;
@@ -1401,6 +1401,7 @@ if ($dashboard_flash_payload === false) {
     <link rel="stylesheet" href="../css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="../super_admin/modules.css">
     <style>
         .sa-topbar-action-wrap { position:relative; margin-right:8px; }
         .sa-topbar-action-btn { position:relative; width:38px; height:38px; border:1px solid #d0d5dd; border-radius:9px; background:#fff; color:#344054; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; transition:all 0.2s ease; }
@@ -1447,7 +1448,7 @@ if ($dashboard_flash_payload === false) {
         body.dark-mode .sa-item-title { color:#f8fafc; }
         body.dark-mode .sa-item:hover { background:#334155; }
         body.dark-mode .sa-item.unread { background:#1e3a5f; }
-        body.dark-mode .sa-filter-bar, body.dark-mode .sa-dropdown-pages { background:#0f172a; border-color:#334155; }
+        body.dark-mode .sa-filter-bar, body.dark-mode .sa-dropdown-pages { background:#101828; border-color:#334155; }
         body.dark-mode .sa-filter-pill { background:#1e293b; border-color:#475569; color:#cbd5e1; }
         body.dark-mode .sa-filter-pill.active { background:#b3261e; color:#fff; border-color:#b3261e; }
         body.dark-mode .sa-item-desc, body.dark-mode .sa-item-time, body.dark-mode .sa-dropdown-page-label { color:#94a3b8; }
@@ -1480,42 +1481,52 @@ if ($dashboard_flash_payload === false) {
 
         .super-owner-page {
             display: grid;
-            gap: 18px;
+            gap: 20px;
+            padding-bottom: 140px;
         }
 
         .owner-hero {
-            border-radius: 20px;
-            padding: 24px;
-            color: #fff;
-            background: linear-gradient(135deg, #7f1d1d 0%, #9f1239 50%, #c2410c 100%);
-            box-shadow: 0 18px 40px rgba(127, 29, 29, 0.18);
+            background: #ffffff;
+            border: 1px solid #eaecf0;
+            border-radius: 16px;
+            padding: 24px 28px;
+            box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06);
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 20px;
+            flex-wrap: wrap;
         }
 
         .owner-badge {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            padding: 7px 12px;
+            gap: 7px;
+            padding: 5px 13px;
             border-radius: 999px;
-            background: rgba(255, 255, 255, 0.14);
-            border: 1px solid rgba(255, 255, 255, 0.22);
-            font-size: 0.8rem;
+            background: #fff1f0;
+            border: 1px solid #fee4e2;
+            color: #b3261e;
+            font-size: 0.75rem;
             font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.06em;
-            margin-bottom: 12px;
+            letter-spacing: 0.05em;
+            margin-bottom: 10px;
         }
 
         .owner-hero h2 {
-            margin: 0 0 10px 0;
-            font-size: clamp(1.8rem, 3vw, 2.5rem);
-            font-weight: 800;
+            margin: 0 0 6px 0;
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: #101828;
         }
 
         .owner-hero p {
             margin: 0;
-            max-width: 820px;
-            color: rgba(255, 255, 255, 0.92);
+            max-width: 560px;
+            color: #475467;
+            font-size: 0.875rem;
+            line-height: 1.5;
         }
 
         .owner-hero-meta {
@@ -1528,12 +1539,25 @@ if ($dashboard_flash_payload === false) {
         .owner-hero-meta span {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            padding: 10px 14px;
-            border-radius: 14px;
-            background: rgba(255, 255, 255, 0.14);
+            gap: 6px;
+            padding: 5px 12px;
+            border-radius: 999px;
+            background: #f8f9fa;
+            border: 1px solid #eaecf0;
+            font-size: 0.8rem;
             font-weight: 600;
+            color: #475467;
         }
+
+
+        body.dark-mode .owner-hero {
+            background: #1e293b !important;
+            border-color: #334155 !important;
+        }
+        body.dark-mode .owner-hero h2 { color: #f8fafc !important; }
+        body.dark-mode .owner-hero p { color: #cbd5e1 !important; }
+        body.dark-mode .owner-badge { background: #3b1f1d !important; border-color: #7f1d1d !important; color: #fca5a5 !important; }
+        body.dark-mode .owner-hero-meta span { background: #0f172a !important; border-color: #334155 !important; color: #94a3b8 !important; }
 
         .owner-metric-grid,
         .owner-action-grid {
@@ -1555,10 +1579,10 @@ if ($dashboard_flash_payload === false) {
         }
 
         .owner-business-card {
-            border: 1px solid #e2e8f0;
+            border: 1px solid #eaecf0;
             border-radius: 16px;
             padding: 16px;
-            background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
+            background: #ffffff;
             display: grid;
             gap: 14px;
         }
@@ -1574,7 +1598,7 @@ if ($dashboard_flash_payload === false) {
             margin: 0 0 4px 0;
             font-size: 1rem;
             font-weight: 800;
-            color: #0f172a;
+            color: #101828;
         }
 
         .owner-business-head small {
@@ -1588,7 +1612,7 @@ if ($dashboard_flash_payload === false) {
             padding: 6px 10px;
             border-radius: 999px;
             background: #fff1f2;
-            color: #9f1239;
+            color: #b3261e;
             font-size: 0.8rem;
             font-weight: 800;
             white-space: nowrap;
@@ -1606,7 +1630,7 @@ if ($dashboard_flash_payload === false) {
             padding: 10px 12px;
             border-radius: 12px;
             background: #ffffff;
-            border: 1px solid #e2e8f0;
+            border: 1px solid #eaecf0;
             display: grid;
             gap: 4px;
         }
@@ -1623,14 +1647,14 @@ if ($dashboard_flash_payload === false) {
         .owner-business-stats strong,
         .owner-business-finance strong {
             font-size: 0.96rem;
-            color: #0f172a;
+            color: #101828;
         }
 
         .owner-card,
         .owner-section {
             background: #fff;
-            border: 1px solid #e2e8f0;
-            border-radius: 18px;
+            border: 1px solid #eaecf0;
+            border-radius: 12px;
             box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
         }
 
@@ -1641,9 +1665,9 @@ if ($dashboard_flash_payload === false) {
         }
 
         .owner-card strong {
-            font-size: 1.9rem;
+            font-size: 1.5rem;
             line-height: 1.1;
-            color: #0f172a;
+            color: #101828;
         }
 
         .owner-card span {
@@ -1673,7 +1697,7 @@ if ($dashboard_flash_payload === false) {
             margin: 0;
             font-size: 1.08rem;
             font-weight: 800;
-            color: #0f172a;
+            color: #101828;
         }
 
         .owner-section-head p {
@@ -1684,8 +1708,8 @@ if ($dashboard_flash_payload === false) {
             display: block;
             padding: 16px;
             border-radius: 16px;
-            border: 1px solid #e2e8f0;
-            background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
+            border: 1px solid #eaecf0;
+            background: #ffffff;
             text-decoration: none;
             color: inherit;
             transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -1706,7 +1730,7 @@ if ($dashboard_flash_payload === false) {
             border-radius: 12px;
             margin-bottom: 10px;
             background: #fff1f2;
-            color: #9f1239;
+            color: #b3261e;
         }
 
         .owner-action strong {
@@ -1731,7 +1755,7 @@ if ($dashboard_flash_payload === false) {
             padding: 12px 14px;
             border-radius: 14px;
             background: #f8fafc;
-            border: 1px solid #e2e8f0;
+            border: 1px solid #eaecf0;
         }
 
         .owner-rank-badge {
@@ -1743,7 +1767,7 @@ if ($dashboard_flash_payload === false) {
             margin-right: 8px;
             border-radius: 999px;
             background: #fff1f2;
-            color: #9f1239;
+            color: #b3261e;
             font-size: 0.72rem;
             font-weight: 800;
             letter-spacing: 0.04em;
@@ -1759,7 +1783,7 @@ if ($dashboard_flash_payload === false) {
         }
 
         .owner-link {
-            color: #9f1239;
+            color: #b3261e;
             text-decoration: none;
             font-weight: 700;
         }
@@ -1777,7 +1801,7 @@ if ($dashboard_flash_payload === false) {
             justify-content: center;
             border-radius: 999px;
             padding: 6px 12px;
-            border: 1px solid #e2e8f0;
+            border: 1px solid #eaecf0;
             background: #f8fafc;
             color: #475569;
             text-decoration: none;
@@ -1788,13 +1812,13 @@ if ($dashboard_flash_payload === false) {
 
         .owner-range-pill:hover {
             border-color: #fca5a5;
-            color: #9f1239;
+            color: #b3261e;
             background: #fff1f2;
         }
 
         .owner-range-pill.active {
-            border-color: #be123c;
-            background: #9f1239;
+            border-color: #b3261e;
+            background: #b3261e;
             color: #fff;
         }
 
@@ -1833,13 +1857,13 @@ if ($dashboard_flash_payload === false) {
         .owner-alert.error {
             background: #fff1f2;
             border-color: #fecdd3;
-            color: #9f1239;
+            color: #b3261e;
         }
 
         .owner-control-form {
             display: grid;
             gap: 10px;
-            border-top: 1px solid #e2e8f0;
+            border-top: 1px solid #eaecf0;
             padding-top: 12px;
         }
 
@@ -1873,7 +1897,7 @@ if ($dashboard_flash_payload === false) {
             border: none;
             border-radius: 10px;
             padding: 10px 14px;
-            background: #9f1239;
+            background: #b3261e;
             color: #fff;
             font-weight: 700;
             cursor: pointer;
@@ -1894,7 +1918,7 @@ if ($dashboard_flash_payload === false) {
         .owner-status-pill.active { background: #dcfce7; color: #166534; }
         .owner-status-pill.restricted { background: #fef3c7; color: #92400e; }
         .owner-status-pill.suspended { background: #fde68a; color: #92400e; }
-        .owner-status-pill.banned { background: #fee2e2; color: #b91c1c; }
+        .owner-status-pill.banned { background: #fee2e2; color: #b3261e; }
         .owner-warning-chip {
             display: inline-flex;
             align-items: center;
@@ -1909,13 +1933,13 @@ if ($dashboard_flash_payload === false) {
         }
 
         .owner-warning-chip.watch { background: #fef3c7; color: #92400e; }
-        .owner-warning-chip.critical { background: #fee2e2; color: #b91c1c; }
+        .owner-warning-chip.critical { background: #fee2e2; color: #b3261e; }
         .owner-warning-chip.healthy { background: #dcfce7; color: #166534; }
 
         .owner-warning-form {
             display: grid;
             gap: 10px;
-            border-top: 1px solid #e2e8f0;
+            border-top: 1px solid #eaecf0;
             padding-top: 12px;
         }
 
@@ -1976,7 +2000,7 @@ if ($dashboard_flash_payload === false) {
             border: none;
             border-radius: 10px;
             padding: 10px 14px;
-            background: #b91c1c;
+            background: #b3261e;
             color: #fff;
             font-weight: 700;
             cursor: pointer;
@@ -2002,7 +2026,7 @@ if ($dashboard_flash_payload === false) {
 
         .owner-priority-card {
             border-radius: 14px;
-            border: 1px solid #e2e8f0;
+            border: 1px solid #eaecf0;
             background: #f8fafc;
             padding: 12px;
             display: grid;
@@ -2019,7 +2043,7 @@ if ($dashboard_flash_payload === false) {
 
         .owner-priority-card strong {
             font-size: 1.35rem;
-            color: #0f172a;
+            color: #101828;
             line-height: 1.05;
         }
 
@@ -2033,7 +2057,7 @@ if ($dashboard_flash_payload === false) {
         }
 
         .owner-priority-card.critical strong {
-            color: #9f1239;
+            color: #b3261e;
         }
 
         .owner-priority-card.watch {
@@ -2061,7 +2085,7 @@ if ($dashboard_flash_payload === false) {
 
         .owner-queue-item {
             border-radius: 14px;
-            border: 1px solid #e2e8f0;
+            border: 1px solid #eaecf0;
             background: #f8fafc;
             padding: 12px;
             display: flex;
@@ -2071,7 +2095,7 @@ if ($dashboard_flash_payload === false) {
         }
 
         .owner-queue-item b {
-            color: #0f172a;
+            color: #101828;
             display: block;
             margin-bottom: 4px;
         }
@@ -2109,7 +2133,7 @@ if ($dashboard_flash_payload === false) {
             letter-spacing: 0.04em;
         }
 
-        .owner-priority-pill.urgent { background: #fee2e2; color: #b91c1c; }
+        .owner-priority-pill.urgent { background: #fee2e2; color: #b3261e; }
         .owner-priority-pill.critical { background: #fecaca; color: #991b1b; }
         .owner-priority-pill.high { background: #ffedd5; color: #9a3412; }
         .owner-priority-pill.medium { background: #fef3c7; color: #92400e; }
@@ -2117,9 +2141,9 @@ if ($dashboard_flash_payload === false) {
 
         .owner-module-card {
             border-radius: 14px;
-            border: 1px solid #e2e8f0;
+            border: 1px solid #eaecf0;
             padding: 14px;
-            background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
+            background: #ffffff;
             display: grid;
             gap: 8px;
             text-decoration: none;
@@ -2146,17 +2170,17 @@ if ($dashboard_flash_payload === false) {
             gap: 8px;
             font-size: 0.9rem;
             font-weight: 800;
-            color: #0f172a;
+            color: #101828;
         }
 
         .owner-module-title i {
-            color: #9f1239;
+            color: #b3261e;
         }
 
         .owner-module-metric {
             font-size: 1.22rem;
             font-weight: 800;
-            color: #0f172a;
+            color: #101828;
         }
 
         .owner-module-subtitle {
@@ -2184,11 +2208,11 @@ if ($dashboard_flash_payload === false) {
 
         .owner-module-state.healthy { background: #dcfce7; color: #166534; }
         .owner-module-state.watch { background: #fef3c7; color: #92400e; }
-        .owner-module-state.critical { background: #fee2e2; color: #b91c1c; }
+        .owner-module-state.critical { background: #fee2e2; color: #b3261e; }
 
         body.dark-mode {
-            background: #0f172a !important;
-            color: #e2e8f0 !important;
+            background: #101828 !important;
+            color: #eaecf0 !important;
         }
 
         body.dark-mode .admin-content,
@@ -2197,7 +2221,7 @@ if ($dashboard_flash_payload === false) {
         body.dark-mode .owner-card,
         body.dark-mode .owner-section {
             background: #111827 !important;
-            color: #e2e8f0 !important;
+            color: #eaecf0 !important;
             border-color: #374151 !important;
         }
 
@@ -2245,7 +2269,7 @@ if ($dashboard_flash_payload === false) {
         }
 
         body.dark-mode .owner-rank-badge {
-            background: #7f1d1d !important;
+            background: #b3261e !important;
             color: #fecaca !important;
         }
 
@@ -2256,7 +2280,7 @@ if ($dashboard_flash_payload === false) {
         }
 
         body.dark-mode .owner-range-pill.active {
-            background: #be123c !important;
+            background: #b3261e !important;
             border-color: #f43f5e !important;
             color: #fff !important;
         }
@@ -2273,7 +2297,7 @@ if ($dashboard_flash_payload === false) {
         body.dark-mode .owner-warning-form textarea {
             background: #111827 !important;
             border-color: #374151 !important;
-            color: #e2e8f0 !important;
+            color: #eaecf0 !important;
         }
 
         body.dark-mode .owner-priority-card strong,
@@ -2770,7 +2794,7 @@ if ($dashboard_flash_payload === false) {
                         <div class="table-responsive" style="overflow-x: auto;">
                             <table class="table" style="width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 0; font-size: 0.88rem;">
                                 <thead>
-                                    <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0; color: #475569; font-weight: 800;">
+                                    <tr style="background: #f8fafc; border-bottom: 2px solid #eaecf0; color: #475569; font-weight: 800;">
                                         <th style="padding: 12px 14px; border-top-left-radius: 10px;">Partner Store &amp; Owner</th>
                                         <th style="padding: 12px 14px;">Plan Subscribed</th>
                                         <th style="padding: 12px 14px;">Plan Rate</th>
@@ -2796,9 +2820,9 @@ if ($dashboard_flash_payload === false) {
                                             
                                             $pillClass = ($subStatus === 'active' || $subStatus === 'trial') ? 'active' : (($subStatus === 'past_due' || $subStatus === 'paused') ? 'restricted' : 'banned');
                                         ?>
-                                        <tr style="border-bottom: 1px solid #e2e8f0; vertical-align: middle;">
+                                        <tr style="border-bottom: 1px solid #eaecf0; vertical-align: middle;">
                                             <td style="padding: 12px 14px;">
-                                                <strong style="color: #0f172a; font-size: 0.92rem;"><?php echo htmlspecialchars((string)$sub['business_name']); ?></strong>
+                                                <strong style="color: #101828; font-size: 0.92rem;"><?php echo htmlspecialchars((string)$sub['business_name']); ?></strong>
                                                 <div style="color: #64748b; font-size: 0.78rem; margin-top: 2px;">
                                                     <span><i class="fas fa-user"></i> <?php echo htmlspecialchars((string)$sub['owner_name']); ?></span>
                                                     &bull; <span><i class="fas fa-envelope"></i> <?php echo htmlspecialchars((string)$sub['email']); ?></span>
@@ -2808,7 +2832,7 @@ if ($dashboard_flash_payload === false) {
                                                 <span style="font-weight: 800; color: #b3261e;"><?php echo htmlspecialchars($planName); ?></span>
                                                 <div style="font-size: 0.76rem; color: #64748b;"><?php echo htmlspecialchars($cycleLabel); ?> Billing</div>
                                             </td>
-                                            <td style="padding: 12px 14px; font-weight: 700; color: #0f172a;">
+                                            <td style="padding: 12px 14px; font-weight: 700; color: #101828;">
                                                 PHP <?php echo number_format($planPrice, 2); ?>
                                                 <div style="font-size: 0.74rem; color: #64748b; font-weight: 400;"><?php echo $cycleLabel === 'Annual' ? 'per year' : 'per month'; ?></div>
                                             </td>
@@ -3008,7 +3032,7 @@ if ($dashboard_flash_payload === false) {
                                                             data-sa-confirm-title-template="Set Partner Access to {field_label:target_status}?"
                                                             data-sa-confirm-text-template="This will update this partner account access status to {field_label:target_status} immediately."
                                                             data-sa-confirm-confirm-text-template="Yes, Set to {field_label:target_status}"
-                                                            data-sa-confirm-confirm-color="#9f1239">
+                                                            data-sa-confirm-confirm-color="#b3261e">
                                                         Apply
                                                     </button>
                                                 </div>
@@ -3054,7 +3078,7 @@ if ($dashboard_flash_payload === false) {
                                                         data-sa-confirm-title="Issue Partner Warning?"
                                                         data-sa-confirm-text-template="Severity: {field_label:warning_severity}. Follow-up: {field_label:warning_followup_status}."
                                                         data-sa-confirm-confirm-text-template="Yes, Issue {field_label:warning_severity} Warning"
-                                                        data-sa-confirm-confirm-color="#b91c1c">
+                                                        data-sa-confirm-confirm-color="#b3261e">
                                                     Issue Warning
                                                 </button>
                                             </div>
@@ -3451,7 +3475,7 @@ if ($dashboard_flash_payload === false) {
                     icon,
                     title,
                     text: message,
-                    confirmButtonColor: '#9f1239'
+                    confirmButtonColor: '#b3261e'
                 }));
             });
         }
@@ -3523,7 +3547,7 @@ if ($dashboard_flash_payload === false) {
                     icon: source.saConfirmIcon || 'warning',
                     confirmText: resolveConfirmTemplate(source.saConfirmConfirmTextTemplate || source.saConfirmConfirmText, form) || 'Yes, Continue',
                     cancelText: resolveConfirmTemplate(source.saConfirmCancelTextTemplate || source.saConfirmCancelText, form) || 'Cancel',
-                    confirmColor: source.saConfirmConfirmColor || '#9f1239',
+                    confirmColor: source.saConfirmConfirmColor || '#b3261e',
                     cancelColor: source.saConfirmCancelColor || '#64748b'
                 };
             };
@@ -3572,3 +3596,4 @@ if ($dashboard_flash_payload === false) {
     </script>
 </body>
 </html>
+

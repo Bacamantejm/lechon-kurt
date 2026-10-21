@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 require_once __DIR__ . '/module_common.php';
 
 $page_file = 'users.php';
@@ -144,18 +144,22 @@ saRenderModuleHeader('Users Management', 'Users Management', $admin_info);
     </div>
     <div class="metrics-grid">
         <div class="metric-card">
+            <div class="metric-icon"><i class="fas fa-users"></i></div>
             <span class="metric-label">Total Customers</span>
             <div class="metric-value"><?php echo number_format((int)($user_stats['total'] ?? 0)); ?></div>
         </div>
         <div class="metric-card">
+            <div class="metric-icon success"><i class="fas fa-user-check"></i></div>
             <span class="metric-label">Active Customers</span>
             <div class="metric-value"><?php echo number_format((int)($user_stats['active'] ?? 0)); ?></div>
         </div>
         <div class="metric-card">
+            <div class="metric-icon info"><i class="fas fa-user"></i></div>
             <span class="metric-label">Individual Accounts</span>
             <div class="metric-value"><?php echo number_format((int)($user_stats['individual'] ?? 0)); ?></div>
         </div>
         <div class="metric-card">
+            <div class="metric-icon warning"><i class="fas fa-building"></i></div>
             <span class="metric-label">Organization Accounts</span>
             <div class="metric-value"><?php echo number_format((int)($user_stats['organization'] ?? 0)); ?></div>
         </div>
@@ -171,13 +175,13 @@ saRenderModuleHeader('Users Management', 'Users Management', $admin_info);
     </div>
 
     <form method="GET" class="module-form-grid" style="margin-bottom: 12px;">
-        <input type="text" name="search" class="form-control" placeholder="Search users..." value="<?php echo htmlspecialchars($search); ?>">
+        <div class="form-input-wrap"><i class="form-input-icon fas fa-search"></i><input type="text" name="search" class="form-control" placeholder="Search by name or email..." value="<?php echo htmlspecialchars($search); ?>"></div>
         <select name="user_type" class="form-select">
             <option value="" <?php echo $user_type === '' ? 'selected' : ''; ?>>All Types</option>
             <option value="individual" <?php echo $user_type === 'individual' ? 'selected' : ''; ?>>Individual</option>
             <option value="organization" <?php echo $user_type === 'organization' ? 'selected' : ''; ?>>Organization</option>
         </select>
-        <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Search</button>
+        <button type="submit" class="btn-modal-primary"><i class="fas fa-search"></i> Search</button>
     </form>
 
     <?php if (!$has_users): ?>
@@ -208,13 +212,13 @@ saRenderModuleHeader('Users Management', 'Users Management', $admin_info);
                                 $status_label = $is_active ? 'Active' : 'Inactive';
                                 $toggle_action = $is_active ? 'deactivate' : 'activate';
                                 $toggle_icon = $is_active ? 'fa-ban' : 'fa-check';
-                                $toggle_button_class = $is_active ? 'btn-outline-danger' : 'btn-outline-success';
+                                $toggle_button_class = $is_active ? 'btn-sm-danger' : 'btn-sm-success';
                                 $toggle_confirm_title = $is_active ? 'Deactivate Customer Account?' : 'Activate Customer Account?';
                                 $toggle_confirm_text = $is_active
                                     ? 'This customer will lose access to the platform until reactivated.'
                                     : 'This customer account will be re-enabled immediately.';
                                 $toggle_confirm_text_btn = $is_active ? 'Yes, Deactivate' : 'Yes, Activate';
-                                $toggle_confirm_color = $is_active ? '#b91c1c' : '#166534';
+                                $toggle_confirm_color = $is_active ? '#b3261e' : '#166534';
                             ?>
                             <tr>
                                 <td><strong><?php echo htmlspecialchars((string)($user['full_name'] ?? 'Unknown')); ?></strong></td>
@@ -227,7 +231,7 @@ saRenderModuleHeader('Users Management', 'Users Management', $admin_info);
                                 <td>
                                     <div class="module-inline-actions">
                                         <button type="button"
-                                                class="btn btn-sm btn-outline-primary"
+                                                class="btn-modal-cancel" style="padding:6px 12px;font-size:12px;"
                                                 data-bs-toggle="modal"
                                                 data-bs-target="#userModal"
                                                 onclick="loadUserDetails(<?php echo (int)$user['id']; ?>)"
@@ -244,7 +248,7 @@ saRenderModuleHeader('Users Management', 'Users Management', $admin_info);
                                             <input type="hidden" name="user_id" value="<?php echo (int)$user['id']; ?>">
                                             <input type="hidden" name="action" value="<?php echo htmlspecialchars($toggle_action, ENT_QUOTES, 'UTF-8'); ?>">
                                             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token, ENT_QUOTES, 'UTF-8'); ?>">
-                                            <button type="submit" class="btn btn-sm <?php echo $toggle_button_class; ?>" title="<?php echo ucfirst($toggle_action); ?>">
+                                            <button type="submit" class="status-chip <?php echo $is_active ? 'chip-danger' : 'chip-success'; ?>" style="cursor:pointer;border:none;" title="<?php echo ucfirst($toggle_action); ?>">
                                                 <i class="fas <?php echo $toggle_icon; ?>"></i>
                                             </button>
                                         </form>
@@ -262,20 +266,20 @@ saRenderModuleHeader('Users Management', 'Users Management', $admin_info);
 <div class="modal fade modern-form-modal" id="userModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <div class="modal-header">
+            <div class="modal-header modern-header">
                 <div class="modal-header-icon">
                     <i class="fas fa-user-shield"></i>
                 </div>
                 <div>
-                    <h5 class="modal-title">Customer Profile Details</h5>
+                    <h5 class="modal-title modern-title">Customer Profile Details</h5>
                     <p class="modal-subtitle">Account credentials, verification status, and order history.</p>
                 </div>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close modern-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body" id="userDetails">
+            <div class="modal-body modern-body" id="userDetails">
                 <div class="text-muted">Loading user details...</div>
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer modern-footer">
                 <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
@@ -301,3 +305,4 @@ $extra_scripts = <<<'HTML'
 HTML;
 
 saRenderModuleFooter($extra_scripts);
+

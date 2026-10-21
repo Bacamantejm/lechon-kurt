@@ -416,7 +416,7 @@ saRenderModuleHeader('User & Business Management', 'User & Business Management',
                                             ? 'This user will regain access to platform modules.'
                                             : 'This user will be blocked from logging in until reactivated.';
                                         $status_confirm_button = $next_is_active ? 'Yes, Activate' : 'Yes, Deactivate';
-                                        $status_confirm_color = $next_is_active ? '#166534' : '#b91c1c';
+                                        $status_confirm_color = $next_is_active ? '#166534' : '#b3261e';
                                     ?>
                                     <form method="POST" class="module-inline-actions">
                                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
@@ -501,7 +501,7 @@ saRenderModuleHeader('User & Business Management', 'User & Business Management',
                                                     data-sa-confirm-title-template="Confirm {field_label:decision} Decision?"
                                                     data-sa-confirm-text-template="This will mark this business application as {field_label:decision}."
                                                     data-sa-confirm-confirm-text-template="Yes, {field_label:decision}"
-                                                    data-sa-confirm-confirm-color="#9f1239">
+                                                    data-sa-confirm-confirm-color="#b3261e">
                                                 Submit
                                             </button>
                                         </form>

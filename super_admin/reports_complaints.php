@@ -439,7 +439,7 @@ saRenderModuleHeader('Reports & Complaints', 'Reports & Complaints', $admin_info
                                                 data-sa-confirm-title-template="Update Complaint to {field_label:status}?"
                                                 data-sa-confirm-text-template="This will set the complaint to {field_label:status} with {field_label:priority} priority."
                                                 data-sa-confirm-confirm-text-template="Yes, Set to {field_label:status}"
-                                                data-sa-confirm-confirm-color="#9f1239">
+                                                data-sa-confirm-confirm-color="#b3261e">
                                             Save
                                         </button>
                                     </form>

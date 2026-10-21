@@ -614,7 +614,7 @@ body.dark-mode .sidebar-menu .menu-item.active i {
                         <a href="<?php echo htmlspecialchars((string)$flow_module['url']); ?>" class="submenu-item">
                             <i class="fas fa-arrow-right"></i>
                             <?php echo htmlspecialchars((string)$flow_module['label']); ?>
-                            <span style="margin-left:auto;background:#c62828;color:#fff;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:600;">
+                            <span style="margin-left:auto;background:#b3261e;color:#fff;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:600;">
                                 <?php echo (int)($flow_module['count'] ?? 0); ?>
                             </span>
                         </a>
@@ -1226,7 +1226,7 @@ body.dark-mode .sidebar-menu .menu-item.active i {
     
     <div class="sidebar-footer">
         <?php if ($is_employee_user): ?>
-            <a href="../employee/dashboard.php" class="logout-btn" style="margin-bottom: 8px; background-color: #1e88e5;">
+            <a href="../employee/dashboard.php" class="logout-btn" style="margin-bottom: 8px; background-color: #475467;">
                 <i class="fas fa-user-clock"></i>
                 <span>Employee Dashboard</span>
             </a>
@@ -1304,7 +1304,7 @@ body.dark-mode .sidebar-menu .menu-item.active i {
     }
 
     .admin-topbar .topbar-right .theme-toggler:hover {
-        color: #c62828;
+        color: #b3261e;
         background: #fff1f2;
         border-color: #fecaca;
         transform: translateY(-1px);
@@ -1374,7 +1374,7 @@ body.dark-mode .sidebar-menu .menu-item.active i {
     }
     
     .notification-btn:hover {
-        color: #c62828;
+        color: #b3261e;
         background: #fff1f2;
         border-color: #fecaca;
         transform: translateY(-1px);
@@ -1384,7 +1384,7 @@ body.dark-mode .sidebar-menu .menu-item.active i {
         position: absolute;
         top: -2px;
         right: -2px;
-        background-color: #c62828;
+        background-color: #b3261e;
         color: white;
         font-size: 0.7rem;
         font-weight: bold;
@@ -1429,7 +1429,7 @@ body.dark-mode .sidebar-menu .menu-item.active i {
     
     .mark-read-btn {
         font-size: 0.8rem;
-        color: #c62828;
+        color: #b3261e;
         text-decoration: none;
         cursor: pointer;
     }
@@ -1569,11 +1569,11 @@ body.dark-mode .sidebar-menu .menu-item.active i {
     
     .notification-btn.shaking i {
         animation: bell-shake 2s infinite;
-        color: #c62828;
+        color: #b3261e;
     }
 
     .notification-btn.is-active {
-        color: #c62828;
+        color: #b3261e;
         background: #fff1f2;
         border-color: #fecaca;
     }
@@ -2441,7 +2441,7 @@ body.dark-mode .sidebar-menu .menu-item.active i {
                                 const notifType = String(notif.type || '').toLowerCase();
                                 
                                 if (notifType.includes('order')) { icon = 'fa-shopping-cart'; color = '#2e7d32'; bg = '#e8f5e9'; }
-                                else if (notifType.includes('alert')) { icon = 'fa-exclamation-triangle'; color = '#c62828'; bg = '#ffebee'; }
+                                else if (notifType.includes('alert')) { icon = 'fa-exclamation-triangle'; color = '#b3261e'; bg = '#ffebee'; }
                                 else if (notifType.includes('user')) { icon = 'fa-user'; color = '#ef6c00'; bg = '#fff3e0'; }
                                 else if (notifType.includes('franchise')) { icon = 'fa-store'; color = '#7c3aed'; bg = '#f3e8ff'; }
                                 const statusMatch = notifType.match(/franchise_(approved|rejected|incomplete)/);
@@ -2631,7 +2631,7 @@ body.dark-mode .sidebar-menu .menu-item.active i {
     right: 30px;
     width: 60px;
     height: 60px;
-    background: var(--primary, #c62828);
+    background: var(--primary, #b3261e);
     color: white;
     border-radius: 50%;
     display: flex;
@@ -2699,7 +2699,7 @@ body.dark-mode .sidebar-menu .menu-item.active i {
 }
 
 .admin-chat-header {
-    background: var(--primary, #c62828);
+    background: var(--primary, #b3261e);
     color: white;
     padding: 15px;
     display: flex;
@@ -2751,7 +2751,7 @@ body.dark-mode .sidebar-menu .menu-item.active i {
     margin-bottom: 8px;
 }
 .widget-message.agent {
-    background: var(--primary, #c62828);
+    background: var(--primary, #b3261e);
     color: white;
     align-self: flex-end;
     border-bottom-right-radius: 4px;
@@ -3457,7 +3457,7 @@ body.dark-mode select:-webkit-autofill {
     <div class="admin-chat-footer" id="adminChatFooter" style="display: none;">
         <form onsubmit="event.preventDefault(); sendWidgetMessage();" style="display: flex; gap: 5px;">
             <input type="text" id="adminWidgetInput" class="form-control form-control-sm" placeholder="Type..." autocomplete="off">
-            <button type="submit" class="btn btn-primary btn-sm" style="background: var(--primary, #c62828); border-color: var(--primary, #c62828);"><i class="fas fa-paper-plane"></i></button>
+            <button type="submit" class="btn btn-primary btn-sm" style="background: var(--primary, #b3261e); border-color: var(--primary, #b3261e);"><i class="fas fa-paper-plane"></i></button>
         </form>
     </div>
 </div>
