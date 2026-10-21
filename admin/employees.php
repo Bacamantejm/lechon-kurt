@@ -425,6 +425,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit();
         }
 
+        // Check if email is already in employees table
+        $emp_email_stmt = mysqli_prepare($conn, "SELECT id FROM employees WHERE email = ? LIMIT 1");
+        if ($emp_email_stmt) {
+            mysqli_stmt_bind_param($emp_email_stmt, "s", $email);
+            mysqli_stmt_execute($emp_email_stmt);
+            $emp_email_res = mysqli_stmt_get_result($emp_email_stmt);
+            if ($emp_email_res && mysqli_num_rows($emp_email_res) > 0) {
+                $_SESSION['error'] = "An employee with email '{$email}' already exists.";
+                mysqli_stmt_close($emp_email_stmt);
+                header("Location: employees.php");
+                exit();
+            }
+            mysqli_stmt_close($emp_email_stmt);
+        }
+
         $user_check_stmt = mysqli_prepare($conn, "SELECT id FROM users WHERE email = ?");
         mysqli_stmt_bind_param($user_check_stmt, "s", $email);
         mysqli_stmt_execute($user_check_stmt);
@@ -434,9 +449,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['error'] = "Password and Role are required when creating a user account.";
         } elseif ($create_user && mysqli_num_rows($user_check_result) > 0) {
             $_SESSION['error'] = "Email is already registered to a user account.";
-        } elseif ($first_name === '' || $last_name === '' || $email === '' || $phone === '' || $sss === '' || $philhealth === '' || $pagibig === '' || $tin === '' || $department_id <= 0 || $position_id <= 0 || $position === '' || $hire_date === '' || $base_salary_input <= 0) {
-            $_SESSION['error'] = "Please fill in all required fields (personal info, phone, government IDs, department, position, hire date, and salary).";
+        } elseif ($first_name === '' || $last_name === '' || $email === '' || $phone === '') {
+            $_SESSION['error'] = "Please fill in all required personal fields (First Name, Last Name, Email, and Phone).";
         } else { // Proceed with adding employee
+            // Auto fallback defaults for optional attributes
+            if ($department_id <= 0 && !empty($departments)) {
+                $department_id = (int)$departments[0]['id'];
+            }
+            if ($position_id <= 0 && !empty($position_catalog['all'])) {
+                $position_id = (int)$position_catalog['all'][0]['id'];
+                $position = (string)$position_catalog['all'][0]['title'];
+            }
+            if ($position === '') {
+                $position = 'Staff';
+            }
+            if ($hire_date === '') {
+                $hire_date = date('Y-m-d');
+            }
+            if ($base_salary_input <= 0) {
+                $base_salary_input = 0.00;
+            }
+            if ($employment_basis === 'monthly') {
+                $salary = $base_salary_input;
+                $daily_rate = 0.00;
+            } else {
+                $salary = 0.00;
+                $daily_rate = $base_salary_input;
+            }
+
             $user_id_for_employee = null; // Initialize user_id to null
 
             // If creating a user account, do it first to get the user_id
@@ -474,15 +514,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // If user account wasn't created via checkbox, check if user with this email already exists
             if (!$create_user && $user_id_for_employee === null) {
-                $user_check_stmt = mysqli_prepare($conn, "SELECT id FROM users WHERE email = ? LIMIT 1");
-                if ($user_check_stmt) {
-                    mysqli_stmt_bind_param($user_check_stmt, "s", $email);
-                    mysqli_stmt_execute($user_check_stmt);
-                    $u_res = mysqli_stmt_get_result($user_check_stmt);
+                $user_check_stmt2 = mysqli_prepare($conn, "SELECT id FROM users WHERE email = ? LIMIT 1");
+                if ($user_check_stmt2) {
+                    mysqli_stmt_bind_param($user_check_stmt2, "s", $email);
+                    mysqli_stmt_execute($user_check_stmt2);
+                    $u_res = mysqli_stmt_get_result($user_check_stmt2);
                     if ($u_row = mysqli_fetch_assoc($u_res)) {
                         $user_id_for_employee = (int)$u_row['id'];
                     }
-                    mysqli_stmt_close($user_check_stmt);
+                    mysqli_stmt_close($user_check_stmt2);
                 }
             }
 
@@ -504,27 +544,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
-            // Now insert the employee record, linking to the user_id if created or found
-            $query = "INSERT INTO employees (employee_id, first_name, middle_initial, last_name, suffix, email, user_id, phone, sss_number, philhealth_number, pagibig_number, tin_number, department_id, position_id, position, hire_date, employment_type, employment_basis, salary, daily_rate, photo, status)
-                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?,0), ?, ?, ?, ?, ?, ?, ?, ?, 'active')";
-            $stmt = mysqli_prepare($conn, $query);
-            mysqli_stmt_bind_param($stmt, "ssssssisssssiissssdds", $employee_id, $first_name, $middle_initial, $last_name, $suffix, $email, $user_id_for_employee, $phone, $sss, $philhealth, $pagibig, $tin, $department_id, $position_id, $position, $hire_date, $employment_type, $employment_basis, $salary, $daily_rate, $photo_db_path);
+            // Now insert the employee record, linking safely with NULLIF for foreign keys
+            $user_id_param = ($user_id_for_employee && (int)$user_id_for_employee > 0) ? (int)$user_id_for_employee : 0;
+            $dept_id_param = ($department_id > 0) ? (int)$department_id : 0;
+            $pos_id_param = ($position_id > 0) ? (int)$position_id : 0;
 
-            if ($stmt && mysqli_stmt_execute($stmt)) {
-                $new_emp_pk = mysqli_insert_id($conn);
-                if ($user_id_for_employee && $user_id_for_employee > 0) {
-                    if ($photo_db_path) {
-                        mysqli_query($conn, "UPDATE users SET profile_image = '" . mysqli_real_escape_string($conn, $photo_db_path) . "' WHERE id = " . (int)$user_id_for_employee);
-                    }
-                    require_once __DIR__ . '/../includes/rider_helper.php';
-                    isDeliveryDriverUser($conn, $user_id_for_employee);
-                }
-                $_SESSION['success'] = (isset($_SESSION['success']) ? $_SESSION['success'] . " Employee added successfully." : "Employee added successfully.");
-            } else {
-                $_SESSION['error'] = "Error adding employee: " . mysqli_error($conn);
-            }
+            $query = "INSERT INTO employees (employee_id, first_name, middle_initial, last_name, suffix, email, user_id, phone, sss_number, philhealth_number, pagibig_number, tin_number, department_id, position_id, position, hire_date, employment_type, employment_basis, salary, daily_rate, photo, status)
+                      VALUES (?, ?, ?, ?, ?, ?, NULLIF(?,0), ?, ?, ?, ?, ?, NULLIF(?,0), NULLIF(?,0), ?, ?, ?, ?, ?, ?, ?, 'active')";
+            $stmt = mysqli_prepare($conn, $query);
             if ($stmt) {
+                mysqli_stmt_bind_param($stmt, "ssssssisssssiissssdds", $employee_id, $first_name, $middle_initial, $last_name, $suffix, $email, $user_id_param, $phone, $sss, $philhealth, $pagibig, $tin, $dept_id_param, $pos_id_param, $position, $hire_date, $employment_type, $employment_basis, $salary, $daily_rate, $photo_db_path);
+
+                if (mysqli_stmt_execute($stmt)) {
+                    $new_emp_pk = mysqli_insert_id($conn);
+                    if ($user_id_for_employee && $user_id_for_employee > 0) {
+                        if ($photo_db_path) {
+                            mysqli_query($conn, "UPDATE users SET profile_image = '" . mysqli_real_escape_string($conn, $photo_db_path) . "' WHERE id = " . (int)$user_id_for_employee);
+                        }
+                        require_once __DIR__ . '/../includes/rider_helper.php';
+                        isDeliveryDriverUser($conn, $user_id_for_employee);
+                    }
+                    $_SESSION['success'] = (isset($_SESSION['success']) ? $_SESSION['success'] . " Employee added successfully." : "Employee added successfully.");
+                } else {
+                    $_SESSION['error'] = "Error adding employee: " . mysqli_error($conn);
+                }
                 mysqli_stmt_close($stmt);
+            } else {
+                $_SESSION['error'] = "Error preparing employee insert: " . mysqli_error($conn);
             }
         }
     }
@@ -585,15 +631,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pagibig = trim($_POST['pagibig_number'] ?? '');
         $tin = trim($_POST['tin_number'] ?? '');
 
-        if ($first_name === '' || $last_name === '' || $email === '' || $phone === '' || $sss === '' || $philhealth === '' || $pagibig === '' || $tin === '' || $department_id <= 0 || $position_id <= 0 || $position === '' || $hire_date === '' || $base_salary_input <= 0) {
-            $_SESSION['error'] = "Please fill in all required employee fields (personal info, phone, government IDs, department, position, hire date, and salary).";
+        if ($first_name === '' || $last_name === '' || $email === '' || $phone === '') {
+            $_SESSION['error'] = "Please fill in all required personal fields (First Name, Last Name, Email, and Phone).";
             header("Location: employees.php");
             exit();
         }
 
-        $query = "UPDATE employees SET first_name=?, middle_initial=?, last_name=?, suffix=?, email=?, phone=?, department_id=NULLIF(?,0), position_id=?, position=?, hire_date=?, employment_type=?, employment_basis=?, salary=?, daily_rate=?, sss_number=?, philhealth_number=?, pagibig_number=?, tin_number=? WHERE id=?";
+        if ($position === '') {
+            $position = 'Staff';
+        }
+        if ($hire_date === '') {
+            $hire_date = date('Y-m-d');
+        }
+        $dept_id_param = ($department_id > 0) ? (int)$department_id : 0;
+        $pos_id_param = ($position_id > 0) ? (int)$position_id : 0;
+
+        $query = "UPDATE employees SET first_name=?, middle_initial=?, last_name=?, suffix=?, email=?, phone=?, department_id=NULLIF(?,0), position_id=NULLIF(?,0), position=?, hire_date=?, employment_type=?, employment_basis=?, salary=?, daily_rate=?, sss_number=?, philhealth_number=?, pagibig_number=?, tin_number=? WHERE id=?";
         $stmt = mysqli_prepare($conn, $query);
-        mysqli_stmt_bind_param($stmt, "ssssssiissssddssssi", $first_name, $middle_initial, $last_name, $suffix, $email, $phone, $department_id, $position_id, $position, $hire_date, $employment_type, $employment_basis, $salary, $daily_rate, $sss, $philhealth, $pagibig, $tin, $id);
+        mysqli_stmt_bind_param($stmt, "ssssssiissssddssssi", $first_name, $middle_initial, $last_name, $suffix, $email, $phone, $dept_id_param, $pos_id_param, $position, $hire_date, $employment_type, $employment_basis, $salary, $daily_rate, $sss, $philhealth, $pagibig, $tin, $id);
 
         if ($stmt && mysqli_stmt_execute($stmt)) {
             // Handle optional photo upload
@@ -1743,6 +1798,18 @@ if ($roles_query instanceof mysqli_result) {
             </div>
             
             <div class="admin-main">
+                <?php if (!empty($_SESSION['error'])): ?>
+                    <div class="alert alert-danger alert-dismissible fade show mb-3" role="alert" style="border-radius: 10px; font-weight: 500;">
+                        <i class="fas fa-exclamation-circle me-2"></i><?php echo htmlspecialchars((string)$_SESSION['error']); ?>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                <?php endif; ?>
+                <?php if (!empty($_SESSION['success'])): ?>
+                    <div class="alert alert-success alert-dismissible fade show mb-3" role="alert" style="border-radius: 10px; font-weight: 500;">
+                        <i class="fas fa-check-circle me-2"></i><?php echo htmlspecialchars((string)$_SESSION['success']); ?>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                <?php endif; ?>
                 
                 <div class="emp-directory-toolbar">
                     <div class="d-flex align-items-center gap-2 flex-wrap">
@@ -2238,46 +2305,46 @@ if ($roles_query instanceof mysqli_result) {
                             </div>
                         </div>
 
-                        <!-- Section 2: Mandatory Government Compliance IDs -->
+                        <!-- Section 2: Government Compliance IDs -->
                         <div class="emp-section-card">
                             <div class="emp-section-head">
-                                <span class="emp-section-title"><i class="fas fa-id-card"></i> Mandatory Government IDs</span>
-                                <span class="emp-req-pill">Required</span>
+                                <span class="emp-section-title"><i class="fas fa-id-card"></i> Government Compliance IDs</span>
+                                <span class="emp-req-pill" style="background: #f1f5f9; color: #475467; border: 1px solid #cbd5e1;">Optional</span>
                             </div>
                             <div class="row g-3">
                                 <div class="col-md-6">
                                     <div class="emp-form-group">
-                                        <label class="emp-label">SSS Number <span class="emp-req-star">*</span></label>
+                                        <label class="emp-label">SSS Number <span class="text-muted fw-normal" style="font-size: 11px;">(Optional)</span></label>
                                         <div class="emp-input-wrap">
                                             <i class="fas fa-shield-alt emp-input-icon"></i>
-                                            <input type="text" name="sss_number" class="form-control" placeholder="XX-XXXXXXX-X" required>
+                                            <input type="text" name="sss_number" class="form-control" placeholder="XX-XXXXXXX-X">
                                         </div>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="emp-form-group">
-                                        <label class="emp-label">PhilHealth Number <span class="emp-req-star">*</span></label>
+                                        <label class="emp-label">PhilHealth Number <span class="text-muted fw-normal" style="font-size: 11px;">(Optional)</span></label>
                                         <div class="emp-input-wrap">
                                             <i class="fas fa-heartbeat emp-input-icon"></i>
-                                            <input type="text" name="philhealth_number" class="form-control" placeholder="XX-XXXXXXXXX-X" required>
+                                            <input type="text" name="philhealth_number" class="form-control" placeholder="XX-XXXXXXXXX-X">
                                         </div>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="emp-form-group">
-                                        <label class="emp-label">Pag-IBIG Number <span class="emp-req-star">*</span></label>
+                                        <label class="emp-label">Pag-IBIG Number <span class="text-muted fw-normal" style="font-size: 11px;">(Optional)</span></label>
                                         <div class="emp-input-wrap">
                                             <i class="fas fa-home emp-input-icon"></i>
-                                            <input type="text" name="pagibig_number" class="form-control" placeholder="XXXX-XXXX-XXXX" required>
+                                            <input type="text" name="pagibig_number" class="form-control" placeholder="XXXX-XXXX-XXXX">
                                         </div>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="emp-form-group">
-                                        <label class="emp-label">TIN (Tax Identification) <span class="emp-req-star">*</span></label>
+                                        <label class="emp-label">TIN (Tax Identification) <span class="text-muted fw-normal" style="font-size: 11px;">(Optional)</span></label>
                                         <div class="emp-input-wrap">
                                             <i class="fas fa-file-invoice-dollar emp-input-icon"></i>
-                                            <input type="text" name="tin_number" class="form-control" placeholder="XXX-XXX-XXX-XXX" required>
+                                            <input type="text" name="tin_number" class="form-control" placeholder="XXX-XXX-XXX-XXX">
                                         </div>
                                     </div>
                                 </div>
@@ -2531,46 +2598,46 @@ if ($roles_query instanceof mysqli_result) {
                             </div>
                         </div>
 
-                        <!-- Section 2: Mandatory Government Compliance IDs -->
+                        <!-- Section 2: Government Compliance IDs -->
                         <div class="emp-section-card">
                             <div class="emp-section-head">
-                                <span class="emp-section-title"><i class="fas fa-id-card"></i> Mandatory Government IDs</span>
-                                <span class="emp-req-pill">Required</span>
+                                <span class="emp-section-title"><i class="fas fa-id-card"></i> Government Compliance IDs</span>
+                                <span class="emp-req-pill" style="background: #f1f5f9; color: #475467; border: 1px solid #cbd5e1;">Optional</span>
                             </div>
                             <div class="row g-3">
                                 <div class="col-md-6">
                                     <div class="emp-form-group">
-                                        <label class="emp-label">SSS Number <span class="emp-req-star">*</span></label>
+                                        <label class="emp-label">SSS Number <span class="text-muted fw-normal" style="font-size: 11px;">(Optional)</span></label>
                                         <div class="emp-input-wrap">
                                             <i class="fas fa-shield-alt emp-input-icon"></i>
-                                            <input type="text" name="sss_number" id="edit_sss" class="form-control" placeholder="XX-XXXXXXX-X" required>
+                                            <input type="text" name="sss_number" id="edit_sss" class="form-control" placeholder="XX-XXXXXXX-X">
                                         </div>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="emp-form-group">
-                                        <label class="emp-label">PhilHealth Number <span class="emp-req-star">*</span></label>
+                                        <label class="emp-label">PhilHealth Number <span class="text-muted fw-normal" style="font-size: 11px;">(Optional)</span></label>
                                         <div class="emp-input-wrap">
                                             <i class="fas fa-heartbeat emp-input-icon"></i>
-                                            <input type="text" name="philhealth_number" id="edit_philhealth" class="form-control" placeholder="XX-XXXXXXXXX-X" required>
+                                            <input type="text" name="philhealth_number" id="edit_philhealth" class="form-control" placeholder="XX-XXXXXXXXX-X">
                                         </div>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="emp-form-group">
-                                        <label class="emp-label">Pag-IBIG Number <span class="emp-req-star">*</span></label>
+                                        <label class="emp-label">Pag-IBIG Number <span class="text-muted fw-normal" style="font-size: 11px;">(Optional)</span></label>
                                         <div class="emp-input-wrap">
                                             <i class="fas fa-home emp-input-icon"></i>
-                                            <input type="text" name="pagibig_number" id="edit_pagibig" class="form-control" placeholder="XXXX-XXXX-XXXX" required>
+                                            <input type="text" name="pagibig_number" id="edit_pagibig" class="form-control" placeholder="XXXX-XXXX-XXXX">
                                         </div>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="emp-form-group">
-                                        <label class="emp-label">TIN (Tax Identification) <span class="emp-req-star">*</span></label>
+                                        <label class="emp-label">TIN (Tax Identification) <span class="text-muted fw-normal" style="font-size: 11px;">(Optional)</span></label>
                                         <div class="emp-input-wrap">
                                             <i class="fas fa-file-invoice-dollar emp-input-icon"></i>
-                                            <input type="text" name="tin_number" id="edit_tin" class="form-control" placeholder="XXX-XXX-XXX-XXX" required>
+                                            <input type="text" name="tin_number" id="edit_tin" class="form-control" placeholder="XXX-XXX-XXX-XXX">
                                         </div>
                                     </div>
                                 </div>
@@ -2807,22 +2874,26 @@ if ($roles_query instanceof mysqli_result) {
         });
 
         // Session Messages
-        <?php if (isset($_SESSION['success'])): ?>
-            Swal.fire({
-                icon: 'success',
-                title: 'Success',
-                text: '<?php echo $_SESSION['success']; ?>',
-                timer: 2000,
-                showConfirmButton: false
-            });
+        <?php if (!empty($_SESSION['success'])): ?>
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Success',
+                    text: <?php echo json_encode((string)$_SESSION['success']); ?>,
+                    timer: 2500,
+                    showConfirmButton: false
+                });
+            }
         <?php unset($_SESSION['success']); endif; ?>
 
-        <?php if (isset($_SESSION['error'])): ?>
-            Swal.fire({
-                icon: 'error',
-                title: 'Error',
-                text: '<?php echo $_SESSION['error']; ?>'
-            });
+        <?php if (!empty($_SESSION['error'])): ?>
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: <?php echo json_encode((string)$_SESSION['error']); ?>
+                });
+            }
         <?php unset($_SESSION['error']); endif; ?>
 
         const positionCatalogByDepartment = <?php echo json_encode($position_catalog['by_department'] ?? [], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;

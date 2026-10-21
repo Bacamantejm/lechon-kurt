@@ -265,6 +265,18 @@ if (!function_exists('hrEnsureDepartmentsTable')) {
         if (hrTableExists($conn, 'departments') && !hrColumnExists($conn, 'departments', 'manager_id')) {
             @mysqli_query($conn, "ALTER TABLE departments ADD COLUMN manager_id INT NULL AFTER description");
         }
+        if (hrTableExists($conn, 'departments')) {
+            $cnt_res = @mysqli_query($conn, "SELECT COUNT(*) FROM departments");
+            $cnt = $cnt_res ? (int)(mysqli_fetch_row($cnt_res)[0] ?? 0) : 0;
+            if ($cnt === 0) {
+                @mysqli_query($conn, "INSERT INTO departments (department_name, description) VALUES
+                    ('Cooking', 'Kitchen and roasting operations'),
+                    ('Delivery & Logistics', 'Order fulfillment, packing, and dispatch'),
+                    ('Receptionist', 'Customer service and order booking'),
+                    ('Finance', 'Billing, collections, and accounting'),
+                    ('General Staff', 'Store operations and utility')");
+            }
+        }
         return hrTableExists($conn, 'departments');
     }
 }
@@ -291,6 +303,38 @@ if (!function_exists('hrEnsureJobPositionsTable')) {
                 `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 PRIMARY KEY (`id`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci");
+        }
+        if (hrTableExists($conn, 'job_positions')) {
+            $jp_cnt_res = @mysqli_query($conn, "SELECT COUNT(*) FROM job_positions");
+            $jp_cnt = $jp_cnt_res ? (int)(mysqli_fetch_row($jp_cnt_res)[0] ?? 0) : 0;
+            if ($jp_cnt === 0) {
+                $d_map = [];
+                $d_res = @mysqli_query($conn, "SELECT id, department_name FROM departments");
+                if ($d_res) {
+                    while ($d_row = mysqli_fetch_assoc($d_res)) {
+                        $d_map[$d_row['department_name']] = (int)$d_row['id'];
+                    }
+                }
+                $cook_id = $d_map['Cooking'] ?? 'NULL';
+                $deliv_id = $d_map['Delivery & Logistics'] ?? 'NULL';
+                $rec_id = $d_map['Receptionist'] ?? 'NULL';
+                $fin_id = $d_map['Finance'] ?? 'NULL';
+                $staff_id = $d_map['General Staff'] ?? 'NULL';
+
+                $seed_positions = [
+                    ['Chef / Lechonero', $cook_id],
+                    ['Assistant Cook', $cook_id],
+                    ['Delivery Rider / Driver', $deliv_id],
+                    ['Cashier / Receptionist', $rec_id],
+                    ['Finance Staff', $fin_id],
+                    ['General Staff', $staff_id]
+                ];
+                foreach ($seed_positions as $sp) {
+                    $t = mysqli_real_escape_string($conn, $sp[0]);
+                    $did = $sp[1] !== 'NULL' ? (int)$sp[1] : 'NULL';
+                    @mysqli_query($conn, "INSERT INTO job_positions (position_title, department_id, employment_type, status, posted_date) VALUES ('{$t}', {$did}, 'full_time', 'open', CURDATE())");
+                }
+            }
         }
         return hrTableExists($conn, 'job_positions');
     }
