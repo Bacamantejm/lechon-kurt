@@ -18,15 +18,26 @@ if (isset($rider['id'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title><?php echo htmlspecialchars($page_title); ?> — Rider Portal</title>
-    <!-- Favicon -->
-    <link rel="icon" type="image/x-icon" href="../favicon.ico">
+    <title>Lechon Delight | <?php echo htmlspecialchars($page_title); ?> — Rider Portal</title>
+    <!-- Favicon & Brand Logo Icons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32x32.png?v=lechon2">
+    <link rel="icon" type="image/png" sizes="16x16" href="../favicon-16x16.png?v=lechon2">
+    <link rel="icon" type="image/x-icon" href="../favicon.ico?v=lechon2">
+    <link rel="shortcut icon" type="image/x-icon" href="../favicon.ico?v=lechon2">
+    <link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png?v=lechon2">
     <!-- Bootstrap 5 CSS -->
     <link href="../css/bootstrap.min.css" rel="stylesheet">
     <!-- FontAwesome 6 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Leaflet CSS -->
+    <!-- Leaflet CSS & JS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script>
+        // CDN Fallback for Leaflet if unpkg is blocked or slow
+        if (typeof L === 'undefined') {
+            document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"><\/script>');
+        }
+    </script>
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -56,6 +67,13 @@ if (isset($rider['id'])) {
 
         * {
             box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* 0ms Mobile Tap Delay Elimination */
+        html, body, a, button, input, select, textarea, label, [role="button"],
+        .rider-nav-item, .rider-card, .duty-switch-btn, .btn, .btn-sm {
+            touch-action: manipulation;
             -webkit-tap-highlight-color: transparent;
         }
 
@@ -180,6 +198,13 @@ if (isset($rider['id'])) {
             padding: 16px;
             margin-bottom: 14px;
             box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+            transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
+        }
+
+        .rider-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 18px rgba(16, 24, 40, 0.06);
+            border-color: #d0d5dd;
         }
 
         /* Duty Status Switch */
@@ -204,12 +229,20 @@ if (isset($rider['id'])) {
             text-transform: uppercase;
             border-radius: 24px;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
             color: var(--muted-ink);
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 6px;
+        }
+
+        .duty-switch-btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .duty-switch-btn:active {
+            transform: scale(0.95);
         }
 
         .duty-switch-btn.active.offline {
@@ -243,15 +276,24 @@ if (isset($rider['id'])) {
             align-items: center;
             justify-content: center;
             gap: 8px;
-            transition: background 0.2s;
+            transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1), background 0.18s ease;
             text-decoration: none;
             cursor: pointer;
             width: 100%;
+            user-select: none;
         }
 
         .btn-rider-primary:hover, .btn-rider-primary:focus {
             background-color: var(--primary-hover);
             color: #ffffff;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px -2px rgba(179, 38, 30, 0.28);
+        }
+
+        .btn-rider-primary:active {
+            transform: translateY(1.5px) scale(0.975);
+            box-shadow: 0 2px 4px rgba(179, 38, 30, 0.18);
+            transition-duration: 0.08s;
         }
 
         .btn-rider-secondary {
@@ -269,6 +311,19 @@ if (isset($rider['id'])) {
             text-decoration: none;
             cursor: pointer;
             width: 100%;
+            transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s ease, background-color 0.18s ease;
+            user-select: none;
+        }
+
+        .btn-rider-secondary:hover {
+            transform: translateY(-1.5px);
+            background-color: #f8fafc;
+            box-shadow: 0 4px 12px rgba(16, 24, 40, 0.06);
+        }
+
+        .btn-rider-secondary:active {
+            transform: translateY(1px) scale(0.98);
+            transition-duration: 0.08s;
         }
 
         .btn-rider-success {
@@ -286,6 +341,21 @@ if (isset($rider['id'])) {
             text-decoration: none;
             cursor: pointer;
             width: 100%;
+            transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s ease, background 0.18s ease;
+            user-select: none;
+        }
+
+        .btn-rider-success:hover {
+            background-color: #02663c;
+            color: #ffffff;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px -2px rgba(2, 122, 72, 0.28);
+        }
+
+        .btn-rider-success:active {
+            transform: translateY(1.5px) scale(0.975);
+            box-shadow: 0 2px 4px rgba(2, 122, 72, 0.18);
+            transition-duration: 0.08s;
         }
 
         /* Bottom Navigation Bar */
@@ -298,11 +368,12 @@ if (isset($rider['id'])) {
             border-top: 1px solid var(--border-neutral);
             display: flex;
             justify-content: space-around;
-            padding: 8px 6px (max(8px, env(safe-area-inset-bottom)));
+            padding: 8px 6px calc(max(8px, env(safe-area-inset-bottom, 8px)));
             z-index: 1050;
             box-shadow: 0 -2px 10px rgba(16, 24, 40, 0.05);
             max-width: 540px;
             margin: 0 auto;
+            touch-action: manipulation;
         }
 
         .rider-nav-item {
@@ -316,10 +387,18 @@ if (isset($rider['id'])) {
             font-weight: 600;
             padding: 4px 8px;
             border-radius: 8px;
-            transition: color 0.15s ease;
+            transition: color 0.1s ease, transform 0.06s ease;
             position: relative;
             flex: 1;
             text-align: center;
+            touch-action: manipulation;
+        }
+
+        .rider-nav-item:active,
+        .rider-nav-item.is-touch-active {
+            transform: scale(0.93) translateZ(0);
+            transition: transform 0.05s ease-out;
+            color: var(--primary-red);
         }
 
         .rider-nav-item i {

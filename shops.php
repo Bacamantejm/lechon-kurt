@@ -5,7 +5,7 @@ require_once __DIR__ . '/includes/favorites_helper.php';
 require_once __DIR__ . '/includes/store_availability_helper.php';
 
 $current_page = 'shops';
-$page_title = 'Lechon & Meat Supply Shops';
+$page_title = 'Lechon Delight';
 
 $current_user_address = '';
 if (!empty($_SESSION['user_id'])) {
@@ -94,12 +94,12 @@ if ($branch_res) {
 
         $shops[] = [
             'key' => 'branch-' . $store_id,
-            'name' => trim((string)$row['store_name']),
+            'name' => fixMojibakeText(trim((string)$row['store_name'])),
             'type' => 'Pickup Branch',
             'cat_key' => 'branch',
-            'summary' => 'Official branch location offering pickup & delivery: ' . $location_display,
-            'location' => $city_label,
-            'city' => $city_label,
+            'summary' => 'Official branch location offering pickup & delivery: ' . fixMojibakeText($location_display),
+            'location' => fixMojibakeText($city_label),
+            'city' => fixMojibakeText($city_label),
             'start_price' => $start_price,
             'rating' => 4.9,
             'reviews' => 12,
@@ -225,10 +225,19 @@ require_once 'includes/header.php';
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
 /* CSS Styles for Foodpanda Shops Explorer & Cards */
+html, body {
+    overflow-x: clip !important;
+    max-width: 100vw !important;
+}
+
 .market-home {
-    background: #fff9f2;
+    overflow-x: clip !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    background: #f8f9fa !important;
     padding-top: 24px;
-    padding-bottom: 60px;
+    padding-bottom: 140px !important;
 }
 
 .market-explorer {
@@ -246,10 +255,10 @@ require_once 'includes/header.php';
     align-self: start !important;
     z-index: 100 !important;
     padding: 20px 14px 20px 20px !important;
-    border-radius: 24px !important;
+    border-radius: 26px !important;
     background: #ffffff !important;
-    border: 1px solid #efddcd !important;
-    box-shadow: 0 10px 28px rgba(74, 32, 20, 0.05) !important;
+    border: 1px solid #eaecf0 !important;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04) !important;
     scrollbar-width: thin !important;
     scrollbar-color: #94a3b8 #f1f5f9 !important;
 }
@@ -272,12 +281,16 @@ require_once 'includes/header.php';
     background: #64748b !important;
 }
 
+.market-sidebar-header {
+    margin-bottom: 16px;
+}
+
 .market-sidebar h3 {
     font-family: 'Outfit', sans-serif !important;
     font-size: 1.25rem !important;
     font-weight: 800 !important;
     color: #171922 !important;
-    margin: 0 0 16px 0 !important;
+    margin: 0 0 14px 0 !important;
 }
 
 .market-sidebar h4 {
@@ -289,9 +302,9 @@ require_once 'includes/header.php';
 }
 
 .market-sidebar-section + .market-sidebar-section {
-    margin-top: 20px !important;
-    padding-top: 20px !important;
-    border-top: 1px solid #efddcd !important;
+    margin-top: 24px !important;
+    padding-top: 24px !important;
+    border-top: 1px solid #eaecf0 !important;
 }
 
 .market-radio-list,
@@ -497,37 +510,102 @@ require_once 'includes/header.php';
     margin-top: 1px !important;
 }
 
-@media (max-width: 991px) {
+@media (max-width: 768px) {
     .market-explorer {
         grid-template-columns: 1fr !important;
     }
     .market-sidebar {
         position: static !important;
+        padding: 12px 16px !important;
+        margin-bottom: 14px !important;
+        max-width: 100% !important;
+        border: 1px solid #eaecf0 !important;
+        background: #ffffff !important;
+        border-radius: 16px !important;
+        box-shadow: 0 2px 8px rgba(16, 24, 40, 0.04) !important;
     }
-    .market-home {
-        padding-bottom: 140px !important;
+    .market-sidebar-toggle-btn {
+        display: flex !important;
+        align-items: center;
+        justify-content: space-between;
+        font-weight: 800;
+        font-size: 0.92rem;
+        color: #1e293b;
+        cursor: pointer;
+        padding: 4px 0;
+        user-select: none;
+    }
+    .market-sidebar-toggle-btn i.fa-sliders {
+        color: #b3261e;
+        margin-right: 6px;
+    }
+    .market-sidebar.is-collapsed-mobile .market-sidebar-section,
+    .market-sidebar.is-collapsed-mobile .market-sidebar-header {
+        display: none !important;
+    }
+    .market-sidebar.is-collapsed-mobile .toggle-icon {
+        transform: rotate(-90deg);
+        transition: transform 0.2s ease;
+    }
+    .market-sidebar:not(.is-collapsed-mobile) .toggle-icon {
+        transform: rotate(0deg);
+        transition: transform 0.2s ease;
+    }
+}
+@media (min-width: 769px) {
+    .market-sidebar-toggle-btn {
+        display: none !important;
     }
 }
 
 @media (max-width: 768px) {
-    .market-store-list,
-    .store-list-grid {
-        grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr)) !important;
-        gap: 20px 16px !important;
+    #nearbyShopsGrid {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
+        touch-action: pan-x pan-y !important;
+        scroll-snap-type: x mandatory !important;
+        scroll-behavior: smooth !important;
+        gap: 14px !important;
+        padding: 4px 4px 14px 4px !important;
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+        user-select: none;
+    }
+    #nearbyShopsGrid::-webkit-scrollbar {
+        display: none !important;
+    }
+    #nearbyShopsGrid .market-store-row {
+        flex: 0 0 clamp(230px, 72vw, 275px) !important;
+        width: clamp(230px, 72vw, 275px) !important;
+        min-width: clamp(230px, 72vw, 275px) !important;
+        max-width: clamp(230px, 72vw, 275px) !important;
+        scroll-snap-align: start !important;
+        scroll-snap-stop: normal !important;
+        touch-action: pan-x pan-y !important;
+    }
+    .market-store-list:not(#nearbyShopsGrid),
+    .store-list-grid:not(#nearbyShopsGrid) {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 12px !important;
     }
     .store-card-image-wrap {
-        height: 150px !important;
+        height: 120px !important;
+        border-radius: 14px !important;
     }
 }
 
 @media (max-width: 480px) {
-    .market-store-list,
-    .store-list-grid {
-        grid-template-columns: 1fr !important;
-        gap: 16px !important;
+    .market-store-list:not(#nearbyShopsGrid),
+    .store-list-grid:not(#nearbyShopsGrid) {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 10px !important;
     }
     .store-card-image-wrap {
-        height: 160px !important;
+        height: 110px !important;
     }
 }
 
@@ -551,6 +629,10 @@ body.dark-mode .market-sidebar {
 
 body.dark-mode .market-sidebar-section {
     border-color: #334155 !important;
+}
+
+body.dark-mode .market-sidebar-toggle-btn {
+    color: #f8fafc !important;
 }
 
 body.dark-mode .market-sidebar h3,
@@ -737,18 +819,34 @@ body.dark-mode .leaflet-popup-content span {
         <div class="container" style="max-width:1320px; margin:0 auto; padding:0 22px;">
             <div class="market-explorer">
                 
-                <!-- Left Sidebar Filters (Matching Delivery Page Layout) -->
-                <aside class="market-sidebar">
-                    <div class="market-sidebar-section">
+                <!-- Left Sidebar Filters (Unified Design Matching Delivery Page) -->
+                <aside class="market-sidebar is-collapsed-mobile" id="marketSidebar">
+                    <div class="market-sidebar-toggle-btn" id="marketSidebarToggleBtn" onclick="document.getElementById('marketSidebar').classList.toggle('is-collapsed-mobile')">
+                        <span><i class="fas fa-sliders"></i> Filters &amp; Sort</span>
+                        <i class="fas fa-chevron-down toggle-icon"></i>
+                    </div>
+
+                    <div class="market-sidebar-header">
                         <h3>Filters</h3>
                     </div>
 
-                    <!-- Nearby Distance & City Filter -->
-                    <div class="market-sidebar-section">
-                        <h4>Location & City Scope</h4>
+                    <!-- Sort By -->
+                    <div class="market-sidebar-section market-sort-section">
+                        <h4>Sort by</h4>
+                        <div class="market-radio-list">
+                            <label class="market-radio"><input type="radio" name="shopSort" value="relevance" checked> <span>Relevance</span></label>
+                            <label class="market-radio"><input type="radio" name="shopSort" value="fastest"> <span>Fastest delivery</span></label>
+                            <label class="market-radio"><input type="radio" name="shopSort" value="distance"> <span>Distance</span></label>
+                            <label class="market-radio"><input type="radio" name="shopSort" value="top_rated"> <span>Top rated</span></label>
+                        </div>
+                    </div>
+
+                    <!-- Location & City Scope -->
+                    <div class="market-sidebar-section" id="shopsLocationSection">
+                        <h4>Location &amp; City Scope</h4>
                         <div class="market-check-list">
                             <label class="market-check">
-                                <input type="checkbox" id="filterCityOnly" checked>
+                                <input type="checkbox" id="filterCityOnly">
                                 <span id="filterCityLabel">Stores in my city only</span>
                             </label>
                             <label class="market-check">
@@ -756,7 +854,7 @@ body.dark-mode .leaflet-popup-content span {
                                 <span>Nearby radius (&le; 15 km)</span>
                             </label>
                         </div>
-                        <button type="button" class="market-btn" id="sidebarDetectLocationBtn" style="margin-top:10px; width:100%; min-height:36px; padding:0 12px; font-size:0.8rem; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; gap:6px; background:#ffffff; color:#b3261e; border:1px solid #b3261e; cursor:pointer; font-weight:700; transition:all 0.2s ease;">
+                        <button type="button" class="market-btn market-detect-btn" id="sidebarDetectLocationBtn" style="margin-top:12px; width:100%; min-height:38px; padding:0 12px; font-size:0.82rem; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; gap:8px; background:#ffffff; color:#b3261e; border:1px solid #b3261e; cursor:pointer; font-weight:700; transition:all 0.2s ease;">
                             <i class="fas fa-location-crosshairs"></i> Detect my location
                         </button>
                     </div>
@@ -786,17 +884,6 @@ body.dark-mode .leaflet-popup-content span {
                         </div>
                     </div>
                     <?php endif; ?>
-
-                    <!-- Sort By -->
-                    <div class="market-sidebar-section">
-                        <h4>Sort by</h4>
-                        <div class="market-radio-list">
-                            <label class="market-radio"><input type="radio" name="shopSort" value="relevance" checked> <span>Relevance</span></label>
-                            <label class="market-radio"><input type="radio" name="shopSort" value="fastest"> <span>Fastest delivery</span></label>
-                            <label class="market-radio"><input type="radio" name="shopSort" value="distance"> <span>Distance</span></label>
-                            <label class="market-radio"><input type="radio" name="shopSort" value="top_rated"> <span>Top rated</span></label>
-                        </div>
-                    </div>
 
                     <!-- Price Range -->
                     <div class="market-sidebar-section">
@@ -987,11 +1074,11 @@ document.addEventListener('DOMContentLoaded', function () {
     const mapDetectLocationBtn = document.getElementById('mapDetectLocationBtn');
     const sidebarDetectLocationBtn = document.getElementById('sidebarDetectLocationBtn');
 
-    // Default coordinates: Dasmariñas / Cavite Center
-    let currentUserLat = 14.3294;
-    let currentUserLng = 120.9367;
-    let userLocationLabel = 'Dasmariñas, Cavite';
-    let detectedCity = { key: 'dasmarinas', name: 'Dasmariñas' };
+    // Default coordinates: Unset initially until real user location is confirmed
+    let currentUserLat = null;
+    let currentUserLng = null;
+    let userLocationLabel = '';
+    let detectedCity = null;
     let isUserLocationAccurate = false;
     let leafletMap = null;
     let userMarker = null;
@@ -1103,35 +1190,43 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (parsed) {
                     const plat = parseFloat(parsed.latitude);
                     const plng = parseFloat(parsed.longitude);
-                    const addrText = parsed.display_address || parsed.city || parsed.address || '';
-                    if (Number.isFinite(plat) && Number.isFinite(plng) && plat !== 0 && plng !== 0) {
+                    const addrText = parsed.display_address || parsed.city || parsed.address || parsed.street_address || '';
+                    const hasValidCoords = Number.isFinite(plat) && Number.isFinite(plng) && plat !== 0 && plng !== 0;
+                    
+                    if (hasValidCoords) {
                         currentUserLat = plat;
                         currentUserLng = plng;
+                        isUserLocationAccurate = true;
                     }
-                    if (addrText) {
+                    if (addrText && addrText !== 'Select your address') {
                         userLocationLabel = addrText;
                     }
-                    isUserLocationAccurate = true;
-
-                    const detected = detectCityFromTextOrCoords(addrText, currentUserLat, currentUserLng);
-                    if (detected) {
-                        detectedCity = detected;
+                    if (isUserLocationAccurate) {
+                        const detected = detectCityFromTextOrCoords(addrText, currentUserLat, currentUserLng);
+                        if (detected) {
+                            detectedCity = detected;
+                        }
+                        return true;
                     }
-                    return true;
                 }
             }
         } catch (e) {}
 
-        // Fallback to PHP user address if available
-        if (window.PHP_USER_ADDRESS && window.PHP_USER_ADDRESS.trim() !== '') {
+        // Fallback to PHP user address if available and real
+        if (window.PHP_USER_ADDRESS && window.PHP_USER_ADDRESS.trim() !== '' && window.PHP_USER_ADDRESS.trim() !== 'Select your address') {
             userLocationLabel = window.PHP_USER_ADDRESS.trim();
-            const detected = detectCityFromTextOrCoords(userLocationLabel, currentUserLat, currentUserLng);
+            const detected = detectCityFromTextOrCoords(userLocationLabel, 0, 0);
             if (detected) {
                 detectedCity = detected;
             }
             return true;
         }
 
+        isUserLocationAccurate = false;
+        currentUserLat = null;
+        currentUserLng = null;
+        userLocationLabel = '';
+        detectedCity = null;
         return false;
     }
 
@@ -1140,10 +1235,15 @@ document.addEventListener('DOMContentLoaded', function () {
         const mapContainer = document.getElementById('shopsNearbyMap');
         if (!mapContainer || typeof L === 'undefined') return;
 
+        const initialCenter = (isUserLocationAccurate && Number.isFinite(currentUserLat) && Number.isFinite(currentUserLng))
+            ? [currentUserLat, currentUserLng]
+            : [14.3294, 120.9367];
+        const initialZoom = isUserLocationAccurate ? 13 : 11;
+
         leafletMap = L.map('shopsNearbyMap', {
             zoomControl: true,
             scrollWheelZoom: false
-        }).setView([currentUserLat, currentUserLng], 13);
+        }).setView(initialCenter, initialZoom);
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
@@ -1159,37 +1259,44 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (userMarker) {
             leafletMap.removeLayer(userMarker);
+            userMarker = null;
         }
 
-        const userIcon = L.divIcon({
-            className: 'user-radar-pin',
-            html: `
-                <div style="position:relative; width:28px; height:28px; display:flex; align-items:center; justify-content:center;">
-                    <span style="position:absolute; width:100%; height:100%; border-radius:50%; background:rgba(37,99,235,0.4); animation:ping 1.6s cubic-bezier(0,0,0.2,1) infinite;"></span>
-                    <div style="width:16px; height:16px; border-radius:50%; background:#2563eb; border:3px solid #ffffff; box-shadow:0 3px 10px rgba(0,0,0,0.35); z-index:2;"></div>
-                </div>
-            `,
-            iconSize: [28, 28],
-            iconAnchor: [14, 14],
-            popupAnchor: [0, -14]
-        });
+        if (isUserLocationAccurate && Number.isFinite(currentUserLat) && Number.isFinite(currentUserLng)) {
+            const userIcon = L.divIcon({
+                className: 'user-radar-pin',
+                html: `
+                    <div style="position:relative; width:28px; height:28px; display:flex; align-items:center; justify-content:center;">
+                        <span style="position:absolute; width:100%; height:100%; border-radius:50%; background:rgba(37,99,235,0.4); animation:ping 1.6s cubic-bezier(0,0,0.2,1) infinite;"></span>
+                        <div style="width:16px; height:16px; border-radius:50%; background:#2563eb; border:3px solid #ffffff; box-shadow:0 3px 10px rgba(0,0,0,0.35); z-index:2;"></div>
+                    </div>
+                `,
+                iconSize: [28, 28],
+                iconAnchor: [14, 14],
+                popupAnchor: [0, -14]
+            });
 
-        userMarker = L.marker([currentUserLat, currentUserLng], { icon: userIcon, zIndexOffset: 1000 }).addTo(leafletMap);
-        userMarker.bindPopup(`
-            <div style="font-family:'Outfit',sans-serif; padding:4px;">
-                <strong style="color:#2563eb; font-size:13px;"><i class="fas fa-location-crosshairs"></i> Your Location</strong>
-                <div style="font-size:12px; color:#475569; margin-top:2px;">${userLocationLabel}</div>
-                ${detectedCity ? `<div style="font-size:11px; font-weight:700; color:#b3261e; margin-top:4px;">Showing stores in ${detectedCity.name}</div>` : ''}
-            </div>
-        `);
+            userMarker = L.marker([currentUserLat, currentUserLng], { icon: userIcon, zIndexOffset: 1000 }).addTo(leafletMap);
+            userMarker.bindPopup(`
+                <div style="font-family:'Outfit',sans-serif; padding:4px;">
+                    <strong style="color:#2563eb; font-size:13px;"><i class="fas fa-location-crosshairs"></i> Your Location</strong>
+                    <div style="font-size:12px; color:#475569; margin-top:2px;">${userLocationLabel || 'Current Position'}</div>
+                    ${detectedCity ? `<div style="font-size:11px; font-weight:700; color:#b3261e; margin-top:4px;">Showing stores in ${detectedCity.name}</div>` : ''}
+                </div>
+            `);
+        }
 
         if (userLocationText) {
-            const cityName = detectedCity ? detectedCity.name : 'Dasmariñas';
-            userLocationText.textContent = isUserLocationAccurate ? (`${userLocationLabel} (${cityName})`) : `Location: ${cityName}`;
+            if (isUserLocationAccurate) {
+                const cityName = detectedCity ? detectedCity.name : '';
+                userLocationText.textContent = cityName ? `${userLocationLabel || 'Your Location'} (${cityName})` : (userLocationLabel || 'Location detected');
+            } else {
+                userLocationText.textContent = 'Location not set — showing Cavite stores';
+            }
         }
 
-        if (filterCityLabel && detectedCity) {
-            filterCityLabel.textContent = `Stores in ${detectedCity.name} only`;
+        if (filterCityLabel) {
+            filterCityLabel.textContent = detectedCity ? `Stores in ${detectedCity.name} only` : 'Stores in my city only';
         }
     }
 
@@ -1249,7 +1356,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const bounds = [[currentUserLat, currentUserLng]];
         const isNearbyOnly = filterNearbyOnly ? filterNearbyOnly.checked : false;
         const isCityOnly = filterCityOnly ? filterCityOnly.checked : false;
-        const targetCityKey = detectedCity ? detectedCity.key : 'dasmarinas';
+        const targetCityKey = detectedCity ? detectedCity.key : '';
 
         shopCards.forEach(function (card) {
             const storeLat = parseFloat(card.dataset.lat || '');
@@ -1316,8 +1423,11 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function calculateShopDistances(lat, lng) {
-        currentUserLat = lat;
-        currentUserLng = lng;
+        const hasCoords = Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0 && isUserLocationAccurate;
+        if (hasCoords) {
+            currentUserLat = lat;
+            currentUserLng = lng;
+        }
 
         shopCards.forEach(function (card) {
             const storeLat = parseFloat(card.dataset.lat || '');
@@ -1325,12 +1435,19 @@ document.addEventListener('DOMContentLoaded', function () {
             const timeLabel = card.querySelector('[data-role="time-label"]');
             const etaText = card.querySelector('[data-role="eta-text"]');
             const distanceText = card.querySelector('[data-role="distance-text"]');
+            const cardCity = card.dataset.city || 'Cavite';
+            const isOpen = card.dataset.open === '1';
 
-            if (!Number.isFinite(storeLat) || !Number.isFinite(storeLng) || storeLat === 0 || storeLng === 0) {
+            if (!hasCoords || !Number.isFinite(storeLat) || !Number.isFinite(storeLng) || storeLat === 0 || storeLng === 0) {
                 card.dataset.distance = '999';
-                card.dataset.minutes = '999';
+                card.dataset.minutes = '25';
+                if (timeLabel) {
+                    timeLabel.innerHTML = isOpen 
+                        ? '<i class="fas fa-truck-fast"></i> 20-30 min &bull; ' + cardCity 
+                        : '<i class="fas fa-store-slash"></i> Closed &bull; ' + cardCity;
+                }
                 if (etaText) etaText.textContent = '20-30 min';
-                if (distanceText) distanceText.textContent = 'Near Cavite';
+                if (distanceText) distanceText.textContent = cardCity;
                 return;
             }
 
@@ -1343,7 +1460,6 @@ document.addEventListener('DOMContentLoaded', function () {
             card.dataset.distance = distanceKm.toFixed(2);
             card.dataset.minutes = minTime.toString();
 
-            const isOpen = card.dataset.open === '1';
             if (timeLabel) {
                 timeLabel.innerHTML = isOpen 
                     ? '<i class="fas fa-truck-fast"></i> ' + etaString + ' &bull; ' + (distanceKm < 1 ? '< 1 km' : distanceKm.toFixed(1) + ' km') 
@@ -1362,7 +1478,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const vouchersOnly = filterVouchers ? filterVouchers.checked : false;
         const nearbyOnly = filterNearbyOnly ? filterNearbyOnly.checked : false;
         const cityOnly = filterCityOnly ? filterCityOnly.checked : false;
-        const targetCityKey = detectedCity ? detectedCity.key : 'dasmarinas';
+        const targetCityKey = detectedCity ? detectedCity.key : '';
 
         const selectedTypes = [];
         shopTypeChecks.forEach(function (chk) {
@@ -1407,28 +1523,40 @@ document.addEventListener('DOMContentLoaded', function () {
             card.style.display = '';
 
             // Strict Nearby Determination based on user location & proximity
-            const inCity = isStoreInCityScope(card, targetCityKey);
-            const isNearbyRadius = Number.isFinite(cardDistance) && cardDistance <= 10;
-            const isSameCityNearby = inCity && Number.isFinite(cardDistance) && cardDistance <= 12;
-            const isNearby = (isNearbyRadius || isSameCityNearby) && cardDistance < 900;
+            if (isUserLocationAccurate) {
+                const inCity = targetCityKey ? isStoreInCityScope(card, targetCityKey) : false;
+                const isNearbyRadius = Number.isFinite(cardDistance) && cardDistance <= 10;
+                const isSameCityNearby = inCity && Number.isFinite(cardDistance) && cardDistance <= 12;
+                const isNearby = (isNearbyRadius || isSameCityNearby) && cardDistance < 900;
 
-            if (cityOnly) {
-                if (inCity && cardDistance < 900) {
-                    nearbyCardsArray.push(card);
+                if (cityOnly) {
+                    if (inCity) {
+                        nearbyCardsArray.push(card);
+                    } else {
+                        card.style.display = 'none';
+                    }
+                } else if (nearbyOnly) {
+                    if (isNearby) {
+                        nearbyCardsArray.push(card);
+                    } else {
+                        card.style.display = 'none';
+                    }
                 } else {
-                    card.style.display = 'none';
-                }
-            } else if (nearbyOnly) {
-                if (isNearby) {
-                    nearbyCardsArray.push(card);
-                } else {
-                    card.style.display = 'none';
+                    if (isNearby) {
+                        nearbyCardsArray.push(card);
+                    } else {
+                        otherCardsArray.push(card);
+                    }
                 }
             } else {
-                if (isNearby) {
-                    nearbyCardsArray.push(card);
+                if (cityOnly && targetCityKey) {
+                    if (isStoreInCityScope(card, targetCityKey)) {
+                        nearbyCardsArray.push(card);
+                    } else {
+                        card.style.display = 'none';
+                    }
                 } else {
-                    otherCardsArray.push(card);
+                    nearbyCardsArray.push(card);
                 }
             }
         });
@@ -1471,9 +1599,14 @@ document.addEventListener('DOMContentLoaded', function () {
             otherCardsArray.forEach(card => otherGrid.appendChild(card));
         }
 
-        const cityName = detectedCity ? detectedCity.name : 'Dasmariñas';
         if (nearbyTitle) {
-            nearbyTitle.textContent = `Stores Near You in ${cityName}`;
+            if (isUserLocationAccurate && detectedCity) {
+                nearbyTitle.textContent = `Stores Near You in ${detectedCity.name}`;
+            } else if (isUserLocationAccurate) {
+                nearbyTitle.textContent = 'Stores Near You';
+            } else {
+                nearbyTitle.textContent = 'All Cavite Lechon Stores';
+            }
         }
         if (nearbyCountLabel) {
             nearbyCountLabel.textContent = `Showing ${nearbyCardsArray.length} nearby store${nearbyCardsArray.length === 1 ? '' : 's'}`;
@@ -1510,7 +1643,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 calculateShopDistances(pos.coords.latitude, pos.coords.longitude);
                 applyShopFilters();
             }, function () {
-                if (userLocationText) userLocationText.textContent = `Location blocked. Using ${detectedCity ? detectedCity.name : 'Dasmariñas'}.`;
+                if (userLocationText) userLocationText.textContent = isUserLocationAccurate ? (userLocationLabel || 'Location detected') : 'Location permission denied. Please select address in header.';
             }, { timeout: 6000, enableHighAccuracy: true });
         }
     }
@@ -1588,6 +1721,51 @@ document.addEventListener('DOMContentLoaded', function () {
     });
     window.addEventListener('marketAddressChanged', syncLocationUpdate);
     window.addEventListener('marketAddressUpdated', syncLocationUpdate);
+
+    // Smooth touch & mouse swipe support for nearby shops carousel
+    const nearbyGrid = document.getElementById('nearbyShopsGrid');
+    if (nearbyGrid) {
+        let isDown = false;
+        let startX = 0;
+        let scrollLeft = 0;
+        let hasMoved = false;
+
+        nearbyGrid.addEventListener('mousedown', function (e) {
+            isDown = true;
+            hasMoved = false;
+            nearbyGrid.style.cursor = 'grabbing';
+            startX = e.pageX - nearbyGrid.offsetLeft;
+            scrollLeft = nearbyGrid.scrollLeft;
+        });
+
+        nearbyGrid.addEventListener('mouseleave', function () {
+            isDown = false;
+            nearbyGrid.style.cursor = '';
+        });
+
+        nearbyGrid.addEventListener('mouseup', function () {
+            isDown = false;
+            nearbyGrid.style.cursor = '';
+        });
+
+        nearbyGrid.addEventListener('mousemove', function (e) {
+            if (!isDown) return;
+            e.preventDefault();
+            const x = e.pageX - nearbyGrid.offsetLeft;
+            const walk = (x - startX) * 1.5;
+            if (Math.abs(walk) > 5) {
+                hasMoved = true;
+            }
+            nearbyGrid.scrollLeft = scrollLeft - walk;
+        });
+
+        nearbyGrid.addEventListener('click', function (e) {
+            if (hasMoved) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        }, true);
+    }
 });
 </script>
 

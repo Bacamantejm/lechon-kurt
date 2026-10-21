@@ -603,8 +603,11 @@ if ($attendance_trend_result) {
             justify-content: space-between;
             align-items: center;
             gap: 20px;
-            flex-wrap: wrap;
             box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+        }
+        .welcome-guide-content {
+            flex: 1;
+            min-width: 0;
         }
         .welcome-guide-badge {
             display: inline-flex;
@@ -621,19 +624,97 @@ if ($attendance_trend_result) {
             margin-bottom: 8px;
             border: 1px solid #fee4e2;
         }
-        .welcome-guide-banner h2 { font-size: 1.25rem; font-weight: 700; margin: 0 0 4px 0; color: #101828; }
-        .welcome-guide-banner p { margin: 0 0 12px 0; font-size: 0.88rem; color: #475467; max-width: 650px; line-height: 1.45; }
+        .welcome-guide-banner h2 { font-size: 1.25rem; font-weight: 700; margin: 0 0 6px 0; color: #101828; }
+        .welcome-guide-banner p { margin: 0 0 14px 0; font-size: 0.88rem; color: #475467; max-width: 650px; line-height: 1.45; }
+        .welcome-status-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
         .welcome-status-pill {
             background: #f8fafc;
             border: 1px solid #eaecf0;
             color: #344054;
             font-size: 12px;
             font-weight: 600;
-            padding: 4px 10px;
-            border-radius: 6px;
+            padding: 6px 10px;
+            border-radius: 8px;
             display: inline-flex;
             align-items: center;
             gap: 6px;
+            min-width: 0;
+            white-space: nowrap;
+        }
+        .welcome-status-pill i {
+            font-size: 12px;
+            flex-shrink: 0;
+        }
+        .welcome-status-pill strong {
+            color: #101828;
+            font-weight: 700;
+        }
+        .welcome-guide-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        .btn-welcome-action {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            font-size: 12.5px;
+            font-weight: 600;
+            border-radius: 8px;
+            padding: 8px 14px;
+            text-decoration: none;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+            min-height: 38px;
+        }
+        .btn-welcome-action.secondary {
+            background: #ffffff;
+            border: 1px solid #d0d5dd;
+            color: #344054;
+        }
+        .btn-welcome-action.secondary:hover {
+            background: #f8fafc;
+            border-color: #98a2b3;
+            color: #101828;
+        }
+        .btn-welcome-action.primary {
+            background: #b3261e;
+            border: 1px solid #b3261e;
+            color: #ffffff;
+            box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+        }
+        .btn-welcome-action.primary:hover {
+            background: #981b15;
+            border-color: #981b15;
+            color: #ffffff;
+        }
+        body.dark-mode .welcome-guide-banner {
+            background: var(--card-bg-dark) !important;
+            border-color: var(--border-color-dark) !important;
+        }
+        body.dark-mode .welcome-status-pill {
+            background: #252d3a !important;
+            border-color: var(--border-color-dark) !important;
+            color: #e2e8f0 !important;
+        }
+        body.dark-mode .welcome-status-pill strong {
+            color: #ffffff !important;
+        }
+        body.dark-mode .btn-welcome-action.secondary {
+            background: #252d3a !important;
+            border-color: #3e4a5e !important;
+            color: #e2e8f0 !important;
+        }
+        body.dark-mode .btn-welcome-action.secondary:hover {
+            background: #2c3545 !important;
+            color: #ffffff !important;
         }
 
         /* KPI Cards with Friendly Accents */
@@ -928,10 +1009,126 @@ if ($attendance_trend_result) {
         body.dark-mode .decision-item p,
         body.dark-mode .decision-item small { color: #b0b0b0; }
         @media (max-width: 768px) {
+            .welcome-guide-banner {
+                flex-direction: column;
+                align-items: stretch;
+                padding: 16px 14px;
+                gap: 14px;
+                margin-bottom: 18px;
+            }
+            .welcome-guide-banner h2 {
+                font-size: 1.15rem;
+                margin-bottom: 6px;
+            }
+            .welcome-guide-banner p {
+                font-size: 0.82rem;
+                line-height: 1.45;
+                margin-bottom: 12px;
+            }
+            .welcome-guide-actions {
+                width: 100%;
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+                margin-top: 4px;
+            }
+            .btn-welcome-action {
+                font-size: 11.5px;
+                padding: 8px 6px;
+                width: 100%;
+            }
+            .btn-welcome-action.primary {
+                grid-column: 1 / -1;
+                font-size: 12.5px;
+                padding: 9px 12px;
+            }
+
+            .stats-dashboard-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 10px;
+                margin-bottom: 20px;
+            }
+            .stats-dashboard-grid .stat-card {
+                padding: 12px 10px;
+                gap: 10px;
+                min-height: auto;
+            }
+            .stats-dashboard-grid .stat-icon {
+                width: 38px;
+                height: 38px;
+                font-size: 15px;
+            }
+            .stats-dashboard-grid .stat-content h3 {
+                font-size: 1.15rem;
+            }
+            .stats-dashboard-grid .stat-content p {
+                font-size: 11.5px;
+            }
+            .stats-dashboard-grid .stat-content small {
+                font-size: 10.5px;
+            }
+
+            .module-hub-grid {
+                grid-template-columns: 1fr;
+                gap: 12px;
+                margin-bottom: 24px;
+            }
+            .module-hub-card {
+                padding: 14px 16px;
+                min-height: auto;
+            }
+
+            .module-filter-bar {
+                flex-wrap: nowrap;
+                overflow-x: auto;
+                padding-bottom: 6px;
+                margin-bottom: 16px;
+                -webkit-overflow-scrolling: touch;
+            }
+            .btn-filter-pill {
+                flex-shrink: 0;
+                font-size: 11.5px;
+                padding: 5px 12px;
+            }
+
             .decision-summary { grid-template-columns: 1fr; text-align: center; }
             .module-search-input { width: 100%; }
             .module-tools { width: 100%; }
             .module-header-note { width: 100%; }
+        }
+
+        @media (max-width: 576px) {
+            .welcome-status-grid {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 6px;
+                margin-bottom: 4px;
+            }
+            .welcome-status-pill {
+                padding: 6px 8px;
+                font-size: 11px;
+                justify-content: flex-start;
+                overflow: hidden;
+            }
+            .welcome-status-pill .pill-title {
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+        }
+
+        @media (max-width: 340px) {
+            .welcome-status-grid {
+                grid-template-columns: 1fr;
+            }
+            .welcome-guide-actions {
+                grid-template-columns: 1fr;
+            }
+            .btn-welcome-action.primary {
+                grid-column: auto;
+            }
+            .stats-dashboard-grid {
+                grid-template-columns: 1fr;
+            }
         }
         .focus-list { display: flex; flex-direction: column; gap: 10px; }
         .focus-item { border: 1px solid #e5e7eb; border-radius: 10px; padding: 11px 12px; background: #f8fafc; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
@@ -962,21 +1159,21 @@ if ($attendance_trend_result) {
 
             <div class="admin-main">
                 <div class="welcome-guide-banner">
-                    <div>
+                    <div class="welcome-guide-content">
                         <div class="welcome-guide-badge"><i class="fas fa-compass"></i> HR Operations Hub</div>
                         <h2>Good day, <?php echo htmlspecialchars($admin_info['full_name']); ?>!</h2>
                         <p>Welcome to your Human Resources workspace. Monitor workforce attendance, approve leave requests, and manage payroll with ease. Choose a category below to quickly find what you need.</p>
-                        <div class="d-flex flex-wrap gap-2">
-                            <span class="welcome-status-pill"><i class="fas fa-user-check text-success"></i> Presence: <strong><?php echo $presence_rate; ?>%</strong></span>
-                            <span class="welcome-status-pill"><i class="fas fa-shield-alt text-primary"></i> Coverage: <strong><?php echo $coverage_rate; ?>%</strong></span>
-                            <span class="welcome-status-pill"><i class="fas fa-clipboard-check text-warning"></i> Pending Reviews: <strong><?php echo $attendance_review_count; ?></strong></span>
-                            <span class="welcome-status-pill"><i class="fas fa-plane-departure text-info"></i> Upcoming Leaves: <strong><?php echo $upcoming_leave_count; ?></strong></span>
+                        <div class="welcome-status-grid">
+                            <span class="welcome-status-pill"><i class="fas fa-user-check text-success"></i> <span class="pill-title">Presence:</span> <strong><?php echo $presence_rate; ?>%</strong></span>
+                            <span class="welcome-status-pill"><i class="fas fa-shield-alt text-primary"></i> <span class="pill-title">Coverage:</span> <strong><?php echo $coverage_rate; ?>%</strong></span>
+                            <span class="welcome-status-pill"><i class="fas fa-clipboard-check text-warning"></i> <span class="pill-title">Pending Reviews:</span> <strong><?php echo $attendance_review_count; ?></strong></span>
+                            <span class="welcome-status-pill"><i class="fas fa-plane-departure text-info"></i> <span class="pill-title">Upcoming Leaves:</span> <strong><?php echo $upcoming_leave_count; ?></strong></span>
                         </div>
                     </div>
-                    <div class="d-flex flex-wrap gap-2 align-items-center">
-                        <a href="employees.php" class="btn btn-sm btn-outline-secondary" style="border-radius: 8px; font-weight: 600; padding: 7px 14px; background: #fff;"><i class="fas fa-users me-1"></i> Staff Directory</a>
-                        <a href="attendance.php" class="btn btn-sm btn-outline-secondary" style="border-radius: 8px; font-weight: 600; padding: 7px 14px; background: #fff;"><i class="fas fa-calendar-check me-1"></i> Today's Logs</a>
-                        <a href="payroll.php" class="btn btn-sm text-white" style="border-radius: 8px; font-weight: 600; padding: 7px 14px; background: #b3261e;"><i class="fas fa-file-invoice-dollar me-1"></i> Run Payroll</a>
+                    <div class="welcome-guide-actions">
+                        <a href="employees.php" class="btn-welcome-action secondary"><i class="fas fa-users"></i> <span>Staff Directory</span></a>
+                        <a href="attendance.php" class="btn-welcome-action secondary"><i class="fas fa-calendar-check"></i> <span>Today's Logs</span></a>
+                        <a href="payroll.php" class="btn-welcome-action primary"><i class="fas fa-file-invoice-dollar"></i> <span>Run Payroll</span></a>
                     </div>
                 </div>
 

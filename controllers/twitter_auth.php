@@ -141,6 +141,7 @@ if (!empty($code) && !empty($state)) {
         $_SESSION['user_type'] = in_array($existing_type, ['admin', 'employee'], true) ? $existing_type : 'customer';
         $_SESSION['account_type'] = 'individual'; // Default for OAuth users
         $_SESSION['oauth_provider'] = 'twitter';
+        $_SESSION['show_mobile_get_started'] = false;
         
         // Clear OAuth session variables
         unset($_SESSION['oauth_state']);
@@ -178,8 +179,8 @@ if (!empty($code) && !empty($state)) {
                     $phone, 
                     $address, 
                     $account_type, 
-                    $user_type,
-                    $oauth_provider,
+                    $user_type, 
+                    $oauth_provider, 
                     $oauth_id
                 );
                 
@@ -193,6 +194,7 @@ if (!empty($code) && !empty($state)) {
                     $_SESSION['user_type'] = 'customer';
                     $_SESSION['account_type'] = 'individual';
                     $_SESSION['oauth_provider'] = 'twitter';
+                    $_SESSION['show_mobile_get_started'] = true;
                     $_SESSION['register_success'] = true;
                     
                     // Clear OAuth session variables

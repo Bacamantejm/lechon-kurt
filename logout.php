@@ -1,5 +1,27 @@
 <?php
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+require_once __DIR__ . '/includes/config.php';
+
+// Invalidate token in database
+if (!empty($_SESSION['user_id'])) {
+    $uid = (int)$_SESSION['user_id'];
+    $clear_stmt = mysqli_prepare($conn, "UPDATE users SET remember_token = NULL, remember_expires = NULL WHERE id = ?");
+    if ($clear_stmt) {
+        mysqli_stmt_bind_param($clear_stmt, "i", $uid);
+        mysqli_stmt_execute($clear_stmt);
+        mysqli_stmt_close($clear_stmt);
+    }
+} elseif (!empty($_COOKIE['remember_token'])) {
+    $token = trim((string)$_COOKIE['remember_token']);
+    $clear_stmt = mysqli_prepare($conn, "UPDATE users SET remember_token = NULL, remember_expires = NULL WHERE remember_token = ?");
+    if ($clear_stmt) {
+        mysqli_stmt_bind_param($clear_stmt, "s", $token);
+        mysqli_stmt_execute($clear_stmt);
+        mysqli_stmt_close($clear_stmt);
+    }
+}
 
 // Destroy all session data
 $_SESSION = array();
@@ -16,7 +38,7 @@ if (ini_get("session.use_cookies")) {
 // Destroy the session
 session_destroy();
 
-// Clear remember me cookie
+// Clear remember me cookies
 setcookie('remember_token', '', time() - 3600, '/');
 
 // Redirect to home page

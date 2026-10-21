@@ -253,7 +253,7 @@ saRenderModuleHeader('Platform Monetization', 'Platform Monetization & Revenue',
         <input type="date" name="automation_run_date" class="form-control" value="<?php echo htmlspecialchars(date('Y-m-d')); ?>" required>
         <div class="module-inline-actions" style="grid-column:1/-1;">
             <button type="submit" class="btn btn-primary"><i class="fas fa-rotate"></i> Generate Previous Month</button>
-            <span class="compact-text">CLI schedule: <code>php C:\xampp\htdocs\lechonsystem\cron_generate_partner_invoices.php <?php echo htmlspecialchars(date('Y-m-d')); ?></code></span>
+            <span class="compact-text">CLI schedule: <code>php <?php echo htmlspecialchars(str_replace('\\', '/', realpath(__DIR__ . '/..') ?: 'path/to/lechonsystem')); ?>/cron_generate_partner_invoices.php <?php echo htmlspecialchars(date('Y-m-d')); ?></code></span>
         </div>
     </form>
 </div>

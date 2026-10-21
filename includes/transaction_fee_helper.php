@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * Transaction Fee & Subscription Monetization Helper
  *

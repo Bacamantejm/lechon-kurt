@@ -15,6 +15,10 @@ $current_user_id = (int)($_SESSION['user_id'] ?? 0);
 $is_partner_scoped_admin = isApprovedFranchiseSellerAccount($conn, $current_user_id);
 $seller_scope_id = $is_partner_scoped_admin ? getFranchiseSellerScopeOwnerId($conn, $current_user_id) : null;
 
+require_once dirname(__DIR__) . '/includes/CommissionAndWalletService.php';
+$walletService = CommissionAndWalletService::getInstance($conn);
+$current_store_id = $walletService->getStoreIdForUser($current_user_id);
+
 $seller_scoped_orders_exists = '';
 $partner_product_scope_sql = '';
 if ($seller_scope_id !== null) {
@@ -23,17 +27,35 @@ if ($seller_scope_id !== null) {
 }
 
 // Get order details (store-scoped for partner admins)
-$order_query = "SELECT o.* FROM orders o WHERE o.id = ?" . ($seller_scope_id !== null ? " AND {$seller_scoped_orders_exists}" : "");
+$has_store_id = function_exists('appColumnExists') ? appColumnExists($conn, 'orders', 'store_id') : false;
+$store_join_col = $has_store_id ? "COALESCE(NULLIF(o.store_id, 0), o.pickup_location)" : "o.pickup_location";
+
+$order_query = "SELECT o.*, 
+                       sl.store_name, sl.address AS store_address, sl.city AS store_city, sl.province AS store_province
+                FROM orders o 
+                LEFT JOIN store_locations sl ON sl.store_id = {$store_join_col}
+                WHERE o.id = ?" . ($seller_scope_id !== null ? " AND {$seller_scoped_orders_exists}" : "");
 $stmt = mysqli_prepare($conn, $order_query);
-mysqli_stmt_bind_param($stmt, "i", $order_id);
-mysqli_stmt_execute($stmt);
-$order_result = mysqli_stmt_get_result($stmt);
-$order = mysqli_fetch_assoc($order_result);
-mysqli_stmt_close($stmt);
+$order = null;
+if ($stmt) {
+    mysqli_stmt_bind_param($stmt, "i", $order_id);
+    mysqli_stmt_execute($stmt);
+    $order_result = mysqli_stmt_get_result($stmt);
+    $order = $order_result ? mysqli_fetch_assoc($order_result) : null;
+    mysqli_stmt_close($stmt);
+}
 
 if (!$order) {
-    die("Order not found");
+    die("<div class='p-3 text-danger fw-bold'><i class='fas fa-exclamation-circle me-1'></i> Order not found or you do not have permission to view this order.</div>");
 }
+
+// Multi-tenant check: If shop owner, order.store_id must match current_store_id
+$order_store_id = (int)(($order['store_id'] ?? 0) ?: ($order['pickup_location'] ?? 0));
+if ($current_store_id !== null && $current_store_id > 0 && $order_store_id !== $current_store_id && ($_SESSION['role_name'] ?? '') !== 'super_admin') {
+    die("<div class='alert alert-danger m-3'><i class='fas fa-shield-alt me-1'></i> <strong>Access Denied:</strong> This order belongs to another branch. You are only authorized to view orders from your store.</div>");
+}
+
+$split = $walletService->recordOrUpdateSplit($order_id, false);
 
 $vat_rate = 0.12;
 $computed_vat = round(floatval($order['subtotal']) * $vat_rate, 2);
@@ -291,25 +313,60 @@ if ($order['delivery_option'] === 'delivery') {
     </div>
     
     <div class="order-summary">
-        <?php if ($seller_scope_id !== null): ?>
-            <div class="summary-row">
-                <span>Store Items Count:</span>
-                <span><?php echo count($items); ?></span>
-            </div>
-            <div class="summary-row total">
-                <span>Store Items Total:</span>
-                <span>&#8369;<?php echo number_format($partner_items_total, 2); ?></span>
-            </div>
-            <?php if (isset($order['platform_fee_amount']) && (float)$order['platform_fee_amount'] > 0): ?>
-                <div class="summary-row" style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #eaecf0; color: #475467;">
-                    <span>Platform Fee (<?php echo htmlspecialchars($order['platform_fee_plan_name'] ?: 'Plan Rate'); ?> - <?php echo number_format((float)($order['platform_fee_rate_percent'] ?? 0), 2); ?>% + &#8369;<?php echo number_format((float)($order['platform_fee_flat'] ?? 0), 2); ?>):</span>
-                    <span style="color: #b3261e;">-&#8369;<?php echo number_format((float)$order['platform_fee_amount'], 2); ?></span>
+        <?php if ($seller_scope_id !== null || $current_store_id !== null): ?>
+            <!-- Store Breakdown Card (Store Owner Scope) -->
+            <div class="p-3 mb-3 rounded" style="background: #f8fafc; border: 1px solid #eaecf0;">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="small fw-bold text-dark"><i class="fas fa-store text-danger me-1"></i> Order Origin:</span>
+                    <span class="badge" style="background:#fff1f0; color:#b3261e; border:1px solid #fee4e2; font-size: 11px;">
+                        <?php echo htmlspecialchars($order['store_name'] ?: ('Store #' . $order_store_id)); ?> &bull; <?php echo htmlspecialchars($order['store_city'] ?: 'Branch'); ?>
+                    </span>
                 </div>
-                <div class="summary-row" style="font-weight: 600; color: #027a48;">
-                    <span>Net Store Payout:</span>
-                    <span>&#8369;<?php echo number_format((float)($order['net_seller_payout'] ?? ($partner_items_total - $order['platform_fee_amount'])), 2); ?></span>
+                <div class="summary-row">
+                    <span>Gross Order Items Subtotal:</span>
+                    <span class="fw-bold">&#8369;<?php echo number_format((float)($split['food_subtotal'] ?? $partner_items_total), 2); ?></span>
                 </div>
-            <?php endif; ?>
+                <div class="summary-row" style="color: #b3261e;">
+                    <span>Platform Commission Deducted (<?php echo number_format((float)($split['platform_commission_rate'] ?? 15), 1); ?>%):</span>
+                    <span class="fw-bold">-&#8369;<?php echo number_format((float)($split['platform_cut'] ?? 0), 2); ?></span>
+                </div>
+                
+                <!-- Kinita ng Tindahan (Net Store Take-Home) -->
+                <div class="p-3 my-2 rounded d-flex justify-content-between align-items-center" style="background: #ecfdf3; border: 1px solid #abefc6;">
+                    <div>
+                        <div class="fw-bold" style="color: #027a48; font-size: 14px;"><i class="fas fa-coins me-1"></i> Kinita ng Tindahan (Net Store Take-Home)</div>
+                        <small style="color: #05603a;">Directly credited to your digital Store Wallet.</small>
+                    </div>
+                    <div style="font-size: 1.35rem; font-weight: 800; color: #027a48;">
+                        &#8369;<?php echo number_format((float)($split['store_net_cut'] ?? ($partner_items_total - ($split['platform_cut'] ?? 0))), 2); ?>
+                    </div>
+                </div>
+
+                <!-- Delivery Snapshot for this Order -->
+                <div class="p-2 rounded mt-2" style="background: #ffffff; border: 1px solid #eaecf0; font-size: 12px;">
+                    <div class="fw-bold text-muted mb-1" style="letter-spacing: 0.03em; text-transform: uppercase;">Delivery Snapshot</div>
+                    <div class="d-flex justify-content-between py-1 border-bottom">
+                        <span class="text-muted">Assigned Rider:</span>
+                        <strong><?php echo !empty($tracking_info['driver_display_name']) ? htmlspecialchars($tracking_info['driver_display_name']) : 'No rider assigned yet'; ?></strong>
+                    </div>
+                    <div class="d-flex justify-content-between py-1 border-bottom">
+                        <span class="text-muted">Delivery Fee (Paid to rider):</span>
+                        <strong>&#8369;<?php echo number_format((float)($split['delivery_fee'] ?? $order['delivery_fee']), 2); ?></strong>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center pt-1">
+                        <span class="text-muted">Payment Mode:</span>
+                        <?php if (($split['payment_method'] ?? 'cod') === 'cod'): ?>
+                            <span class="badge" style="background: #fffaeb; color: #b54708; border: 1px solid #fedf89;">
+                                [Cash on Delivery] (Rider to collect, store earnings credited to wallet)
+                            </span>
+                        <?php else: ?>
+                            <span class="badge" style="background: #eff8ff; color: #175cd3; border: 1px solid #b2ddff;">
+                                [Online / Paid] (Digitally paid, credited to wallet)
+                            </span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
         <?php else: ?>
             <div class="summary-row">
                 <span>Subtotal:</span>

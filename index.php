@@ -228,10 +228,10 @@ if ($branch_result) {
         $branch = [
             'id' => (int)$row['store_id'],
             'owner_user_id' => (int)($row['owner_user_id'] ?? 0),
-            'name' => trim((string)$row['store_name']),
-            'address' => trim((string)$row['address']),
-            'city' => trim((string)$row['city']),
-            'province' => trim((string)$row['province']),
+            'name' => fixMojibakeText(trim((string)$row['store_name'])),
+            'address' => fixMojibakeText(trim((string)$row['address'])),
+            'city' => fixMojibakeText(trim((string)$row['city'])),
+            'province' => fixMojibakeText(trim((string)$row['province'])),
             'phone' => trim((string)$row['phone']),
             'email' => strtolower(trim((string)$row['email'])),
             'hours' => trim((string)($availability['schedule'] ?? $row['opening_hours'])),
@@ -363,7 +363,7 @@ $seller_result = mysqli_query($conn, "SELECT u.id, u.full_name, u.email, u.phone
                                       ORDER BY COALESCE(NULLIF(TRIM(u.business_name), ''), u.full_name)");
 if ($seller_result) {
     while ($row = mysqli_fetch_assoc($seller_result)) {
-        $name = trim((string)$row['business_name']) !== '' ? trim((string)$row['business_name']) : trim((string)$row['full_name']) . ' Store';
+        $name = fixMojibakeText(trim((string)$row['business_name']) !== '' ? trim((string)$row['business_name']) : trim((string)$row['full_name']) . ' Store');
         $email = strtolower(trim((string)$row['email']));
         $seller_id = (int)$row['id'];
         $match = $branch_by_owner[$seller_id] ?? ($branch_by_email[$email] ?? ($branch_by_name[norm_key($name)] ?? null));
@@ -521,7 +521,7 @@ foreach ($branches as $branch) {
         : sahResolveStoreAvailability($branch);
     $stores['branch-' . $branch['id']] = [
         'key' => 'branch-' . $branch['id'],
-        'name' => $branch['name'],
+        'name' => fixMojibakeText($branch['name']),
         'type' => 'branch',
         'seller_id' => 0,
         'branch_id' => (int)$branch['id'],
@@ -835,6 +835,17 @@ body.dark-mode .panda-brand-meta {
 }
 
 /* Best Sellers & Partner Deals Section */
+.bestsellers-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(195px, 1fr));
+    gap: 14px;
+}
+.top-shops-swipe-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 14px;
+}
+
 body.dark-mode .bestsellers-section {
     background: linear-gradient(135deg, #1e293b 0%, #171f2c 100%) !important;
     border-color: #334155 !important;
@@ -1008,8 +1019,22 @@ body.dark-mode .reg-choice-desc {
     display: none !important;
 }
 
+html, body {
+    overflow-x: clip !important;
+    max-width: 100vw !important;
+}
+
+.market-home {
+    overflow-x: clip !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    padding-bottom: 120px !important;
+}
+
 .market-home .container {
     max-width: 1280px;
+    width: 100%;
     margin: 0 auto;
     padding: 0 24px;
     position: relative;
@@ -1019,13 +1044,13 @@ body.dark-mode .reg-choice-desc {
 
 @media (max-width: 768px) {
     .market-home .container {
-        padding: 0 16px;
+        padding: 0 14px;
     }
 }
 
 @media (max-width: 480px) {
     .market-home .container {
-        padding: 0 12px;
+        padding: 0 10px;
     }
 }
 
@@ -1304,110 +1329,594 @@ body.dark-mode .reg-choice-desc {
     100% { transform: translateY(-10px) scale(1.1); }
 }
 
-@media (max-width: 768px) {
-    .market-home {
-        padding-bottom: 140px !important;
-    }
-    .panda-hero-banners {
-        grid-template-columns: 1fr !important;
-        gap: 14px !important;
-    }
-    .panda-hero-card {
-        padding: 20px 18px !important;
-        border-radius: 18px !important;
-        min-height: auto !important;
-        position: relative !important;
-        overflow: hidden !important;
-        flex-direction: row !important;
-        align-items: center !important;
-        justify-content: space-between !important;
-        gap: 12px !important;
-    }
-    .panda-card-content {
-        flex: 1 1 0 !important;
-        min-width: 0 !important;
-        width: 100% !important;
-        max-width: 100% !important;
-        gap: 6px !important;
-        z-index: 2 !important;
-    }
-    .panda-card-title {
-        font-size: 1.25rem !important;
-        line-height: 1.2 !important;
-    }
-    .panda-card-desc {
-        font-size: 0.84rem !important;
-        line-height: 1.4 !important;
-    }
-    .panda-card-btn {
-        min-height: 36px !important;
-        padding: 0 16px !important;
-        font-size: 0.82rem !important;
-        margin-top: 4px !important;
-    }
-    .panda-card-arch,
-    .panda-card-heart-bg {
-        display: none !important;
-    }
-    .panda-card-graphic,
-    .panda-card-graphic-cluster {
-        position: absolute !important;
-        right: 10px !important;
-        bottom: 0 !important;
-        margin: 0 !important;
-        flex: none !important;
-        width: 95px !important;
-        height: 95px !important;
-        opacity: 0.28 !important;
-        pointer-events: none !important;
-        z-index: 1 !important;
-    }
-    .panda-card-graphic img.panda-mascot-img {
-        height: 95px !important;
-        width: auto !important;
-        margin-bottom: 0 !important;
-    }
-    .user-promo-row {
-        grid-template-columns: 1fr !important;
-        gap: 12px !important;
-    }
+/* ==========================================================================
+   Food Delivery Mobile Reference UI/UX Engine (Screens 1 to 5)
+   ========================================================================== */
+
+/* Screen 1: Mobile Full-Bleed Welcome Splash */
+.ref-splash-screen {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    flex-direction: column;
+    justify-content: flex-end;
+    background: #000000;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    overflow: hidden;
+    touch-action: none;
+    transition: opacity 0.38s cubic-bezier(0.16, 1, 0.3, 1), transform 0.38s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-@media (max-width: 480px) {
-    .panda-hero-card {
-        padding: 16px 14px !important;
+.ref-splash-screen.ref-splash-closing {
+    opacity: 0 !important;
+    transform: translateY(24px) scale(0.98) !important;
+    pointer-events: none !important;
+}
+
+.ref-splash-bg {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    transform: scale(1.05);
+    animation: splashZoom 8s ease-out infinite alternate;
+}
+
+@keyframes splashZoom {
+    0% { transform: scale(1.04); }
+    100% { transform: scale(1.12); }
+}
+
+.ref-splash-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.2) 0%, rgba(16, 24, 40, 0.5) 45%, rgba(16, 24, 40, 0.96) 85%, #101828 100%);
+}
+
+.ref-splash-top {
+    position: absolute;
+    top: max(20px, env(safe-area-inset-top));
+    left: 20px;
+    right: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 3;
+}
+
+.ref-splash-stepper {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.ref-splash-dot {
+    width: 28px;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.35);
+    transition: all 0.3s ease;
+}
+
+.ref-splash-dot.active {
+    background: #b3261e;
+    box-shadow: 0 0 10px rgba(179, 38, 30, 0.8);
+    width: 38px;
+}
+
+.ref-splash-skip {
+    background: rgba(255, 255, 255, 0.18);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+    font-size: 0.82rem;
+    font-weight: 700;
+    padding: 6px 14px;
+    border-radius: 999px;
+    cursor: pointer;
+}
+
+.ref-splash-card {
+    position: relative;
+    z-index: 3;
+    padding: 28px 24px max(34px, env(safe-area-inset-bottom)) 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.ref-splash-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 2.1rem;
+    font-weight: 800;
+    color: #ffffff;
+    line-height: 1.15;
+    margin: 0;
+    letter-spacing: -0.02em;
+}
+
+.ref-splash-desc {
+    font-size: 0.92rem;
+    color: rgba(255, 255, 255, 0.82);
+    line-height: 1.5;
+    margin: 0 0 10px 0;
+}
+
+.ref-splash-btn {
+    width: 100%;
+    min-height: 52px;
+    border-radius: 999px;
+    background: #b3261e;
+    color: #ffffff;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 1rem;
+    font-weight: 800;
+    border: none;
+    box-shadow: 0 8px 24px rgba(179, 38, 30, 0.45);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ref-splash-btn:active {
+    transform: scale(0.97);
+}
+
+/* Screen 2: Promo Banner & Categories Carousel */
+.m-ref-home-container {
+    display: none;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+}
+
+.m-ref-promo-banner {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(234, 236, 240, 0.85);
+    border-radius: 18px;
+    padding: 14px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    box-shadow: 0 4px 16px -2px rgba(16, 24, 40, 0.05);
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+}
+
+.m-ref-promo-left {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.m-ref-promo-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    background: #fff1f0;
+    color: #b3261e;
+    font-size: 0.68rem;
+    font-weight: 800;
+    border-radius: 999px;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.m-ref-promo-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.98rem;
+    font-weight: 800;
+    color: #101828;
+    line-height: 1.25;
+    margin: 0 0 10px 0;
+}
+
+.m-ref-promo-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 14px;
+    background: #b3261e;
+    color: #ffffff !important;
+    font-size: 0.76rem;
+    font-weight: 800;
+    border-radius: 999px;
+    text-decoration: none;
+    box-shadow: 0 3px 10px rgba(179, 38, 30, 0.3);
+}
+
+.m-ref-promo-right {
+    flex: 0 0 74px;
+    width: 74px;
+    flex-shrink: 0;
+}
+
+.m-ref-promo-img-wrap {
+    width: 74px;
+    height: 74px;
+    border-radius: 14px;
+    overflow: hidden;
+    background: #f4f5f7;
+    box-shadow: 0 3px 10px rgba(16, 24, 40, 0.08);
+}
+
+.m-ref-promo-img-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Categories Row (Reference Screen 2 & 5) */
+.m-ref-section-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 18px 0 10px 0;
+}
+
+.m-ref-section-head h3 {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #101828;
+    margin: 0;
+}
+
+.m-ref-see-all {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #b3261e;
+    text-decoration: none;
+}
+
+.m-ref-categories-row {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 4px 2px 14px 2px;
+}
+
+.m-ref-categories-row::-webkit-scrollbar {
+    display: none;
+}
+
+.m-ref-cat-card {
+    flex: 0 0 74px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    text-decoration: none;
+    color: #344054;
+    transition: transform 0.18s ease;
+}
+
+.m-ref-cat-card:active {
+    transform: scale(0.92);
+}
+
+.m-ref-cat-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 50% !important;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(234, 236, 240, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.35rem;
+    color: #b3261e;
+    box-shadow: 0 4px 14px rgba(16, 24, 40, 0.05);
+}
+
+.m-ref-cat-card span {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-align: center;
+    white-space: nowrap;
+}
+
+/* Popular Searches Horizontal Chips (Reference Screen 1) */
+.m-ref-popular-searches {
+    margin-top: 6px;
+    margin-bottom: 16px;
+}
+.m-ref-popular-chips-row {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 2px 2px 8px 2px;
+}
+.m-ref-popular-chips-row::-webkit-scrollbar {
+    display: none;
+}
+.m-pop-chip {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 14px;
+    background: #ffffff;
+    border: 1px solid #e4e7ec;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #344054;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.03);
+}
+.m-pop-chip i {
+    font-size: 0.72rem;
+    color: #027a48;
+}
+.m-pop-chip.active {
+    background: #fff1f0;
+    border-color: #fee4e2;
+    color: #b3261e;
+}
+.m-pop-chip.active i {
+    color: #b3261e;
+}
+.m-pop-chip:hover {
+    border-color: #d0d5dd;
+    background: #f8fafc;
+}
+
+/* Dark Mode Overrides for Mobile Reference UI */
+body.dark-mode .m-ref-promo-banner,
+body.dark-mode .m-ref-cat-icon,
+body.dark-mode .m-pop-chip {
+    background: rgba(30, 41, 59, 0.9) !important;
+    border-color: rgba(51, 65, 85, 0.85) !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .m-ref-promo-title,
+body.dark-mode .m-ref-section-head h3,
+body.dark-mode .m-ref-cat-card span {
+    color: #f8fafc !important;
+}
+
+/* Comprehensive Responsive System for Viewports <= 768px */
+@media (max-width: 768px) {
+    .market-home {
+        padding-bottom: 200px !important;
+    }
+
+    .m-ref-home-container {
+        display: block !important;
+        margin-bottom: 12px;
+    }
+
+    /* Hide redundant desktop promo banners on mobile */
+    .panda-welcome-banner,
+    .panda-hero-banners,
+    .user-promo-row {
+        display: none !important;
+    }
+
+    /* Filters & Sort as clean rounded pill */
+    .market-sidebar-toggle-btn {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        border-radius: 999px !important;
+        padding: 8px 18px !important;
+        background: rgba(255, 255, 255, 0.88) !important;
+        backdrop-filter: blur(14px) !important;
+        -webkit-backdrop-filter: blur(14px) !important;
+        border: 1px solid rgba(234, 236, 240, 0.85) !important;
+        color: #344054 !important;
+        font-size: 0.82rem !important;
+        font-weight: 700 !important;
+        box-shadow: 0 2px 8px rgba(16, 24, 40, 0.04) !important;
+        margin-bottom: 16px !important;
+        cursor: pointer;
+        width: auto !important;
+    }
+
+    .market-explorer > div {
+        min-width: 0 !important;
+        max-width: 100% !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    /* Universal Horizontal Swipe Tracks for Menu, Top Store, Store, and Deals */
+    .bestsellers-grid,
+    .top-shops-swipe-grid,
+    .partner-store-deals-grid,
+    .first-user-deals-grid,
+    .market-store-list.store-list-grid {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
+        touch-action: pan-x pan-y !important;
+        scroll-snap-type: x mandatory !important;
+        scroll-behavior: smooth !important;
+        gap: 12px !important;
+        padding: 4px 4px 14px 4px !important;
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    .bestsellers-grid::-webkit-scrollbar,
+    .top-shops-swipe-grid::-webkit-scrollbar,
+    .partner-store-deals-grid::-webkit-scrollbar,
+    .first-user-deals-grid::-webkit-scrollbar,
+    .market-store-list.store-list-grid::-webkit-scrollbar {
+        display: none !important;
+    }
+
+    /* Menu Bestseller Swipe Cards */
+    .bestsellers-grid .bestseller-card {
+        flex: 0 0 clamp(190px, 64vw, 235px) !important;
+        width: clamp(190px, 64vw, 235px) !important;
+        min-width: clamp(190px, 64vw, 235px) !important;
+        max-width: clamp(190px, 64vw, 235px) !important;
+        scroll-snap-align: start !important;
+        scroll-snap-stop: normal !important;
+        touch-action: pan-x pan-y !important;
         border-radius: 16px !important;
+        background: #ffffff !important;
+        border: 1px solid #eaecf0 !important;
+        overflow: hidden !important;
+        box-sizing: border-box !important;
     }
-    .panda-card-title {
-        font-size: 1.15rem !important;
-    }
-    .panda-card-desc {
-        font-size: 0.8rem !important;
-    }
-    .panda-card-btn {
-        min-height: 34px !important;
-        padding: 0 14px !important;
-        font-size: 0.78rem !important;
-    }
-    .panda-card-graphic,
-    .panda-card-graphic-cluster {
-        width: 80px !important;
-        height: 80px !important;
-        right: 6px !important;
-        opacity: 0.22 !important;
-    }
-    .panda-card-graphic img.panda-mascot-img {
-        height: 80px !important;
-    }
-    .panda-welcome-banner {
-        padding: 18px 16px !important;
+
+    /* Top Store (Top Restaurants) Swipe Cards */
+    .top-shops-swipe-grid .market-store-row {
+        flex: 0 0 clamp(200px, 68vw, 250px) !important;
+        width: clamp(200px, 68vw, 250px) !important;
+        min-width: clamp(200px, 68vw, 250px) !important;
+        max-width: clamp(200px, 68vw, 250px) !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        scroll-snap-align: start !important;
+        scroll-snap-stop: normal !important;
+        touch-action: pan-x pan-y !important;
         border-radius: 16px !important;
+        background: #ffffff !important;
+        border: 1px solid #eaecf0 !important;
+        overflow: hidden !important;
+        box-sizing: border-box !important;
+        padding: 0 !important;
+        gap: 0 !important;
     }
-    .market-store-list,
-    .store-list-grid,
-    .store-list-rows {
-        grid-template-columns: 1fr !important;
-        gap: 14px !important;
+
+    .top-shops-swipe-grid .store-card-image-wrap {
+        height: 115px !important;
+        width: calc(100% - 12px) !important;
+        margin: 6px !important;
+        border-radius: 12px !important;
+        overflow: hidden !important;
+        position: relative !important;
+        flex: 0 0 115px !important;
+    }
+
+    .top-shops-swipe-grid .store-card-details {
+        padding: 6px 10px 10px 10px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        flex: 1 1 auto !important;
+        justify-content: space-between !important;
+        gap: 4px !important;
+    }
+
+    /* All Stores Mobile Swipe Cards */
+    .market-store-list.store-list-grid .market-store-row {
+        flex: 0 0 clamp(200px, 68vw, 250px) !important;
+        width: clamp(200px, 68vw, 250px) !important;
+        min-width: clamp(200px, 68vw, 250px) !important;
+        max-width: clamp(200px, 68vw, 250px) !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        scroll-snap-align: start !important;
+        scroll-snap-stop: normal !important;
+        touch-action: pan-x pan-y !important;
+        border-radius: 16px !important;
+        background: #ffffff !important;
+        border: 1px solid #eaecf0 !important;
+        overflow: hidden !important;
+        box-sizing: border-box !important;
+        padding: 0 !important;
+        gap: 0 !important;
+    }
+
+    .market-store-list.store-list-grid .store-card-image-wrap {
+        height: 115px !important;
+        width: calc(100% - 12px) !important;
+        margin: 6px !important;
+        border-radius: 12px !important;
+        overflow: hidden !important;
+        position: relative !important;
+        flex: 0 0 115px !important;
+    }
+
+    .market-store-list.store-list-grid .store-card-details {
+        padding: 6px 10px 10px 10px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        flex: 1 1 auto !important;
+        justify-content: space-between !important;
+        gap: 4px !important;
+    }
+
+    /* Store Deals & Welcome Deals Swipe Cards */
+    .partner-store-deals-grid .deal-card,
+    .first-user-deals-grid .deal-card {
+        flex: 0 0 clamp(220px, 72vw, 260px) !important;
+        width: clamp(220px, 72vw, 260px) !important;
+        min-width: clamp(220px, 72vw, 260px) !important;
+        max-width: clamp(220px, 72vw, 260px) !important;
+        scroll-snap-align: start !important;
+        border-radius: 16px !important;
+        background: #ffffff !important;
+        border: 1px solid #eaecf0 !important;
+        box-sizing: border-box !important;
+        padding: 14px !important;
+    }
+
+    .store-card-row-head h3 {
+        font-size: 0.88rem !important;
+        font-weight: 800 !important;
+        line-height: 1.25 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+
+    .store-card-summary,
+    .panda-card-footer-line .panda-card-city {
+        font-size: 0.72rem !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+
+    .panda-card-price-text {
+        font-size: 0.86rem !important;
+        color: #b3261e !important;
+        font-weight: 800 !important;
+    }
+
+    .panda-card-dss-info {
+        display: flex !important;
+        align-items: center !important;
+        gap: 4px !important;
+        font-size: 0.7rem !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+
+    body.dark-mode .bestseller-card,
+    body.dark-mode .market-store-row {
+        background: rgba(30, 41, 59, 0.88) !important;
+        border-color: rgba(51, 65, 85, 0.85) !important;
+        color: #f8fafc !important;
     }
 }
 
@@ -2396,22 +2905,36 @@ body.dark-mode .reg-choice-desc {
     }
 }
 
-/* Foodpanda Brands Carousel UI */
+/* Foodpanda Brands Carousel UI - Smooth Touch & Mouse Swipeable */
 .panda-brand-slider {
-    display: flex;
-    gap: 12px;
-    overflow-x: auto;
-    padding: 6px 2px 14px;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    gap: 12px !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-x !important;
+    scroll-snap-type: x proximity !important;
+    padding: 6px 4px 14px !important;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+    cursor: grab;
+    user-select: none;
+}
+
+.panda-brand-slider:active,
+.panda-brand-slider.is-dragging {
+    cursor: grabbing !important;
 }
 
 .panda-brand-slider::-webkit-scrollbar {
-    display: none;
+    display: none !important;
 }
 
 .panda-brand-item {
-    flex: 0 0 115px;
+    flex: 0 0 120px !important;
+    min-width: 120px !important;
+    max-width: 120px !important;
     background: #ffffff;
     border: 1px solid #f0e2d5;
     border-radius: 16px;
@@ -2424,6 +2947,8 @@ body.dark-mode .reg-choice-desc {
     color: #2a211d;
     box-shadow: 0 4px 10px rgba(74, 32, 20, 0.04);
     transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    scroll-snap-align: start !important;
+    user-select: none;
 }
 
 .panda-brand-item:hover {
@@ -2971,6 +3496,190 @@ body:not(.dark-mode) {
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
     gap: 16px;
 }
+/* Minimized Voucher Ticket Cards (Matching compact coupon stub UI) */
+.voucher-deal-ticket {
+    background: #ffffff;
+    border: 1px solid #e0e2ec;
+    border-radius: 14px;
+    display: flex !important;
+    flex-direction: row !important;
+    position: relative;
+    overflow: hidden;
+    min-height: 124px;
+    padding: 0 !important;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.voucher-deal-ticket:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(16, 24, 40, 0.08);
+    border-color: #cbd5e1;
+}
+
+.voucher-deal-ticket .voucher-ticket-stub {
+    width: 36px;
+    min-width: 36px;
+    background: linear-gradient(180deg, #5c35cc 0%, #4a28a8 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    user-select: none;
+    flex-shrink: 0;
+}
+
+.voucher-deal-ticket .voucher-ticket-stub::before {
+    content: "";
+    position: absolute;
+    left: -7px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: inset -1px 0 1px rgba(0, 0, 0, 0.08);
+    z-index: 2;
+}
+
+.voucher-deal-ticket .voucher-ticket-stub-text {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.18em;
+    color: #ffffff;
+    text-transform: uppercase;
+    font-family: 'Outfit', -apple-system, sans-serif;
+    line-height: 1;
+}
+
+.voucher-deal-ticket .voucher-ticket-body {
+    flex: 1;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-width: 0;
+}
+
+.voucher-deal-ticket .voucher-ticket-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 2px;
+}
+
+.voucher-deal-ticket .voucher-ticket-discount {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #475467;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.voucher-deal-ticket .voucher-ticket-icon-wrap {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #f8f9fa;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    flex-shrink: 0;
+    border: 1px solid #f2f4f7;
+}
+
+.voucher-deal-ticket .voucher-ticket-dots {
+    display: flex;
+    align-items: center;
+    position: relative;
+    width: 16px;
+    height: 10px;
+}
+
+.voucher-deal-ticket .voucher-ticket-dots .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    position: absolute;
+    top: 0;
+}
+
+.voucher-deal-ticket .voucher-ticket-dots .dot-1 {
+    left: 0;
+    background: #991b1b;
+}
+
+.voucher-deal-ticket .voucher-ticket-dots .dot-2 {
+    left: 6px;
+    background: #ea580c;
+    opacity: 0.9;
+}
+
+.voucher-deal-ticket .voucher-ticket-code {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: #101828;
+    letter-spacing: 0.4px;
+    line-height: 1.2;
+    margin: 1px 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.voucher-deal-ticket .voucher-ticket-desc {
+    font-size: 0.72rem;
+    color: #667085;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 2px;
+}
+
+.voucher-deal-ticket .voucher-ticket-terms {
+    font-size: 0.67rem;
+    color: #5c35cc;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 6px;
+}
+
+.voucher-deal-ticket .voucher-pill-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    border: 1px solid #d0d5dd;
+    background: #ffffff;
+    color: #1d2939;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.18s ease;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
+.voucher-deal-ticket .voucher-pill-btn:hover {
+    background: #f8f9fa;
+    border-color: #5c35cc;
+    color: #5c35cc;
+}
+
 .deal-card {
     background: #ffffff;
     border: 1px solid #eaecf0;
@@ -3200,6 +3909,99 @@ body.dark-mode .deal-copy-btn {
 }
 </style>
 
+<!-- Mobile Welcome Splash Screen (First Customer Only, First Time Login Only) -->
+<?php
+$is_customer_user = !empty($_SESSION['user_id']) && in_array(strtolower(trim((string)($_SESSION['user_type'] ?? ''))), ['', 'customer', 'user'], true);
+$show_mobile_splash = false;
+
+if ($is_customer_user && !empty($_SESSION['show_mobile_get_started'])) {
+    $splash_user_id = (int)$_SESSION['user_id'];
+    $stmt_splash = mysqli_prepare($conn, "SELECT COALESCE(mobile_splash_seen, 0) FROM users WHERE id = ? LIMIT 1");
+    if ($stmt_splash) {
+        mysqli_stmt_bind_param($stmt_splash, "i", $splash_user_id);
+        mysqli_stmt_execute($stmt_splash);
+        mysqli_stmt_bind_result($stmt_splash, $db_seen_val);
+        mysqli_stmt_fetch($stmt_splash);
+        mysqli_stmt_close($stmt_splash);
+
+        if ((int)$db_seen_val === 0) {
+            $show_mobile_splash = true;
+            // Clear session flag immediately so subsequent reloads won't trigger it again
+            unset($_SESSION['show_mobile_get_started']);
+        }
+    }
+}
+?>
+<?php if ($show_mobile_splash): ?>
+<div id="mobileGetStartedSplash" class="ref-splash-screen" style="display: none;">
+    <div class="ref-splash-bg" style="background-image: url('assets/images/promo_lechon.jpg');"></div>
+    <div class="ref-splash-overlay"></div>
+    <div class="ref-splash-top">
+        <div class="ref-splash-stepper">
+            <span class="ref-splash-dot active"></span>
+            <span class="ref-splash-dot"></span>
+            <span class="ref-splash-dot"></span>
+        </div>
+        <button type="button" class="ref-splash-skip" onclick="dismissMobileSplash()">Skip</button>
+    </div>
+    <div class="ref-splash-card">
+        <h1 class="ref-splash-title">Delight in Every Bite, Delivered Fast</h1>
+        <p class="ref-splash-desc">Fast delivery, fresh flavors—every bite is a delight at your doorstep. Enjoy your delicious meal.</p>
+        <button type="button" class="ref-splash-btn" onclick="dismissMobileSplash()">Get Started</button>
+    </div>
+</div>
+
+<script>
+function dismissMobileSplash() {
+    var splash = document.getElementById('mobileGetStartedSplash');
+    if (!splash) return;
+    splash.classList.add('ref-splash-closing');
+    var uid = <?php echo (int)($_SESSION['user_id'] ?? 0); ?>;
+    try {
+        localStorage.setItem('lechon_mobile_splash_seen_' + uid, '1');
+        localStorage.setItem('lechon_mobile_splash_seen', '1');
+    } catch(e) {}
+
+    // Persist to database so it never shows again on any device or session
+    try {
+        fetch('api/dismiss_mobile_splash.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'dismiss' })
+        }).catch(function() {});
+    } catch(err) {}
+
+    setTimeout(function() {
+        splash.style.display = 'none';
+        if (splash.parentNode) splash.parentNode.removeChild(splash);
+    }, 380);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    if (window.innerWidth <= 768) {
+        var uid = <?php echo (int)($_SESSION['user_id'] ?? 0); ?>;
+        var seenLocal = false;
+        try {
+            seenLocal = (localStorage.getItem('lechon_mobile_splash_seen_' + uid) === '1');
+        } catch(e) {}
+
+        var splash = document.getElementById('mobileGetStartedSplash');
+        if (splash && !seenLocal) {
+            splash.style.display = 'flex';
+            // Mark as seen in DB immediately upon showing so it shows only once
+            try {
+                fetch('api/dismiss_mobile_splash.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'shown' })
+                }).catch(function() {});
+            } catch(err) {}
+        }
+    }
+});
+</script>
+<?php endif; ?>
+
 <div class="market-home">
     <section class="market-section" id="marketplaceStores">
         <div class="container">
@@ -3241,6 +4043,72 @@ body.dark-mode .deal-copy-btn {
                 </aside>
 
                 <div>
+
+                    <!-- Mobile-Only Hero Promo & Categories Carousel (Reference Screen 2) -->
+                    <div class="m-ref-home-container">
+                        <!-- Screen 2 Promo Banner -->
+                        <div class="m-ref-promo-banner">
+                            <div class="m-ref-promo-left">
+                                <span class="m-ref-promo-badge">Up to 35% offer</span>
+                                <h2 class="m-ref-promo-title">Enjoy our dinner offer of every day.</h2>
+                                <a href="shops.php" class="m-ref-promo-btn">Shop Now</a>
+                            </div>
+                            <div class="m-ref-promo-right">
+                                <div class="m-ref-promo-img-wrap">
+                                    <img src="assets/images/promo_lechon.jpg" alt="Special Lechon Offer" onerror="this.onerror=null;this.src='images/menu/lechon.jpg';">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Screen 2 Categories Horizontal Row -->
+                        <div class="m-ref-categories-section">
+                            <div class="m-ref-section-head">
+                                <h3>What Service Do You Want?</h3>
+                                <a href="menu.php" class="m-ref-see-all">See all</a>
+                            </div>
+                            <div class="m-ref-categories-row">
+                                <a href="menu.php?category=whole" class="m-ref-cat-card">
+                                    <div class="m-ref-cat-icon"><i class="fas fa-piggy-bank"></i></div>
+                                    <span>Whole Lechon</span>
+                                </a>
+                                <a href="menu.php?category=belly" class="m-ref-cat-card">
+                                    <div class="m-ref-cat-icon"><i class="fas fa-bacon"></i></div>
+                                    <span>Lechon Belly</span>
+                                </a>
+                                <a href="menu.php?category=sisig" class="m-ref-cat-card">
+                                    <div class="m-ref-cat-icon"><i class="fas fa-bowl-rice"></i></div>
+                                    <span>Sisig &amp; Rice</span>
+                                </a>
+                                <a href="menu.php?category=crispy" class="m-ref-cat-card">
+                                    <div class="m-ref-cat-icon"><i class="fas fa-fire-burner"></i></div>
+                                    <span>Crispy Fry</span>
+                                </a>
+                                <a href="preorder.php" class="m-ref-cat-card">
+                                    <div class="m-ref-cat-icon"><i class="fas fa-calendar-check"></i></div>
+                                    <span>Celebrations</span>
+                                </a>
+                                <a href="shops.php" class="m-ref-cat-card">
+                                    <div class="m-ref-cat-icon"><i class="fas fa-store"></i></div>
+                                    <span>All Stores</span>
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Popular Searches Section (Reference Screen 1) -->
+                        <div class="m-ref-popular-searches">
+                            <div class="m-ref-section-head" style="margin-top: 10px;">
+                                <h3>Popular Searches</h3>
+                            </div>
+                            <div class="m-ref-popular-chips-row">
+                                <a href="menu.php?search=belly" class="m-pop-chip active"><i class="fas fa-check"></i> Crispy Belly</a>
+                                <a href="menu.php?search=whole" class="m-pop-chip active"><i class="fas fa-check"></i> Whole Roast</a>
+                                <a href="menu.php?search=sisig" class="m-pop-chip">Sisig Pack</a>
+                                <a href="menu.php?search=lechon" class="m-pop-chip">Lechon Kilo</a>
+                                <a href="shops.php" class="m-pop-chip">Cavite Hubs</a>
+                                <a href="preorder.php" class="m-pop-chip">Celebrations</a>
+                            </div>
+                        </div>
+                    </div>
 
 
                     <?php if (empty($is_pickup_mode) && !empty($_SESSION['user_id'])): 
@@ -3331,94 +4199,118 @@ body.dark-mode .deal-copy-btn {
 
                         <div class="first-user-deals-grid">
                             <!-- Deal 1 -->
-                            <article class="deal-card">
-                                <div>
-                                    <div class="deal-card-top">
-                                        <span class="deal-badge deal-badge-primary"><i class="fas fa-sparkles"></i> Welcome Gift</span>
-                                        <span style="font-size:0.76rem; color:#667085; font-weight:600;">1st Order Only</span>
-                                    </div>
-                                    <div class="deal-discount-val">₱100 OFF</div>
-                                    <p class="deal-desc">Get ₱100 flat discount on your very first freshly roasted lechon order. Min. spend ₱200.</p>
+                            <article class="deal-card voucher-deal-ticket">
+                                <div class="voucher-ticket-stub">
+                                    <span class="voucher-ticket-stub-text">DISCOUNT</span>
                                 </div>
-                                <div>
-                                    <div class="deal-code-row">
-                                        <span class="deal-code-text">WELCOME100</span>
-                                        <button type="button" class="deal-copy-btn" onclick="copyWelcomePromoCode('WELCOME100', this)">
-                                            <i class="fas fa-copy"></i> Copy
-                                        </button>
+                                <div class="voucher-ticket-body">
+                                    <div class="voucher-ticket-top">
+                                        <span class="voucher-ticket-discount">Flat ₱100 off*</span>
+                                        <div class="voucher-ticket-icon-wrap" title="Welcome Gift - 1st Order Only">
+                                            <div class="voucher-ticket-dots">
+                                                <span class="dot dot-1"></span>
+                                                <span class="dot dot-2"></span>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <a href="javascript:void(0)" onclick="claimAndUseWelcomeDeal('WELCOME100', 'shops.php')" class="deal-action-btn">
-                                        <i class="fas fa-utensils"></i> Claim &amp; Order Now
-                                    </a>
+                                    <div class="voucher-ticket-code">WELCOME100</div>
+                                    <div class="voucher-ticket-desc" title="Get ₱100 flat discount on your very first roasted lechon order.">₱100 off on first lechon order</div>
+                                    <div class="voucher-ticket-terms">*Min. spend ₱200</div>
+                                    <div style="display:flex; gap:6px;">
+                                        <button type="button" class="voucher-pill-btn" onclick="copyWelcomePromoCode('WELCOME100', this)" title="Copy promo code" style="flex:0 0 auto; width:auto; padding:5px 9px;">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                        <a href="javascript:void(0)" onclick="claimAndUseWelcomeDeal('WELCOME100', 'shops.php')" class="voucher-pill-btn" style="flex:1;">
+                                            Apply Code
+                                        </a>
+                                    </div>
                                 </div>
                             </article>
 
                             <!-- Deal 2 -->
-                            <article class="deal-card">
-                                <div>
-                                    <div class="deal-card-top">
-                                        <span class="deal-badge deal-badge-success"><i class="fas fa-truck-fast"></i> Free Delivery</span>
-                                        <span style="font-size:0.76rem; color:#667085; font-weight:600;">Whole &amp; Half Lechon</span>
-                                    </div>
-                                    <div class="deal-discount-val">Free Shipping</div>
-                                    <p class="deal-desc">Enjoy zero delivery fee on your first party celebration or whole lechon delivery across Cavite. Min. spend ₱600.</p>
+                            <article class="deal-card voucher-deal-ticket">
+                                <div class="voucher-ticket-stub" style="background: linear-gradient(180deg, #027a48 0%, #05603a 100%);">
+                                    <span class="voucher-ticket-stub-text">FREE SHIP</span>
                                 </div>
-                                <div>
-                                    <div class="deal-code-row">
-                                        <span class="deal-code-text">FREESHIP</span>
-                                        <button type="button" class="deal-copy-btn" onclick="copyWelcomePromoCode('FREESHIP', this)">
-                                            <i class="fas fa-copy"></i> Copy
-                                        </button>
+                                <div class="voucher-ticket-body">
+                                    <div class="voucher-ticket-top">
+                                        <span class="voucher-ticket-discount">Free Shipping*</span>
+                                        <div class="voucher-ticket-icon-wrap" title="Free Delivery - Whole & Half Lechon">
+                                            <div class="voucher-ticket-dots">
+                                                <span class="dot" style="background:#027a48;"></span>
+                                                <span class="dot" style="left:6px; background:#10b981; opacity:0.9;"></span>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <a href="javascript:void(0)" onclick="claimAndUseWelcomeDeal('FREESHIP', 'preorder.php')" class="deal-action-btn" style="background:#027a48;">
-                                        <i class="fas fa-calendar-check"></i> Claim Free Shipping
-                                    </a>
+                                    <div class="voucher-ticket-code">FREESHIP</div>
+                                    <div class="voucher-ticket-desc" title="Zero delivery fee on party celebrations or whole lechon.">Zero delivery fee on whole/half lechon</div>
+                                    <div class="voucher-ticket-terms" style="color:#027a48;">*Min. spend ₱600</div>
+                                    <div style="display:flex; gap:6px;">
+                                        <button type="button" class="voucher-pill-btn" onclick="copyWelcomePromoCode('FREESHIP', this)" title="Copy promo code" style="flex:0 0 auto; width:auto; padding:5px 9px;">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                        <a href="javascript:void(0)" onclick="claimAndUseWelcomeDeal('FREESHIP', 'preorder.php')" class="voucher-pill-btn" style="flex:1;">
+                                            Apply Code
+                                        </a>
+                                    </div>
                                 </div>
                             </article>
 
                             <!-- Deal 3 -->
-                            <article class="deal-card">
-                                <div>
-                                    <div class="deal-card-top">
-                                        <span class="deal-badge deal-badge-warning"><i class="fas fa-percent"></i> Best Value</span>
-                                        <span style="font-size:0.76rem; color:#667085; font-weight:600;">Advance Booking</span>
-                                    </div>
-                                    <div class="deal-discount-val">15% OFF</div>
-                                    <p class="deal-desc">Save 15% (up to ₱300) when booking your weekend family feasts and birthdays in advance. Min. spend ₱400.</p>
+                            <article class="deal-card voucher-deal-ticket">
+                                <div class="voucher-ticket-stub" style="background: linear-gradient(180deg, #b45309 0%, #92400e 100%);">
+                                    <span class="voucher-ticket-stub-text">DISCOUNT</span>
                                 </div>
-                                <div>
-                                    <div class="deal-code-row">
-                                        <span class="deal-code-text">LECHON15</span>
-                                        <button type="button" class="deal-copy-btn" onclick="copyWelcomePromoCode('LECHON15', this)">
-                                            <i class="fas fa-copy"></i> Copy
-                                        </button>
+                                <div class="voucher-ticket-body">
+                                    <div class="voucher-ticket-top">
+                                        <span class="voucher-ticket-discount">15% off*</span>
+                                        <div class="voucher-ticket-icon-wrap" title="Advance Booking - Save 15%">
+                                            <div class="voucher-ticket-dots">
+                                                <span class="dot" style="background:#b45309;"></span>
+                                                <span class="dot" style="left:6px; background:#f59e0b; opacity:0.9;"></span>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <a href="javascript:void(0)" onclick="claimAndUseWelcomeDeal('LECHON15', 'preorder.php')" class="deal-action-btn" style="background:#b54708;">
-                                        <i class="fas fa-ticket"></i> Claim 15% OFF
-                                    </a>
+                                    <div class="voucher-ticket-code">LECHON15</div>
+                                    <div class="voucher-ticket-desc" title="Save 15% (up to ₱300) when booking feasts in advance.">15% off weekend family feasts</div>
+                                    <div class="voucher-ticket-terms" style="color:#b45309;">*Min. spend ₱400</div>
+                                    <div style="display:flex; gap:6px;">
+                                        <button type="button" class="voucher-pill-btn" onclick="copyWelcomePromoCode('LECHON15', this)" title="Copy promo code" style="flex:0 0 auto; width:auto; padding:5px 9px;">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                        <a href="javascript:void(0)" onclick="claimAndUseWelcomeDeal('LECHON15', 'preorder.php')" class="voucher-pill-btn" style="flex:1;">
+                                            Apply Code
+                                        </a>
+                                    </div>
                                 </div>
                             </article>
 
                             <!-- Deal 4 -->
-                            <article class="deal-card">
-                                <div>
-                                    <div class="deal-card-top">
-                                        <span class="deal-badge deal-badge-info"><i class="fas fa-drumstick-bite"></i> Snack &amp; Meal</span>
-                                        <span style="font-size:0.76rem; color:#667085; font-weight:600;">Belly &amp; Meals</span>
-                                    </div>
-                                    <div class="deal-discount-val">₱50 OFF</div>
-                                    <p class="deal-desc">Direct discount on crispy lechon belly rolls, sisig packs, or kilo boxes. Min. spend ₱150.</p>
+                            <article class="deal-card voucher-deal-ticket">
+                                <div class="voucher-ticket-stub" style="background: linear-gradient(180deg, #1d4ed8 0%, #1e40af 100%);">
+                                    <span class="voucher-ticket-stub-text">DISCOUNT</span>
                                 </div>
-                                <div>
-                                    <div class="deal-code-row">
-                                        <span class="deal-code-text">BELLY50</span>
-                                        <button type="button" class="deal-copy-btn" onclick="copyWelcomePromoCode('BELLY50', this)">
-                                            <i class="fas fa-copy"></i> Copy
-                                        </button>
+                                <div class="voucher-ticket-body">
+                                    <div class="voucher-ticket-top">
+                                        <span class="voucher-ticket-discount">Flat ₱50 off*</span>
+                                        <div class="voucher-ticket-icon-wrap" title="Snack & Meal - Belly & Meals">
+                                            <div class="voucher-ticket-dots">
+                                                <span class="dot" style="background:#1d4ed8;"></span>
+                                                <span class="dot" style="left:6px; background:#3b82f6; opacity:0.9;"></span>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <a href="javascript:void(0)" onclick="claimAndUseWelcomeDeal('BELLY50', 'shops.php')" class="deal-action-btn" style="background:#175cd3;">
-                                        <i class="fas fa-store"></i> Claim ₱50 OFF
-                                    </a>
+                                    <div class="voucher-ticket-code">BELLY50</div>
+                                    <div class="voucher-ticket-desc" title="Discount on crispy lechon belly rolls or kilo boxes.">₱50 off crispy belly rolls &amp; packs</div>
+                                    <div class="voucher-ticket-terms" style="color:#1d4ed8;">*Min. spend ₱150</div>
+                                    <div style="display:flex; gap:6px;">
+                                        <button type="button" class="voucher-pill-btn" onclick="copyWelcomePromoCode('BELLY50', this)" title="Copy promo code" style="flex:0 0 auto; width:auto; padding:5px 9px;">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                        <a href="javascript:void(0)" onclick="claimAndUseWelcomeDeal('BELLY50', 'shops.php')" class="voucher-pill-btn" style="flex:1;">
+                                            Apply Code
+                                        </a>
+                                    </div>
                                 </div>
                             </article>
                         </div>
@@ -3459,49 +4351,46 @@ body.dark-mode .deal-copy-btn {
                                     <i class="fas fa-store"></i> Verified Partner Store Offers
                                 </div>
                                 <h2 style="font-family:'Outfit',sans-serif; font-size:1.45rem; font-weight:800; color:#101828; margin:0 0 4px 0;">Partner Store Deals &amp; Vouchers</h2>
-                                <p style="font-size:0.86rem; color:#475467; margin:0;">Special discounts and promotional vouchers posted directly by our verified roast pitmasters and restaurant partners.</p>
+                                <p style="font-size:0.84rem; color:#475467; margin:0;">Special discounts and vouchers from our verified partners. Swipe to see more deals.</p>
                             </div>
                         </div>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;">
+                        <div class="partner-store-deals-grid" id="partnerStoreDealsGrid">
                             <?php foreach ($featured_store_promos as $sp): ?>
                                 <?php
                                     $is_pct = ($sp['discount_type'] === 'percent');
-                                    $sp_disc = $is_pct ? (rtrim(rtrim(number_format((float)$sp['discount_value'], 2), '0'), '.') . '% OFF') : ('₱' . number_format((float)$sp['discount_value'], 0) . ' OFF');
+                                    $sp_disc = $is_pct ? (rtrim(rtrim(number_format((float)$sp['discount_value'], 2), '0'), '.') . '% off*') : ('Flat ₱' . number_format((float)$sp['discount_value'], 0) . ' off*');
                                     $sp_min = (float)$sp['min_order_amount'];
-                                    $sp_min_label = $sp_min > 0 ? ('Min. spend ₱' . number_format($sp_min, 2)) : 'No minimum spend';
+                                    $sp_min_label = $sp_min > 0 ? ('*Min. spend ₱' . number_format($sp_min, 2)) : '*Terms & conditions apply';
                                     $sp_code = htmlspecialchars((string)$sp['code']);
                                     $sp_seller_id = (int)$sp['seller_id'];
                                     $sp_shop_name = htmlspecialchars((string)$sp['shop_name']);
                                     $sp_target_url = 'menu.php?seller_id=' . $sp_seller_id;
                                 ?>
-                                <article class="deal-card" style="border-left: none; display: flex; flex-direction: column; justify-content: space-between;">
-                                    <div>
-                                        <div class="deal-card-top" style="margin-bottom: 8px;">
-                                            <span class="deal-badge" style="background:#eff8ff; color:#175cd3; border:1px solid #b2ddff;">
-                                                <i class="fas fa-store"></i> <?php echo $sp_shop_name; ?>
-                                            </span>
-                                            <span style="font-size:0.75rem; color:#667085; font-weight:700;">Store Exclusive</span>
-                                        </div>
-                                        <div class="deal-discount-val" style="color:#b3261e; font-size:1.5rem; font-weight:900; margin-bottom: 4px;">
-                                            <?php echo $sp_disc; ?>
-                                        </div>
-                                        <div style="font-weight:700; font-size:0.92rem; color:#101828; margin-bottom: 4px;">
-                                            <?php echo htmlspecialchars((string)$sp['name']); ?>
-                                        </div>
-                                        <p class="deal-desc" style="font-size:0.8rem; color:#475467; margin-bottom: 12px;">
-                                            <?php echo htmlspecialchars((string)($sp['description'] ?: 'Exclusive promo voucher for ' . $sp['shop_name'] . ' customers.')); ?> <?php echo $sp_min_label; ?>.
-                                        </p>
+                                <article class="deal-card voucher-deal-ticket">
+                                    <div class="voucher-ticket-stub" style="background: linear-gradient(180deg, #175cd3 0%, #1e40af 100%);">
+                                        <span class="voucher-ticket-stub-text">PROMO</span>
                                     </div>
-                                    <div>
-                                        <div class="deal-code-row" style="margin-bottom: 8px;">
-                                            <span class="deal-code-text"><?php echo $sp_code; ?></span>
-                                            <button type="button" class="deal-copy-btn" onclick="copyWelcomePromoCode('<?php echo $sp_code; ?>', this)">
-                                                <i class="fas fa-copy"></i> Copy
-                                            </button>
+                                    <div class="voucher-ticket-body">
+                                        <div class="voucher-ticket-top">
+                                            <span class="voucher-ticket-discount"><?php echo htmlspecialchars($sp_disc); ?></span>
+                                            <div class="voucher-ticket-icon-wrap" title="<?php echo $sp_shop_name; ?>">
+                                                <div class="voucher-ticket-dots">
+                                                    <span class="dot" style="background:#175cd3;"></span>
+                                                    <span class="dot" style="left:6px; background:#60a5fa; opacity:0.9;"></span>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <a href="javascript:void(0)" onclick="claimAndUseWelcomeDeal('<?php echo $sp_code; ?>', '<?php echo $sp_target_url; ?>')" class="deal-action-btn" style="background:#b3261e;">
-                                            <i class="fas fa-store"></i> Claim &amp; Shop Store
-                                        </a>
+                                        <div class="voucher-ticket-code"><?php echo $sp_code; ?></div>
+                                        <div class="voucher-ticket-desc" title="<?php echo htmlspecialchars((string)$sp['name']); ?>"><?php echo htmlspecialchars((string)$sp['name']); ?></div>
+                                        <div class="voucher-ticket-terms" style="color:#175cd3;"><?php echo htmlspecialchars($sp_min_label); ?></div>
+                                        <div style="display:flex; gap:6px;">
+                                            <button type="button" class="voucher-pill-btn" onclick="copyWelcomePromoCode('<?php echo $sp_code; ?>', this)" title="Copy promo code" style="flex:0 0 auto; width:auto; padding:5px 9px;">
+                                                <i class="fas fa-copy"></i>
+                                            </button>
+                                            <a href="javascript:void(0)" onclick="claimAndUseWelcomeDeal('<?php echo $sp_code; ?>', '<?php echo $sp_target_url; ?>')" class="voucher-pill-btn" style="flex:1;">
+                                                Apply Code
+                                            </a>
+                                        </div>
                                     </div>
                                 </article>
                             <?php endforeach; ?>
@@ -3576,7 +4465,7 @@ body.dark-mode .deal-copy-btn {
                             <?php foreach ($top_rated_stores as $top_store): ?>
                                 <a href="<?php echo htmlspecialchars($top_store['menu_link']); ?>" class="panda-brand-item">
                                     <div class="panda-brand-avatar" style="background-image:url('<?php echo htmlspecialchars($top_store['image']); ?>');"></div>
-                                    <div class="panda-brand-name"><?php echo htmlspecialchars($top_store['name']); ?></div>
+                                    <div class="panda-brand-name"><?php echo htmlspecialchars(fixMojibakeText($top_store['name'])); ?></div>
                                     <div class="panda-brand-meta">
                                         <i class="fas fa-star" style="color:#ef6b2e;"></i> <?php echo $top_store['rating'] > 0 ? number_format((float)$top_store['rating'], 1) : '4.9'; ?>
                                         • 25-35m
@@ -3603,7 +4492,7 @@ body.dark-mode .deal-copy-btn {
                             </a>
                         </div>
 
-                        <div class="bestsellers-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(195px, 1fr)); gap: 14px;">
+                        <div class="bestsellers-grid">
                             <?php foreach ($featured_products as $idx => $product): ?>
                                 <?php
                                 $prod_id_val = (string)($product['id'] ?? '');
@@ -3660,10 +4549,79 @@ body.dark-mode .deal-copy-btn {
                     </section>
                     <?php endif; ?>
 
+                    <?php if (!empty($stores)): 
+                        $top_stores_swipe = array_slice($stores, 0, 8);
+                    ?>
+                    <!-- Top Restaurants Horizontal Swipe Track (Reference Screen 2 & 5) -->
+                    <section class="m-ref-top-shops-section" style="margin-bottom: 24px;">
+                        <div class="market-head" style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 8px;">
+                            <div>
+                                <div style="display:inline-flex; align-items:center; gap:5px; padding:3px 10px; background:#eff8ff; border:1px solid #b2ddff; border-radius:999px; color:#175cd3; font-size:0.72rem; font-weight:800; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:4px;">
+                                    <i class="fas fa-award"></i> Verified Partners
+                                </div>
+                                <h2 style="font-family:'Outfit',sans-serif; font-size:1.25rem; font-weight:800; color:#171922; margin:0 0 3px 0;">Top Restaurants</h2>
+                                <p style="font-size:0.8rem; color:#7b6d64; margin:0;">Swipe to explore top rated lechon shops and pickup branches.</p>
+                            </div>
+                            <a href="shops.php" class="btn-outline btn-sm" style="border-radius:999px; font-weight:700; text-decoration:none; padding:5px 12px; font-size:0.78rem;">
+                                See all <i class="fas fa-arrow-right" style="margin-left:4px;"></i>
+                            </a>
+                        </div>
+
+                        <div class="top-shops-swipe-grid">
+                            <?php foreach ($top_stores_swipe as $s_idx => $s_item): ?>
+                                <?php
+                                $s_price = $s_item['start'] !== null ? 'PHP ' . number_format((float)$s_item['start'], 2) : 'Starts at PHP 450.00';
+                                $s_type_label = $s_item['type'] === 'branch' ? 'Pickup branch' : ($s_item['type'] === 'partner' ? 'Partner store' : 'Seller');
+                                $s_key_val = (string)($s_item['key'] ?? '');
+                                $s_is_fav = !empty($favorite_store_keys[$s_key_val]);
+                                $s_city_lbl = !empty($s_item['city']) ? $s_item['city'] . ', Cavite' : $s_item['location'];
+                                ?>
+                                <a href="<?php echo htmlspecialchars($s_item['menu_link']); ?>" class="market-store-row panda-card-link" style="background:#ffffff; border:1px solid #efddcd; border-radius:18px; overflow:hidden; display:flex; flex-direction:column; text-decoration:none; position:relative; box-shadow:0 4px 14px -2px rgba(16,24,40,0.04);">
+                                    <div class="store-card-image-wrap" style="height:120px; position:relative; overflow:hidden; border-radius:14px; margin:6px;">
+                                        <div class="market-store-row-thumb" style="background-image:url('<?php echo htmlspecialchars($s_item['image']); ?>'); width:100%; height:100%; background-size:cover; background-position:center;"></div>
+                                        <span class="market-type-pill"><?php echo htmlspecialchars($s_type_label); ?></span>
+                                        <span class="market-time-pill"><?php echo !empty($s_item['is_open']) ? 'Open now' : 'Closed now'; ?></span>
+                                        <button
+                                            type="button"
+                                            class="market-store-favorite-btn<?php echo $s_is_fav ? ' is-active' : ''; ?>"
+                                            data-favorite-toggle="1"
+                                            data-favorite-type="store"
+                                            data-favorite-store-key="<?php echo htmlspecialchars($s_key_val); ?>"
+                                            data-favorite-active="<?php echo $s_is_fav ? '1' : '0'; ?>"
+                                            aria-pressed="<?php echo $s_is_fav ? 'true' : 'false'; ?>"
+                                            title="<?php echo $s_is_fav ? 'Remove from favorites' : 'Save to favorites'; ?>"
+                                            style="position:absolute; top:8px; right:8px; z-index:2; width:28px; height:28px; font-size:0.75rem;">
+                                            <i class="<?php echo $s_is_fav ? 'fas' : 'far'; ?> fa-heart"></i>
+                                        </button>
+                                    </div>
+                                    <div class="store-card-details" style="padding:8px 10px 10px 10px; display:flex; flex-direction:column; flex:1; justify-content:space-between;">
+                                        <div>
+                                            <div class="store-card-row-head" style="display:flex; justify-content:space-between; align-items:flex-start; gap:4px; margin-bottom:2px;">
+                                                <h3 style="font-size:0.86rem; font-weight:800; line-height:1.25; margin:0; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical;"><?php echo htmlspecialchars($s_item['name']); ?></h3>
+                                                <span style="font-size:0.75rem; font-weight:800; color:#171922; display:inline-flex; align-items:center; gap:2px; white-space:nowrap;">
+                                                    <i class="fas fa-star" style="color:#ef6b2e;"></i><?php echo $s_item['rating'] > 0 ? number_format((float)$s_item['rating'], 1) : 'New'; ?>
+                                                </span>
+                                            </div>
+                                            <div style="font-size:0.72rem; color:#667085; display:flex; align-items:center; gap:4px; margin-bottom:4px;">
+                                                <i class="fas fa-location-dot" style="color:#b3261e; font-size:0.68rem;"></i> <?php echo htmlspecialchars($s_city_lbl); ?>
+                                            </div>
+                                        </div>
+                                        <div class="panda-card-footer-line" style="display:flex; justify-content:space-between; align-items:center; border-top:1px dashed #efddcd; padding-top:6px; margin-top:6px;">
+                                            <span style="font-size:0.72rem; color:#475467; font-weight:600;"><i class="fas fa-truck-fast" style="color:#175cd3;"></i> 20-30 min</span>
+                                            <strong class="panda-card-price-text" style="font-size:0.85rem; color:#b3261e; font-weight:800;"><?php echo htmlspecialchars($s_price); ?></strong>
+                                        </div>
+                                    </div>
+                                </a>
+                            <?php endforeach; ?>
+                        </div>
+                    </section>
+                    <?php endif; ?>
+
                     <section class="market-mini-section">
                         <div class="panda-store-header-bar">
                             <div class="panda-store-header-title">
                                 <h2 class="panda-main-heading">All Cavite stores</h2>
+                                <p style="font-size: 0.8rem; color: #7b6d64; margin: 2px 0 0;">Swipe to explore verified stores and branches across Cavite.</p>
                             </div>
                         </div>
 
@@ -4326,9 +5284,44 @@ document.addEventListener('DOMContentLoaded', function () {
         return false;
     }
 
-    // Immediate initial DSS calculation on load: use stored address or default Cavite center
+    function resetToDefaultCaviteScope() {
+        locationReady = false;
+        rows.forEach(function (row) {
+            const timeLabel = row.querySelector('[data-role="time-label"]');
+            const etaText = row.querySelector('[data-role="eta-text"]');
+            const distanceText = row.querySelector('[data-role="distance-text"]');
+            const storeCity = row.dataset.city || 'Cavite';
+            const isOpen = row.dataset.open === '1';
+
+            row.dataset.distance = '999';
+            row.dataset.minutes = '25';
+
+            if (timeLabel) {
+                timeLabel.innerHTML = isOpen 
+                    ? '<i class="fas fa-truck-fast"></i> 20-30 min &bull; ' + storeCity 
+                    : '<i class="fas fa-store-slash"></i> Closed &bull; ' + storeCity;
+            }
+            if (etaText) {
+                etaText.textContent = '20-30 min';
+            }
+            if (distanceText) {
+                distanceText.textContent = storeCity;
+            }
+        });
+
+        if (detectNearestStatus) {
+            detectNearestStatus.textContent = 'Allow location access or set your address to calculate exact delivery distances.';
+        }
+        if (distanceSummary) {
+            distanceSummary.textContent = 'Showing Cavite stores. Set your address for exact distances and delivery times.';
+        }
+        sortRows();
+        applyFilters(heroSearch || gridSearch, { preservePagination: true });
+    }
+
+    // Immediate initial DSS calculation on load: use stored address if valid, otherwise avoid showing false location
     if (!checkStoredAddressOnIndex()) {
-        updateNearest(14.3294, 120.9367, false);
+        resetToDefaultCaviteScope();
     }
 
     // Try auto-detecting user location silently if permission was previously granted
@@ -4437,6 +5430,165 @@ document.addEventListener('DOMContentLoaded', function () {
 .reg-choice-info { display:grid; gap:2px; }
 .reg-choice-title { font-weight:800; font-size:1.02rem; color:#171922; }
 .reg-choice-desc { font-size:.82rem; color:#667085; line-height:1.3; }
+
+@media (max-width: 768px) {
+    .market-home,
+    .market-home .container,
+    .market-explorer,
+    .market-explorer > div,
+    .market-mini-section,
+    .first-user-deals-section,
+    .store-promos-section,
+    .partner-ads-section,
+    .bestsellers-section {
+        min-width: 0 !important;
+        max-width: 100% !important;
+    }
+
+    .market-head {
+        align-items: flex-start !important;
+        gap: 8px !important;
+    }
+
+    .market-head > div {
+        min-width: 0 !important;
+        max-width: 100% !important;
+    }
+
+    .market-head h2,
+    .market-head p {
+        overflow-wrap: anywhere !important;
+    }
+
+    .m-ref-categories-row {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        overscroll-behavior-x: contain !important;
+        touch-action: pan-x !important;
+    }
+
+    .first-user-deals-grid,
+    .store-promos-section > div:last-child,
+    .partner-ads-grid {
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
+        touch-action: pan-x !important;
+        scroll-snap-type: x proximity !important;
+        gap: 12px !important;
+        padding: 2px 2px 12px !important;
+        scrollbar-width: none !important;
+    }
+
+    .first-user-deals-grid::-webkit-scrollbar,
+    .store-promos-section > div:last-child::-webkit-scrollbar,
+    .partner-ads-grid::-webkit-scrollbar {
+        display: none !important;
+    }
+
+    .first-user-deals-grid > .deal-card,
+    .store-promos-section > div:last-child > .deal-card,
+    .partner-ads-grid > .partner-ad-card {
+        flex: 0 0 min(78vw, 270px) !important;
+        width: min(78vw, 270px) !important;
+        min-width: min(78vw, 270px) !important;
+        max-width: min(78vw, 270px) !important;
+        scroll-snap-align: start !important;
+        box-sizing: border-box !important;
+    }
+
+    .first-user-deals-grid .deal-card,
+    .store-promos-section .deal-card {
+        padding: 14px !important;
+    }
+
+    .partner-ads-grid .partner-ad-card {
+        min-height: 190px !important;
+    }
+
+    .panda-brand-slider,
+    .market-product-grid,
+    .market-mini-grid,
+    .market-dishes,
+    .market-branches {
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
+        touch-action: pan-x !important;
+        overscroll-behavior-x: contain !important;
+        scroll-snap-type: x proximity !important;
+        gap: 12px !important;
+        padding-bottom: 12px !important;
+        scrollbar-width: none !important;
+    }
+
+    .panda-brand-slider::-webkit-scrollbar,
+    .market-product-grid::-webkit-scrollbar,
+    .market-mini-grid::-webkit-scrollbar,
+    .market-dishes::-webkit-scrollbar,
+    .market-branches::-webkit-scrollbar {
+        display: none !important;
+    }
+
+    .market-product-grid > *,
+    .market-mini-grid > *,
+    .market-dishes > *,
+    .market-branches > * {
+        flex: 0 0 min(82vw, 260px) !important;
+        min-width: min(82vw, 260px) !important;
+        scroll-snap-align: start !important;
+    }
+
+    .panda-brand-slider > * {
+        flex: 0 0 120px !important;
+        min-width: 120px !important;
+        max-width: 120px !important;
+        scroll-snap-align: start !important;
+    }
+
+    .market-product-grid > *,
+    .market-mini-grid > *,
+    .market-dishes > *,
+    .market-branches > * {
+        box-sizing: border-box !important;
+        max-width: min(82vw, 260px) !important;
+    }
+
+    .bestsellers-grid {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
+        touch-action: pan-x !important;
+        overscroll-behavior-x: contain !important;
+        scroll-snap-type: x mandatory !important;
+        gap: 12px !important;
+        padding-bottom: 12px !important;
+        scrollbar-width: none !important;
+        cursor: grab;
+    }
+    .bestsellers-grid::-webkit-scrollbar {
+        display: none !important;
+    }
+    .bestsellers-grid .bestseller-card {
+        flex: 0 0 180px !important;
+        width: 180px !important;
+        min-width: 180px !important;
+        max-width: 180px !important;
+        scroll-snap-align: start !important;
+    }
+}
+
 </style>
 
 <!-- Landing Page Login & Signup Popup Modal Markup -->
@@ -4459,7 +5611,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         <label for="popupEmail">Email Address</label>
                         <div class="input-wrap">
                             <i class="fas fa-envelope"></i>
-                            <input type="email" id="popupEmail" name="email" class="form-control" placeholder="Enter your email address" required autocomplete="email">
+                            <input type="email" id="popupEmail" name="email" class="form-control" placeholder="Enter your email address" required autocomplete="email" value="<?php echo htmlspecialchars($_COOKIE['remember_email'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
                         </div>
                     </div>
                     
@@ -4476,7 +5628,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     
                     <div class="remember-forgot">
                         <label class="remember-label">
-                            <input type="checkbox" name="remember" id="popupRememberMe" value="1">
+                            <input type="checkbox" name="remember" id="popupRememberMe" value="1" <?php echo !empty($_COOKIE['remember_email']) ? 'checked' : ''; ?>>
                             <span>Remember me</span>
                         </label>
                         <a href="javascript:void(0);" class="forgot-link" id="popupSwitchToForgot">Forgot password?</a>
@@ -4911,7 +6063,54 @@ function claimAndUseWelcomeDeal(code, targetUrl) {
         }
     }
 }
+
+// Universal smooth touch & mouse swipe support for horizontal carousels
+document.addEventListener('DOMContentLoaded', function () {
+    const swipeContainers = document.querySelectorAll('.bestsellers-grid, .top-shops-swipe-grid, .m-ref-categories-row');
+    swipeContainers.forEach(function (slider) {
+        if (!slider) return;
+        let isDown = false;
+        let startX = 0;
+        let scrollLeft = 0;
+        let hasMoved = false;
+
+        slider.addEventListener('mousedown', function (e) {
+            isDown = true;
+            hasMoved = false;
+            slider.style.cursor = 'grabbing';
+            startX = e.pageX - slider.offsetLeft;
+            scrollLeft = slider.scrollLeft;
+        });
+
+        slider.addEventListener('mouseleave', function () {
+            isDown = false;
+            slider.style.cursor = '';
+        });
+
+        slider.addEventListener('mouseup', function () {
+            isDown = false;
+            slider.style.cursor = '';
+        });
+
+        slider.addEventListener('mousemove', function (e) {
+            if (!isDown) return;
+            e.preventDefault();
+            const x = e.pageX - slider.offsetLeft;
+            const walk = (x - startX) * 1.5;
+            if (Math.abs(walk) > 5) {
+                hasMoved = true;
+            }
+            slider.scrollLeft = scrollLeft - walk;
+        });
+
+        // Prevent accidental link clicks when dragging/swiping
+        slider.addEventListener('click', function (e) {
+            if (hasMoved) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        }, true);
+    });
+});
 </script>
 <?php include 'includes/footer.php'; ?>
-
-

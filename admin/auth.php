@@ -488,6 +488,19 @@ if (!function_exists('getFranchiseScopedOrderExistsSql')) {
 
         $seller_scope_condition = getFranchiseSellerScopeConditionSql($conn, 'p_scope.seller_id', $owner_id);
 
+        $direct_scope_clauses = ["o_scope.seller_id = {$owner_id}"];
+        if (adminAuthColumnExists($conn, 'orders', 'store_id') && adminAuthTableExists($conn, 'store_locations')) {
+            $direct_scope_clauses[] = "o_scope.store_id IN (SELECT store_id FROM store_locations WHERE owner_user_id = {$owner_id})";
+        }
+        if (adminAuthColumnExists($conn, 'orders', 'pickup_location') && adminAuthTableExists($conn, 'store_locations')) {
+            $direct_scope_clauses[] = "o_scope.pickup_location IN (SELECT store_id FROM store_locations WHERE owner_user_id = {$owner_id})";
+            $direct_scope_clauses[] = "o_scope.pickup_location IN (SELECT store_name FROM store_locations WHERE owner_user_id = {$owner_id})";
+        }
+        if (adminAuthColumnExists($conn, 'orders', 'special_instructions') && adminAuthTableExists($conn, 'store_locations')) {
+            $direct_scope_clauses[] = "(o_scope.special_instructions IS NOT NULL AND o_scope.special_instructions LIKE CONCAT('%', (SELECT store_name FROM store_locations WHERE owner_user_id = {$owner_id} LIMIT 1), '%'))";
+        }
+        $direct_scope_sql = implode(" OR ", $direct_scope_clauses);
+
         return "((EXISTS (
             SELECT 1
             FROM order_items oi_scope
@@ -503,14 +516,7 @@ if (!function_exists('getFranchiseScopedOrderExistsSql')) {
             SELECT 1
             FROM orders o_scope
             WHERE o_scope.id = {$order_id_expr}
-              AND (
-                  o_scope.seller_id = {$owner_id}
-                  OR o_scope.pickup_location IN (SELECT store_id FROM store_locations WHERE owner_user_id = {$owner_id})
-                  OR (
-                      o_scope.special_instructions IS NOT NULL 
-                      AND o_scope.special_instructions LIKE CONCAT('%', (SELECT store_name FROM store_locations WHERE owner_user_id = {$owner_id} LIMIT 1), '%')
-                  )
-              )
+              AND ({$direct_scope_sql})
         )))";
     }
 }
@@ -530,12 +536,14 @@ if (!function_exists('getFranchiseScopedPreOrderExistsSql')) {
             return '1=0';
         }
 
-        $seller_scope_condition = getFranchiseSellerScopeConditionSql($conn, 'p_scope.seller_id', $seller_scope_owner_id);
-        if ($seller_scope_condition === '1=0') {
+        $owner_id = (int)$seller_scope_owner_id;
+        if ($owner_id <= 0) {
             return '1=0';
         }
 
-        return "EXISTS (
+        $seller_scope_condition = getFranchiseSellerScopeConditionSql($conn, 'p_scope.seller_id', $owner_id);
+
+        return "((EXISTS (
             SELECT 1
             FROM pre_orders po_scope
             INNER JOIN products p_scope
@@ -546,7 +554,20 @@ if (!function_exists('getFranchiseScopedPreOrderExistsSql')) {
                 )
             WHERE po_scope.id = {$pre_order_id_expr}
               AND {$seller_scope_condition}
-        )";
+        )) OR (EXISTS (
+            SELECT 1
+            FROM pre_orders po_scope
+            WHERE po_scope.id = {$pre_order_id_expr}
+              AND EXISTS (
+                  SELECT 1 FROM store_locations sl
+                  WHERE sl.owner_user_id = {$owner_id}
+                    AND (
+                        po_scope.pickup_location LIKE CONCAT('%', sl.store_name, '%')
+                        OR po_scope.pickup_location LIKE CONCAT('%', sl.city, '%')
+                        OR (po_scope.special_instructions IS NOT NULL AND po_scope.special_instructions LIKE CONCAT('%', sl.store_name, '%'))
+                    )
+              )
+        )))";
     }
 }
 
@@ -1021,6 +1042,7 @@ function getAdminModuleByPage($page_name) {
         'subscription_plans.php' => 'billing',
         'receipt_settings.php' => 'billing',
         'partner_banking.php' => 'billing',
+        'store_wallet.php' => 'finance',
         'business_account.php' => 'billing',
         'operations_dashboard.php' => 'operations',
         'operations_dashboard_feed.php' => 'operations',
@@ -1655,6 +1677,7 @@ function checkAdminAccess() {
             'billing_invoice_view.php',
             'billing_invoice_pdf.php',
             'shop_owner_tutorial_modal.php',
+            'store_wallet.php',
             'tenant_scope_migration.php'
         ];
 

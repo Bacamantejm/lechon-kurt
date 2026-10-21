@@ -658,6 +658,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $order_id = mysqli_insert_id($conn);
         mysqli_stmt_close($stmt);
 
+        // Multi-tenant Store Scoping: Ensure store_id column is populated on orders
+        if (in_array('store_id', $columns, true) && !empty($pickup_location)) {
+            $store_sync_stmt = mysqli_prepare($conn, "UPDATE orders SET store_id = ? WHERE id = ?");
+            if ($store_sync_stmt) {
+                $pickup_store_val = (int)$pickup_location;
+                mysqli_stmt_bind_param($store_sync_stmt, "ii", $pickup_store_val, $order_id);
+                mysqli_stmt_execute($store_sync_stmt);
+                mysqli_stmt_close($store_sync_stmt);
+            }
+        }
+
         if (!$has_modern_schema && $has_voucher_columns) {
             $voucher_update_sql = "UPDATE orders
                                    SET voucher_id = NULLIF(?, 0),
@@ -855,10 +866,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
         
-        // Commit transaction
         mysqli_commit($conn);
         pvClearAppliedVoucherSession();
         unset($_SESSION['pending_welcome_voucher']);
+
+        // Automated multi-tenant revenue splitting record
+        try {
+            require_once __DIR__ . '/includes/CommissionAndWalletService.php';
+            $wallet_svc = new CommissionAndWalletService($conn);
+            $wallet_svc->recordOrUpdateSplit((int)$order_id, false);
+        } catch (\Throwable $split_ex) {
+            error_log('Initial split tracking warning: ' . $split_ex->getMessage());
+        }
         
         // -------------------------------------------------------------
         // CASH ON DELIVERY (COD) / CASH ON PICKUP FULFILLMENT
@@ -1030,8 +1049,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'customer_name' => $full_name,
                     'customer_email' => $email,
                     'customer_phone' => $phone,
-                    'success_url' => 'http://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/lechonsystem/payment_success.php?order_id=' . $order_id,
-                    'cancel_url' => 'http://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/lechonsystem/payment_cancel.php?order_id=' . $order_id,
+                    'success_url' => appBaseUrl('payment_success.php?order_id=' . $order_id),
+                    'cancel_url' => appBaseUrl('payment_cancel.php?order_id=' . $order_id),
                     'payment_method' => $payment_method
                 ];
 

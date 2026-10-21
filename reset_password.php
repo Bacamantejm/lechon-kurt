@@ -675,7 +675,7 @@ body.dark-mode .rp-state-icon.error {
             <div class="auth-form-card">
                 <div class="login-header">
                     <a href="index.php" class="brand-logo-row">
-                        <img src="assets/images/logo.jpg" alt="Lechon Delights Logo">
+                        <img src="assets/images/logo.png?v=lechon2" alt="Lechon Delight Logo" style="object-fit: contain;">
                         <span>Lechon Delights</span>
                     </a>
                     <h2>Create New Password</h2>

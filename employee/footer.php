@@ -13,8 +13,8 @@
             icon: 'warning',
             confirmButtonText: 'Confirm',
             cancelButtonText: 'Cancel',
-            confirmButtonColor: '#1976d2',
-            cancelButtonColor: '#d33'
+            confirmButtonColor: 'var(--danger, #ef4444)',
+            cancelButtonColor: 'var(--secondary, #64748b)'
         }, options || {});
 
         if (typeof Swal !== 'undefined') {
@@ -51,8 +51,8 @@
                     icon: form.dataset.swConfirmIcon || 'warning',
                     confirmButtonText: form.dataset.swConfirmConfirmText || 'Confirm',
                     cancelButtonText: form.dataset.swConfirmCancelText || 'Cancel',
-                    confirmButtonColor: form.dataset.swConfirmConfirmColor || '#1976d2',
-                    cancelButtonColor: form.dataset.swConfirmCancelColor || '#d33'
+                    confirmButtonColor: form.dataset.swConfirmConfirmColor || 'var(--danger, #ef4444)',
+                    cancelButtonColor: form.dataset.swConfirmCancelColor || 'var(--secondary, #64748b)'
                 }).then((confirmed) => {
                     if (confirmed) {
                         form.dataset.swConfirmed = '1';

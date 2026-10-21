@@ -154,8 +154,21 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
         })();
     </script>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo htmlspecialchars($page_title . ' | Lechon Delights'); ?></title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
+    <?php
+    $brand_tab_title = 'Lechon Delight';
+    $rendered_tab_title = $brand_tab_title;
+    if (!empty($page_title) && !in_array(strtolower(trim((string)$page_title)), ['home', 'index', 'marketplace home', 'lechon delight', 'lechon delights', 'lechon & meat supply shops'], true)) {
+        $rendered_tab_title = $brand_tab_title . ' — ' . trim((string)$page_title);
+    }
+    ?>
+    <title><?php echo htmlspecialchars($rendered_tab_title); ?></title>
+    <!-- Favicon & Brand Logo Icons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="<?php echo $path_prefix; ?>favicon-32x32.png?v=lechon2">
+    <link rel="icon" type="image/png" sizes="16x16" href="<?php echo $path_prefix; ?>favicon-16x16.png?v=lechon2">
+    <link rel="icon" type="image/x-icon" href="<?php echo $path_prefix; ?>favicon.ico?v=lechon2">
+    <link rel="shortcut icon" type="image/x-icon" href="<?php echo $path_prefix; ?>favicon.ico?v=lechon2">
+    <link rel="apple-touch-icon" sizes="180x180" href="<?php echo $path_prefix; ?>apple-touch-icon.png?v=lechon2">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -173,11 +186,42 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
             color: #f8fafc !important;
         }
 
-        :root { --ink:#171922; --muted:#667085; --line:#efddcd; --rose:#b3261e; --bg:#f8f9fa; --card:#fff; --shadow:0 12px 30px rgba(15,23,42,.1); --primary-color:#b3261e; --primary-dark:#8f261a; --motion-ease:cubic-bezier(.22,1,.36,1); --motion-fast:.22s; --motion-base:.28s; --transition-fast:all var(--motion-fast) var(--motion-ease); --transition-fade:opacity var(--motion-fast) var(--motion-ease), visibility var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease); --transition-lift:transform var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease); }
+        :root { --ink:#171922; --muted:#667085; --line:#efddcd; --rose:#b3261e; --bg:#f8f9fa; --card:#fff; --shadow:0 12px 30px rgba(15,23,42,.1); --primary-color:#b3261e; --primary-dark:#8f261a; --motion-ease:cubic-bezier(0.16, 1, 0.3, 1); --motion-fast:0.2s; --motion-base:0.24s; --transition-fast:all var(--motion-fast) var(--motion-ease); --transition-fade:opacity var(--motion-fast) var(--motion-ease), visibility var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease); --transition-lift:transform var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease); }
         [data-theme="dark"], body.dark-mode { --ink:#f8fafc; --muted:#94a3b8; --line:#334155; --rose:#b3261e; --bg:#121824; --card:#1e293b; --shadow:0 12px 30px rgba(0,0,0,.45); --primary-color:#b3261e; --primary-dark:#981b15; }
         
         * { box-sizing:border-box; }
         html, body { margin:0; padding:0; overflow-x:clip !important; max-width:100vw; width:100%; font-family:"Plus Jakarta Sans","Segoe UI",sans-serif; background:var(--bg); color:var(--ink); }
+        
+        /* 0ms Delay Mobile Touch Responsiveness & Tap Optimization */
+        html, body, a, button, input, select, textarea, label, [role="button"],
+        .btn, .mob-nav-item, .rider-nav-item, .menu-item, .submenu-item,
+        .mobile-toggle, .mobile-menu-close, .sidebar-toggler, .nav-link,
+        .tab-btn, .category-chip, .user-avatar-btn, .icon-btn, .action-btn,
+        .card, .product-card, .store-card, .filter-chip, .pill-btn, .order-btn {
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Instant Tactile Touch Micro-Feedback */
+        .is-touch-active,
+        .mob-nav-item.is-touch-active,
+        .rider-nav-item.is-touch-active,
+        .menu-item.is-touch-active,
+        .btn.is-touch-active,
+        .icon-btn.is-touch-active {
+            transform: scale(0.95) translateZ(0) !important;
+            transition: transform 0.05s ease-out !important;
+            opacity: 0.92;
+        }
+
+        @media (hover: none) and (pointer: coarse) {
+            a:active, button:active, [role="button"]:active,
+            .btn:active, .mob-nav-item:active, .rider-nav-item:active,
+            .menu-item:active, .icon-btn:active, .mobile-toggle:active {
+                transform: scale(0.96) translateZ(0);
+                transition: transform 0.05s ease-out !important;
+            }
+        }
         img, video, iframe, canvas { max-width:100%; height:auto; }
         pre, code { max-width:100%; }
         h1,h2,h3,h4,h5,h6 { font-family:"Outfit","Plus Jakarta Sans",sans-serif; }
@@ -719,7 +763,8 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
         }
         .header-shell { max-width:1320px; margin:0 auto; padding:0 22px; width:100%; }
         .logo-link { display:inline-flex; gap:10px; align-items:center; text-decoration:none; flex-shrink:0; }
-        .logo-icon { width:36px; height:36px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; color:#fff; background:linear-gradient(135deg,#b3261e,#ef6b2e); box-shadow:0 6px 16px rgba(179,38,30,.2); font-size:.95rem; }
+        .logo-icon { width:36px; height:36px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; background:transparent !important; box-shadow:none !important; border:none !important; font-size:.95rem; overflow:hidden; }
+        .logo-icon img { width:100%; height:100%; object-fit:contain !important; display:block; border-radius:inherit; }
         .logo-copy { display:grid; gap:1px; }
         .logo-title { font-size:1.15rem; font-weight:800; color:var(--ink); line-height:1; }
         .logo-sub { font-size:.65rem; text-transform:uppercase; letter-spacing:.12em; color:#7f879a; font-weight:700; }
@@ -1495,7 +1540,11 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
         /* Foodpanda Style Mobile Ready Layout */
         @media (max-width: 768px) {
             .site-header {
-                box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05) !important;
+                box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04) !important;
+                background: rgba(255, 255, 255, 0.88) !important;
+                backdrop-filter: blur(18px) !important;
+                -webkit-backdrop-filter: blur(18px) !important;
+                border-bottom: 1px solid rgba(234, 236, 240, 0.8) !important;
                 position: sticky !important;
                 top: 0 !important;
                 z-index: 1200 !important;
@@ -1521,8 +1570,42 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
                 align-items: center !important;
                 justify-content: center !important;
             }
-            .market-header-top .logo-link {
+            .market-header-top.has-address-bar .logo-link {
                 display: none !important;
+            }
+            .market-header-top.no-address-bar .logo-link,
+            .market-header-top:not(:has(.market-address-wrap)) .logo-link {
+                display: inline-flex !important;
+                align-items: center !important;
+                gap: 8px !important;
+                min-width: 0 !important;
+                flex-shrink: 1 !important;
+            }
+            .market-header-top.no-address-bar .logo-copy,
+            .market-header-top:not(:has(.market-address-wrap)) .logo-copy {
+                display: flex !important;
+                flex-direction: column !important;
+                min-width: 0 !important;
+            }
+            .market-header-top.no-address-bar .logo-title,
+            .market-header-top:not(:has(.market-address-wrap)) .logo-title {
+                font-size: 0.92rem !important;
+                font-weight: 800 !important;
+                white-space: nowrap !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+                line-height: 1.2 !important;
+            }
+            .market-header-top.no-address-bar .logo-sub,
+            .market-header-top:not(:has(.market-address-wrap)) .logo-sub {
+                display: none !important;
+            }
+            .market-header-top.no-address-bar .logo-icon,
+            .market-header-top:not(:has(.market-address-wrap)) .logo-icon {
+                width: 32px !important;
+                height: 32px !important;
+                border-radius: 8px !important;
+                flex-shrink: 0 !important;
             }
             .standard-top .logo-link {
                 display: inline-flex !important;
@@ -1542,10 +1625,12 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
             .market-address-trigger {
                 width: 100% !important;
                 max-width: 100% !important;
-                min-height: 36px !important;
-                padding: 0 10px !important;
-                background: #f8fafc !important;
-                border: 1px solid #e2e8f0 !important;
+                min-height: 38px !important;
+                padding: 0 12px !important;
+                background: rgba(244, 245, 247, 0.85) !important;
+                backdrop-filter: blur(12px) !important;
+                -webkit-backdrop-filter: blur(12px) !important;
+                border: 1px solid rgba(234, 236, 240, 0.85) !important;
                 border-radius: 999px !important;
                 font-size: 0.8rem !important;
                 font-weight: 700 !important;
@@ -1612,11 +1697,13 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
                 margin-top: 0 !important;
             }
             .market-home-search {
-                min-height: 40px !important;
-                background: #f1f5f9 !important;
-                border: 1px solid #e2e8f0 !important;
+                min-height: 42px !important;
+                background: rgba(244, 245, 247, 0.85) !important;
+                backdrop-filter: blur(12px) !important;
+                -webkit-backdrop-filter: blur(12px) !important;
+                border: 1px solid rgba(234, 236, 240, 0.85) !important;
                 border-radius: 999px !important;
-                padding: 0 14px !important;
+                padding: 0 16px !important;
             }
             .market-home-search input {
                 font-size: 0.88rem !important;
@@ -1648,20 +1735,7 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
             }
         }
 
-            /* Foodpanda Style Slide-in Drawer */
-            .mobile-menu {
-                left: -360px !important;
-                right: auto !important;
-                transition: left var(--motion-base) var(--motion-ease) !important;
-                width: min(320px, 86vw) !important;
-                border-right: 1px solid var(--line) !important;
-                border-left: none !important;
-                box-shadow: 14px 0 34px rgba(15, 23, 42, 0.18) !important;
-            }
-            .mobile-menu.active {
-                left: 0 !important;
-                right: auto !important;
-            }
+            /* Unified Slide-in Drawer defined below */
             .mobile-profile-card {
                 padding: 16px 14px;
                 background: #f8fafc;
@@ -1740,17 +1814,353 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
             .logo-title { font-size: 0.98rem; }
             .logo-sub { font-size: 0.58rem; }
         }
-    </style>
+        @media (max-width: 360px) {
+            .market-header-top {
+                padding: 8px 10px !important;
+                gap: 6px !important;
+            }
+            .header-actions {
+                gap: 4px !important;
+            }
+            .header-actions .icon-btn,
+            .header-actions .mobile-toggle {
+                width: 32px !important;
+                height: 32px !important;
+                min-width: 32px !important;
+                font-size: 0.78rem !important;
+                border-radius: 8px !important;
+            }
+            .user-avatar-btn .user-avatar-initial,
+            .user-avatar-btn .user-avatar-thumb {
+                width: 28px !important;
+                height: 28px !important;
+                font-size: 0.78rem !important;
+            }
+            .market-header-top.no-address-bar .logo-title,
+            .market-header-top:not(:has(.market-address-wrap)) .logo-title {
+                font-size: 0.84rem !important;
+            }
+            .market-header-top.no-address-bar .logo-icon,
+            .market-header-top:not(:has(.market-address-wrap)) .logo-icon {
+                width: 28px !important;
+                height: 28px !important;
+            }
+        }
+    
+        /* Guaranteed Mobile Drawer & Glassmorphic Overlay (Reference Screen 8) */
+        .mobile-menu-overlay {
+            position: fixed !important;
+            inset: 0 !important;
+            background: rgba(16, 24, 40, 0.5) !important;
+            backdrop-filter: blur(8px) !important;
+            -webkit-backdrop-filter: blur(8px) !important;
+            z-index: 99998 !important;
+            opacity: 0 !important;
+            visibility: hidden !important;
+            transition: opacity 0.25s ease, visibility 0.25s ease !important;
+            pointer-events: none !important;
+        }
+        .mobile-menu-overlay.active {
+            opacity: 1 !important;
+            visibility: visible !important;
+            pointer-events: auto !important;
+        }
+        .mobile-menu {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            bottom: 0 !important;
+            right: auto !important;
+            width: min(320px, 86vw) !important;
+            height: 100vh !important;
+            height: 100dvh !important;
+            background: rgba(255, 255, 255, 0.98) !important;
+            backdrop-filter: blur(20px) !important;
+            -webkit-backdrop-filter: blur(20px) !important;
+            border-right: 1px solid rgba(234, 236, 240, 0.85) !important;
+            border-left: none !important;
+            box-shadow: 14px 0 40px rgba(16, 24, 40, 0.18) !important;
+            z-index: 99999 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            transform: translateX(-100%) !important;
+            transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;
+            overflow-y: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+        }
+        .mobile-menu.active {
+            transform: translateX(0) !important;
+            visibility: visible !important;
+        }
+        .mobile-menu-header {
+            padding: 18px 16px;
+            border-bottom: 1px solid rgba(234, 236, 240, 0.85);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .mobile-menu-close {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: 1px solid #eaecf0;
+            background: #ffffff;
+            color: #475467;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.18s ease;
+        }
+        .mobile-menu-close:active {
+            transform: scale(0.92);
+            background: #fff1f0;
+            color: #b3261e;
+        }
+        .mobile-nav {
+            margin: 0;
+            padding: 12px;
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .mobile-nav a {
+            text-decoration: none;
+            color: #1d2939;
+            font-size: 0.92rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 14px;
+            border-radius: 12px;
+            transition: all 0.18s ease;
+        }
+        .mobile-nav a i:not(.chevron-icon) {
+            width: 22px;
+            text-align: center;
+            color: #b3261e;
+            font-size: 1rem;
+        }
+        .mobile-nav a .chevron-icon {
+            margin-left: auto;
+            color: #98a2b3;
+            font-size: 0.75rem;
+        }
+        .mobile-nav a:hover,
+        .mobile-nav a.active {
+            background: #fff1f0;
+            color: #b3261e;
+        }
+        body.dark-mode .mobile-menu {
+            background: rgba(30, 41, 59, 0.98) !important;
+            border-color: rgba(51, 65, 85, 0.85) !important;
+            color: #f8fafc !important;
+        }
+        body.dark-mode .mobile-menu-header {
+            border-bottom-color: rgba(51, 65, 85, 0.85) !important;
+        }
+        body.dark-mode .mobile-menu-close {
+            background: #1e293b !important;
+            border-color: #334155 !important;
+            color: #cbd5e1 !important;
+        }
+        body.dark-mode .mobile-nav a {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .mobile-nav a:hover,
+        body.dark-mode .mobile-nav a.active {
+            background: #334155 !important;
+            color: #ffffff !important;
+        }
+
+        /* Mobile Header Popover Placement & Active Order Banner Fix */
+        @media (max-width: 768px) {
+            .user-dropdown {
+                position: fixed !important;
+                top: 64px !important;
+                right: 14px !important;
+                left: auto !important;
+                width: min(300px, calc(100vw - 28px)) !important;
+                max-width: calc(100vw - 28px) !important;
+                margin-left: auto !important;
+                box-shadow: 0 14px 40px rgba(16, 24, 40, 0.22) !important;
+                border-radius: 18px !important;
+                z-index: 99999 !important;
+                max-height: calc(100vh - 120px) !important;
+                max-height: calc(100dvh - 120px) !important;
+                overflow-y: auto !important;
+                -webkit-overflow-scrolling: touch !important;
+            }
+            .notification-dropdown {
+                position: fixed !important;
+                top: 64px !important;
+                right: 14px !important;
+                left: auto !important;
+                width: min(300px, calc(100vw - 28px)) !important;
+                max-width: calc(100vw - 28px) !important;
+                margin-left: auto !important;
+                box-shadow: 0 14px 40px rgba(16, 24, 40, 0.22) !important;
+                border-radius: 18px !important;
+                z-index: 99999 !important;
+            }
+            .sticky-ongoing-widget {
+                bottom: 84px !important;
+                right: 14px !important;
+                left: 14px !important;
+                width: auto !important;
+                max-width: none !important;
+                z-index: 1240 !important;
+            }
+        }
+        .sticky-ongoing-close-btn {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #171922;
+            color: #ffffff;
+            border: 2px solid #ffffff;
+            font-size: 13px;
+            font-weight: 700;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            z-index: 10;
+        }
+
+</style>
     <!-- Leaflet Map CSS and JS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+<script>
+window.openMobileNavSidebar = function(e) {
+    if (e) {
+        if (e.cancelable && typeof e.preventDefault === 'function') e.preventDefault();
+        if (typeof e.stopPropagation === 'function') e.stopPropagation();
+    }
+    var m = document.getElementById('mobileMenu');
+    var o = document.getElementById('mobileOverlay');
+    if (m) {
+        m.classList.add('active');
+        m.style.setProperty('display', 'flex', 'important');
+        m.style.setProperty('transform', 'translate3d(0, 0, 0)', 'important');
+        m.style.setProperty('visibility', 'visible', 'important');
+        m.style.setProperty('pointer-events', 'auto', 'important');
+        m.style.setProperty('opacity', '1', 'important');
+        m.style.setProperty('left', '0', 'important');
+        m.style.setProperty('right', 'auto', 'important');
+        m.style.setProperty('z-index', '999999', 'important');
+    }
+    if (o) {
+        o.classList.add('active');
+        o.style.setProperty('display', 'block', 'important');
+        o.style.setProperty('opacity', '1', 'important');
+        o.style.setProperty('visibility', 'visible', 'important');
+        o.style.setProperty('pointer-events', 'auto', 'important');
+        o.style.setProperty('z-index', '999998', 'important');
+    }
+    document.body.style.overflow = 'hidden';
+};
+window.closeMobileNavSidebar = function(e) {
+    if (e) {
+        if (typeof e.stopPropagation === 'function') e.stopPropagation();
+    }
+    var m = document.getElementById('mobileMenu');
+    var o = document.getElementById('mobileOverlay');
+    if (m) {
+        m.classList.remove('active');
+        m.style.setProperty('transform', 'translate3d(-100%, 0, 0)', 'important');
+        m.style.setProperty('pointer-events', 'none', 'important');
+    }
+    if (o) {
+        o.classList.remove('active');
+        o.style.setProperty('opacity', '0', 'important');
+        o.style.setProperty('pointer-events', 'none', 'important');
+        setTimeout(function() {
+            if (o && !o.classList.contains('active')) {
+                o.style.setProperty('display', 'none', 'important');
+            }
+        }, 220);
+    }
+    document.body.style.overflow = '';
+};
+
+// 0ms Fast Touch & Click Listeners for Drawer
+document.addEventListener('click', function(e) {
+    var toggle = e.target.closest('#mobileToggle, #mobileToggle2, .mobile-toggle');
+    if (toggle) {
+        window.openMobileNavSidebar(e);
+        return;
+    }
+    var close = e.target.closest('#mobileMenuClose, .mobile-menu-close, #mobileOverlay');
+    if (close) {
+        window.closeMobileNavSidebar(e);
+        return;
+    }
+    var navLink = e.target.closest('.mobile-nav a');
+    if (navLink) {
+        window.closeMobileNavSidebar();
+    }
+}, true);
+
+document.addEventListener('pointerdown', function(e) {
+    // Instant tactile feedback on any touchable element
+    var touchable = e.target.closest('a, button, [role="button"], .mob-nav-item, .rider-nav-item, .menu-item, .btn, .icon-btn, .tab-btn');
+    if (touchable) {
+        touchable.classList.add('is-touch-active');
+        var onRelease = function() {
+            touchable.classList.remove('is-touch-active');
+            window.removeEventListener('pointerup', onRelease);
+            window.removeEventListener('pointercancel', onRelease);
+        };
+        window.addEventListener('pointerup', onRelease, { once: true, passive: true });
+        window.addEventListener('pointercancel', onRelease, { once: true, passive: true });
+    }
+}, { passive: true });
+
+// Instant Mobile Navigation Micro-Progress Bar
+(function() {
+    var progressBar = document.createElement('div');
+    progressBar.id = 'siteNavProgressBar';
+    progressBar.style.cssText = 'position:fixed;top:0;left:0;height:2.5px;width:0%;background:#b3261e;z-index:9999999;transition:width 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.18s ease;pointer-events:none;opacity:0;box-shadow:0 0 10px rgba(179,38,30,0.7);';
+    document.documentElement.appendChild(progressBar);
+
+    document.addEventListener('click', function(e) {
+        var link = e.target.closest('a[href]');
+        if (!link) return;
+        var href = link.getAttribute('href');
+        if (!href || href.startsWith('#') || href.startsWith('javascript:') || href.startsWith('tel:') || href.startsWith('mailto:') || link.target === '_blank' || e.defaultPrevented || e.ctrlKey || e.metaKey || e.shiftKey) {
+            return;
+        }
+        progressBar.style.opacity = '1';
+        progressBar.style.width = '78%';
+    }, { capture: true, passive: true });
+
+    window.addEventListener('pageshow', function() {
+        progressBar.style.width = '100%';
+        setTimeout(function() {
+            progressBar.style.opacity = '0';
+            setTimeout(function() { progressBar.style.width = '0%'; }, 200);
+        }, 120);
+    });
+})();
+</script>
+
 <body class="<?php echo $is_market_home_header ? 'market-body' : 'site-body'; ?><?php echo $is_initial_dark ? ' dark-mode' : ''; ?>">
 <script>(function(){if(document.documentElement.classList.contains('dark-mode')&&document.body){document.body.classList.add('dark-mode');}})();</script>
 <?php if ($is_market_home_header): ?>
 <header class="site-header market-main-header">
-    <div class="market-header-top">
+    <div class="market-header-top <?php echo in_array($current_page, ['index', 'home', 'pickup'], true) ? 'has-address-bar' : 'no-address-bar'; ?>">
         <a href="<?php echo htmlspecialchars($nav_logo_href); ?>" class="logo-link">
-            <span class="logo-icon"><img src="<?php echo $path_prefix; ?>assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block;"></span>
+            <span class="logo-icon"><img src="<?php echo $path_prefix; ?>assets/images/logo.png?v=lechon2" alt="Lechon Delight Logo" style="width: 100%; height: 100%; object-fit: contain; display: block;"></span>
             <span class="logo-copy"><span class="logo-title">Lechon Delights</span><span class="logo-sub">Marketplace</span></span>
         </a>
 
@@ -1796,8 +2206,13 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
 
         <div class="header-actions">
             <?php if ($is_logged_in_user): ?>
+            <button class="icon-btn cart-btn" id="cartToggle" onclick="location.href='<?php echo $path_prefix; ?>cart.php'"><i class="fas fa-shopping-cart"></i><span class="badge" id="cartBadge"><?php echo (int)$cart_count; ?></span></button>
+            <div class="notification-wrapper">
+                <button class="icon-btn"><i class="fas fa-bell"></i><span class="badge" id="notificationBadge" style="display:none;">0</span></button>
+                <div class="notification-dropdown" id="notificationDropdown"><div class="notification-header">Notifications</div><div class="notification-empty">No new notifications yet.</div></div>
+            </div>
             <div class="user-menu-wrapper">
-                <button class="icon-btn user-avatar-btn" aria-label="Open user menu" title="<?php echo htmlspecialchars($viewer_name !== '' ? $viewer_name : 'My Account'); ?>">
+                <button class="icon-btn user-avatar-btn" aria-label="Open user menu" title="<?php echo htmlspecialchars($viewer_name !== '' ? $viewer_name : 'Profile Settings'); ?>">
                     <?php if ($viewer_profile_image_url !== ''): ?>
                     <img src="<?php echo htmlspecialchars($viewer_profile_image_url); ?>" alt="Profile picture" class="user-avatar-thumb">
                     <?php else: ?>
@@ -1806,17 +2221,16 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
                 </button>
                 <div class="user-dropdown">
                     <div class="user-dropdown-header"><div class="user-name"><?php echo htmlspecialchars($viewer_name !== '' ? $viewer_name : $viewer_first_name); ?></div><?php if ($viewer_email !== ''): ?><div class="user-email"><?php echo htmlspecialchars($viewer_email); ?></div><?php endif; ?></div>
-                    <a href="<?php echo $path_prefix; ?>my_account.php" class="user-dropdown-item"><i class="fas fa-user"></i> My Profile</a>
-                    <a href="<?php echo $path_prefix; ?>my_account.php#addresses" class="user-dropdown-item"><i class="fas fa-address-book"></i> Address Book</a>
-                    <a href="<?php echo $path_prefix; ?>my_orders.php" class="user-dropdown-item"><i class="fas fa-shopping-bag"></i> My Orders</a>
-                    <a href="<?php echo $path_prefix; ?>help_center.php" class="user-dropdown-item"><i class="fas fa-life-ring"></i> Help Center</a>
-                    <a href="javascript:void(0);" onclick="openCustomerTutorial(true)" class="user-dropdown-item"><i class="fas fa-compass"></i> Customer Guide</a>
+                    <a href="<?php echo $path_prefix; ?>my_account.php" class="user-dropdown-item"><i class="fas fa-user-gear"></i> Profile Settings</a>
+                    <a href="<?php echo $path_prefix; ?>my_orders.php" class="user-dropdown-item"><i class="fas fa-shopping-bag"></i> Orders</a>
                     <?php if ($favorites_feature_enabled): ?>
-                    <a href="<?php echo $favorites_page_href; ?>" class="user-dropdown-item"><i class="fas fa-heart"></i> My Favorites</a>
+                    <a href="<?php echo $favorites_page_href; ?>" class="user-dropdown-item"><i class="fas fa-heart"></i> Favorites</a>
                     <?php endif; ?>
                     <?php if (!$is_shop_owner_or_partner): ?>
                     <a href="<?php echo $path_prefix; ?>franchise_application.php" class="user-dropdown-item"><i class="fas fa-store"></i> Apply for Business</a>
                     <?php endif; ?>
+                    <a href="javascript:void(0);" onclick="openCustomerTutorial(true)" class="user-dropdown-item"><i class="fas fa-compass"></i> Customer Guide</a>
+                    <a href="<?php echo $path_prefix; ?>help_center.php" class="user-dropdown-item"><i class="fas fa-life-ring"></i> Help Center</a>
                     <?php if (isset($_SESSION['account_type']) && $_SESSION['account_type'] === 'organization'): ?>
                     <a href="<?php echo $path_prefix; ?>subscription_plans.php" class="user-dropdown-item"><i class="fas fa-layer-group"></i> Subscription Plans</a>
                     <a href="<?php echo $path_prefix; ?>seller_products.php" class="user-dropdown-item"><i class="fas fa-box"></i> My Products</a>
@@ -1829,20 +2243,7 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
                     <a href="javascript:void(0);" onclick="confirmLogout()" class="user-dropdown-item logout-btn"><i class="fas fa-sign-out-alt"></i> Logout</a>
                 </div>
             </div>
-            <?php if ($favorites_feature_enabled): ?>
-            <a class="icon-btn" id="favoritesToggle" href="<?php echo $favorites_page_href; ?>" title="Favorites"><i class="far fa-heart"></i><span class="badge" id="favoritesBadge" style="display:none;">0</span></a>
-            <?php endif; ?>
-            <?php if ($is_customer_user): ?>
-            <button class="icon-btn" id="chatBtn" onclick="location.href='<?php echo $path_prefix; ?>help_center.php'" title="Help Center"><i class="fas fa-comment-dots"></i><span class="badge" id="chatBadge" style="display:none;">0</span></button>
-            <?php endif; ?>
-            <div class="notification-wrapper">
-                <button class="icon-btn"><i class="fas fa-bell"></i><span class="badge" id="notificationBadge" style="display:none;">0</span></button>
-                <div class="notification-dropdown" id="notificationDropdown"><div class="notification-header">Notifications</div><div class="notification-empty">No new notifications yet.</div></div>
-            </div>
-            <button class="icon-btn cart-btn" id="cartToggle" onclick="location.href='<?php echo $path_prefix; ?>cart.php'"><i class="fas fa-shopping-cart"></i><span class="badge" id="cartBadge"><?php echo (int)$cart_count; ?></span></button>
-            <button type="button" class="icon-btn market-theme-btn" id="marketThemeToggler" title="Toggle Theme" aria-label="Toggle Dark or Light Theme"><i class="fas fa-moon"></i></button>
             <?php else: ?>
-                <button type="button" class="icon-btn market-theme-btn" id="marketThemeToggler" title="Toggle Theme" aria-label="Toggle Dark or Light Theme"><i class="fas fa-moon"></i></button>
                 <?php if ($current_page !== 'register' && $current_page !== 'login'): ?>
                 <div class="auth-buttons">
                     <a href="<?php echo $path_prefix; ?>register.php?mode=login#login" class="btn-signin">Log in</a>
@@ -1850,7 +2251,7 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
                 </div>
                 <?php endif; ?>
             <?php endif; ?>
-            <button class="icon-btn mobile-toggle" id="mobileToggle"><i class="fas fa-bars"></i></button>
+            <button type="button" class="icon-btn mobile-toggle" id="mobileToggle" onclick="openMobileNavSidebar(event)" aria-label="Open mobile menu"><i class="fas fa-bars"></i></button>
         </div>
     </div>
     
@@ -1897,42 +2298,82 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
     <?php endif; ?>
 
     <?php if ($ongoing_order_id > 0 && $current_page !== 'track_order'): ?>
-    <div id="stickyOngoingOrderWidget" class="sticky-ongoing-widget">
-        <a href="<?php echo $path_prefix; ?>track_order.php?order_id=<?php echo $ongoing_order_id; ?>" class="sticky-ongoing-link">
-            <div class="sticky-ongoing-icon">
-                <i class="fas fa-motorcycle"></i>
-                <span class="sticky-pulse-ring"></span>
-            </div>
-            <div class="sticky-ongoing-info">
-                <div class="sticky-ongoing-header">
-                    <strong style="font-weight:800; font-size:0.92rem; color:#171922;">Active Delivery Order</strong>
-                    <span class="sticky-live-tag">LIVE</span>
+    <div id="stickyOngoingOrderWidget" class="sticky-ongoing-widget" style="display: none;">
+        <div style="position: relative;">
+            <a href="<?php echo $path_prefix; ?>track_order.php?order_id=<?php echo $ongoing_order_id; ?>" class="sticky-ongoing-link" onclick="handleTrackOrderClick(<?php echo (int)$ongoing_order_id; ?>)">
+                <div class="sticky-ongoing-icon">
+                    <i class="fas fa-motorcycle"></i>
+                    <span class="sticky-pulse-ring"></span>
                 </div>
-                <div class="sticky-ongoing-status">
-                    #<?php echo htmlspecialchars($ongoing_order_number); ?> &bull; <span style="color:#b3261e; font-weight:700;"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $ongoing_order_status))); ?></span>
+                <div class="sticky-ongoing-info">
+                    <div class="sticky-ongoing-header">
+                        <strong style="font-weight:800; font-size:0.92rem; color:#171922;">Active Delivery Order</strong>
+                        <span class="sticky-live-tag">LIVE</span>
+                    </div>
+                    <div class="sticky-ongoing-status">
+                        #<?php echo htmlspecialchars($ongoing_order_number); ?> &bull; <span style="color:#b3261e; font-weight:700;"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $ongoing_order_status))); ?></span>
+                    </div>
                 </div>
-            </div>
-            <div class="sticky-ongoing-btn">
-                Track <i class="fas fa-arrow-right"></i>
-            </div>
-        </a>
+                <div class="sticky-ongoing-btn">
+                    Track <i class="fas fa-arrow-right"></i>
+                </div>
+            </a>
+            <button type="button" class="sticky-ongoing-close-btn" onclick="dismissStickyOngoingOrder(event, <?php echo (int)$ongoing_order_id; ?>)" aria-label="Dismiss">&times;</button>
+        </div>
     </div>
     <script>
     (function() {
+        var orderId = <?php echo (int)$ongoing_order_id; ?>;
+        var key = 'sticky_order_seen_' + orderId;
+        var stickyWidget = document.getElementById('stickyOngoingOrderWidget');
+        if (!stickyWidget) return;
+        
+        // Show once logic: if already seen or dismissed in this session, do NOT show again
+        if (sessionStorage.getItem(key) === '1' || sessionStorage.getItem('sticky_order_dismissed_' + orderId) === '1') {
+            stickyWidget.style.display = 'none';
+            return;
+        }
+        
+        // Mark as seen immediately so navigating away or clicking back won't show it again
+        sessionStorage.setItem(key, '1');
+        stickyWidget.style.display = 'block';
+        
+        // Auto fade out after 6 seconds
+        setTimeout(function() {
+            if (stickyWidget) {
+                stickyWidget.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+                stickyWidget.style.opacity = '0';
+                stickyWidget.style.transform = 'translateY(16px)';
+                setTimeout(function() {
+                    if (stickyWidget) stickyWidget.style.display = 'none';
+                }, 400);
+            }
+        }, 6000);
+    })();
+    
+    window.handleTrackOrderClick = function(orderId) {
+        try {
+            sessionStorage.setItem('sticky_order_seen_' + orderId, '1');
+            sessionStorage.setItem('sticky_order_dismissed_' + orderId, '1');
+        } catch(e) {}
+    };
+    
+    window.dismissStickyOngoingOrder = function(e, orderId) {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        try {
+            sessionStorage.setItem('sticky_order_seen_' + orderId, '1');
+            sessionStorage.setItem('sticky_order_dismissed_' + orderId, '1');
+        } catch(e) {}
         var stickyWidget = document.getElementById('stickyOngoingOrderWidget');
         if (stickyWidget) {
+            stickyWidget.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+            stickyWidget.style.opacity = '0';
+            stickyWidget.style.transform = 'translateY(16px)';
             setTimeout(function() {
-                stickyWidget.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
-                stickyWidget.style.opacity = '0';
-                stickyWidget.style.transform = 'translateY(20px)';
-                setTimeout(function() {
-                    if (stickyWidget && stickyWidget.parentNode) {
-                        stickyWidget.style.display = 'none';
-                    }
-                }, 500);
-            }, 5000);
+                if (stickyWidget) stickyWidget.style.display = 'none';
+            }, 300);
         }
-    })();
+    };
     </script>
     <?php endif; ?>
     
@@ -1968,7 +2409,7 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
 <header class="site-header standard-header">
     <div class="header-shell standard-top">
         <a href="<?php echo htmlspecialchars($nav_logo_href); ?>" class="logo-link">
-            <span class="logo-icon"><img src="<?php echo $path_prefix; ?>assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block;"></span>
+            <span class="logo-icon"><img src="<?php echo $path_prefix; ?>assets/images/logo.png?v=lechon2" alt="Lechon Delight Logo" style="width: 100%; height: 100%; object-fit: contain; display: block;"></span>
             <span class="logo-copy"><span class="logo-title">Lechon Delights</span><span class="logo-sub"><?php echo $is_rider_context ? 'Rider Portal' : 'Marketplace'; ?></span></span>
         </a>
         <?php if (!$is_auth_page): ?>
@@ -1985,8 +2426,13 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
         </nav>
         <div class="header-actions">
             <?php if ($is_logged_in_user): ?>
+            <button class="icon-btn cart-btn" id="cartToggle" onclick="location.href='<?php echo $path_prefix; ?>cart.php'"><i class="fas fa-shopping-cart"></i><span class="badge" id="cartBadge"><?php echo (int)$cart_count; ?></span></button>
+            <div class="notification-wrapper">
+                <button class="icon-btn"><i class="fas fa-bell"></i><span class="badge" id="notificationBadge" style="display:none;">0</span></button>
+                <div class="notification-dropdown" id="notificationDropdown"><div class="notification-header">Notifications</div><div class="notification-empty">No new notifications yet.</div></div>
+            </div>
             <div class="user-menu-wrapper">
-                <button class="icon-btn user-avatar-btn" aria-label="Open user menu" title="<?php echo htmlspecialchars($viewer_name !== '' ? $viewer_name : 'My Account'); ?>">
+                <button class="icon-btn user-avatar-btn" aria-label="Open user menu" title="<?php echo htmlspecialchars($viewer_name !== '' ? $viewer_name : 'Profile Settings'); ?>">
                     <?php if ($viewer_profile_image_url !== ''): ?>
                     <img src="<?php echo htmlspecialchars($viewer_profile_image_url); ?>" alt="Profile picture" class="user-avatar-thumb">
                     <?php else: ?>
@@ -1998,17 +2444,16 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
                     <?php if ($is_rider_context): ?>
                     <a href="<?php echo $path_prefix; ?>admin/logistics.php" class="user-dropdown-item" style="color:#b3261e; font-weight:700;"><i class="fas fa-motorcycle"></i> Delivery Rider Dashboard</a>
                     <?php endif; ?>
-                    <a href="<?php echo $path_prefix; ?>my_account.php<?php echo $is_rider_context ? '?from=logistics' : ''; ?>" class="user-dropdown-item"><i class="fas fa-user"></i> My Profile</a>
-                    <a href="<?php echo $path_prefix; ?>my_account.php#addresses" class="user-dropdown-item"><i class="fas fa-address-book"></i> Address Book</a>
-                    <a href="<?php echo $path_prefix; ?>my_orders.php" class="user-dropdown-item"><i class="fas fa-shopping-bag"></i> My Orders</a>
-                    <a href="<?php echo $path_prefix; ?>help_center.php" class="user-dropdown-item"><i class="fas fa-life-ring"></i> Help Center</a>
-                    <a href="javascript:void(0);" onclick="openCustomerTutorial(true)" class="user-dropdown-item"><i class="fas fa-compass"></i> Customer Guide</a>
+                    <a href="<?php echo $path_prefix; ?>my_account.php<?php echo $is_rider_context ? '?from=logistics' : ''; ?>" class="user-dropdown-item"><i class="fas fa-user-gear"></i> Profile Settings</a>
+                    <a href="<?php echo $path_prefix; ?>my_orders.php" class="user-dropdown-item"><i class="fas fa-shopping-bag"></i> Orders</a>
                     <?php if ($favorites_feature_enabled): ?>
-                    <a href="<?php echo $favorites_page_href; ?>" class="user-dropdown-item"><i class="fas fa-heart"></i> My Favorites</a>
+                    <a href="<?php echo $favorites_page_href; ?>" class="user-dropdown-item"><i class="fas fa-heart"></i> Favorites</a>
                     <?php endif; ?>
                     <?php if (!$is_shop_owner_or_partner): ?>
                     <a href="<?php echo $path_prefix; ?>franchise_application.php" class="user-dropdown-item"><i class="fas fa-store"></i> Apply for Business</a>
                     <?php endif; ?>
+                    <a href="javascript:void(0);" onclick="openCustomerTutorial(true)" class="user-dropdown-item"><i class="fas fa-compass"></i> Customer Guide</a>
+                    <a href="<?php echo $path_prefix; ?>help_center.php" class="user-dropdown-item"><i class="fas fa-life-ring"></i> Help Center</a>
                     <?php if (isset($_SESSION['account_type']) && $_SESSION['account_type'] === 'organization'): ?>
                     <a href="<?php echo $path_prefix; ?>subscription_plans.php" class="user-dropdown-item"><i class="fas fa-layer-group"></i> Subscription Plans</a>
                     <a href="<?php echo $path_prefix; ?>seller_products.php" class="user-dropdown-item"><i class="fas fa-box"></i> My Products</a>
@@ -2021,7 +2466,6 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
                 </div>
             </div>
             <?php else: ?>
-                <button type="button" class="icon-btn market-theme-btn" id="marketThemeTogglerSite" title="Toggle Theme" aria-label="Toggle Dark or Light Theme"><i class="fas fa-moon"></i></button>
                 <?php if ($current_page !== 'register' && $current_page !== 'login'): ?>
                 <div class="auth-buttons">
                     <a href="<?php echo $path_prefix; ?>register.php?mode=login#login" class="btn-signin">Log in</a>
@@ -2029,31 +2473,21 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
                 </div>
                 <?php endif; ?>
             <?php endif; ?>
-            <?php if ($favorites_feature_enabled): ?>
-            <a class="icon-btn" id="favoritesToggle" href="<?php echo $favorites_page_href; ?>" title="Favorites"><i class="far fa-heart"></i><span class="badge" id="favoritesBadge" style="display:none;">0</span></a>
-            <?php endif; ?>
-            <?php if ($is_customer_user): ?>
-            <button class="icon-btn" id="chatBtn" onclick="location.href='<?php echo $path_prefix; ?>help_center.php'" title="Help Center"><i class="fas fa-comment-dots"></i><span class="badge" id="chatBadge" style="display:none;">0</span></button>
-            <?php endif; ?>
-            <button class="icon-btn cart-btn" id="cartToggle" onclick="location.href='<?php echo $path_prefix; ?>cart.php'"><i class="fas fa-shopping-cart"></i><span class="badge" id="cartBadge"><?php echo (int)$cart_count; ?></span></button>
-            <?php if ($is_logged_in_user): ?>
-            <button type="button" class="icon-btn market-theme-btn" id="marketThemeTogglerSiteLoggedIn" title="Toggle Theme" aria-label="Toggle Dark or Light Theme"><i class="fas fa-moon"></i></button>
-            <?php endif; ?>
-            <button class="icon-btn mobile-toggle" id="mobileToggle"><i class="fas fa-bars"></i></button>
+            <button type="button" class="icon-btn mobile-toggle" id="mobileToggle2" onclick="openMobileNavSidebar(event)" aria-label="Open mobile menu"><i class="fas fa-bars"></i></button>
         </div>
         <?php endif; ?>
     </div>
 </header>
 <?php endif; ?>
 
-<div class="mobile-menu-overlay" id="mobileOverlay"></div>
+<div class="mobile-menu-overlay" id="mobileOverlay" onclick="closeMobileNavSidebar(event)"></div>
 <aside class="mobile-menu" id="mobileMenu">
     <div class="mobile-menu-header">
         <a href="<?php echo htmlspecialchars($nav_logo_href); ?>" class="logo-link" style="display:flex !important;">
-            <span class="logo-icon" style="width:34px;height:34px;font-size:.88rem;"><img src="<?php echo $path_prefix; ?>assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block;"></span>
+            <span class="logo-icon" style="width:34px;height:34px;font-size:.88rem;"><img src="<?php echo $path_prefix; ?>assets/images/logo.png?v=lechon2" alt="Lechon Delight Logo" style="width: 100%; height: 100%; object-fit: contain; display: block;"></span>
             <span class="logo-copy"><span class="logo-title" style="font-size:0.98rem;">Lechon Delights</span><span class="logo-sub" style="font-size:0.58rem;"><?php echo $is_rider_context ? 'Rider Portal' : 'Marketplace'; ?></span></span>
         </a>
-        <button class="mobile-menu-close" id="mobileMenuClose" aria-label="Close menu"><i class="fas fa-times"></i></button>
+        <button type="button" class="mobile-menu-close" id="mobileMenuClose" onclick="closeMobileNavSidebar(event)" aria-label="Close menu"><i class="fas fa-times"></i></button>
     </div>
     
     <?php if ($is_logged_in_user): ?>
@@ -2082,17 +2516,16 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
         <li><a href="<?php echo $path_prefix; ?>about.php" class="<?php echo $current_page === 'about' ? 'active' : ''; ?>"><i class="fas fa-book-open"></i> Our Story</a></li>
         <li><a href="<?php echo $path_prefix; ?>faq.php" class="<?php echo $current_page === 'faq' ? 'active' : ''; ?>"><i class="fas fa-circle-question"></i> FAQ</a></li>
         <?php if ($is_logged_in_user): ?>
-        <li><a href="<?php echo $path_prefix; ?>my_account.php"><i class="fas fa-user-circle"></i> My Profile</a></li>
-        <li><a href="<?php echo $path_prefix; ?>my_account.php#addresses"><i class="fas fa-address-book"></i> Address Book</a></li>
-        <li><a href="<?php echo $path_prefix; ?>my_orders.php"><i class="fas fa-bag-shopping"></i> My Orders</a></li>
+        <li><a href="<?php echo $path_prefix; ?>my_account.php"><i class="fas fa-user-gear"></i> Profile Settings</a></li>
+        <li><a href="<?php echo $path_prefix; ?>my_orders.php"><i class="fas fa-bag-shopping"></i> Orders</a></li>
         <?php if ($favorites_feature_enabled): ?>
-        <li><a href="<?php echo $favorites_page_href; ?>"><i class="fas fa-heart"></i> My Favorites</a></li>
+        <li><a href="<?php echo $favorites_page_href; ?>"><i class="fas fa-heart"></i> Favorites</a></li>
         <?php endif; ?>
-        <li><a href="<?php echo $path_prefix; ?>help_center.php"><i class="fas fa-life-ring"></i> Help Center</a></li>
-        <li><a href="javascript:void(0);" onclick="openCustomerTutorial(true)"><i class="fas fa-compass"></i> Customer Guide</a></li>
         <?php if (!$is_shop_owner_or_partner): ?>
-        <li><a href="<?php echo $path_prefix; ?>franchise_application.php"><i class="fas fa-briefcase"></i> Partner with Us</a></li>
+        <li><a href="<?php echo $path_prefix; ?>franchise_application.php"><i class="fas fa-store"></i> Apply for Business</a></li>
         <?php endif; ?>
+        <li><a href="javascript:void(0);" onclick="openCustomerTutorial(true)"><i class="fas fa-compass"></i> Customer Guide</a></li>
+        <li><a href="<?php echo $path_prefix; ?>help_center.php"><i class="fas fa-life-ring"></i> Help Center</a></li>
         <?php if (isset($_SESSION['account_type']) && $_SESSION['account_type'] === 'organization'): ?>
         <li><a href="<?php echo $path_prefix; ?>subscription_plans.php" class="<?php echo $current_page === 'subscription_plans' ? 'active' : ''; ?>"><i class="fas fa-layer-group"></i> Subscription Plans</a></li>
         <li><a href="<?php echo $path_prefix; ?>seller_products.php"><i class="fas fa-box"></i> My Products</a></li>
@@ -2118,8 +2551,8 @@ window.swalConfirmAction = window.swalConfirmAction || function(options) {
         icon: 'warning',
         confirmButtonText: 'Confirm',
         cancelButtonText: 'Cancel',
-        confirmButtonColor: '#171922',
-        cancelButtonColor: '#98a2b3'
+        confirmButtonColor: 'var(--danger, #ef4444)',
+        cancelButtonColor: 'var(--secondary, #64748b)'
     }, options || {});
 
     if (typeof Swal !== 'undefined') {
@@ -2158,8 +2591,8 @@ window.bindSwalConfirmForms = window.bindSwalConfirmForms || function(root) {
                 icon: form.dataset.swConfirmIcon || 'warning',
                 confirmButtonText: form.dataset.swConfirmConfirmText || 'Confirm',
                 cancelButtonText: form.dataset.swConfirmCancelText || 'Cancel',
-                confirmButtonColor: form.dataset.swConfirmConfirmColor || '#171922',
-                cancelButtonColor: form.dataset.swConfirmCancelColor || '#98a2b3'
+                confirmButtonColor: form.dataset.swConfirmConfirmColor || 'var(--danger, #ef4444)',
+                cancelButtonColor: form.dataset.swConfirmCancelColor || 'var(--secondary, #64748b)'
             }).then(function(confirmed) {
                 if (confirmed) {
                     form.dataset.swConfirmed = '1';
@@ -3240,7 +3673,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 marketLocateMeBtn.disabled = false;
                 marketLocateMeBtn.innerHTML = originalBtnHtml;
 
-                const finalPayload = resolvedPayload || { street_address: 'General Trias, Cavite', city: 'General Trias', postal_code: '' };
+                if (!resolvedPayload) {
+                    if (marketQuickStreetInput) {
+                        marketQuickStreetInput.focus();
+                        marketQuickStreetInput.placeholder = 'Please enter your address manually...';
+                    }
+                    return;
+                }
+
+                const finalPayload = resolvedPayload;
                 if (marketQuickStreetInput) {
                     marketQuickStreetInput.value = finalPayload.street_address;
                 }
@@ -3251,12 +3692,10 @@ document.addEventListener('DOMContentLoaded', function () {
             }).catch(function (error) {
                 marketLocateMeBtn.disabled = false;
                 marketLocateMeBtn.innerHTML = originalBtnHtml;
-                const defaultPayload = { street_address: 'General Trias, Cavite', city: 'General Trias', postal_code: '' };
-                if (marketQuickStreetInput) marketQuickStreetInput.value = defaultPayload.street_address;
-                fillMarketAddressInputs(defaultPayload, { includeMapFields: true });
-                const storedPayload = persistMarketAddressPayload(defaultPayload);
-                renderMarketAddressDisplay(storedPayload);
-                closeAddressPopover();
+                if (marketQuickStreetInput) {
+                    marketQuickStreetInput.focus();
+                    marketQuickStreetInput.placeholder = 'Location access denied. Type address manually...';
+                }
             });
         });
     }

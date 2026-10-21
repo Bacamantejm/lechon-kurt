@@ -1416,6 +1416,10 @@ include 'includes/header.php';
     .btn-help-secondary {
         width: 100%;
     }
+
+    .help-center-section {
+        padding-bottom: 200px !important;
+    }
 }
 
 /* ==========================================================================

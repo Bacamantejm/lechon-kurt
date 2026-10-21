@@ -467,8 +467,8 @@ $checkout_data = [
     'customer_name' => $resolved_customer_name,
     'customer_email' => $resolved_customer_email,
     'customer_phone' => $resolved_customer_phone,
-    'success_url' => 'http://' . $_SERVER['HTTP_HOST'] . '/lechonsystem/payment_success_preorder.php?preorder_id=' . $preorder_id,
-    'cancel_url' => 'http://' . $_SERVER['HTTP_HOST'] . '/lechonsystem/payment_cancel_preorder.php?preorder_id=' . $preorder_id,
+    'success_url' => appBaseUrl('payment_success_preorder.php?preorder_id=' . $preorder_id),
+    'cancel_url' => appBaseUrl('payment_cancel_preorder.php?preorder_id=' . $preorder_id),
     'payment_method' => 'all' // Allow all payment methods
 ];
 

@@ -88,6 +88,17 @@ if (!empty($initial_proof_path)) {
     $initial_proof_path = 'uploads/proof_of_delivery/' . basename($initial_proof_path);
 }
 
+// Check if user has already reviewed the driver/delivery
+$existing_delivery_review = null;
+$rev_chk = $conn->prepare("SELECT rating, comment, created_at FROM delivery_reviews WHERE order_id = ? AND user_id = ? LIMIT 1");
+if ($rev_chk) {
+    $rev_chk->bind_param("ii", $order_id, $user_id);
+    $rev_chk->execute();
+    $rev_res = $rev_chk->get_result();
+    $existing_delivery_review = $rev_res ? $rev_res->fetch_assoc() : null;
+    $rev_chk->close();
+}
+
 $page_title = ($is_pickup ? "Pick-up Order #" : "Track Order #") . $order['order_number'];
 include 'includes/header.php';
 ?>
@@ -109,6 +120,22 @@ include 'includes/header.php';
     --fp-warning: #b54708;
     --fp-warning-bg: #fffaeb;
     --fp-warning-border: #fedf89;
+}
+
+html.dark-mode,
+html[data-theme="dark"],
+body.dark-mode {
+    --fp-bg: #0f172a;
+    --fp-card: #1e293b;
+    --fp-ink: #f8fafc;
+    --fp-muted: #94a3b8;
+    --fp-border: #334155;
+    --fp-success: #34d399;
+    --fp-success-bg: rgba(6, 78, 59, 0.4);
+    --fp-success-border: #065f46;
+    --fp-warning: #fbbf24;
+    --fp-warning-bg: rgba(120, 53, 15, 0.4);
+    --fp-warning-border: #92400e;
 }
 
 .fp-tracking-page {
@@ -1185,18 +1212,514 @@ include 'includes/header.php';
 }
 
 /* ==========================================================================
-   Responsive Adaptations
+   TRACK ORDER DARK THEME ENGINE (Universal Desktop & Mobile)
+   ========================================================================== */
+body.dark-mode .fp-tracking-page {
+    background: #0f172a !important;
+}
+
+/* Universal Dark Card Containers */
+body.dark-mode .fp-status-hero-card,
+body.dark-mode .fp-map-card,
+body.dark-mode .fp-rider-card,
+body.dark-mode .fp-store-card,
+body.dark-mode .fp-timeline-card,
+body.dark-mode .fp-chat-card,
+body.dark-mode .fp-order-summary-card,
+body.dark-mode .fp-claim-pass-card,
+body.dark-mode .fp-waiting-rider-card,
+body.dark-mode #fpProofCard {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35) !important;
+    color: #f8fafc !important;
+}
+
+/* Hero Order Status Card */
+body.dark-mode .fp-hero-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .fp-hero-subtitle {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .fp-live-badge {
+    background: rgba(6, 78, 59, 0.35) !important;
+    color: #34d399 !important;
+    border-color: rgba(16, 185, 129, 0.4) !important;
+}
+
+body.dark-mode .fp-live-badge.pickup-mode {
+    background: rgba(120, 53, 15, 0.35) !important;
+    color: #fbbf24 !important;
+    border-color: rgba(245, 158, 11, 0.4) !important;
+}
+
+body.dark-mode .fp-eta-pill {
+    background: rgba(179, 38, 30, 0.18) !important;
+    border-color: rgba(179, 38, 30, 0.45) !important;
+    color: #fca5a5 !important;
+}
+
+body.dark-mode .fp-eta-label {
+    color: #f87171 !important;
+}
+
+body.dark-mode .fp-eta-value {
+    color: #fca5a5 !important;
+}
+
+body.dark-mode .fp-eta-pill.pickup {
+    background: rgba(30, 58, 138, 0.3) !important;
+    border-color: rgba(59, 130, 246, 0.4) !important;
+    color: #93c5fd !important;
+}
+
+body.dark-mode .fp-eta-pill.pickup .fp-eta-label {
+    color: #60a5fa !important;
+}
+
+body.dark-mode .fp-eta-pill.pickup .fp-eta-value {
+    color: #93c5fd !important;
+}
+
+body.dark-mode .fp-order-number-pill {
+    background: #0f172a !important;
+    color: #94a3b8 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .fp-delivery-pin-badge,
+body.dark-mode div[title*="PIN"] {
+    background: rgba(179, 38, 30, 0.18) !important;
+    border-color: rgba(179, 38, 30, 0.45) !important;
+    color: #fca5a5 !important;
+}
+
+/* 4-Step Animated Progress Stepper */
+body.dark-mode .fp-stepper-track-bg {
+    background: #334155 !important;
+}
+
+body.dark-mode .fp-stepper-track-fill {
+    background: #b3261e !important;
+}
+
+body.dark-mode .fp-step-icon-wrap {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #64748b !important;
+}
+
+body.dark-mode .fp-step-label {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .fp-step-sub {
+    color: #64748b !important;
+}
+
+body.dark-mode .fp-step-item.is-completed .fp-step-icon-wrap {
+    background: #b3261e !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .fp-step-item.is-completed .fp-step-label {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .fp-step-item.is-completed .fp-step-sub {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .fp-step-item.is-active .fp-step-icon-wrap {
+    background: #1e293b !important;
+    border-color: #ef4444 !important;
+    color: #ef4444 !important;
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.25) !important;
+}
+
+body.dark-mode .fp-step-item.is-active .fp-step-label {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .fp-step-item.is-active .fp-step-sub {
+    color: #fca5a5 !important;
+}
+
+/* Interactive Map, Dark Tiles & Overlays */
+body.dark-mode #map {
+    background: #0b1120 !important;
+}
+
+body.dark-mode .leaflet-tile {
+    filter: brightness(0.65) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7) !important;
+}
+
+body.dark-mode .leaflet-container {
+    background: #0b1120 !important;
+}
+
+body.dark-mode .leaflet-popup-content-wrapper,
+body.dark-mode .leaflet-popup-tip {
+    background: #1e293b !important;
+    color: #f8fafc !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5) !important;
+}
+
+body.dark-mode .leaflet-popup-content {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .leaflet-popup-content strong {
+    color: #ffffff !important;
+}
+
+body.dark-mode .leaflet-control-zoom a {
+    background-color: #1e293b !important;
+    color: #f8fafc !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .leaflet-control-zoom a:hover {
+    background-color: #334155 !important;
+    color: #ffffff !important;
+}
+
+body.dark-mode .leaflet-control-attribution {
+    background: rgba(15, 23, 42, 0.8) !important;
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .leaflet-control-attribution a {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .fp-map-pill-stat {
+    background: rgba(15, 23, 42, 0.94) !important;
+    border-color: rgba(51, 65, 85, 0.85) !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4) !important;
+}
+
+body.dark-mode .fp-map-pill-stat .stat-item {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .fp-map-pill-stat .stat-item strong {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .fp-map-btn {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+}
+
+body.dark-mode .fp-map-btn:hover {
+    background: #334155 !important;
+    color: #ffffff !important;
+    border-color: #475569 !important;
+}
+
+body.dark-mode .fp-map-btn.is-active {
+    background: #b3261e !important;
+    color: #ffffff !important;
+    border-color: #b3261e !important;
+}
+
+/* Waiting for Rider Card */
+body.dark-mode .fp-waiting-rider-card strong {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .fp-waiting-rider-card p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .fp-waiting-rider-card .badge {
+    background: rgba(120, 53, 15, 0.35) !important;
+    color: #fbbf24 !important;
+    border-color: rgba(245, 158, 11, 0.4) !important;
+}
+
+body.dark-mode .fp-waiting-icon,
+body.dark-mode .fp-waiting-rider-card div[style*="background:#fff1f0"] {
+    background: rgba(179, 38, 30, 0.2) !important;
+    color: #fca5a5 !important;
+}
+
+/* Rider Profile Card */
+body.dark-mode .fp-rider-avatar {
+    background: rgba(179, 38, 30, 0.2) !important;
+    border-color: rgba(179, 38, 30, 0.4) !important;
+    color: #fca5a5 !important;
+}
+
+body.dark-mode .fp-rider-online-dot {
+    border-color: #1e293b !important;
+}
+
+body.dark-mode .fp-rider-info h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .fp-tag-verified {
+    background: rgba(6, 78, 59, 0.35) !important;
+    color: #34d399 !important;
+    border-color: rgba(16, 185, 129, 0.4) !important;
+}
+
+body.dark-mode .fp-tag-vehicle {
+    background: #0f172a !important;
+    color: #94a3b8 !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .fp-btn-call {
+    background: rgba(6, 78, 59, 0.35) !important;
+    color: #34d399 !important;
+    border-color: rgba(16, 185, 129, 0.4) !important;
+}
+
+body.dark-mode .fp-btn-call:hover {
+    background: #059669 !important;
+    color: #ffffff !important;
+}
+
+/* Proof of Delivery Card */
+body.dark-mode #fpProofCard h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode #fpProofCard p {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode #fpProofImg {
+    border-color: #334155 !important;
+}
+
+body.dark-mode #fpProofCard .badge {
+    background: rgba(6, 78, 59, 0.35) !important;
+    color: #34d399 !important;
+    border-color: rgba(16, 185, 129, 0.4) !important;
+}
+
+/* Delivery Route Timeline Card */
+body.dark-mode .fp-timeline-title {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .fp-timeline-list::before {
+    background: #334155 !important;
+}
+
+body.dark-mode .fp-timeline-dot {
+    background: #0f172a !important;
+    border-color: #475569 !important;
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .fp-timeline-node.origin .fp-timeline-dot {
+    border-color: #94a3b8 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .fp-timeline-node.destination .fp-timeline-dot {
+    background: rgba(179, 38, 30, 0.2) !important;
+    border-color: #ef4444 !important;
+    color: #fca5a5 !important;
+}
+
+body.dark-mode .fp-timeline-label {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .fp-timeline-name {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .fp-timeline-desc {
+    color: #cbd5e1 !important;
+}
+
+/* In-App Live Rider Chat Card */
+body.dark-mode .fp-chat-header h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode #fpChatStatus {
+    color: #34d399 !important;
+}
+
+body.dark-mode .fp-chat-messages {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .fp-chat-msg.driver .fp-chat-bubble {
+    background: #1e293b !important;
+    color: #f8fafc !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .fp-chat-time {
+    color: #64748b !important;
+}
+
+body.dark-mode .fp-chip {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .fp-chip:hover {
+    background: #334155 !important;
+    border-color: #475569 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .fp-chat-input {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+}
+
+body.dark-mode .fp-chat-input:focus {
+    border-color: #b3261e !important;
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.25) !important;
+}
+
+/* Pick-up Claim Pass & Store Location Cards */
+body.dark-mode .fp-claim-header {
+    color: #fca5a5 !important;
+}
+
+body.dark-mode .fp-claim-code-box {
+    background: rgba(179, 38, 30, 0.18) !important;
+    border-color: rgba(179, 38, 30, 0.35) !important;
+}
+
+body.dark-mode .fp-claim-code-text {
+    color: #fca5a5 !important;
+}
+
+body.dark-mode .fp-claim-hint {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .fp-store-header h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .fp-store-address-box {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .fp-store-address-box p {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .fp-store-address-box span,
+body.dark-mode .fp-store-address-text {
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .fp-store-hours {
+    color: #94a3b8 !important;
+}
+
+/* Order Summary Details */
+body.dark-mode .fp-summary-header h4 {
+    color: #f8fafc !important;
+}
+
+body.dark-mode #summaryChevron {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .fp-order-items-list {
+    border-top-color: #334155 !important;
+}
+
+body.dark-mode .fp-item-thumb {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+}
+
+body.dark-mode .fp-item-name {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .fp-item-sub {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .fp-item-price {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .fp-cost-breakdown {
+    border-top-color: #334155 !important;
+}
+
+body.dark-mode .fp-cost-row {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .fp-cost-row strong {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .fp-cost-row.total {
+    color: #f8fafc !important;
+    border-top-color: #334155 !important;
+}
+
+body.dark-mode .fp-cost-row.total strong {
+    color: #ef4444 !important;
+}
+
+body.dark-mode .fp-payment-method-row span {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .fp-payment-method-row strong,
+body.dark-mode .fp-order-summary-card strong[style*="text-transform:uppercase"] {
+    color: #f8fafc !important;
+}
+
+body.dark-mode .fp-btn-link-sec {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+}
+
+body.dark-mode .fp-btn-link-sec:hover {
+    background: #334155 !important;
+    color: #ffffff !important;
+    border-color: #475569 !important;
+}
+
+/* ==========================================================================
+   Foodpanda & Reference App Glassmorphism & Mobile Responsive Adaptations
    ========================================================================== */
 @media (max-width: 992px) {
     .fp-tracking-grid {
         grid-template-columns: 1fr;
     }
     #map {
-        height: 420px;
+        height: 380px;
     }
     .fp-hero-header-row {
         flex-direction: column;
         align-items: flex-start;
+        gap: 14px;
     }
     .fp-hero-right {
         align-items: flex-start;
@@ -1206,21 +1729,647 @@ include 'includes/header.php';
         width: 100%;
         justify-content: space-between;
     }
-    .fp-stepper-steps {
-        overflow-x: auto;
+}
+
+/* Prevent global floating widgets from overlapping tracking page UI */
+#floatingChatBtn,
+#floatingOrderBtn,
+#stickyOngoingOrderWidget {
+    display: none !important;
+}
+
+/* ==========================================================================
+   MOBILE NATIVE APP EXPERIENCE (Matching Reference Live Track UI)
+   ========================================================================== */
+.mob-track-header,
+.mob-floating-rider-card,
+.mob-map-crosshair-btn,
+.mob-stepper-pin-callout {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .fp-tracking-page {
+        padding: 6px 0 160px !important; /* safe clearance above mobile-bottom-nav */
+        background: #f8fafc !important;
+        min-height: 100vh;
     }
+    body.dark-mode .fp-tracking-page {
+        background: #0b1120 !important;
+    }
+
+    .fp-tracking-container {
+        padding: 0 10px !important;
+        max-width: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 10px !important;
+    }
+
+    /* 1. Mobile Native App Header */
+    .mob-track-header {
+        order: 1 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        padding: 2px 4px 4px !important;
+        width: 100% !important;
+    }
+
+    .mob-track-back-btn,
+    .mob-track-bell-btn {
+        width: 38px !important;
+        height: 38px !important;
+        border-radius: 50% !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        color: #101828 !important;
+        text-decoration: none !important;
+        font-size: 1.05rem !important;
+        background: #ffffff !important;
+        border: 1px solid rgba(226, 232, 240, 0.9) !important;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04) !important;
+        transition: transform 0.15s ease !important;
+    }
+    .mob-track-back-btn:active,
+    .mob-track-bell-btn:active {
+        transform: scale(0.92) !important;
+    }
+    body.dark-mode .mob-track-back-btn,
+    body.dark-mode .mob-track-bell-btn {
+        background: #1e293b !important;
+        border-color: #334155 !important;
+        color: #f8fafc !important;
+    }
+
+    .mob-track-title {
+        font-family: 'Outfit', sans-serif !important;
+        font-size: 1.15rem !important;
+        font-weight: 800 !important;
+        color: #101828 !important;
+        margin: 0 !important;
+        letter-spacing: -0.3px !important;
+    }
+    body.dark-mode .mob-track-title {
+        color: #f8fafc !important;
+    }
+
+    /* 2. Notification Toast */
+    #fpNotificationToast {
+        order: 2 !important;
+        margin-bottom: 0 !important;
+    }
+
+    /* 3. Main Tracking Grid using display:contents to place Map at top and Stepper directly below */
+    .fp-tracking-grid {
+        display: contents !important;
+    }
+
+    /* 4. Full Featured Interactive Map Container */
+    .fp-map-card {
+        order: 3 !important;
+        border-radius: 20px !important;
+        overflow: hidden !important;
+        position: relative !important;
+        box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.08), 0 4px 8px -4px rgba(0, 0, 0, 0.04) !important;
+        border: 1px solid rgba(226, 232, 240, 0.9) !important;
+        margin: 0 !important;
+        width: 100% !important;
+    }
+    body.dark-mode .fp-map-card {
+        border-color: #334155 !important;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45) !important;
+    }
+
+    #map {
+        height: 420px !important;
+        min-height: 380px !important;
+        width: 100% !important;
+        border-radius: 20px !important;
+        background: #eef2f6 !important;
+    }
+
+    .fp-map-floating-bar {
+        display: none !important;
+    }
+
+    /* 5. Floating Rider Card Overlay (Reference UI Match) */
+    .mob-floating-rider-card {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        position: absolute !important;
+        top: 10px !important;
+        left: 10px !important;
+        right: 10px !important;
+        z-index: 999 !important;
+        background: rgba(255, 255, 255, 0.96) !important;
+        backdrop-filter: blur(14px) !important;
+        -webkit-backdrop-filter: blur(14px) !important;
+        border: 1px solid rgba(226, 232, 240, 0.9) !important;
+        border-radius: 18px !important;
+        padding: 8px 12px !important;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08) !important;
+        gap: 8px !important;
+    }
+    body.dark-mode .mob-floating-rider-card {
+        background: rgba(30, 41, 59, 0.96) !important;
+        border-color: rgba(51, 65, 85, 0.85) !important;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5) !important;
+    }
+
+    .mob-rider-card-left {
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        flex: 1 !important;
+        min-width: 0 !important;
+    }
+
+    .mob-rider-avatar-wrap {
+        width: 44px !important;
+        height: 44px !important;
+        border-radius: 50% !important;
+        background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%) !important;
+        border: 2px solid #ffffff !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        color: #0284c7 !important;
+        font-size: 1.15rem !important;
+        flex-shrink: 0 !important;
+        box-shadow: 0 2px 8px rgba(2, 132, 199, 0.2) !important;
+    }
+    body.dark-mode .mob-rider-avatar-wrap {
+        background: linear-gradient(135deg, rgba(2, 132, 199, 0.25) 0%, rgba(14, 165, 233, 0.15) 100%) !important;
+        border-color: #334155 !important;
+        color: #38bdf8 !important;
+    }
+
+    .mob-rider-meta {
+        display: flex !important;
+        flex-direction: column !important;
+        min-width: 0 !important;
+        line-height: 1.2 !important;
+    }
+
+    .mob-rider-tagline {
+        font-size: 0.65rem !important;
+        color: #64748b !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.02em !important;
+    }
+    body.dark-mode .mob-rider-tagline {
+        color: #94a3b8 !important;
+    }
+
+    .mob-rider-name-row {
+        display: flex !important;
+        align-items: center !important;
+        gap: 4px !important;
+        margin: 1px 0 !important;
+    }
+
+    .mob-rider-name {
+        font-size: 0.9rem !important;
+        font-weight: 800 !important;
+        color: #101828 !important;
+        font-family: 'Outfit', sans-serif !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        max-width: 95px !important;
+    }
+    body.dark-mode .mob-rider-name {
+        color: #f8fafc !important;
+    }
+
+    .mob-rider-rating {
+        font-size: 0.7rem !important;
+        font-weight: 700 !important;
+        color: #eab308 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 2px !important;
+    }
+
+    .mob-rider-status-lbl {
+        font-size: 0.68rem !important;
+        color: #64748b !important;
+        font-weight: 500 !important;
+    }
+    body.dark-mode .mob-rider-status-lbl {
+        color: #94a3b8 !important;
+    }
+
+    .mob-rider-eta-val {
+        font-family: 'Outfit', sans-serif !important;
+        font-size: 1.05rem !important;
+        font-weight: 800 !important;
+        color: #2563eb !important;
+        letter-spacing: -0.3px !important;
+    }
+    body.dark-mode .mob-rider-eta-val {
+        color: #60a5fa !important;
+    }
+
+    .mob-rider-card-actions {
+        display: flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+        flex-shrink: 0 !important;
+    }
+
+    .mob-circle-action-btn {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        background: transparent !important;
+        border: 0 !important;
+        padding: 0 !important;
+        cursor: pointer !important;
+        text-decoration: none !important;
+    }
+
+    .mob-circle-icon {
+        width: 36px !important;
+        height: 36px !important;
+        border-radius: 50% !important;
+        background: #f8fafc !important;
+        border: 1px solid #e2e8f0 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        color: #475569 !important;
+        font-size: 0.88rem !important;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05) !important;
+        transition: transform 0.15s ease, background 0.15s ease !important;
+    }
+    .mob-circle-action-btn:active .mob-circle-icon {
+        transform: scale(0.92) !important;
+    }
+    body.dark-mode .mob-circle-icon {
+        background: #0f172a !important;
+        border-color: #334155 !important;
+        color: #cbd5e1 !important;
+    }
+
+    .mob-circle-lbl {
+        font-size: 0.62rem !important;
+        color: #64748b !important;
+        font-weight: 600 !important;
+        margin-top: 2px !important;
+    }
+    body.dark-mode .mob-circle-lbl {
+        color: #94a3b8 !important;
+    }
+
+    /* 6. Floating GPS Recenter Crosshair Button */
+    .mob-map-crosshair-btn {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        position: absolute !important;
+        bottom: 14px !important;
+        right: 12px !important;
+        z-index: 999 !important;
+        width: 44px !important;
+        height: 44px !important;
+        border-radius: 50% !important;
+        background: #ffffff !important;
+        border: 1px solid rgba(226, 232, 240, 0.9) !important;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14) !important;
+        color: #2563eb !important;
+        font-size: 1.1rem !important;
+        cursor: pointer !important;
+        transition: transform 0.15s ease !important;
+    }
+    .mob-map-crosshair-btn:active {
+        transform: scale(0.92) !important;
+    }
+    body.dark-mode .mob-map-crosshair-btn {
+        background: #1e293b !important;
+        border-color: #334155 !important;
+        color: #60a5fa !important;
+        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45) !important;
+    }
+
+    /* Map Markers */
+    .fp-marker-store-inner {
+        background: #16a34a !important;
+        color: #ffffff !important;
+        box-shadow: 0 4px 14px rgba(22, 163, 74, 0.4) !important;
+    }
+    .fp-marker-home-inner {
+        background: #4f46e5 !important;
+        color: #ffffff !important;
+        box-shadow: 0 4px 14px rgba(79, 70, 229, 0.4) !important;
+    }
+
+    /* 7. Stepper Card directly below Map */
+    .fp-status-hero-card {
+        order: 4 !important;
+        border-radius: 20px !important;
+        margin: 0 !important;
+        padding: 14px 10px !important;
+        background: #ffffff !important;
+        border: 1px solid rgba(226, 232, 240, 0.9) !important;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.05) !important;
+        width: 100% !important;
+    }
+    body.dark-mode .fp-status-hero-card {
+        background: #1e293b !important;
+        border-color: #334155 !important;
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4) !important;
+    }
+
+    .fp-hero-header-row {
+        display: none !important;
+    }
+
+    .fp-stepper-wrapper {
+        padding: 4px 0 2px !important;
+        position: relative !important;
+        width: 100% !important;
+    }
+
+    .fp-stepper-track-bg {
+        top: 20px !important;
+        left: 22px !important;
+        right: 22px !important;
+        height: 4px !important;
+        background: #e2e8f0 !important;
+        border-radius: 4px !important;
+    }
+    body.dark-mode .fp-stepper-track-bg {
+        background: #334155 !important;
+    }
+
+    .fp-stepper-track-fill {
+        top: 20px !important;
+        left: 22px !important;
+        height: 4px !important;
+        background: #16a34a !important;
+        border-radius: 4px !important;
+    }
+
+    .fp-stepper-steps {
+        display: flex !important;
+        justify-content: space-between !important;
+        width: 100% !important;
+        position: relative !important;
+        z-index: 3 !important;
+        gap: 2px !important;
+    }
+
     .fp-step-item {
-        width: 75px;
+        flex: 1 1 0 !important;
+        width: auto !important;
+        max-width: none !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        text-align: center !important;
+        padding: 0 2px !important;
+    }
+
+    .fp-step-icon-wrap {
+        width: 40px !important;
+        height: 40px !important;
+        border-radius: 50% !important;
+        font-size: 0.95rem !important;
+        border-width: 2px !important;
+        margin-bottom: 4px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05) !important;
+    }
+
+    /* Completed Step: Green with white check icon (Reference Match) */
+    .fp-step-item.is-completed .fp-step-icon-wrap {
+        background: #16a34a !important;
+        border-color: #16a34a !important;
+        color: #ffffff !important;
+        box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3) !important;
+    }
+    .fp-step-item.is-completed .fp-step-icon-wrap i::before {
+        content: "\f00c" !important; /* FontAwesome fa-check */
+    }
+    .fp-step-item.is-completed .fp-step-label {
+        color: #101828 !important;
+        font-weight: 700 !important;
+    }
+    body.dark-mode .fp-step-item.is-completed .fp-step-label {
+        color: #f8fafc !important;
+    }
+
+    /* Active Step: Vibrant Blue with motorcycle icon (Reference Match) */
+    .fp-step-item.is-active .fp-step-icon-wrap {
+        background: #2563eb !important;
+        border-color: #2563eb !important;
+        color: #ffffff !important;
+        box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4) !important;
+        transform: scale(1.05) !important;
+    }
+    .fp-step-item.is-active .fp-step-label {
+        color: #2563eb !important;
+        font-weight: 800 !important;
+    }
+
+    /* Pending Step */
+    .fp-step-item:not(.is-completed):not(.is-active) .fp-step-icon-wrap {
+        background: #f1f5f9 !important;
+        border: 2px solid #cbd5e1 !important;
+        color: #94a3b8 !important;
+    }
+    body.dark-mode .fp-step-item:not(.is-completed):not(.is-active) .fp-step-icon-wrap {
+        background: #0f172a !important;
+        border-color: #334155 !important;
+        color: #64748b !important;
+    }
+
+    .fp-step-label {
+        font-size: 0.68rem !important;
+        line-height: 1.15 !important;
+        white-space: normal !important;
+        text-align: center !important;
+        font-weight: 600 !important;
+        word-break: break-word !important;
+    }
+
+    .fp-step-sub {
+        display: block !important;
+        font-size: 0.6rem !important;
+        color: #64748b !important;
+        margin-top: 1px !important;
+        font-weight: 500 !important;
+    }
+    body.dark-mode .fp-step-sub {
+        color: #94a3b8 !important;
+    }
+
+    /* Delivery PIN Callout under Stepper */
+    .mob-stepper-pin-callout {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        background: #fff1f0 !important;
+        border: 1px solid #fee4e2 !important;
+        border-radius: 12px !important;
+        padding: 8px 12px !important;
+        margin-top: 10px !important;
+    }
+    body.dark-mode .mob-stepper-pin-callout {
+        background: rgba(179, 38, 30, 0.18) !important;
+        border-color: rgba(179, 38, 30, 0.35) !important;
+    }
+    .mob-pin-badge-inner {
+        font-size: 0.8rem !important;
+        color: #b3261e !important;
+        font-weight: 700 !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+    }
+    body.dark-mode .mob-pin-badge-inner {
+        color: #fca5a5 !important;
+    }
+    .mob-pin-badge-inner strong {
+        font-family: monospace !important;
+        letter-spacing: 2px !important;
+        font-size: 0.94rem !important;
+    }
+    .mob-pin-hint {
+        font-size: 0.7rem !important;
+        color: #64748b !important;
+    }
+    body.dark-mode .mob-pin-hint {
+        color: #94a3b8 !important;
+    }
+
+    /* 8. Details Sheet in Side Panel (Route, Chat, Order Summary) */
+    .fp-side-panel {
+        order: 5 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 12px !important;
+        margin-top: 0 !important;
+        width: 100% !important;
+    }
+
+    .fp-side-panel .fp-rider-card,
+    .fp-side-panel .fp-waiting-rider-card {
+        display: none !important; /* Managed by floating rider card on mobile */
+    }
+
+    .fp-timeline-card,
+    .fp-chat-card,
+    .fp-order-summary-card,
+    .fp-claim-pass-card,
+    .fp-route-card,
+    .fp-store-card,
+    #fpProofCard {
+        border-radius: 18px !important;
+        padding: 14px !important;
+        margin-bottom: 0 !important;
+        border: 1px solid rgba(226, 232, 240, 0.9) !important;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04) !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    body.dark-mode .fp-timeline-card,
+    body.dark-mode .fp-chat-card,
+    body.dark-mode .fp-order-summary-card,
+    body.dark-mode .fp-claim-pass-card,
+    body.dark-mode .fp-route-card,
+    body.dark-mode .fp-store-card,
+    body.dark-mode #fpProofCard {
+        border-color: #334155 !important;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35) !important;
+    }
+
+    .fp-action-links {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 8px !important;
+        margin-top: 14px !important;
+    }
+    .fp-btn-link-sec {
+        padding: 10px 8px !important;
+        font-size: 0.84rem !important;
+        text-align: center !important;
+        justify-content: center !important;
+    }
+}
+
+@media (max-width: 380px) {
+    .fp-tracking-container {
+        padding: 0 8px !important;
+        gap: 8px !important;
+    }
+    #map {
+        height: 380px !important;
+        min-height: 350px !important;
+    }
+    .mob-floating-rider-card {
+        top: 8px !important;
+        left: 6px !important;
+        right: 6px !important;
+        padding: 6px 8px !important;
+        gap: 6px !important;
+    }
+    .mob-rider-avatar-wrap {
+        width: 38px !important;
+        height: 38px !important;
+        font-size: 1rem !important;
+    }
+    .mob-rider-name {
+        font-size: 0.82rem !important;
+        max-width: 80px !important;
+    }
+    .mob-rider-tagline {
+        font-size: 0.6rem !important;
+    }
+    .mob-rider-status-lbl {
+        font-size: 0.62rem !important;
+    }
+    .mob-rider-eta-val {
+        font-size: 0.95rem !important;
+    }
+    .mob-circle-icon {
+        width: 32px !important;
+        height: 32px !important;
+        font-size: 0.8rem !important;
+    }
+    .mob-circle-lbl {
+        font-size: 0.58rem !important;
     }
     .fp-step-icon-wrap {
-        width: 40px;
-        height: 40px;
-        font-size: 1rem;
+        width: 34px !important;
+        height: 34px !important;
+        font-size: 0.82rem !important;
+        border-width: 1.5px !important;
     }
-    .fp-stepper-track-bg, .fp-stepper-track-fill {
-        top: 28px;
-        left: 35px;
-        right: 35px;
+    .fp-step-label {
+        font-size: 0.58rem !important;
+        line-height: 1.1 !important;
+    }
+    .fp-step-sub {
+        font-size: 0.52rem !important;
+    }
+    .fp-stepper-track-bg,
+    .fp-stepper-track-fill {
+        top: 17px !important;
+        left: 14px !important;
+        right: 14px !important;
+    }
+    .mob-pin-badge-inner {
+        font-size: 0.74rem !important;
+    }
+    .mob-pin-hint {
+        font-size: 0.62rem !important;
     }
 }
 </style>
@@ -1244,6 +2393,17 @@ include 'includes/header.php';
             </div>
         </div>
 
+        <!-- Mobile Native Header (Matches reference Live Track UI) -->
+        <div class="mob-track-header">
+            <a href="my_orders.php" class="mob-track-back-btn" title="Back to Orders">
+                <i class="fas fa-chevron-left"></i>
+            </a>
+            <h2 class="mob-track-title">Live Track</h2>
+            <a href="help_center.php" class="mob-track-bell-btn" title="Help & Support">
+                <i class="far fa-bell"></i>
+            </a>
+        </div>
+
         <!-- Foodpanda Style Hero Order Status Card -->
         <div class="fp-status-hero-card">
             <div class="fp-hero-header-row">
@@ -1254,6 +2414,9 @@ include 'includes/header.php';
                     <h1 class="fp-hero-title" id="fpHeroTitle">
                         <?php 
                         $display_driver_name = htmlspecialchars(!empty($tracking_info['driver_name']) ? $tracking_info['driver_name'] : 'Your rider');
+                        $display_driver_rating = (!empty($tracking_info['driver_rating']) && is_numeric($tracking_info['driver_rating'])) 
+                            ? number_format((float)$tracking_info['driver_rating'], 1) 
+                            : '5.0';
                         if ($is_pickup) {
                             echo 'Store is preparing your pick-up order';
                         } elseif (empty($tracking_info['driver_id']) || ($tracking_info['current_status'] ?? '') === 'pending') {
@@ -1310,7 +2473,7 @@ include 'includes/header.php';
                     </div>
                     <div class="fp-order-number-pill">Order #<?php echo htmlspecialchars($order['order_number']); ?></div>
                     <?php if (!$is_pickup && !empty($order['delivery_pin'])): ?>
-                        <div style="background:#fff1f0; border:1px solid #fee4e2; color:#b3261e; font-weight:800; font-size:0.82rem; padding:4px 12px; border-radius:8px; display:inline-flex; align-items:center; gap:6px;" title="Provide this 4-digit PIN to your rider upon arrival">
+                        <div class="fp-delivery-pin-badge" style="background:#fff1f0; border:1px solid #fee4e2; color:#b3261e; font-weight:800; font-size:0.82rem; padding:4px 12px; border-radius:8px; display:inline-flex; align-items:center; gap:6px;" title="Provide this 4-digit PIN to your rider upon arrival">
                             <i class="fas fa-key"></i> Delivery PIN: <span style="letter-spacing:2px; font-size:0.95rem; font-family:monospace;"><?php echo htmlspecialchars($order['delivery_pin']); ?></span>
                         </div>
                     <?php endif; ?>
@@ -1390,6 +2553,15 @@ include 'includes/header.php';
                     </div>
                 </div>
             </div>
+
+            <?php if (!$is_pickup && !empty($order['delivery_pin'])): ?>
+                <div class="mob-stepper-pin-callout">
+                    <div class="mob-pin-badge-inner">
+                        <i class="fas fa-key"></i> Delivery PIN: <strong><?php echo htmlspecialchars($order['delivery_pin']); ?></strong>
+                    </div>
+                    <span class="mob-pin-hint">Provide to rider upon arrival</span>
+                </div>
+            <?php endif; ?>
         </div>
 
         <!-- Main Tracking Split Screen Grid -->
@@ -1397,6 +2569,67 @@ include 'includes/header.php';
             
             <!-- Left Column: Full-Height Interactive Map -->
             <div class="fp-map-card">
+                <!-- Mobile Floating Rider Card (Reference Match) -->
+                <div class="mob-floating-rider-card" id="mobFloatingRiderCard">
+                    <div class="mob-rider-card-left">
+                        <div class="mob-rider-avatar-wrap">
+                            <i class="<?php echo $is_pickup ? 'fas fa-store' : 'fas fa-motorcycle'; ?>"></i>
+                        </div>
+                        <div class="mob-rider-meta">
+                            <span class="mob-rider-tagline"><?php echo $is_pickup ? 'Pick-up Counter' : 'Your Rider'; ?></span>
+                            <div class="mob-rider-name-row">
+                                <strong class="mob-rider-name" id="mobDriverName"><?php echo $display_driver_name; ?></strong>
+                                <span class="mob-rider-rating" title="Driver Rating"><i class="fas fa-star"></i> <span id="mobDriverRating"><?php echo $display_driver_rating; ?></span></span>
+                            </div>
+                            <span class="mob-rider-status-lbl" id="mobRiderStatus">
+                                <?php 
+                                if ($is_pickup) {
+                                    echo 'Ready for Pick-up';
+                                } elseif (empty($tracking_info['driver_id']) || ($tracking_info['current_status'] ?? '') === 'pending') {
+                                    echo 'Finding a Rider';
+                                } elseif (($tracking_info['current_status'] ?? '') === 'assigned') {
+                                    echo 'Heading to Store';
+                                } elseif (($tracking_info['current_status'] ?? '') === 'arrived_at_restaurant') {
+                                    echo 'At Store';
+                                } elseif (in_array(($tracking_info['current_status'] ?? ''), ['picked_up', 'on_the_way'])) {
+                                    echo 'Arriving In';
+                                } elseif (($tracking_info['current_status'] ?? '') === 'delivered') {
+                                    echo 'Delivered';
+                                } else {
+                                    echo 'In Progress';
+                                }
+                                ?>
+                            </span>
+                            <span class="mob-rider-eta-val" id="mobRiderEta">
+                                <?php 
+                                if ($is_pickup) {
+                                    echo !empty($order['delivery_time']) ? htmlspecialchars($order['delivery_time']) : 'Ready Soon';
+                                } else {
+                                    echo '12 min';
+                                }
+                                ?>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="mob-rider-card-actions">
+                        <?php 
+                        $call_phone = $is_pickup ? ($store_details['phone'] ?? '') : ($tracking_info['driver_phone'] ?? '');
+                        ?>
+                        <a href="<?php echo !empty($call_phone) ? 'tel:' . htmlspecialchars($call_phone) : '#'; ?>" class="mob-circle-action-btn" id="mobCallBtn" title="Call">
+                            <div class="mob-circle-icon"><i class="fas fa-phone-alt"></i></div>
+                            <span class="mob-circle-lbl">Call</span>
+                        </a>
+                        <button type="button" class="mob-circle-action-btn" id="mobChatBtn" title="Message">
+                            <div class="mob-circle-icon"><i class="fas fa-comment-dots"></i></div>
+                            <span class="mob-circle-lbl">Message</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Floating Map Recenter Crosshairs Button -->
+                <button type="button" class="mob-map-crosshair-btn" id="mobRecenterMapBtn" title="Fit & Center Route">
+                    <i class="fas fa-crosshairs"></i>
+                </button>
                 <div class="fp-map-floating-bar">
                     <div class="fp-map-pill-stat">
                         <div class="stat-item">
@@ -1405,7 +2638,7 @@ include 'includes/header.php';
                         </div>
                         <div class="stat-item">
                             <i class="fas fa-clock" style="color:#027a48;"></i>
-                            <span>Status: <strong id="mapEtaStat"><?php echo ucfirst(htmlspecialchars((string)$order['status'])); ?></strong></span>
+                            <span><span id="mapEtaLabel"><?php echo $is_pickup ? 'Status:' : 'ETA:'; ?></span> <strong id="mapEtaStat"><?php echo ucfirst(htmlspecialchars((string)$order['status'])); ?></strong></span>
                         </div>
                     </div>
 
@@ -1477,7 +2710,7 @@ include 'includes/header.php';
                 <!-- Waiting for Rider Card (Shown when order has not yet been accepted by a driver) -->
                 <div class="fp-waiting-rider-card" id="fpWaitingRiderCard" style="<?php echo $has_valid_rider ? 'display:none;' : 'display:block;'; ?> background:#ffffff; border:1px solid #eaecf0; border-radius:16px; padding:18px 20px; margin-bottom:16px; box-shadow:0 1px 3px rgba(16,24,40,0.04);">
                     <div style="display:flex; align-items:center; gap:16px;">
-                        <div style="width:48px; height:48px; border-radius:14px; background:#fff1f0; color:#b3261e; display:flex; align-items:center; justify-content:center; font-size:1.3rem; flex-shrink:0;">
+                        <div class="fp-waiting-icon" style="width:48px; height:48px; border-radius:14px; background:#fff1f0; color:#b3261e; display:flex; align-items:center; justify-content:center; font-size:1.3rem; flex-shrink:0;">
                             <i class="fas fa-motorcycle"></i>
                         </div>
                         <div>
@@ -1504,6 +2737,7 @@ include 'includes/header.php';
                                 <h4 id="fpDriverName"><?php echo htmlspecialchars($tracking_info['driver_name'] ?? 'Assigned Rider'); ?></h4>
                                 <div class="fp-rider-tags">
                                     <span class="fp-tag-verified"><i class="fas fa-check-circle"></i> Verified Rider</span>
+                                    <span class="badge" style="background:#fffaeb; color:#b54708; border:1px solid #fedf89; font-size:11px; font-weight:700;"><i class="fas fa-star text-warning"></i> <span id="desktopDriverRating"><?php echo $display_driver_rating; ?></span></span>
                                     <span class="fp-tag-vehicle" id="fpDriverVehicle"><i class="fas fa-motorcycle"></i> <?php echo htmlspecialchars(ucfirst((string)($tracking_info['driver_vehicle'] ?? 'Motorcycle'))); ?></span>
                                 </div>
                             </div>
@@ -1526,6 +2760,81 @@ include 'includes/header.php';
                     <div style="text-align:center;">
                         <img id="fpProofImg" src="<?php echo !empty($initial_proof_path) ? htmlspecialchars($initial_proof_path) : ''; ?>" alt="Delivery Proof" style="max-height: 240px; width: auto; max-width: 100%; border-radius: 10px; border: 1px solid #d0d5dd; object-fit: cover; cursor: pointer;" onclick="window.open(this.src, '_blank')">
                         <p style="font-size:0.75rem; color:#667085; margin:8px 0 0 0;"><i class="fas fa-info-circle me-1"></i> Photo taken by rider upon handover at your doorstep. Click to view full image.</p>
+                    </div>
+                </div>
+
+                <!-- Delivery Order: 1.7 Driver Star Rating Card -->
+                <?php 
+                $is_order_delivered = in_array(strtolower((string)$order['status']), ['delivered', 'completed'], true) 
+                                   || in_array(strtolower((string)($tracking_info['current_status'] ?? '')), ['delivered', 'completed'], true);
+                ?>
+                <div class="fp-card fp-rate-driver-card" id="fpRateDriverCard" style="<?php echo (!$is_pickup && $is_order_delivered) ? '' : 'display:none;'; ?> margin-bottom: 16px; border: 1px solid #eaecf0; border-radius: 16px; padding: 18px 20px; background: #ffffff; box-shadow: 0 1px 3px rgba(16,24,40,0.04);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <h4 style="font-size:0.95rem; font-weight:700; color:#101828; margin:0;">
+                            <i class="fas fa-star" style="color:#eab308; margin-right:6px;"></i> Rate Your Delivery Rider
+                        </h4>
+                        <span class="badge" id="rateDriverStatusBadge" style="background:<?php echo $existing_delivery_review ? '#ecfdf3' : '#eff8ff'; ?>; color:<?php echo $existing_delivery_review ? '#027a48' : '#175cd3'; ?>; border:1px solid <?php echo $existing_delivery_review ? '#abefc6' : '#b2ddff'; ?>; font-size:11px; font-weight:700;">
+                            <?php echo $existing_delivery_review ? 'Rated' : 'Feedback'; ?>
+                        </span>
+                    </div>
+
+                    <!-- Interactive Star Rating Form -->
+                    <div id="rateDriverFormWrap" style="<?php echo $existing_delivery_review ? 'display:none;' : 'display:block;'; ?>">
+                        <p style="font-size:0.84rem; color:#475467; margin:0 0 12px 0;">
+                            How was your delivery service with <strong id="rateDriverName"><?php echo htmlspecialchars($tracking_info['driver_name'] ?? 'your rider'); ?></strong>? Your rating reflects on their dashboard and helps them improve.
+                        </p>
+
+                        <div class="fp-star-picker" style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+                            <div style="display:flex; gap:6px;" id="starRatingGroup">
+                                <button type="button" class="fp-star-btn" data-star="1" style="background:transparent; border:none; cursor:pointer; font-size:1.65rem; color:#d0d5dd; padding:0 2px; transition:transform 0.15s, color 0.15s;"><i class="fas fa-star"></i></button>
+                                <button type="button" class="fp-star-btn" data-star="2" style="background:transparent; border:none; cursor:pointer; font-size:1.65rem; color:#d0d5dd; padding:0 2px; transition:transform 0.15s, color 0.15s;"><i class="fas fa-star"></i></button>
+                                <button type="button" class="fp-star-btn" data-star="3" style="background:transparent; border:none; cursor:pointer; font-size:1.65rem; color:#d0d5dd; padding:0 2px; transition:transform 0.15s, color 0.15s;"><i class="fas fa-star"></i></button>
+                                <button type="button" class="fp-star-btn" data-star="4" style="background:transparent; border:none; cursor:pointer; font-size:1.65rem; color:#d0d5dd; padding:0 2px; transition:transform 0.15s, color 0.15s;"><i class="fas fa-star"></i></button>
+                                <button type="button" class="fp-star-btn" data-star="5" style="background:transparent; border:none; cursor:pointer; font-size:1.65rem; color:#d0d5dd; padding:0 2px; transition:transform 0.15s, color 0.15s;"><i class="fas fa-star"></i></button>
+                            </div>
+                            <span id="starRatingLabel" style="font-size:0.84rem; font-weight:700; color:#eab308; margin-left:6px;">Select stars</span>
+                        </div>
+
+                        <input type="hidden" id="selectedDriverRating" value="0">
+
+                        <div style="margin-bottom:12px;">
+                            <textarea id="rateDriverComment" placeholder="Leave a short compliment or feedback for the driver (optional)..." maxlength="500" style="width:100%; border:1px solid #d0d5dd; border-radius:10px; padding:10px 12px; font-size:0.84rem; font-family:inherit; resize:vertical; min-height:60px; box-sizing:border-box; outline:none;"></textarea>
+                        </div>
+
+                        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                            <button type="button" id="btnSubmitDriverRating" onclick="submitDriverRating()" style="background:#b3261e; color:#ffffff; border:none; border-radius:10px; padding:10px 20px; font-weight:700; font-size:0.88rem; cursor:pointer; display:inline-flex; align-items:center; gap:6px; box-shadow:0 2px 8px rgba(179,38,30,0.25);">
+                                <i class="fas fa-paper-plane"></i> Submit Driver Rating
+                            </button>
+                            <span id="rateDriverMsg" style="font-size:0.82rem; font-weight:600;"></span>
+                        </div>
+                    </div>
+
+                    <!-- Already Rated Summary View -->
+                    <div id="rateDriverCompletedWrap" style="<?php echo $existing_delivery_review ? 'display:block;' : 'display:none;'; ?>">
+                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                            <span style="font-size:1.25rem; color:#eab308;" id="completedStarIcons">
+                                <?php 
+                                $rated_stars = (int)($existing_delivery_review['rating'] ?? 5);
+                                for ($s = 1; $s <= 5; $s++):
+                                    if ($s <= $rated_stars) {
+                                        echo '<i class="fas fa-star"></i> ';
+                                    } else {
+                                        echo '<i class="far fa-star" style="color:#d0d5dd;"></i> ';
+                                    }
+                                endfor;
+                                ?>
+                            </span>
+                            <strong style="font-size:0.92rem; color:#101828;" id="completedRatingText"><?php echo $rated_stars; ?> / 5 Stars</strong>
+                        </div>
+                        <p style="font-size:0.82rem; color:#475467; margin:0;" id="completedCommentText">
+                            <?php 
+                            if (!empty($existing_delivery_review['comment'])) {
+                                echo '"' . htmlspecialchars($existing_delivery_review['comment']) . '"';
+                            } else {
+                                echo 'Thank you for rating your delivery rider! Your review helps them maintain quality service.';
+                            }
+                            ?>
+                        </p>
                     </div>
                 </div>
 
@@ -1638,7 +2947,7 @@ include 'includes/header.php';
                                 <span>Total Paid</span>
                                 <strong style="color:var(--fp-primary);">&#8369;<?php echo number_format((float)$order['total_amount'], 2); ?></strong>
                             </div>
-                            <div style="margin-top:8px; font-size:0.78rem; color:#667085; display:flex; justify-content:space-between;">
+                            <div class="fp-payment-method-row" style="margin-top:8px; font-size:0.78rem; color:#667085; display:flex; justify-content:space-between;">
                                 <span>Payment Method:</span>
                                 <strong style="text-transform:uppercase; color:#344054;"><?php echo htmlspecialchars(str_replace('_', ' ', (string)$order['payment_method'])); ?></strong>
                             </div>
@@ -1658,8 +2967,8 @@ include 'includes/header.php';
 </section>
 
 <!-- Leaflet Map CSS and JS -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
     function escapeHtml(str) {
@@ -1904,6 +3213,27 @@ include 'includes/header.php';
             if (btnFocusRider) btnFocusRider.classList.remove('is-active');
         });
 
+        // Mobile View Button Handlers
+        const mobRecenterMapBtn = document.getElementById('mobRecenterMapBtn');
+        if (mobRecenterMapBtn) {
+            mobRecenterMapBtn.addEventListener('click', () => {
+                isAutoTrackingRider = false;
+                fitMapAllMarkers();
+            });
+        }
+
+        const mobChatBtn = document.getElementById('mobChatBtn');
+        if (mobChatBtn) {
+            mobChatBtn.addEventListener('click', () => {
+                const chatCard = document.querySelector('.fp-chat-card');
+                const chatInput = document.getElementById('deliveryChatInput');
+                if (chatCard) {
+                    chatCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    setTimeout(() => { if (chatInput) chatInput.focus(); }, 400);
+                }
+            });
+        }
+
         // Initialize driver marker immediately on page load if coordinates are available
         if (Number.isFinite(initialDriverLat) && Number.isFinite(initialDriverLng) && ['assigned', 'arrived_at_restaurant', 'picked_up', 'on_the_way', 'arriving'].includes(initialDeliveryStatus)) {
             updateDriverMarker(initialDriverLat, initialDriverLng, initialDriverName, initialDeliveryStatus);
@@ -1911,13 +3241,35 @@ include 'includes/header.php';
         }
 
         fetchTrackingData();
-        trackingPollTimer = setInterval(fetchTrackingData, 3500);
+        trackingPollTimer = setInterval(fetchTrackingData, 2500);
 
         initDeliveryChat();
+
+        // Ensure Leaflet map recalculates its dimensions after mobile layout reflow
+        setTimeout(() => {
+            if (map) {
+                map.invalidateSize();
+                fitMapAllMarkers();
+            }
+        }, 200);
+
+        setTimeout(() => {
+            if (map) {
+                map.invalidateSize();
+            }
+        }, 800);
+
+        window.addEventListener('resize', () => {
+            if (map) map.invalidateSize();
+        });
+        window.addEventListener('orientationchange', () => {
+            setTimeout(() => { if (map) map.invalidateSize(); }, 300);
+        });
     }
 
     function fitMapAllMarkers() {
         if (!map) return;
+        map.invalidateSize();
         const markers = [];
         if (driverMarker) markers.push(driverMarker);
         if (customerMarker) markers.push(customerMarker);
@@ -1962,9 +3314,13 @@ include 'includes/header.php';
         playNotificationChime();
     }
 
+    let isTrackingDataFetching = false;
+
     async function fetchTrackingData() {
+        if (isTrackingDataFetching) return;
+        isTrackingDataFetching = true;
         try {
-            const res = await fetch(`get_tracking_info.php?order_id=${orderId}`);
+            const res = await fetch(`get_tracking_info.php?order_id=${orderId}&_t=${Date.now()}`);
             const data = await res.json();
             if (!data.success) return;
 
@@ -2015,6 +3371,8 @@ include 'includes/header.php';
             }
         } catch (err) {
             console.error('Error fetching live tracking:', err);
+        } finally {
+            isTrackingDataFetching = false;
         }
     }
 
@@ -2177,6 +3535,38 @@ include 'includes/header.php';
             } else {
                 if (phoneWrap) phoneWrap.style.display = 'none';
             }
+
+            // Update Mobile Floating Rider Card
+            const mobDriverName = document.getElementById('mobDriverName');
+            if (mobDriverName) mobDriverName.textContent = data.driver_name || 'Assigned Rider';
+            const mobCallBtn = document.getElementById('mobCallBtn');
+            if (mobCallBtn && data.driver_phone) {
+                mobCallBtn.href = `tel:${data.driver_phone}`;
+            }
+
+            // Sync Driver Star Rating live in mobile floating card and desktop card
+            if (data.driver_rating) {
+                const mobRating = document.getElementById('mobDriverRating');
+                const deskRating = document.getElementById('desktopDriverRating');
+                if (mobRating) mobRating.textContent = data.driver_rating;
+                if (deskRating) deskRating.textContent = data.driver_rating;
+            }
+        }
+
+        // Update Mobile Rider Status label
+        const mobRiderStatus = document.getElementById('mobRiderStatus');
+        if (mobRiderStatus) {
+            if (status === 'assigned') mobRiderStatus.textContent = 'Heading to Store';
+            else if (status === 'arrived_at_restaurant') mobRiderStatus.textContent = 'At Store';
+            else if (status === 'picked_up' || status === 'on_the_way') mobRiderStatus.textContent = 'Arriving In';
+            else if (status === 'arriving') mobRiderStatus.textContent = 'Arriving Soon';
+            else if (status === 'delivered') mobRiderStatus.textContent = 'Delivered';
+        }
+
+        // Show Rate Driver Card once delivered
+        if (status === 'delivered') {
+            const rateCard = document.getElementById('fpRateDriverCard');
+            if (rateCard) rateCard.style.display = 'block';
         }
 
         // Update Delivery Proof Photo Card
@@ -2205,8 +3595,9 @@ include 'includes/header.php';
     function ensureRouteLayers() {
         if (!map) return;
         if (!routeCasingPolyline) {
+            const isDarkRoute = document.body.classList.contains('dark-mode') || document.documentElement.classList.contains('dark-mode') || document.documentElement.getAttribute('data-theme') === 'dark';
             routeCasingPolyline = L.polyline([], {
-                color: '#ffffff',
+                color: isDarkRoute ? '#0f172a' : '#ffffff',
                 weight: 8,
                 opacity: 0.95,
                 lineCap: 'round',
@@ -2214,9 +3605,10 @@ include 'includes/header.php';
             }).addTo(map);
         }
         if (!routePolyline) {
+            const isMobileScreen = window.innerWidth <= 768;
             routePolyline = L.polyline([], {
-                color: '#b3261e',
-                weight: 5,
+                color: isMobileScreen ? '#2563eb' : '#b3261e',
+                weight: isMobileScreen ? 6 : 5,
                 opacity: 0.95,
                 lineCap: 'round',
                 lineJoin: 'round'
@@ -2284,39 +3676,66 @@ include 'includes/header.php';
         }
     }
 
-    function updateMapEtaPill(distKm, durMins, isHeadingToStore, status) {
+    function formatDistanceDisplay(km) {
+        const numKm = parseFloat(km) || 0;
+        if (numKm < 0.95) {
+            const meters = Math.max(20, Math.round(numKm * 1000));
+            return `${meters} m`;
+        }
+        return `${numKm.toFixed(1)} km`;
+    }
+
+    function updateMapEtaPill(distFormatted, durMins, isHeadingToStore, status, rawDistKm = null) {
         const distEl = document.getElementById('mapDistStat');
         const etaEl = document.getElementById('mapEtaStat');
         const fpEtaVal = document.getElementById('fpEtaValue');
+        const mobEtaVal = document.getElementById('mobRiderEta');
 
-        const etaText = durMins > 1 ? `${durMins} mins` : '1 min';
+        let etaText = durMins > 1 ? `${durMins} mins` : '1 min';
+        const numKm = (rawDistKm !== null) ? parseFloat(rawDistKm) : (parseFloat(distFormatted) || 0);
+        if (numKm > 0 && numKm < 0.15 && ['on_the_way', 'arriving'].includes(status)) {
+            etaText = 'Arriving now';
+        }
 
         if (distEl) {
             if (isHeadingToStore) {
-                distEl.textContent = `${distKm} km to store`;
+                distEl.textContent = `${distFormatted} to store`;
             } else {
-                distEl.textContent = `${distKm} km`;
+                distEl.textContent = distFormatted;
             }
         }
 
         if (etaEl) {
             if (isHeadingToStore) {
-                etaEl.textContent = (status === 'arrived_at_restaurant') ? 'At Restaurant' : 'Heading to Store';
+                etaEl.textContent = (status === 'arrived_at_restaurant') ? 'At Restaurant' : `${etaText} to store`;
             } else {
                 etaEl.textContent = etaText;
             }
         }
 
-        if (fpEtaVal && previousDeliveryStatus !== 'delivered') {
+        const etaLabelEl = document.getElementById('mapEtaLabel');
+        if (etaLabelEl && !isPickupOrder) {
+            etaLabelEl.textContent = 'ETA:';
+        }
+
+        if (fpEtaVal && status !== 'delivered') {
             if (isHeadingToStore) {
                 fpEtaVal.textContent = (status === 'arrived_at_restaurant') ? 'At Store (Waiting)' : `~${etaText} to store`;
             } else {
-                fpEtaVal.textContent = `${etaText} (${distKm} km)`;
+                fpEtaVal.textContent = `${etaText} (${distFormatted})`;
+            }
+        }
+
+        if (mobEtaVal && status !== 'delivered') {
+            if (isHeadingToStore) {
+                mobEtaVal.textContent = (status === 'arrived_at_restaurant') ? 'At Store' : etaText;
+            } else {
+                mobEtaVal.textContent = `${etaText} • ${distFormatted}`;
             }
         }
     }
 
-    function animateDriverMovement(targetPosition, durationMs = 1200) {
+    function animateDriverMovement(targetPosition, durationMs = 1500) {
         if (!driverMarker || !targetPosition) return;
         const startLatLng = driverMarker.getLatLng();
         if (!startLatLng) {
@@ -2325,16 +3744,36 @@ include 'includes/header.php';
             return;
         }
 
-        if (driverMoveRaf) cancelAnimationFrame(driverMoveRaf);
-
         const startLat = startLatLng.lat;
         const startLng = startLatLng.lng;
         const endLat = targetPosition[0];
         const endLng = targetPosition[1];
+
+        // Avoid animation overhead for sub-meter fluctuations
+        const dLat = Math.abs(endLat - startLat);
+        const dLng = Math.abs(endLng - startLng);
+        if (dLat < 0.000005 && dLng < 0.000005) {
+            return;
+        }
+
+        if (driverMoveRaf) cancelAnimationFrame(driverMoveRaf);
+
+        // Calculate travel heading angle and rotate the motorcycle pin
+        const bearingDeg = (Math.atan2(endLng - startLng, endLat - startLat) * 180 / Math.PI + 360) % 360;
+        const markerIconEl = (typeof driverMarker.getElement === 'function') ? driverMarker.getElement() : null;
+        if (markerIconEl) {
+            const innerPin = markerIconEl.querySelector('.fa-motorcycle');
+            if (innerPin) {
+                innerPin.style.transition = 'transform 0.4s ease';
+                innerPin.style.transform = `rotate(${Math.round(bearingDeg - 45)}deg)`;
+            }
+        }
+
         const startAt = performance.now();
 
         const step = (now) => {
             const t = Math.min((now - startAt) / durationMs, 1);
+            // Smooth ease-out cubic interpolation
             const eased = 1 - Math.pow(1 - t, 3);
             const curLat = startLat + (endLat - startLat) * eased;
             const curLng = startLng + (endLng - startLng) * eased;
@@ -2347,7 +3786,7 @@ include 'includes/header.php';
             } else {
                 driverMoveRaf = null;
                 if (isAutoTrackingRider && map) {
-                    map.panTo([endLat, endLng], { animate: true, duration: 0.6 });
+                    map.panTo([endLat, endLng], { animate: true, duration: 0.5 });
                 }
             }
         };
@@ -2371,7 +3810,7 @@ include 'includes/header.php';
                 map.setView(point, 16);
             }
         } else {
-            animateDriverMovement(point, 1100);
+            animateDriverMovement(point, 1400);
         }
 
         if (!hasAutoFitBounds) {
@@ -2426,25 +3865,27 @@ include 'includes/header.php';
             } else {
                 setSecondaryRouteCoordinates([]);
             }
+        } else {
+            updateRouteHeadPoint(driverPoint);
         }
 
-        // Throttle external OSRM API calls to avoid rate limits
+        // Direct distance calculation (Haversine) - ALWAYS CALCULATE & UPDATE LIVE UI IMMEDIATELY!
+        const straightDistKm = calculateHaversineDistanceKm(driverPoint[0], driverPoint[1], destPoint[0], destPoint[1]);
+        const estimatedRoadDistKm = straightDistKm * 1.25;
+        const estimatedMins = Math.max(1, Math.round((estimatedRoadDistKm / 24) * 60));
+        const formattedDist = formatDistanceDisplay(estimatedRoadDistKm);
+
+        // Update distance and ETA pills instantly on every location update
+        updateMapEtaPill(formattedDist, estimatedMins, isHeadingToStore, status, estimatedRoadDistKm);
+
+        // Throttle external OSRM directions calls to avoid rate limits (refresh route every 6s or if moved > 25m)
         const now = Date.now();
-        const coordsKey = `${Math.round(driverPoint[0] * 1000)}_${Math.round(driverPoint[1] * 1000)}_${status}`;
-        if (!force && now - lastRouteRefreshAt < 7000 && lastRouteCoordsKey === coordsKey) {
-            updateRouteHeadPoint(driverPoint);
+        const coordsKey = `${Math.round(driverPoint[0] * 5000)}_${Math.round(driverPoint[1] * 5000)}_${status}`;
+        if (!force && now - lastRouteRefreshAt < 6000 && lastRouteCoordsKey === coordsKey) {
             return;
         }
         lastRouteRefreshAt = now;
         lastRouteCoordsKey = coordsKey;
-
-        // Direct distance calculation (Haversine)
-        const straightDistKm = calculateHaversineDistanceKm(driverPoint[0], driverPoint[1], destPoint[0], destPoint[1]);
-        const estimatedRoadDistKm = (straightDistKm * 1.25).toFixed(1);
-        const estimatedMins = Math.max(1, Math.round((estimatedRoadDistKm / 25) * 60));
-
-        // Update display with instantaneous calculation immediately
-        updateMapEtaPill(estimatedRoadDistKm, estimatedMins, isHeadingToStore, status);
 
         // 2. FETCH PRECISE TURN-BY-TURN STREET GEOMETRY (Streets & Highways)
         try {
@@ -2466,7 +3907,8 @@ include 'includes/header.php';
                         setSecondaryRouteCoordinates([]);
                     }
 
-                    updateMapEtaPill(data.distance_km, data.duration_mins, isHeadingToStore, status);
+                    const routeDistFormatted = formatDistanceDisplay(data.distance_km);
+                    updateMapEtaPill(routeDistFormatted, data.duration_mins, isHeadingToStore, status, data.distance_km);
                     return;
                 }
             }
@@ -2631,6 +4073,150 @@ include 'includes/header.php';
         }
     }
 
+    // ==========================================
+    // Driver Star Rating Picker & Submission
+    // ==========================================
+    let currentSelectedDriverRating = 0;
+    const driverStarLabels = {
+        1: '1 - Poor',
+        2: '2 - Fair',
+        3: '3 - Good',
+        4: '4 - Very Good',
+        5: '5 - Excellent!'
+    };
+
+    function initDriverRatingPicker() {
+        const starBtns = document.querySelectorAll('#starRatingGroup .fp-star-btn');
+        const label = document.getElementById('starRatingLabel');
+        const hiddenInput = document.getElementById('selectedDriverRating');
+        if (!starBtns.length) return;
+
+        starBtns.forEach(btn => {
+            btn.addEventListener('mouseenter', () => {
+                const val = parseInt(btn.getAttribute('data-star'));
+                highlightDriverStars(val);
+                if (label) label.textContent = driverStarLabels[val] || '';
+            });
+
+            btn.addEventListener('mouseleave', () => {
+                highlightDriverStars(currentSelectedDriverRating);
+                if (label) {
+                    label.textContent = currentSelectedDriverRating > 0 ? (driverStarLabels[currentSelectedDriverRating] || '') : 'Select stars';
+                }
+            });
+
+            btn.addEventListener('click', () => {
+                currentSelectedDriverRating = parseInt(btn.getAttribute('data-star'));
+                if (hiddenInput) hiddenInput.value = currentSelectedDriverRating;
+                highlightDriverStars(currentSelectedDriverRating);
+                if (label) label.textContent = driverStarLabels[currentSelectedDriverRating] || '';
+            });
+        });
+    }
+
+    function highlightDriverStars(val) {
+        const starBtns = document.querySelectorAll('#starRatingGroup .fp-star-btn');
+        starBtns.forEach(btn => {
+            const starNum = parseInt(btn.getAttribute('data-star'));
+            if (starNum <= val) {
+                btn.style.color = '#eab308';
+                btn.style.transform = 'scale(1.15)';
+            } else {
+                btn.style.color = '#d0d5dd';
+                btn.style.transform = 'scale(1.0)';
+            }
+        });
+    }
+
+    async function submitDriverRating() {
+        const ratingInput = document.getElementById('selectedDriverRating');
+        const commentInput = document.getElementById('rateDriverComment');
+        const btn = document.getElementById('btnSubmitDriverRating');
+        const msg = document.getElementById('rateDriverMsg');
+
+        const ratingVal = parseInt(ratingInput ? ratingInput.value : 0);
+        const commentVal = commentInput ? commentInput.value.trim() : '';
+
+        if (ratingVal < 1 || ratingVal > 5) {
+            if (msg) {
+                msg.style.color = '#b3261e';
+                msg.textContent = 'Please select 1 to 5 stars.';
+            }
+            return;
+        }
+
+        if (btn) btn.disabled = true;
+        if (msg) {
+            msg.style.color = '#475467';
+            msg.textContent = 'Submitting your rating...';
+        }
+
+        try {
+            const res = await fetch('api/rate_driver.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    order_id: orderId,
+                    rating: ratingVal,
+                    comment: commentVal
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                const formWrap = document.getElementById('rateDriverFormWrap');
+                const completedWrap = document.getElementById('rateDriverCompletedWrap');
+                const badge = document.getElementById('rateDriverStatusBadge');
+                const ratingText = document.getElementById('completedRatingText');
+                const commentText = document.getElementById('completedCommentText');
+                const starIconsWrap = document.getElementById('completedStarIcons');
+
+                if (formWrap) formWrap.style.display = 'none';
+                if (completedWrap) completedWrap.style.display = 'block';
+                if (badge) {
+                    badge.style.background = '#ecfdf3';
+                    badge.style.color = '#027a48';
+                    badge.style.borderColor = '#abefc6';
+                    badge.textContent = 'Rated';
+                }
+                if (ratingText) ratingText.textContent = `${ratingVal} / 5 Stars`;
+                if (commentText) {
+                    commentText.textContent = commentVal ? `"${escapeHtml(commentVal)}"` : 'Thank you for rating your delivery rider! Your review helps them maintain quality service.';
+                }
+                if (starIconsWrap) {
+                    let starsHtml = '';
+                    for (let i = 1; i <= 5; i++) {
+                        if (i <= ratingVal) {
+                            starsHtml += '<i class="fas fa-star"></i> ';
+                        } else {
+                            starsHtml += '<i class="far fa-star" style="color:#d0d5dd;"></i> ';
+                        }
+                    }
+                    starIconsWrap.innerHTML = starsHtml;
+                }
+
+                // Update live driver rating in mobile floating card and desktop card
+                if (data.new_driver_rating) {
+                    const mobRating = document.getElementById('mobDriverRating');
+                    const deskRating = document.getElementById('desktopDriverRating');
+                    if (mobRating) mobRating.textContent = data.new_driver_rating;
+                    if (deskRating) deskRating.textContent = data.new_driver_rating;
+                }
+            } else {
+                if (msg) {
+                    msg.style.color = '#b3261e';
+                    msg.textContent = data.message || 'Error saving rating.';
+                }
+                if (btn) btn.disabled = false;
+            }
+        } catch (e) {
+            if (msg) {
+                msg.style.color = '#b3261e';
+                msg.textContent = 'Network error. Please try again.';
+            }
+            if (btn) btn.disabled = false;
+        }
+    }
+
     window.addEventListener('beforeunload', () => {
         if (trackingPollTimer) clearInterval(trackingPollTimer);
         if (chatPollTimer) clearInterval(chatPollTimer);
@@ -2638,6 +4224,7 @@ include 'includes/header.php';
 
     document.addEventListener('DOMContentLoaded', () => {
         initMap();
+        initDriverRatingPicker();
     });
 </script>
 

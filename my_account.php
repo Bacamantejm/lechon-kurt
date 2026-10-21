@@ -1036,41 +1036,47 @@ include 'includes/header.php';
 .mobile-segmented-nav {
     display: none;
     position: sticky;
-    top: 70px;
-    z-index: 100;
-    background: rgba(255, 255, 255, 0.96);
-    backdrop-filter: blur(8px);
-    border: 1px solid var(--acc-border);
-    border-radius: 12px;
-    padding: 4px;
-    margin-bottom: 16px;
+    top: 68px;
+    z-index: 95;
+    background: rgba(255, 255, 255, 0.88);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(234, 236, 240, 0.85);
+    border-radius: 999px;
+    padding: 5px;
+    margin-bottom: 20px;
     gap: 4px;
+    box-shadow: 0 4px 16px rgba(16, 24, 40, 0.06);
 }
 
 .mobile-segment-btn {
     flex: 1;
     border: none;
     background: transparent;
-    padding: 8px;
-    font-size: 0.8rem;
+    padding: 9px 12px;
+    font-size: 0.82rem;
     font-weight: 700;
     color: #475467;
-    border-radius: 8px;
+    border-radius: 999px;
     cursor: pointer;
     text-align: center;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 6px;
-    transition: all 0.15s ease;
+    transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .mobile-segment-btn.active {
     background: var(--acc-primary);
     color: #ffffff;
+    box-shadow: 0 2px 8px rgba(179, 38, 30, 0.25);
 }
 
 @media (max-width: 992px) {
+    .account-page-v2 {
+        padding-bottom: 200px !important;
+    }
     .account-grid-v2 {
         grid-template-columns: 1fr;
     }
@@ -1087,15 +1093,34 @@ include 'includes/header.php';
         grid-column: span 1;
     }
     .account-hero-card {
+        background: rgba(255, 255, 255, 0.92);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(234, 236, 240, 0.85);
+        border-radius: 20px;
+        box-shadow: 0 4px 20px -2px rgba(16, 24, 40, 0.05);
         flex-direction: column;
         align-items: flex-start;
+        padding: 20px;
     }
     .account-hero-right {
         width: 100%;
+        margin-top: 8px;
     }
     .hero-action-btn {
         flex: 1;
         justify-content: center;
+        border-radius: 12px;
+        padding: 10px 14px;
+    }
+    .acc-panel-card {
+        background: rgba(255, 255, 255, 0.92);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        border: 1px solid rgba(234, 236, 240, 0.85);
+        border-radius: 20px;
+        padding: 18px 16px;
+        box-shadow: 0 4px 16px -2px rgba(16, 24, 40, 0.04);
     }
 }
 
@@ -1268,20 +1293,11 @@ body.dark-mode .mobile-segment-btn.active {
                 <a href="admin/logistics.php" class="hero-action-btn" style="background:#b3261e; color:#ffffff; border-color:#b3261e; font-weight:700;">
                     <i class="fas fa-motorcycle"></i> Rider Dashboard
                 </a>
-                <a href="help_center.php" class="hero-action-btn">
-                    <i class="fas fa-headset"></i> Support
-                </a>
-                <?php else: ?>
-                <a href="my_orders.php" class="hero-action-btn">
-                    <i class="fas fa-bag-shopping"></i> My Orders
-                </a>
-                <a href="favorites.php" class="hero-action-btn">
-                    <i class="fas fa-heart"></i> Favorites
-                </a>
-                <a href="help_center.php" class="hero-action-btn">
-                    <i class="fas fa-headset"></i> Help Center
-                </a>
                 <?php endif; ?>
+                <button type="button" class="hero-action-btn market-theme-btn" id="accountHeroThemeBtn" title="Toggle Theme" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;background:#ffffff;border:1px solid #d0d5dd;border-radius:10px;padding:8px 16px;font-size:0.86rem;font-weight:700;color:#344054;">
+                    <i class="fas fa-moon"></i>
+                    <span id="accountHeroThemeText">Theme Mode</span>
+                </button>
             </div>
         </div>
 
@@ -1462,6 +1478,31 @@ body.dark-mode .mobile-segment-btn.active {
                                 </button>
                             </div>
                         </form>
+                    </div>
+
+                    <!-- Display & Theme Preferences Card -->
+                    <div class="acc-panel-card" style="margin-top: 20px;">
+                        <div class="acc-panel-head">
+                            <div>
+                                <h3>Appearance &amp; Theme</h3>
+                                <p>Choose between light and dark theme modes for your account interface.</p>
+                            </div>
+                        </div>
+                        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 4px;flex-wrap:wrap;gap:14px;">
+                            <div style="display:flex;align-items:center;gap:14px;">
+                                <div style="width:44px;height:44px;border-radius:12px;background:#fff1f0;color:#b3261e;display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0;">
+                                    <i class="fas fa-circle-half-stroke"></i>
+                                </div>
+                                <div>
+                                    <strong style="display:block;font-size:0.95rem;color:var(--ink);" id="accountDisplayThemeTitle">Interface Theme</strong>
+                                    <span style="font-size:0.82rem;color:var(--muted);" id="accountDisplayThemeSub">Switch to dark mode for comfortable low-light viewing.</span>
+                                </div>
+                            </div>
+                            <button type="button" class="acc-btn-secondary market-theme-btn" id="accountSettingsThemeToggler" style="min-height:38px;padding:0 16px;border-radius:10px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:8px;">
+                                <i class="fas fa-moon"></i>
+                                <span id="accountSettingsThemeBtnLabel">Toggle Dark Mode</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -1808,6 +1849,22 @@ document.addEventListener('DOMContentLoaded', function() {
             if (form) form.submit();
         }
     };
+
+    function updateAccountThemeUI(isDark) {
+        const heroText = document.getElementById('accountHeroThemeText');
+        const title = document.getElementById('accountDisplayThemeTitle');
+        const sub = document.getElementById('accountDisplayThemeSub');
+        const btnLabel = document.getElementById('accountSettingsThemeBtnLabel');
+        if (heroText) heroText.textContent = isDark ? 'Light Mode' : 'Dark Mode';
+        if (title) title.textContent = isDark ? 'Dark Mode (Active)' : 'Light Mode (Active)';
+        if (sub) sub.textContent = isDark ? 'Dark theme is active across the system.' : 'Light theme is active across the system.';
+        if (btnLabel) btnLabel.textContent = isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode';
+    }
+    window.addEventListener('themeChanged', function(e) {
+        updateAccountThemeUI(e.detail && e.detail.isDark);
+    });
+    const isDarkInitial = document.documentElement.classList.contains('dark-mode') || document.body.classList.contains('dark-mode');
+    updateAccountThemeUI(isDarkInitial);
 });
 </script>
 

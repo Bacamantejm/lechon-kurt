@@ -16,6 +16,18 @@ if ($is_super_admin_user && basename($_SERVER['PHP_SELF'] ?? '') === 'index.php'
     header('Location: ../super_admin/super_admin_dashboard.php');
     exit;
 }
+
+// Fetch linked employee record and role info for prominent dashboard display
+$emp_info_query = mysqli_query($conn, "
+    SELECT e.employee_id, e.position, d.department_name 
+    FROM employees e 
+    LEFT JOIN departments d ON d.id = e.department_id 
+    WHERE e.user_id = " . (int)$current_user_id . " 
+    LIMIT 1");
+$emp_info = $emp_info_query ? mysqli_fetch_assoc($emp_info_query) : null;
+$logged_role_slug = strtolower(trim((string)($_SESSION['role_name'] ?? ($admin_info['role_name'] ?? ''))));
+$logged_role_title = function_exists('getRoleDisplayName') ? getRoleDisplayName($logged_role_slug) : ucwords(str_replace('_', ' ', $logged_role_slug ?: 'Staff'));
+$logged_role_title = preg_replace('/\s*\(.*\)\s*/', '', (string)$logged_role_title);
 $expenses_has_recorded_by = false;
 $expenses_recorded_by_check = mysqli_query($conn, "SHOW COLUMNS FROM expenses LIKE 'recorded_by'");
 if ($expenses_recorded_by_check && mysqli_num_rows($expenses_recorded_by_check) > 0) {
@@ -46,15 +58,7 @@ if ($seller_scope_id === null) {
     $dss_decision_brief = $insights_service->generateDecisionBrief(30);
     $dss_top_products = $insights_service->getTopProducts(30, 5);
 } else {
-    $seller_scope_expr = "
-        EXISTS (
-            SELECT 1
-            FROM order_items oi_scope
-            INNER JOIN products p_scope
-                ON (oi_scope.product_id COLLATE utf8mb4_general_ci = p_scope.product_id COLLATE utf8mb4_general_ci OR oi_scope.product_id COLLATE utf8mb4_general_ci = CAST(p_scope.id AS CHAR) COLLATE utf8mb4_general_ci)
-            WHERE oi_scope.order_id = o.id
-              AND p_scope.seller_id = " . (int)$seller_scope_id . "
-        )";
+    $seller_scope_expr = getFranchiseScopedOrderExistsSql($conn, (int)$seller_scope_id, 'o.id');
 
     $overview_query = "SELECT
                            COALESCE(SUM(o.total_amount), 0) AS total_revenue,
@@ -71,18 +75,14 @@ if ($seller_scope_id === null) {
     $dss_overview['net_income'] = $dss_overview['total_revenue'];
     $dss_overview['net_margin'] = $dss_overview['total_revenue'] > 0 ? 100 : 0;
 
-    $dss_top_query = "SELECT p.name AS product_name, COALESCE(SUM(oi.quantity), 0) AS quantity
-                      FROM products p
-                      LEFT JOIN order_items oi
-                        ON (oi.product_id COLLATE utf8mb4_general_ci = p.product_id COLLATE utf8mb4_general_ci OR oi.product_id COLLATE utf8mb4_general_ci = CAST(p.id AS CHAR) COLLATE utf8mb4_general_ci)
-                      LEFT JOIN orders o
-                        ON oi.order_id = o.id
-                       AND o.is_archived = 0
-                       AND o.status IN ('confirmed', 'preparing', 'delivered', 'completed')
-                       AND DATE(o.created_at) >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
-                      WHERE p.seller_id = " . (int)$seller_scope_id . "
-                        AND p.is_archived = 0
-                      GROUP BY p.id, p.name
+    $dss_top_query = "SELECT oi.product_name, COALESCE(SUM(oi.quantity), 0) AS quantity
+                      FROM order_items oi
+                      INNER JOIN orders o ON oi.order_id = o.id
+                      WHERE o.is_archived = 0
+                        AND o.status IN ('confirmed', 'preparing', 'delivered', 'completed')
+                        AND DATE(o.created_at) >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+                        AND {$seller_scope_expr}
+                      GROUP BY oi.product_name
                       ORDER BY quantity DESC
                       LIMIT 5";
     $dss_top_result = mysqli_query($conn, $dss_top_query);
@@ -91,6 +91,10 @@ if ($seller_scope_id === null) {
             $dss_top_products[] = $top_row;
         }
     }
+
+    $seller_custom_check = mysqli_query($conn, "SELECT 1 FROM products WHERE seller_id = " . (int)$seller_scope_id . " LIMIT 1");
+    $seller_has_own_prods = ($seller_custom_check && mysqli_num_rows($seller_custom_check) > 0);
+    $inv_seller_cond = $seller_has_own_prods ? "p.seller_id = " . (int)$seller_scope_id : "(p.seller_id IS NULL OR p.seller_id = 1)";
 
     $dss_inventory_query = "SELECT p.name AS product_name,
                                    COALESCE(i.current_stock, 0) AS stock,
@@ -105,7 +109,8 @@ if ($seller_scope_id === null) {
                               ON p.id = i.product_id
                              AND i.inventory_date = CURDATE()
                              AND i.is_archived = 0
-                            WHERE p.seller_id = " . (int)$seller_scope_id . "
+                            WHERE {$inv_seller_cond}
+                              AND p.is_active = 1
                               AND p.is_archived = 0
                             ORDER BY
                               CASE
@@ -124,7 +129,7 @@ if ($seller_scope_id === null) {
 
     $dss_decision_brief[] = [
         'headline' => 'Store Scope Enabled',
-        'action' => 'Dashboard data is filtered to your store products only.',
+        'action' => 'Dashboard data is filtered to your store and orders.',
         'priority' => 'medium'
     ];
 }
@@ -155,15 +160,7 @@ if ($seller_scope_id === null) {
 
 $seller_scoped_orders_exists = '';
 if ($seller_scope_id !== null) {
-    $seller_scoped_orders_exists = "
-        EXISTS (
-            SELECT 1
-            FROM order_items oi_scope
-            INNER JOIN products p_scope
-                ON (oi_scope.product_id COLLATE utf8mb4_general_ci = p_scope.product_id COLLATE utf8mb4_general_ci OR oi_scope.product_id COLLATE utf8mb4_general_ci = CAST(p_scope.id AS CHAR) COLLATE utf8mb4_general_ci)
-            WHERE oi_scope.order_id = o.id
-              AND p_scope.seller_id = " . (int)$seller_scope_id . "
-        )";
+    $seller_scoped_orders_exists = getFranchiseScopedOrderExistsSql($conn, (int)$seller_scope_id, 'o.id');
 }
 ?>
 <!DOCTYPE html>
@@ -344,6 +341,34 @@ if ($seller_scope_id !== null) {
 
         body.dark-mode .hub-sub {
             color: #b0b0b0 !important;
+        }
+
+        @media (max-width: 768px) {
+            .admin-main .stats-grid,
+            .admin-main .dashboard-hub-grid {
+                display: flex !important;
+                flex-wrap: nowrap !important;
+                overflow-x: auto !important;
+                overflow-y: hidden !important;
+                -webkit-overflow-scrolling: touch !important;
+                touch-action: pan-x !important;
+                scroll-snap-type: x proximity !important;
+                gap: 12px !important;
+                padding: 2px 2px 12px !important;
+                scrollbar-width: none !important;
+            }
+
+            .admin-main .stats-grid::-webkit-scrollbar,
+            .admin-main .dashboard-hub-grid::-webkit-scrollbar {
+                display: none !important;
+            }
+
+            .admin-main .stats-grid > *,
+            .admin-main .dashboard-hub-grid > * {
+                flex: 0 0 min(82vw, 280px) !important;
+                min-width: min(82vw, 280px) !important;
+                scroll-snap-align: start !important;
+            }
         }
 
         .franchise-priority-card {
@@ -538,9 +563,27 @@ if ($seller_scope_id !== null) {
             
             <!-- Main Content -->
             <div class="admin-main">
-                <div class="dashboard-header">
-                    <h2>Welcome, <?php echo htmlspecialchars($admin_info['full_name']); ?></h2>
-                    <p>Monitor your business metrics and manage operations</p>
+                <div class="dashboard-header d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
+                    <div>
+                        <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                            <h2 class="mb-0">Welcome, <?php echo htmlspecialchars($admin_info['full_name']); ?></h2>
+                            <span class="badge" style="background: #eff8ff; color: #175cd3; border: 1px solid #b2ddff; font-size: 13px; font-weight: 700; padding: 4px 12px; border-radius: 20px;">
+                                <i class="fas fa-shield-alt me-1"></i> Role: <?php echo htmlspecialchars($logged_role_title); ?>
+                            </span>
+                        </div>
+                        <p class="text-muted mb-0">
+                            Active Session &bull; Logged in as <strong><?php echo htmlspecialchars($logged_role_title); ?></strong>
+                            <?php if (!empty($emp_info['department_name'])): ?>
+                                &bull; Department: <strong><?php echo htmlspecialchars($emp_info['department_name']); ?></strong>
+                            <?php endif; ?>
+                            &bull; Monitor your assigned operations and workflows
+                        </p>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <span class="badge" style="background:#ecfdf3; color:#027a48; border:1px solid #abefc6; padding:8px 12px; border-radius:8px; font-size:12px; font-weight:600;">
+                            <i class="fas fa-check-circle me-1"></i> Account: Active
+                        </span>
+                    </div>
                 </div>
                 
                 <!-- Statistics Cards -->
@@ -623,25 +666,40 @@ if ($seller_scope_id !== null) {
                     $logistics_stats = mysqli_fetch_assoc($logistics_result);
 
                     // Get pending pre-orders
+                    $scoped_preorder_exists = $seller_scope_id !== null ? getFranchiseScopedPreOrderExistsSql($conn, (int)$seller_scope_id, 'po.id') : '';
                     $preorder_query = $seller_scope_id === null
                         ? "SELECT COUNT(*) as count FROM pre_orders WHERE reservation_status = 'pending'"
-                        : "SELECT 0 as count";
+                        : "SELECT COUNT(*) as count FROM pre_orders po WHERE po.reservation_status = 'pending' AND {$scoped_preorder_exists}";
                     $preorder_result = mysqli_query($conn, $preorder_query);
                     $preorder_stats = mysqli_fetch_assoc($preorder_result);
 
-                    // Get low stock inventory
-                    $inventory_query = "SELECT COUNT(*) as count
-                                        FROM inventory i
-                                        INNER JOIN products p ON p.id = i.product_id
-                                        WHERE i.current_stock <= i.min_stock_level" . ($seller_scope_id !== null ? " AND p.seller_id = " . (int)$seller_scope_id : "");
+                    // Get low stock inventory and active products
+                    if ($seller_scope_id !== null) {
+                        $seller_has_custom_stmt = mysqli_query($conn, "SELECT 1 FROM products WHERE seller_id = " . (int)$seller_scope_id . " LIMIT 1");
+                        $seller_has_custom = ($seller_has_custom_stmt && mysqli_num_rows($seller_has_custom_stmt) > 0);
+                        $prod_seller_filter = $seller_has_custom 
+                            ? (" AND p.seller_id = " . (int)$seller_scope_id)
+                            : (" AND (p.seller_id IS NULL OR p.seller_id = 1)");
+                        $inventory_query = "SELECT COUNT(*) as count
+                                            FROM inventory i
+                                            INNER JOIN products p ON p.id = i.product_id
+                                            WHERE i.current_stock <= i.min_stock_level{$prod_seller_filter}";
+                        $products_query = "SELECT COUNT(*) as count
+                                           FROM products p
+                                           WHERE p.is_active = 1
+                                             AND p.is_archived = 0{$prod_seller_filter}";
+                    } else {
+                        $inventory_query = "SELECT COUNT(*) as count
+                                            FROM inventory i
+                                            INNER JOIN products p ON p.id = i.product_id
+                                            WHERE i.current_stock <= i.min_stock_level";
+                        $products_query = "SELECT COUNT(*) as count
+                                           FROM products
+                                           WHERE is_active = 1
+                                             AND is_archived = 0";
+                    }
                     $inventory_result = mysqli_query($conn, $inventory_query);
                     $inventory_stats = mysqli_fetch_assoc($inventory_result);
-
-                    // Get active products
-                    $products_query = "SELECT COUNT(*) as count
-                                       FROM products
-                                       WHERE is_active = 1
-                                         AND is_archived = 0" . ($seller_scope_id !== null ? " AND seller_id = " . (int)$seller_scope_id : "");
                     $products_result = mysqli_query($conn, $products_query);
                     $products_stats = mysqli_fetch_assoc($products_result);
 
@@ -687,11 +745,9 @@ if ($seller_scope_id !== null) {
                     $top_products_7days_query = "SELECT oi.product_name, SUM(oi.quantity) as total_qty 
                                                  FROM order_items oi 
                                                  JOIN orders o ON oi.order_id = o.id
-                                                 LEFT JOIN products p
-                                                   ON (oi.product_id COLLATE utf8mb4_general_ci = p.product_id COLLATE utf8mb4_general_ci OR oi.product_id COLLATE utf8mb4_general_ci = CAST(p.id AS CHAR) COLLATE utf8mb4_general_ci)
                                                  WHERE o.is_archived = 0 
                                                    AND o.status IN ('confirmed', 'preparing', 'delivered', 'completed') 
-                                                   AND DATE(o.created_at) >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)" . ($seller_scope_id !== null ? " AND p.seller_id = " . (int)$seller_scope_id : "") . "
+                                                   AND DATE(o.created_at) >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)" . ($seller_scope_id !== null ? " AND {$seller_scoped_orders_exists}" : "") . "
                                                  GROUP BY oi.product_name 
                                                  ORDER BY total_qty DESC 
                                                  LIMIT 5";
@@ -701,11 +757,9 @@ if ($seller_scope_id !== null) {
                     $top_products_month_query = "SELECT oi.product_name, SUM(oi.quantity) as total_qty 
                                                  FROM order_items oi 
                                                  JOIN orders o ON oi.order_id = o.id
-                                                 LEFT JOIN products p
-                                                   ON (oi.product_id COLLATE utf8mb4_general_ci = p.product_id COLLATE utf8mb4_general_ci OR oi.product_id COLLATE utf8mb4_general_ci = CAST(p.id AS CHAR) COLLATE utf8mb4_general_ci)
                                                  WHERE o.is_archived = 0 
                                                    AND o.status IN ('confirmed', 'preparing', 'delivered', 'completed') 
-                                                   AND MONTH(o.created_at) = MONTH(CURDATE()) AND YEAR(o.created_at) = YEAR(CURDATE())" . ($seller_scope_id !== null ? " AND p.seller_id = " . (int)$seller_scope_id : "") . "
+                                                   AND MONTH(o.created_at) = MONTH(CURDATE()) AND YEAR(o.created_at) = YEAR(CURDATE())" . ($seller_scope_id !== null ? " AND {$seller_scoped_orders_exists}" : "") . "
                                                  GROUP BY oi.product_name 
                                                  ORDER BY total_qty DESC 
                                                  LIMIT 5";

@@ -97,31 +97,33 @@ document.addEventListener('DOMContentLoaded', function () {
         counters.forEach(counter => observer.observe(counter));
     }
 
-    // 5. Ripple Effect on Buttons
-    const buttons = document.querySelectorAll('.btn, .btn-icon, .module-card, .menu-item');
-    buttons.forEach(button => {
-        button.addEventListener('click', function (e) {
-            const rect = button.getBoundingClientRect();
-            const ripple = document.createElement('span');
-            const diameter = Math.max(button.clientWidth, button.clientHeight);
-            const radius = diameter / 2;
+    // 5. Ripple Effect on Buttons (Bypassed on touch devices to eliminate synchronous layout reflow)
+    if (window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+        const buttons = document.querySelectorAll('.btn, .btn-icon, .module-card, .menu-item');
+        buttons.forEach(button => {
+            button.addEventListener('click', function (e) {
+                const rect = button.getBoundingClientRect();
+                const ripple = document.createElement('span');
+                const diameter = Math.max(button.clientWidth, button.clientHeight);
+                const radius = diameter / 2;
 
-            ripple.style.width = ripple.style.height = `${diameter}px`;
-            ripple.style.left = `${e.clientX - rect.left - radius}px`;
-            ripple.style.top = `${e.clientY - rect.top - radius}px`;
-            ripple.classList.add('ripple');
+                ripple.style.width = ripple.style.height = `${diameter}px`;
+                ripple.style.left = `${e.clientX - rect.left - radius}px`;
+                ripple.style.top = `${e.clientY - rect.top - radius}px`;
+                ripple.classList.add('ripple');
 
-            const existingRipple = button.querySelector('.ripple');
-            if (existingRipple) {
-                existingRipple.remove();
-            }
+                const existingRipple = button.querySelector('.ripple');
+                if (existingRipple) {
+                    existingRipple.remove();
+                }
 
-            button.appendChild(ripple);
-            ripple.addEventListener('animationend', () => {
-                ripple.remove();
+                button.appendChild(ripple);
+                ripple.addEventListener('animationend', () => {
+                    ripple.remove();
+                });
             });
         });
-    });
+    }
 
     // 6. Staggered Animations
     const animatedElements = document.querySelectorAll('.fade-in-up');
@@ -169,5 +171,44 @@ document.addEventListener('DOMContentLoaded', function () {
                 window.location.href = href;
             }
         });
+    });
+
+    // 7. Modern Tactile Click Micro-Feedback
+    document.addEventListener('pointerdown', function(e) {
+        const target = e.target.closest('.btn, .action-btn, .menu-item, .submenu-item, .sa-topbar-action-btn, .stat-card[onclick], .metric-card[onclick], .btn-rider-primary, .btn-rider-secondary');
+        if (!target) return;
+        target.classList.add('is-pressing');
+        const clearPress = () => {
+            target.classList.remove('is-pressing');
+            window.removeEventListener('pointerup', clearPress);
+            window.removeEventListener('pointercancel', clearPress);
+        };
+        window.addEventListener('pointerup', clearPress, { once: true });
+        window.addEventListener('pointercancel', clearPress, { once: true });
+    }, { passive: true });
+
+    // 8. Instant Mobile Navigation Micro-Progress Bar
+    const progressBar = document.createElement('div');
+    progressBar.id = 'adminNavProgressBar';
+    progressBar.style.cssText = 'position:fixed;top:0;left:0;height:2.5px;width:0%;background:#b3261e;z-index:9999999;transition:width 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.18s ease;pointer-events:none;opacity:0;box-shadow:0 0 10px rgba(179,38,30,0.7);';
+    document.documentElement.appendChild(progressBar);
+
+    document.addEventListener('click', function(e) {
+        const link = e.target.closest('a[href]');
+        if (!link) return;
+        const href = link.getAttribute('href');
+        if (!href || href.startsWith('#') || href.startsWith('javascript:') || href.startsWith('tel:') || href.startsWith('mailto:') || link.target === '_blank' || e.defaultPrevented || e.ctrlKey || e.metaKey || e.shiftKey) {
+            return;
+        }
+        progressBar.style.opacity = '1';
+        progressBar.style.width = '78%';
+    }, { capture: true, passive: true });
+
+    window.addEventListener('pageshow', function() {
+        progressBar.style.width = '100%';
+        setTimeout(() => {
+            progressBar.style.opacity = '0';
+            setTimeout(() => { progressBar.style.width = '0%'; }, 200);
+        }, 120);
     });
 });

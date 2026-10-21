@@ -122,11 +122,12 @@
     background: #ffffff;
     box-shadow: var(--ui-shadow-soft);
     padding: 18px 20px;
+    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
 }
 
 .admin-polish .stat-card:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--ui-shadow);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px -4px rgba(16, 24, 40, 0.08), 0 4px 8px -2px rgba(16, 24, 40, 0.04);
     border-color: #d0d5dd;
 }
 
@@ -174,6 +175,10 @@
     background: #fcfdff;
 }
 
+.admin-polish .admin-table tbody tr {
+    transition: background-color 0.15s ease;
+}
+
 .admin-polish .admin-table tbody tr:hover {
     background: #f8fbff;
 }
@@ -184,12 +189,36 @@
     font-size: 0.75rem;
     font-weight: 600;
     letter-spacing: 0.1px;
+    transition: transform 0.15s ease;
+}
+
+.admin-polish .status-badge:hover {
+    transform: translateY(-1px);
 }
 
 .admin-polish .btn,
 .admin-polish .btn-icon,
 .admin-polish .btn-icon-sm {
     border-radius: 10px;
+    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+                background-color 0.18s ease,
+                border-color 0.18s ease !important;
+    cursor: pointer;
+    user-select: none;
+}
+
+.admin-polish .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(16, 24, 40, 0.1);
+}
+
+.admin-polish .btn:active,
+.admin-polish .btn-icon:active,
+.admin-polish .btn-icon-sm:active {
+    transform: translateY(1px) scale(0.98) !important;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.08) !important;
+    transition-duration: 0.08s !important;
 }
 
 .admin-polish .btn-primary {
@@ -198,8 +227,13 @@
 }
 
 .admin-polish .btn-primary:hover {
-    background: #ad2020;
-    border-color: #ad2020;
+    background: #981b15;
+    border-color: #981b15;
+    box-shadow: 0 6px 16px -2px rgba(179, 38, 30, 0.28) !important;
+}
+
+.admin-polish .btn-primary:active {
+    transform: translateY(1px) scale(0.98) !important;
 }
 
 .admin-polish .btn-outline-primary {
@@ -218,8 +252,24 @@
     border: 1px solid #e2e8f0;
 }
 
+.admin-polish .pagination .page-link:active {
+    transform: translateY(1px) scale(0.98) !important;
+}
+
 .admin-polish .alert {
     border-radius: 12px;
+}
+
+.admin-polish .modal.fade .modal-dialog {
+    transform: scale(0.96) translateY(8px);
+    opacity: 0;
+    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    will-change: transform, opacity;
+}
+
+.admin-polish .modal.fade.show .modal-dialog {
+    transform: scale(1) translateY(0) !important;
+    opacity: 1 !important;
 }
 
 .admin-polish .modal-content {
@@ -234,6 +284,34 @@
 
 .admin-polish .modal-footer {
     border-top: 1px solid #edf1f5;
+}
+
+.admin-polish .admin-table td.col-amount,
+.admin-polish .admin-table th.col-amount,
+.admin-polish .admin-table td.col-price,
+.admin-polish .admin-table th.col-price,
+.admin-polish .admin-table td.col-num,
+.admin-polish .admin-table th.col-num,
+.admin-polish .admin-table td.col-qty,
+.admin-polish .admin-table th.col-qty,
+.admin-polish .admin-table td.text-end,
+.admin-polish .admin-table th.text-end,
+.admin-polish .stat-content h3 {
+    font-variant-numeric: tabular-nums !important;
+    font-feature-settings: "tnum" 1 !important;
+}
+
+.admin-polish .admin-table td.col-amount,
+.admin-polish .admin-table th.col-amount,
+.admin-polish .admin-table td.col-price,
+.admin-polish .admin-table th.col-price,
+.admin-polish .admin-table td.col-num,
+.admin-polish .admin-table th.col-num,
+.admin-polish .admin-table td.col-qty,
+.admin-polish .admin-table th.col-qty,
+.admin-polish .admin-table td.text-end,
+.admin-polish .admin-table th.text-end {
+    text-align: right !important;
 }
 
 .admin-polish .nav-tabs {
@@ -398,24 +476,82 @@ body.admin-polish.dark-mode .nav-tabs .nav-link.active {
 
 @media (max-width: 768px) {
     .admin-polish .admin-main {
-        padding: 14px 10px 90px 10px !important;
+        padding: 14px 10px 100px 10px !important;
     }
 
     .admin-polish .admin-topbar {
-        padding: 8px 12px;
+        padding: 10px 14px;
+        background: rgba(255, 255, 255, 0.85) !important;
+        backdrop-filter: blur(16px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+        border-bottom: 1px solid rgba(234, 236, 240, 0.85) !important;
+        box-shadow: 0 4px 20px rgba(16, 24, 40, 0.04);
+        transform: translate3d(0, 0, 0);
     }
 
     .admin-polish .stats-grid,
     .admin-polish .dashboard-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 12px !important;
+    }
+
+    .admin-polish .stat-card {
+        padding: 14px 12px !important;
+        border-radius: 20px !important;
+        background: rgba(255, 255, 255, 0.85) !important;
+        backdrop-filter: blur(16px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+        border: 1px solid rgba(234, 236, 240, 0.85) !important;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.06) !important;
+        transform: translate3d(0, 0, 0);
+        transition: transform 0.15s ease-out !important;
+    }
+
+    .admin-polish .stat-card:active {
+        transform: scale(0.97) !important;
+    }
+
+    .admin-polish .stat-content h3 {
+        font-size: 1.25rem !important;
+        font-variant-numeric: tabular-nums !important;
+    }
+
+    .admin-polish .stat-content p {
+        font-size: 0.76rem !important;
     }
 
     .admin-polish .table-responsive {
-        border-radius: 12px;
+        border-radius: 16px !important;
+        -webkit-overflow-scrolling: touch;
     }
 
     .admin-polish .section-header {
-        padding: 12px 14px;
+        padding: 16px !important;
+        border-radius: 20px !important;
+        background: rgba(255, 255, 255, 0.85) !important;
+        backdrop-filter: blur(16px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+        border: 1px solid rgba(234, 236, 240, 0.85) !important;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.06) !important;
+    }
+
+    .admin-polish button,
+    .admin-polish .btn,
+    .admin-polish .btn-icon,
+    .admin-polish .form-control,
+    .admin-polish .form-select,
+    .admin-polish .page-link {
+        min-height: 44px;
+        touch-action: manipulation;
+    }
+
+    .admin-polish button:active,
+    .admin-polish .btn:active,
+    .admin-polish .btn-icon:active,
+    .admin-polish .status-badge:active {
+        transform: scale(0.97) translate3d(0, 0, 0) !important;
+        transition: transform 0.15s ease-out !important;
     }
 }
+
 

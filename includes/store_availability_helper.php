@@ -122,6 +122,18 @@ function sahEnsureStoreLocationAvailabilitySchema($conn): void
         mysqli_query($conn, "ALTER TABLE store_locations ADD INDEX idx_store_email (email)");
     }
 
+    // Auto-heal any corrupted mojibake store branch names and cities in database
+    static $mojibake_repaired = false;
+    if (!$mojibake_repaired) {
+        $mojibake_repaired = true;
+        @mysqli_query($conn, "UPDATE store_locations SET store_name = 'Dasmariñas Branch' WHERE store_id = 1 AND (store_name LIKE 'Dasmari%as%' OR store_name LIKE '%├%' OR store_name LIKE '%Ã%')");
+        @mysqli_query($conn, "UPDATE store_locations SET city = 'Dasmariñas' WHERE (city LIKE 'Dasmari%as%' OR city LIKE '%Dasmari%') AND city <> 'Dasmariñas'");
+        @mysqli_query($conn, "UPDATE store_locations SET address = REPLACE(REPLACE(REPLACE(REPLACE(address, '├░', 'ñ'), '├▒', 'ñ'), 'Ã±', 'ñ'), 'Γö£ΓûÆ', 'ñ') WHERE address LIKE '%├%' OR address LIKE '%Ã%'");
+        @mysqli_query($conn, "UPDATE users SET full_name = 'Dasmariñas Branch Manager' WHERE email = 'dasma@lechondelights.com' AND full_name <> 'Dasmariñas Branch Manager'");
+        @mysqli_query($conn, "UPDATE users SET business_name = 'Dasmariñas Central Branch' WHERE email = 'dasma@lechondelights.com' AND business_name <> 'Dasmariñas Central Branch'");
+        @mysqli_query($conn, "UPDATE users SET address = REPLACE(REPLACE(REPLACE(REPLACE(address, '├░', 'ñ'), '├▒', 'ñ'), 'Ã±', 'ñ'), 'Γö£ΓûÆ', 'ñ') WHERE address LIKE '%├%' OR address LIKE '%Ã%'");
+    }
+
     sahEnsureCaviteBranchesSeed($conn);
 }
 

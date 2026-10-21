@@ -35,41 +35,86 @@
 <script src="../js/bootstrap.bundle.min.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
 <script>
+// Instant Mobile Touch Tactile Feedback
+document.addEventListener('pointerdown', function(e) {
+    const target = e.target.closest('a, button, [role="button"], .rider-nav-item, .duty-switch-btn, .btn');
+    if (!target) return;
+    target.classList.add('is-touch-active');
+    const onRelease = () => {
+        target.classList.remove('is-touch-active');
+        window.removeEventListener('pointerup', onRelease);
+        window.removeEventListener('pointercancel', onRelease);
+    };
+    window.addEventListener('pointerup', onRelease, { once: true, passive: true });
+    window.addEventListener('pointercancel', onRelease, { once: true, passive: true });
+}, { passive: true });
+
 // Geolocation streaming helper for active riders
 let riderGeoWatchId = null;
+let riderGeoIntervalId = null;
+const riderGeoListeners = [];
+
+function registerRiderLocationListener(cb) {
+    if (typeof cb === 'function' && !riderGeoListeners.includes(cb)) {
+        riderGeoListeners.push(cb);
+    }
+}
+
+function notifyRiderLocationListeners(lat, lng, acc) {
+    riderGeoListeners.forEach(cb => {
+        try { cb(lat, lng, acc); } catch(e) { console.debug('Rider listener err:', e); }
+    });
+}
+
+function sendRiderLocationPing(lat, lng, acc = 10) {
+    notifyRiderLocationListeners(lat, lng, acc);
+
+    const formData = new FormData();
+    formData.append('action', 'update_location');
+    formData.append('latitude', lat);
+    formData.append('longitude', lng);
+    formData.append('accuracy', acc);
+
+    fetch('api_rider.php', {
+        method: 'POST',
+        body: formData
+    }).catch(e => console.debug('Rider GPS ping fail:', e));
+}
+
 function broadcastRiderLocation(onCoordsUpdate) {
+    if (typeof onCoordsUpdate === 'function') {
+        registerRiderLocationListener(onCoordsUpdate);
+    }
     if (!navigator.geolocation) return;
-    if (riderGeoWatchId !== null) return;
 
-    riderGeoWatchId = navigator.geolocation.watchPosition(
-        (pos) => {
-            const lat = pos.coords.latitude;
-            const lng = pos.coords.longitude;
-            const acc = pos.coords.accuracy || 0;
+    if (riderGeoWatchId === null) {
+        riderGeoWatchId = navigator.geolocation.watchPosition(
+            (pos) => {
+                const lat = pos.coords.latitude;
+                const lng = pos.coords.longitude;
+                const acc = pos.coords.accuracy || 0;
+                sendRiderLocationPing(lat, lng, acc);
+            },
+            (err) => {
+                console.debug('Geolocation watch notice:', err.message);
+            },
+            { enableHighAccuracy: true, timeout: 8000, maximumAge: 1500 }
+        );
+    }
 
-            if (typeof onCoordsUpdate === 'function') {
-                onCoordsUpdate(lat, lng, acc);
-            }
-
-            // Sync with backend API
-            const formData = new FormData();
-            formData.append('action', 'update_location');
-            formData.append('latitude', lat);
-            formData.append('longitude', lng);
-            formData.append('accuracy', acc);
-
-            fetch('api_rider.php', {
-                method: 'POST',
-                body: formData
-            }).catch(e => console.debug('Rider GPS ping fail:', e));
-        },
-        (err) => {
-            console.debug('Geolocation watch error:', err.message);
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 2000 }
-    );
+    // Secondary heartbeat interval (every 3.5s) to ensure continuous streaming even when stationary
+    if (riderGeoIntervalId === null) {
+        riderGeoIntervalId = setInterval(() => {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    sendRiderLocationPing(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy || 0);
+                },
+                () => {},
+                { enableHighAccuracy: true, timeout: 4000, maximumAge: 2000 }
+            );
+        }, 3500);
+    }
 }
 
 // Auto-start GPS broadcast if online or busy

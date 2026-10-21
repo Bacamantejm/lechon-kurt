@@ -319,14 +319,21 @@ if ($po && !empty($po['order_date'])) {
 function recalculatePOTotal($conn, $po_id) {
     $total_query = "SELECT SUM(quantity_ordered * unit_cost) as total FROM purchase_order_items WHERE purchase_order_id = ?";
     $stmt = mysqli_prepare($conn, $total_query);
+    if (!$stmt) {
+        return;
+    }
     mysqli_stmt_bind_param($stmt, "i", $po_id);
     mysqli_stmt_execute($stmt);
     $result = mysqli_stmt_get_result($stmt);
-    $total = mysqli_fetch_assoc($result)['total'] ?? 0.00;
+    $total = ($result instanceof mysqli_result) ? ((float)(mysqli_fetch_assoc($result)['total'] ?? 0.00)) : 0.00;
+    mysqli_stmt_close($stmt);
 
     $update_stmt = mysqli_prepare($conn, "UPDATE purchase_orders SET total_amount = ? WHERE id = ?");
-    mysqli_stmt_bind_param($update_stmt, "di", $total, $po_id);
-    mysqli_stmt_execute($update_stmt);
+    if ($update_stmt) {
+        mysqli_stmt_bind_param($update_stmt, "di", $total, $po_id);
+        mysqli_stmt_execute($update_stmt);
+        mysqli_stmt_close($update_stmt);
+    }
 }
 
 $page_title = $po_id > 0 ? "Edit PO #" . htmlspecialchars($po['po_number']) : "Create Purchase Order";

@@ -117,8 +117,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['process_payment'])) {
             'customer_email' => $user_details['email'],
             'customer_phone' => $user_details['phone'],
             'payment_method' => 'all',
-            'success_url' => 'http://' . $_SERVER['HTTP_HOST'] . '/lechonsystem/preorder_payment_success.php?id=' . $pre_order_id . '&type=' . $payment_type,
-            'cancel_url' => 'http://' . $_SERVER['HTTP_HOST'] . '/lechonsystem/preorder_payment.php?id=' . $pre_order_id . '&type=' . $payment_type . '&cancelled=1'
+            'success_url' => appBaseUrl('preorder_payment_success.php?id=' . $pre_order_id . '&type=' . $payment_type),
+            'cancel_url' => appBaseUrl('preorder_payment.php?id=' . $pre_order_id . '&type=' . $payment_type . '&cancelled=1')
         ]);
         
         if ($checkout_data['success']) {

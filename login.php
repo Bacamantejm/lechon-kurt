@@ -117,7 +117,7 @@ if (isset($_SESSION['email_verification_error'])) {
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
     $email = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
-    $remember = isset($_POST['remember']);
+    $remember = !empty($_POST['remember']) && in_array(strtolower(trim((string)$_POST['remember'])), ['1', 'true', 'on', 'yes'], true);
     
     if (empty($email) || empty($password)) {
         $error = 'Please enter both email and password';
@@ -142,6 +142,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
             $_SESSION['has_backoffice_access'] = hasBackofficeAccess($conn, $result['user_id']);
             $_SESSION['permissions'] = getUserPermissions($conn, $result['user_id']);
             
+            // Flag first-time customer for mobile get-started splash
+            if (!empty($result['show_mobile_splash'])) {
+                $_SESSION['show_mobile_get_started'] = true;
+                $_SESSION['is_first_login'] = true;
+            } else {
+                $_SESSION['show_mobile_get_started'] = false;
+            }
+            
             $user_type = strtolower(trim($result['user_type']));
 
             // Check if user is an employee (exists in employees table)
@@ -159,6 +167,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
             $check_emp->close();
             
             // Handle remember me
+            $is_secure_conn = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
             if ($remember) {
                 $token = bin2hex(random_bytes(32));
                 $expires = time() + (30 * 24 * 60 * 60);
@@ -167,9 +176,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
                     'expires' => $expires,
                     'path' => '/',
                     'domain' => '',
-                    'secure' => isset($_SERVER['HTTPS']),
+                    'secure' => $is_secure_conn,
                     'httponly' => true,
-                    'samesite' => 'Strict'
+                    'samesite' => 'Lax'
+                ]);
+
+                setcookie('remember_email', $result['email'], [
+                    'expires' => $expires,
+                    'path' => '/',
+                    'domain' => '',
+                    'secure' => $is_secure_conn,
+                    'httponly' => false,
+                    'samesite' => 'Lax'
                 ]);
                 
                 // Store in database
@@ -181,6 +199,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
                     mysqli_stmt_bind_param($token_stmt, "si", $token, $result['user_id']);
                     mysqli_stmt_execute($token_stmt);
                     mysqli_stmt_close($token_stmt);
+                }
+            } else {
+                // User chose not to be remembered: clear cookies and stored token
+                setcookie('remember_token', '', time() - 3600, '/');
+                setcookie('remember_email', '', time() - 3600, '/');
+                $clear_token_query = "UPDATE users SET remember_token = NULL, remember_expires = NULL WHERE id = ?";
+                if ($clear_token_stmt = mysqli_prepare($conn, $clear_token_query)) {
+                    mysqli_stmt_bind_param($clear_token_stmt, "i", $result['user_id']);
+                    mysqli_stmt_execute($clear_token_stmt);
+                    mysqli_stmt_close($clear_token_stmt);
                 }
             }
 
@@ -1180,7 +1208,7 @@ body.dark-mode .floating-pig {
                 <div id="loginViewContainer" class="auth-panel-view">
                     <div class="login-header" style="text-align: center; margin-bottom: 24px;">
                         <div style="display: inline-flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 12px;">
-                            <img src="assets/images/logo.jpg" alt="Lechon Delights Logo" style="width: 48px; height: 48px; object-fit: cover; border-radius: 12px; display: block; border: 1px solid #efddcd; box-shadow: 0 4px 12px rgba(0,0,0,0.06);">
+                            <img src="assets/images/logo.png?v=lechon2" alt="Lechon Delight Logo" style="width: 48px; height: 48px; object-fit: contain; display: block; border: none; box-shadow: none;">
                             <span style="font-size: 1.6rem; font-weight: 800; color: #171922; font-family: 'Outfit', sans-serif;">Lechon Delights</span>
                         </div>
                         <h2>Welcome Back!</h2>
@@ -1209,7 +1237,7 @@ body.dark-mode .floating-pig {
                             <i class="fas fa-envelope"></i>
                             <input type="email" id="email" name="email" class="form-control" required 
                                 placeholder="Enter your email address" 
-                                value="<?php echo htmlspecialchars($form_data['email'] ?? ''); ?>"
+                                value="<?php echo htmlspecialchars($form_data['email'] ?? ($_COOKIE['remember_email'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
                                 autocomplete="email">
                         </div>
                     </div>
@@ -1229,7 +1257,7 @@ body.dark-mode .floating-pig {
                     
                     <div class="remember-forgot">
                         <label class="remember-checkbox">
-                            <input type="checkbox" name="remember" id="rememberMe" value="1">
+                            <input type="checkbox" name="remember" id="rememberMe" value="1" <?php echo (!empty($remember) || !empty($_COOKIE['remember_email'])) ? 'checked' : ''; ?>>
                             <span>Remember me</span>
                         </label>
                         <a href="reset_password_request.php" class="forgot-link" id="switchToForgotView">Forgot password?</a>

@@ -1467,7 +1467,7 @@ if ($current_page_number < 1) {
                                 ) as combined_counts
                             ";
                             $count_result = mysqli_query($conn, $count_query);
-                            $total_records = mysqli_fetch_assoc($count_result)['total_records'] ?? 0;
+                            $total_records = ($count_result instanceof mysqli_result) ? ((int)(mysqli_fetch_assoc($count_result)['total_records'] ?? 0)) : 0;
                             $total_pages = max(1, ceil($total_records / $records_per_page));
 
                             // Main query: only delivery orders

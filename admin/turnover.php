@@ -122,23 +122,24 @@ if ($has_turnover_table) {
 
 // Calculate turnover rate
 $total_emp_sql = "SELECT COUNT(*) as count FROM employees e WHERE " . ($is_partner_scoped_hr ? $employee_scope_sql : '1=1');
-$total_emp = mysqli_fetch_assoc(mysqli_query($conn, $total_emp_sql))['count'];
+$total_emp_res = @mysqli_query($conn, $total_emp_sql);
+$total_emp = ($total_emp_res instanceof mysqli_result) ? ((int)(mysqli_fetch_assoc($total_emp_res)['count'] ?? 0)) : 0;
 $separated_this_year = 0;
 if ($has_turnover_table) {
     $sep_sql = "SELECT COUNT(*) as count
                 FROM employee_turnover et
                 JOIN employees e ON et.employee_id = e.id
                 WHERE YEAR(et.created_at) = YEAR(CURDATE())" . ($is_partner_scoped_hr ? " AND {$employee_scope_sql}" : "");
-    $sep_query = mysqli_query($conn, $sep_sql);
-    if ($sep_query) {
+    $sep_query = @mysqli_query($conn, $sep_sql);
+    if ($sep_query instanceof mysqli_result) {
         $separated_this_year = (int)(mysqli_fetch_assoc($sep_query)['count'] ?? 0);
     }
 }
 $turnover_rate = $total_emp > 0 ? round(($separated_this_year / $total_emp) * 100, 2) : 0;
 
 $active_emp_sql = "SELECT COUNT(*) as count FROM employees e WHERE e.status = 'active'" . ($is_partner_scoped_hr ? " AND {$employee_scope_sql}" : "");
-$active_emp = mysqli_query($conn, $active_emp_sql);
-$active_count = mysqli_fetch_assoc($active_emp)['count'];
+$active_emp = @mysqli_query($conn, $active_emp_sql);
+$active_count = ($active_emp instanceof mysqli_result) ? ((int)(mysqli_fetch_assoc($active_emp)['count'] ?? 0)) : 0;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -339,8 +340,8 @@ $active_count = mysqli_fetch_assoc($active_emp)['count'];
                                                 <option value="">Select Employee</option>
                                                 <?php
                                                 $active_employees_sql = "SELECT e.id, e.first_name, e.last_name FROM employees e WHERE e.status = 'active'" . ($is_partner_scoped_hr ? " AND {$employee_scope_sql}" : "") . " ORDER BY e.first_name";
-                                                $active_employees = mysqli_query($conn, $active_employees_sql);
-                                                while ($emp = mysqli_fetch_assoc($active_employees)) {
+                                                $active_employees = @mysqli_query($conn, $active_employees_sql);
+                                                while ($active_employees instanceof mysqli_result && ($emp = mysqli_fetch_assoc($active_employees))) {
                                                     echo "<option value='{$emp['id']}'>{$emp['first_name']} {$emp['last_name']}</option>";
                                                 }
                                                 ?>

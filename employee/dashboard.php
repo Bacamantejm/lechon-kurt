@@ -2,13 +2,26 @@
 require_once 'session_check.php';
 require_once 'header.php';
 
-// Fetch employee name from users table and employee record ID
-$stmt = $conn->prepare("SELECT u.full_name, e.id AS employee_id FROM users u LEFT JOIN employees e ON e.user_id = u.id WHERE u.id = ?");
+// Fetch employee name, role, department, and employee record
+$stmt = $conn->prepare("
+    SELECT u.full_name, u.email, u.profile_image, u.user_type,
+           r.name AS role_name, r.description AS role_description,
+           e.id AS employee_id, e.employee_id AS emp_code, e.position, e.hire_date,
+           d.department_name
+    FROM users u 
+    LEFT JOIN roles r ON u.role_id = r.id
+    LEFT JOIN employees e ON e.user_id = u.id 
+    LEFT JOIN departments d ON d.id = e.department_id
+    WHERE u.id = ?");
 $stmt->bind_param("i", $user_id);
 $stmt->execute();
 $result = $stmt->get_result();
 $employee = $result->fetch_assoc();
 $stmt->close();
+
+$role_slug = strtolower(trim((string)($employee['role_name'] ?? '')));
+$role_title = function_exists('getRoleDisplayName') ? getRoleDisplayName($role_slug) : ucwords(str_replace('_', ' ', $role_slug ?: 'Staff'));
+$role_title = preg_replace('/\s*\(.*\)\s*/', '', (string)$role_title);
 
 $employee_id = $employee['employee_id'] ?? 0;
 $attendance_count = 0;
@@ -90,9 +103,16 @@ if ($employee_id) {
                 <i class="fas fa-moon"></i>
             </button>
             <div class="date-display" id="currentDate" style="color: #666; font-size: 0.9rem; margin-right: 15px;"></div>
-            <div class="admin-profile">
-                <span><?php echo htmlspecialchars($employee['full_name'] ?? 'Team Member'); ?></span>
-                <i class="fas fa-user-circle"></i>
+            <div class="admin-profile d-flex align-items-center gap-2">
+                <div class="text-end d-none d-sm-block" style="line-height: 1.2;">
+                    <span class="fw-bold d-block text-dark" style="font-size: 13px;"><?php echo htmlspecialchars($employee['full_name'] ?? 'Team Member'); ?></span>
+                    <span class="badge" style="background: #eff8ff; color: #175cd3; border: 1px solid #b2ddff; font-size: 10px; padding: 2px 7px; border-radius: 10px; font-weight: 600;">
+                        <i class="fas fa-shield-alt me-1" style="font-size:8px;"></i>Role: <?php echo htmlspecialchars($role_title); ?>
+                    </span>
+                </div>
+                <div style="width:38px; height:38px; border-radius:50%; background:#b3261e; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:14px; box-shadow: 0 2px 6px rgba(179, 38, 30, 0.25);">
+                    <?php echo strtoupper(substr($employee['full_name'] ?? 'E', 0, 1)); ?>
+                </div>
             </div>
         </div>
     </div>
@@ -102,8 +122,19 @@ if ($employee_id) {
 <div class="admin-main">
     <div class="dashboard-header d-flex flex-column flex-md-row justify-content-between align-items-start gap-3">
         <div>
-            <h2>Welcome back, <?php echo htmlspecialchars($employee['full_name'] ?? 'Team Member'); ?>!</h2>
-            <p>Quick access to attendance, payslips, leave requests, and work updates.</p>
+            <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                <h2 class="mb-0">Welcome back, <?php echo htmlspecialchars($employee['full_name'] ?? 'Team Member'); ?>!</h2>
+                <span class="badge" style="background: #eff8ff; color: #175cd3; border: 1px solid #b2ddff; font-size: 13px; font-weight: 700; padding: 4px 12px; border-radius: 20px;">
+                    <i class="fas fa-user-tag me-1"></i> Role: <?php echo htmlspecialchars($role_title); ?>
+                </span>
+            </div>
+            <p class="text-muted mb-0">
+                Active Session &bull; Logged in as <strong><?php echo htmlspecialchars($role_title); ?></strong>
+                <?php if (!empty($employee['department_name'])): ?>
+                    &bull; Department: <strong><?php echo htmlspecialchars($employee['department_name']); ?></strong>
+                <?php endif; ?>
+                &bull; Quick access to attendance, payslips, leave requests, and work updates.
+            </p>
         </div>
         <div class="d-flex flex-wrap gap-2 align-items-center">
             <a href="attendance.php" class="quick-chip-link primary"><i class="fas fa-calendar-check"></i> Attendance</a>

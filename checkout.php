@@ -233,11 +233,27 @@ if (isset($conn) && $conn instanceof mysqli) {
     $store_res = mysqli_query($conn, $store_query);
     if ($store_res) {
         $stores = mysqli_fetch_all($store_res, MYSQLI_ASSOC);
+        foreach ($stores as &$st) {
+            $st['name'] = fixMojibakeText((string)($st['name'] ?? ''));
+            $st['store_name'] = fixMojibakeText((string)($st['store_name'] ?? ''));
+            $st['address'] = fixMojibakeText((string)($st['address'] ?? ''));
+            $st['city'] = fixMojibakeText((string)($st['city'] ?? ''));
+            $st['province'] = fixMojibakeText((string)($st['province'] ?? ''));
+        }
+        unset($st);
         $_SESSION['store_locations'] = $stores;
     }
 }
 if (empty($stores)) {
     $stores = $_SESSION['store_locations'] ?? [];
+    foreach ($stores as &$st) {
+        $st['name'] = fixMojibakeText((string)($st['name'] ?? ''));
+        $st['store_name'] = fixMojibakeText((string)($st['store_name'] ?? ''));
+        $st['address'] = fixMojibakeText((string)($st['address'] ?? ''));
+        $st['city'] = fixMojibakeText((string)($st['city'] ?? ''));
+        $st['province'] = fixMojibakeText((string)($st['province'] ?? ''));
+    }
+    unset($st);
 }
 
 // Auto-align seller store ID for pickup pre-selection if storefront_seller_id is set
@@ -559,10 +575,8 @@ $remaining = $total - $downpayment;
                     <div class="checkout-flow-step" data-step="2" style="cursor: pointer;"><span>2</span>Address</div>
                     <div class="checkout-flow-step" data-step="3" style="cursor: pointer;"><span>3</span>Payment</div>
                 </div>
-                <div class="progress-container" style="width: 100%; height: 6px; background: #efddcd; border-radius: 3px; margin-top: 15px; margin-bottom: 24px; overflow: visible; position: relative;">
-                    <div class="progress-bar" id="checkoutProgressBar" style="position: absolute; left: 0; top: 0; height: 100%; width: 33.33%; background: #b3261e; transition: width 0.3s ease; display: block !important; overflow: visible;">
-                        <div class="running-pig" style="position: absolute; right: -14px; top: -20px; font-size: 22px; user-select: none; line-height: 1; animation: pigRun 0.4s infinite alternate ease-in-out;">🐖</div>
-                    </div>
+                <div class="progress-container" style="width: 100%; height: 6px; background: #eaecf0; border-radius: 999px; margin-top: 14px; margin-bottom: 24px; overflow: hidden; position: relative;">
+                    <div class="progress-bar" id="checkoutProgressBar" style="position: absolute; left: 0; top: 0; height: 100%; width: 33.33%; background: #b3261e; border-radius: 999px; transition: width 0.3s ease; display: block !important;"></div>
                 </div>
 
                 <div class="checkout-type-switch" aria-label="Checkout Type">
@@ -922,53 +936,64 @@ $remaining = $total - $downpayment;
                                     <div style="font-size:0.84rem; font-weight:800; color:#344054; margin-bottom:12px; display:flex; align-items:center; gap:6px;">
                                         <i class="fas fa-tags" style="color:#b3261e;"></i> Claimed & Available Customer Vouchers:
                                     </div>
-                                    <div class="available-vouchers-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:12px;">
+                                    <div class="available-vouchers-grid">
                                         <?php foreach ($available_vouchers as $v): ?>
                                             <?php 
                                                 $is_current = (strtoupper($applied_voucher_code) === strtoupper($v['code']));
-                                                $disc_label = ($v['discount_type'] === 'percent') ? number_format($v['discount_value'], 0) . '% OFF' : 'PHP ' . number_format($v['discount_value'], 2) . ' OFF';
-                                                $min_spend_label = $v['min_order_amount'] > 0 ? 'Min. spend PHP ' . number_format($v['min_order_amount'], 2) : 'No min. spend';
+                                                $disc_offer = ($v['discount_type'] === 'percent') ? (number_format($v['discount_value'], 0) . '% off*') : ('Flat ₱' . number_format($v['discount_value'], 0) . ' off*');
+                                                $min_spend_label = $v['min_order_amount'] > 0 ? ('*Min. spend PHP ' . number_format($v['min_order_amount'], 2)) : '*Terms & conditions apply';
                                             ?>
                                             <div class="available-voucher-card<?php echo $is_current ? ' is-active' : ''; ?><?php echo !$v['is_eligible'] ? ' is-ineligible' : ''; ?>" 
-                                                 style="background:<?php echo $is_current ? '#ecfdf3' : '#f8f9fa'; ?>; border:1px solid <?php echo $is_current ? '#abefc6' : '#eaecf0'; ?>; border-radius:12px; padding:12px 14px; position:relative; transition:all 0.2s; box-shadow: 0 1px 3px rgba(16,24,40,0.04);">
-                                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                                                    <span style="font-family:'Outfit',sans-serif; font-weight:800; font-size:0.95rem; color:#b3261e; letter-spacing:0.5px;">
-                                                        <?php echo htmlspecialchars($v['code']); ?>
-                                                    </span>
-                                                    <span style="font-size:0.68rem; font-weight:800; padding:2px 8px; border-radius:999px; background:<?php echo $v['seller_id'] > 0 ? '#eff8ff' : '#fff1f0'; ?>; color:<?php echo $v['seller_id'] > 0 ? '#175cd3' : '#b3261e'; ?>; border:1px solid <?php echo $v['seller_id'] > 0 ? '#b2ddff' : '#fee4e2'; ?>;">
-                                                        <?php echo htmlspecialchars($v['badge']); ?>
-                                                    </span>
+                                                 data-voucher-code="<?php echo htmlspecialchars(strtoupper($v['code'])); ?>">
+                                                
+                                                <!-- Left Vertical Ticket Stub -->
+                                                <div class="voucher-ticket-stub">
+                                                    <span class="voucher-ticket-stub-text">DISCOUNT</span>
                                                 </div>
-                                                <div style="font-size:0.84rem; font-weight:700; color:#101828; margin-bottom:2px;">
-                                                    <?php echo htmlspecialchars($v['name']); ?> (<?php echo $disc_label; ?>)
+
+                                                <!-- Right Voucher Ticket Body -->
+                                                <div class="voucher-ticket-body">
+                                                    <div class="voucher-ticket-top">
+                                                        <span class="voucher-ticket-discount"><?php echo htmlspecialchars($disc_offer); ?></span>
+                                                        <div class="voucher-ticket-icon-wrap" title="<?php echo htmlspecialchars($v['badge']); ?>">
+                                                            <div class="voucher-ticket-dots">
+                                                                <span class="dot dot-1"></span>
+                                                                <span class="dot dot-2"></span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="voucher-ticket-code"><?php echo htmlspecialchars($v['code']); ?></div>
+                                                    <div class="voucher-ticket-desc" title="<?php echo htmlspecialchars($v['name']); ?>"><?php echo htmlspecialchars($v['name']); ?></div>
+                                                    <div class="voucher-ticket-terms"><?php echo htmlspecialchars($min_spend_label); ?></div>
+
+                                                    <div class="voucher-ticket-action">
+                                                        <?php if ($is_current): ?>
+                                                            <button type="button" class="voucher-pill-btn is-applied" disabled>
+                                                                <i class="fas fa-check-circle"></i> Applied
+                                                            </button>
+                                                        <?php elseif ($v['is_eligible']): ?>
+                                                            <button type="button" onclick="applySelectedVoucher('<?php echo htmlspecialchars($v['code']); ?>')" class="voucher-pill-btn">
+                                                                Apply Code
+                                                            </button>
+                                                        <?php else: ?>
+                                                            <?php
+                                                                $cart_subtotal_val = (float)($subtotal ?? 0);
+                                                                $min_spend_val = (float)($v['min_order_amount'] ?? 0);
+                                                                $shortfall = ($min_spend_val > $cart_subtotal_val) ? ($min_spend_val - $cart_subtotal_val) : 0;
+                                                            ?>
+                                                            <?php if ($shortfall > 0): ?>
+                                                                <button type="button" onclick="showVoucherShortfall('<?php echo htmlspecialchars($v['code']); ?>', <?php echo $min_spend_val; ?>, <?php echo $shortfall; ?>)" class="voucher-pill-btn is-shortfall" title="Click to view requirements">
+                                                                    <i class="fas fa-plus-circle"></i> Add PHP <?php echo number_format($shortfall, 2); ?> to unlock
+                                                                </button>
+                                                            <?php else: ?>
+                                                                <button type="button" onclick="showVoucherShortfall('<?php echo htmlspecialchars($v['code']); ?>', 0, 0, '<?php echo htmlspecialchars(addslashes($v['ineligible_reason'])); ?>')" class="voucher-pill-btn is-shortfall" title="Click for details">
+                                                                    <i class="fas fa-info-circle"></i> <?php echo htmlspecialchars($v['ineligible_reason']); ?>
+                                                                </button>
+                                                            <?php endif; ?>
+                                                        <?php endif; ?>
+                                                    </div>
                                                 </div>
-                                                <div style="font-size:0.75rem; color:#667085; margin-bottom:10px;">
-                                                    <?php echo htmlspecialchars($min_spend_label); ?>
-                                                </div>
-                                                <?php if ($is_current): ?>
-                                                    <button type="button" class="btn btn-sm" style="width:100%; background:#027a48; color:#fff; font-weight:700; font-size:0.8rem; border-radius:8px; padding:7px; border:none;" disabled>
-                                                        <i class="fas fa-check-circle"></i> Applied
-                                                    </button>
-                                                <?php elseif ($v['is_eligible']): ?>
-                                                    <button type="button" onclick="applySelectedVoucher('<?php echo htmlspecialchars($v['code']); ?>')" class="btn btn-sm" style="width:100%; background:#b3261e; color:#fff; font-weight:700; font-size:0.8rem; border-radius:8px; padding:7px; border:none; cursor:pointer;" onmouseover="this.style.background='#981b15';" onmouseout="this.style.background='#b3261e';">
-                                                        <i class="fas fa-ticket-alt"></i> Apply Voucher
-                                                    </button>
-                                                <?php else: ?>
-                                                    <?php
-                                                        $cart_subtotal_val = (float)($subtotal ?? 0);
-                                                        $min_spend_val = (float)($v['min_order_amount'] ?? 0);
-                                                        $shortfall = ($min_spend_val > $cart_subtotal_val) ? ($min_spend_val - $cart_subtotal_val) : 0;
-                                                    ?>
-                                                    <?php if ($shortfall > 0): ?>
-                                                        <button type="button" onclick="showVoucherShortfall('<?php echo htmlspecialchars($v['code']); ?>', <?php echo $min_spend_val; ?>, <?php echo $shortfall; ?>)" class="btn btn-sm" style="width:100%; background:#fff1f0; color:#b3261e; font-weight:700; font-size:0.75rem; border-radius:8px; padding:7px; border:1px solid #fee4e2; cursor:pointer;" title="Click to view requirements">
-                                                            <i class="fas fa-plus-circle"></i> Add PHP <?php echo number_format($shortfall, 2); ?> to unlock
-                                                        </button>
-                                                    <?php else: ?>
-                                                        <button type="button" onclick="showVoucherShortfall('<?php echo htmlspecialchars($v['code']); ?>', 0, 0, '<?php echo htmlspecialchars(addslashes($v['ineligible_reason'])); ?>')" class="btn btn-sm" style="width:100%; background:#f2f4f7; color:#667085; font-weight:700; font-size:0.75rem; border-radius:8px; padding:7px; border:1px solid #eaecf0; cursor:pointer;" title="Click for details">
-                                                            <i class="fas fa-info-circle"></i> <?php echo htmlspecialchars($v['ineligible_reason']); ?>
-                                                        </button>
-                                                    <?php endif; ?>
-                                                <?php endif; ?>
                                             </div>
                                         <?php endforeach; ?>
                                     </div>
@@ -1234,6 +1259,240 @@ $remaining = $total - $downpayment;
 .voucher-feedback.warning {
     color: #b45309;
     font-weight: 600;
+}
+
+/* Minimized Voucher Ticket Cards (Modern coupon stub UI) */
+.available-vouchers-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+}
+
+.available-voucher-card {
+    background: #ffffff;
+    border: 1px solid #e0e2ec;
+    border-radius: 14px;
+    display: flex;
+    flex-direction: row;
+    position: relative;
+    overflow: hidden;
+    min-height: 124px;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.available-voucher-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(16, 24, 40, 0.08);
+    border-color: #cbd5e1;
+}
+
+.available-voucher-card.is-active {
+    background: #fcfdff;
+    border-color: #5c35cc;
+    box-shadow: 0 0 0 1px #5c35cc, 0 4px 14px rgba(92, 53, 204, 0.12);
+}
+
+.available-voucher-card.is-ineligible {
+    opacity: 0.88;
+    background: #fcfcfd;
+}
+
+/* Left Vertical Ticket Stub */
+.voucher-ticket-stub {
+    width: 36px;
+    min-width: 36px;
+    background: linear-gradient(180deg, #5c35cc 0%, #4a28a8 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    user-select: none;
+    flex-shrink: 0;
+    transition: background 0.2s ease;
+}
+
+.available-voucher-card.is-active .voucher-ticket-stub {
+    background: linear-gradient(180deg, #027a48 0%, #05603a 100%);
+}
+
+/* Punch-out notch on left edge */
+.voucher-ticket-stub::before {
+    content: "";
+    position: absolute;
+    left: -7px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: inset -1px 0 1px rgba(0, 0, 0, 0.08);
+    z-index: 2;
+}
+
+/* Vertical Stub Text */
+.voucher-ticket-stub-text {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.18em;
+    color: #ffffff;
+    text-transform: uppercase;
+    font-family: 'Outfit', -apple-system, sans-serif;
+    line-height: 1;
+}
+
+/* Right Main Content Body */
+.voucher-ticket-body {
+    flex: 1;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-width: 0;
+}
+
+/* Top Row: Discount Label & Circles */
+.voucher-ticket-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 2px;
+}
+
+.voucher-ticket-discount {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #475467;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.voucher-ticket-icon-wrap {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #f8f9fa;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    flex-shrink: 0;
+    border: 1px solid #f2f4f7;
+}
+
+.voucher-ticket-dots {
+    display: flex;
+    align-items: center;
+    position: relative;
+    width: 16px;
+    height: 10px;
+}
+
+.voucher-ticket-dots .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    position: absolute;
+    top: 0;
+}
+
+.voucher-ticket-dots .dot-1 {
+    left: 0;
+    background: #991b1b;
+}
+
+.voucher-ticket-dots .dot-2 {
+    left: 6px;
+    background: #ea580c;
+    opacity: 0.9;
+}
+
+/* Code & Name */
+.voucher-ticket-code {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: #101828;
+    letter-spacing: 0.4px;
+    line-height: 1.2;
+    margin: 1px 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.voucher-ticket-desc {
+    font-size: 0.72rem;
+    color: #667085;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 2px;
+}
+
+.voucher-ticket-terms {
+    font-size: 0.67rem;
+    color: #5c35cc;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 6px;
+}
+
+/* Action Button */
+.voucher-pill-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    width: 100%;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    border: 1px solid #d0d5dd;
+    background: #ffffff;
+    color: #1d2939;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.18s ease;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
+.voucher-pill-btn:hover {
+    background: #f8f9fa;
+    border-color: #5c35cc;
+    color: #5c35cc;
+}
+
+.voucher-pill-btn.is-applied,
+.available-voucher-card.is-active .voucher-pill-btn {
+    background: #027a48;
+    border-color: #027a48;
+    color: #ffffff;
+    cursor: default;
+}
+
+.voucher-pill-btn.is-shortfall {
+    background: #fff1f0;
+    border-color: #fee4e2;
+    color: #b3261e;
+    font-size: 0.71rem;
+    padding: 5px 8px;
+}
+
+.voucher-pill-btn.is-shortfall:hover {
+    background: #fee4e2;
+    border-color: #fecdca;
 }
 
 .payment-type-section h4 {
@@ -2331,43 +2590,58 @@ body {
 }
 
 @media (max-width: 700px) {
-    .checkout-summary-kpis,
+    .checkout-summary-kpis {
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 8px !important;
+    }
+
+    .checkout-kpi {
+        padding: 8px 6px !important;
+        border-radius: 10px !important;
+        text-align: center !important;
+    }
+
     .checkout-flow {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 6px !important;
     }
 
     .checkout-flow-step {
-        justify-content: flex-start;
-        padding: 0 12px;
+        justify-content: center !important;
+        padding: 6px 4px !important;
+        font-size: 0.74rem !important;
+        min-height: 36px !important;
+    }
+
+    .checkout-flow-step span {
+        width: 18px !important;
+        height: 18px !important;
+        font-size: 0.68rem !important;
     }
 
     .checkout-mode-sticky {
-        display: block;
-        position: fixed;
-        left: 12px;
-        right: 12px;
-        bottom: 78px;
-        z-index: 998;
-        background: rgba(255, 255, 255, 0.98);
-        border: 1px solid #f0ddd0;
-        border-radius: 12px;
-        box-shadow: 0 10px 22px rgba(0, 0, 0, 0.12);
-        padding: 10px;
-        backdrop-filter: blur(4px);
+        display: none !important;
     }
 
-    .checkout-mode-sticky-actions {
-        width: 100%;
-        display: grid;
-        grid-template-columns: 1fr 1fr;
+    .checkout-section {
+        padding: 20px 0 160px !important;
     }
 
-    .checkout-mode-sticky .checkout-mode-btn {
-        justify-content: center;
+    .checkout-form,
+    .checkout-summary {
+        padding: 20px 14px !important;
+        border-radius: 16px !important;
     }
 
-    .checkout-form {
-        padding-bottom: 140px;
+    .co-address-card,
+    .co-delivery-map-card,
+    .voucher-section {
+        padding: 16px 12px !important;
+        border-radius: 14px !important;
+    }
+
+    .custom-payment-method-card {
+        padding: 12px 14px !important;
     }
 }
 
@@ -2606,10 +2880,10 @@ body {
         gap: 24px;
     }
     .checkout-form {
-        order: 2;
+        order: 1 !important;
     }
     .checkout-summary {
-        order: 1;
+        order: 2 !important;
     }
 }
 /* ==========================================================================
@@ -3826,17 +4100,21 @@ async function applyVoucherCode(codeOverride) {
 
         // Dynamically update available voucher cards UI
         document.querySelectorAll('.available-voucher-card').forEach(card => {
-            const cardCodeEl = card.querySelector('span');
-            const cardCode = cardCodeEl ? cardCodeEl.textContent.trim().toUpperCase() : '';
+            const cardCode = (card.dataset.voucherCode || (card.querySelector('.voucher-ticket-code') ? card.querySelector('.voucher-ticket-code').textContent.trim() : '')).toUpperCase();
+            const btn = card.querySelector('.voucher-pill-btn');
             if (cardCode === currentVoucherCode) {
                 card.classList.add('is-active');
-                card.style.background = '#ecfdf3';
-                card.style.borderColor = '#abefc6';
+                if (btn) {
+                    btn.classList.add('is-applied');
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-check-circle"></i> Applied';
+                }
             } else {
                 card.classList.remove('is-active');
-                if (!card.classList.contains('is-ineligible')) {
-                    card.style.background = '#f8f9fa';
-                    card.style.borderColor = '#eaecf0';
+                if (btn && !card.classList.contains('is-ineligible')) {
+                    btn.classList.remove('is-applied');
+                    btn.disabled = false;
+                    btn.innerHTML = 'Apply Code';
                 }
             }
         });
@@ -3880,9 +4158,11 @@ async function removeVoucherCode() {
 
         document.querySelectorAll('.available-voucher-card').forEach(card => {
             card.classList.remove('is-active');
-            if (!card.classList.contains('is-ineligible')) {
-                card.style.background = '#f8f9fa';
-                card.style.borderColor = '#eaecf0';
+            const btn = card.querySelector('.voucher-pill-btn');
+            if (btn && !card.classList.contains('is-ineligible')) {
+                btn.classList.remove('is-applied');
+                btn.disabled = false;
+                btn.innerHTML = 'Apply Code';
             }
         });
     } catch (error) {
