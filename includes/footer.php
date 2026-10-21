@@ -106,7 +106,7 @@
     .mobile-bottom-nav {
         display: none;
         position: fixed;
-        bottom: 16px;
+        bottom: calc(16px + env(safe-area-inset-bottom, 0px));
         left: 16px;
         right: 16px;
         height: 64px;
@@ -122,6 +122,7 @@
         align-items: center;
         transform: translate3d(0, 0, 0);
         will-change: transform;
+        touch-action: manipulation;
     }
     .mob-nav-item {
         flex: 1;
@@ -136,13 +137,16 @@
         font-family: 'Plus Jakarta Sans', sans-serif;
         padding: 4px 0;
         gap: 2px;
-        transition: color 0.15s ease-out, transform 0.15s ease-out;
+        transition: color 0.1s ease-out, transform 0.06s ease-out;
         -webkit-tap-highlight-color: transparent;
+        touch-action: manipulation;
         position: relative;
     }
-    .mob-nav-item:active {
-        transform: scale(0.97);
-        transition-duration: 0.15s;
+    .mob-nav-item:active,
+    .mob-nav-item.is-touch-active {
+        transform: scale(0.93) translateZ(0);
+        transition-duration: 0.05s;
+        color: #b3261e;
     }
     .mob-nav-icon {
         position: relative;
@@ -179,11 +183,13 @@
         align-items: center;
         justify-content: center;
         border: 2.5px solid #ffffff;
-        transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
+        transition: transform 0.08s ease-out, box-shadow 0.08s ease-out;
+        touch-action: manipulation;
     }
-    .mob-nav-item.mob-center-action:active {
-        transform: translateY(-6px) scale(0.97) !important;
-        transition-duration: 0.15s;
+    .mob-nav-item.mob-center-action:active,
+    .mob-nav-item.mob-center-action.is-touch-active {
+        transform: translateY(-6px) scale(0.92) translateZ(0) !important;
+        transition-duration: 0.05s !important;
     }
     .mob-nav-item.mob-center-action .mob-nav-icon {
         font-size: 1.25rem;

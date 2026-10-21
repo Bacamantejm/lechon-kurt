@@ -35,6 +35,20 @@
 <script src="../js/bootstrap.bundle.min.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+// Instant Mobile Touch Tactile Feedback
+document.addEventListener('pointerdown', function(e) {
+    const target = e.target.closest('a, button, [role="button"], .rider-nav-item, .duty-switch-btn, .btn');
+    if (!target) return;
+    target.classList.add('is-touch-active');
+    const onRelease = () => {
+        target.classList.remove('is-touch-active');
+        window.removeEventListener('pointerup', onRelease);
+        window.removeEventListener('pointercancel', onRelease);
+    };
+    window.addEventListener('pointerup', onRelease, { once: true, passive: true });
+    window.addEventListener('pointercancel', onRelease, { once: true, passive: true });
+}, { passive: true });
 
 // Geolocation streaming helper for active riders
 let riderGeoWatchId = null;

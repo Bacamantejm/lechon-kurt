@@ -35,6 +35,33 @@
     box-sizing: border-box;
 }
 
+/* 0ms Delay Mobile Touch Manipulation Optimization */
+html, body, a, button, input, select, textarea, label, [role="button"],
+.btn, .btn-icon, .sidebar-toggler, .menu-item, .submenu-item, .action-btn,
+.stat-card, .metric-card, .tab-btn, .pagination-btn, .page-link, .module-card {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Instant Tactile Feedback */
+.is-pressing,
+.is-touch-active,
+.menu-item.is-touch-active,
+.submenu-item.is-touch-active,
+.btn.is-touch-active,
+.action-btn.is-touch-active {
+    transform: scale(0.96) translateZ(0) !important;
+    transition: transform 0.05s ease-out !important;
+}
+
+@media (hover: none) and (pointer: coarse) {
+    a:active, button:active, [role="button"]:active,
+    .btn:active, .menu-item:active, .submenu-item:active, .action-btn:active {
+        transform: scale(0.96) translateZ(0);
+        transition: transform 0.05s ease-out !important;
+    }
+}
+
 body {
     font-family: 'Inter', sans-serif;
     background-color: #f8f9fa;

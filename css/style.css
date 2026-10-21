@@ -4,6 +4,16 @@
     box-sizing: border-box;
 }
 
+/* Zero 300ms Tap Delay & Mobile Touch Optimization */
+html, body, a, button, input, select, textarea, label, [role="button"],
+.btn, .mob-nav-item, .rider-nav-item, .menu-item, .submenu-item,
+.mobile-toggle, .mobile-menu-close, .sidebar-toggler, .nav-link,
+.tab-btn, .category-chip, .user-avatar-btn, .icon-btn, .action-btn,
+.card, .product-card, .store-card, .filter-chip, .pill-btn, .order-btn {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
 img, video, iframe, canvas {
     max-width: 100%;
     height: auto;
@@ -2157,4 +2167,27 @@ body.dark-mode .form-helper-text {
 /* Mobile Safe Bottom Padding */
 .site-main-padded {
     padding-bottom: 140px !important;
+}
+
+/* Mobile 0ms Touch Tactile Active Response */
+@media (hover: none) and (pointer: coarse) {
+    a:active,
+    button:active,
+    [role="button"]:active,
+    .btn:active,
+    .mob-nav-item:active,
+    .rider-nav-item:active,
+    .menu-item:active,
+    .icon-btn:active,
+    .mobile-toggle:active,
+    .mobile-menu-close:active {
+        transform: scale(0.96) translateZ(0);
+        transition: transform 0.05s ease-out !important;
+    }
+}
+
+.is-touch-active {
+    transform: scale(0.96) translateZ(0) !important;
+    transition: transform 0.05s ease-out !important;
+    opacity: 0.92;
 }

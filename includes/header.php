@@ -154,7 +154,7 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
         })();
     </script>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
     <title><?php echo htmlspecialchars($page_title . ' | Lechon Delights'); ?></title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -178,6 +178,37 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
         
         * { box-sizing:border-box; }
         html, body { margin:0; padding:0; overflow-x:clip !important; max-width:100vw; width:100%; font-family:"Plus Jakarta Sans","Segoe UI",sans-serif; background:var(--bg); color:var(--ink); }
+        
+        /* 0ms Delay Mobile Touch Responsiveness & Tap Optimization */
+        html, body, a, button, input, select, textarea, label, [role="button"],
+        .btn, .mob-nav-item, .rider-nav-item, .menu-item, .submenu-item,
+        .mobile-toggle, .mobile-menu-close, .sidebar-toggler, .nav-link,
+        .tab-btn, .category-chip, .user-avatar-btn, .icon-btn, .action-btn,
+        .card, .product-card, .store-card, .filter-chip, .pill-btn, .order-btn {
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Instant Tactile Touch Micro-Feedback */
+        .is-touch-active,
+        .mob-nav-item.is-touch-active,
+        .rider-nav-item.is-touch-active,
+        .menu-item.is-touch-active,
+        .btn.is-touch-active,
+        .icon-btn.is-touch-active {
+            transform: scale(0.95) translateZ(0) !important;
+            transition: transform 0.05s ease-out !important;
+            opacity: 0.92;
+        }
+
+        @media (hover: none) and (pointer: coarse) {
+            a:active, button:active, [role="button"]:active,
+            .btn:active, .mob-nav-item:active, .rider-nav-item:active,
+            .menu-item:active, .icon-btn:active, .mobile-toggle:active {
+                transform: scale(0.96) translateZ(0);
+                transition: transform 0.05s ease-out !important;
+            }
+        }
         img, video, iframe, canvas { max-width:100%; height:auto; }
         pre, code { max-width:100%; }
         h1,h2,h3,h4,h5,h6 { font-family:"Outfit","Plus Jakarta Sans",sans-serif; }
@@ -2006,7 +2037,7 @@ window.openMobileNavSidebar = function(e) {
     if (m) {
         m.classList.add('active');
         m.style.setProperty('display', 'flex', 'important');
-        m.style.setProperty('transform', 'translateX(0)', 'important');
+        m.style.setProperty('transform', 'translate3d(0, 0, 0)', 'important');
         m.style.setProperty('visibility', 'visible', 'important');
         m.style.setProperty('pointer-events', 'auto', 'important');
         m.style.setProperty('opacity', '1', 'important');
@@ -2033,7 +2064,7 @@ window.closeMobileNavSidebar = function(e) {
     var o = document.getElementById('mobileOverlay');
     if (m) {
         m.classList.remove('active');
-        m.style.setProperty('transform', 'translateX(-100%)', 'important');
+        m.style.setProperty('transform', 'translate3d(-100%, 0, 0)', 'important');
         m.style.setProperty('pointer-events', 'none', 'important');
     }
     if (o) {
@@ -2044,10 +2075,12 @@ window.closeMobileNavSidebar = function(e) {
             if (o && !o.classList.contains('active')) {
                 o.style.setProperty('display', 'none', 'important');
             }
-        }, 280);
+        }, 220);
     }
     document.body.style.overflow = '';
 };
+
+// 0ms Fast Touch & Click Listeners for Drawer
 document.addEventListener('click', function(e) {
     var toggle = e.target.closest('#mobileToggle, #mobileToggle2, .mobile-toggle');
     if (toggle) {
@@ -2057,8 +2090,66 @@ document.addEventListener('click', function(e) {
     var close = e.target.closest('#mobileMenuClose, .mobile-menu-close, #mobileOverlay');
     if (close) {
         window.closeMobileNavSidebar(e);
+        return;
+    }
+    var navLink = e.target.closest('.mobile-nav a');
+    if (navLink) {
+        window.closeMobileNavSidebar(e);
     }
 }, true);
+
+document.addEventListener('pointerdown', function(e) {
+    var toggle = e.target.closest('#mobileToggle, #mobileToggle2, .mobile-toggle');
+    if (toggle) {
+        window.openMobileNavSidebar(e);
+        return;
+    }
+    var close = e.target.closest('#mobileMenuClose, .mobile-menu-close, #mobileOverlay');
+    if (close) {
+        window.closeMobileNavSidebar(e);
+        return;
+    }
+
+    // Instant tactile feedback on any touchable element
+    var touchable = e.target.closest('a, button, [role="button"], .mob-nav-item, .rider-nav-item, .menu-item, .btn, .icon-btn, .tab-btn');
+    if (touchable) {
+        touchable.classList.add('is-touch-active');
+        var onRelease = function() {
+            touchable.classList.remove('is-touch-active');
+            window.removeEventListener('pointerup', onRelease);
+            window.removeEventListener('pointercancel', onRelease);
+        };
+        window.addEventListener('pointerup', onRelease, { once: true, passive: true });
+        window.addEventListener('pointercancel', onRelease, { once: true, passive: true });
+    }
+}, { passive: true });
+
+// Instant Mobile Navigation Micro-Progress Bar
+(function() {
+    var progressBar = document.createElement('div');
+    progressBar.id = 'siteNavProgressBar';
+    progressBar.style.cssText = 'position:fixed;top:0;left:0;height:2.5px;width:0%;background:#b3261e;z-index:9999999;transition:width 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.18s ease;pointer-events:none;opacity:0;box-shadow:0 0 10px rgba(179,38,30,0.7);';
+    document.documentElement.appendChild(progressBar);
+
+    document.addEventListener('click', function(e) {
+        var link = e.target.closest('a[href]');
+        if (!link) return;
+        var href = link.getAttribute('href');
+        if (!href || href.startsWith('#') || href.startsWith('javascript:') || href.startsWith('tel:') || href.startsWith('mailto:') || link.target === '_blank' || e.defaultPrevented || e.ctrlKey || e.metaKey || e.shiftKey) {
+            return;
+        }
+        progressBar.style.opacity = '1';
+        progressBar.style.width = '78%';
+    }, { capture: true, passive: true });
+
+    window.addEventListener('pageshow', function() {
+        progressBar.style.width = '100%';
+        setTimeout(function() {
+            progressBar.style.opacity = '0';
+            setTimeout(function() { progressBar.style.width = '0%'; }, 200);
+        }, 120);
+    });
+})();
 </script>
 
 <body class="<?php echo $is_market_home_header ? 'market-body' : 'site-body'; ?><?php echo $is_initial_dark ? ' dark-mode' : ''; ?>">

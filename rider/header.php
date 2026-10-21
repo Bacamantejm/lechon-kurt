@@ -66,6 +66,13 @@ if (isset($rider['id'])) {
             -webkit-tap-highlight-color: transparent;
         }
 
+        /* 0ms Mobile Tap Delay Elimination */
+        html, body, a, button, input, select, textarea, label, [role="button"],
+        .rider-nav-item, .rider-card, .duty-switch-btn, .btn, .btn-sm {
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+
         body {
             font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background-color: var(--page-bg);
@@ -357,11 +364,12 @@ if (isset($rider['id'])) {
             border-top: 1px solid var(--border-neutral);
             display: flex;
             justify-content: space-around;
-            padding: 8px 6px (max(8px, env(safe-area-inset-bottom)));
+            padding: 8px 6px calc(max(8px, env(safe-area-inset-bottom, 8px)));
             z-index: 1050;
             box-shadow: 0 -2px 10px rgba(16, 24, 40, 0.05);
             max-width: 540px;
             margin: 0 auto;
+            touch-action: manipulation;
         }
 
         .rider-nav-item {
@@ -375,10 +383,18 @@ if (isset($rider['id'])) {
             font-weight: 600;
             padding: 4px 8px;
             border-radius: 8px;
-            transition: color 0.15s ease;
+            transition: color 0.1s ease, transform 0.06s ease;
             position: relative;
             flex: 1;
             text-align: center;
+            touch-action: manipulation;
+        }
+
+        .rider-nav-item:active,
+        .rider-nav-item.is-touch-active {
+            transform: scale(0.93) translateZ(0);
+            transition: transform 0.05s ease-out;
+            color: var(--primary-red);
         }
 
         .rider-nav-item i {
