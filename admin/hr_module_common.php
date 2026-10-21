@@ -56,90 +56,88 @@ if (!function_exists('hrSafeEnum')) {
 
 if (!function_exists('hrTableExists')) {
     function hrTableExists($conn, $table_name) {
-        $sql = "SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ? LIMIT 1";
-        $stmt = mysqli_prepare($conn, $sql);
-        if (!$stmt) {
+        static $cache = [];
+        $table_name = trim((string)$table_name);
+        if ($table_name === '' || !$conn) {
             return false;
         }
+        if (array_key_exists($table_name, $cache)) {
+            return $cache[$table_name];
+        }
 
-        mysqli_stmt_bind_param($stmt, "s", $table_name);
-        mysqli_stmt_execute($stmt);
-        $result = mysqli_stmt_get_result($stmt);
-        $exists = $result && mysqli_num_rows($result) > 0;
-        mysqli_stmt_close($stmt);
-
+        $safe_table = mysqli_real_escape_string($conn, $table_name);
+        $result = @mysqli_query($conn, "SHOW TABLES LIKE '{$safe_table}'");
+        $exists = ($result instanceof mysqli_result) && (mysqli_num_rows($result) > 0);
+        $cache[$table_name] = $exists;
         return $exists;
     }
 }
 
 if (!function_exists('hrColumnExists')) {
     function hrColumnExists($conn, $table_name, $column_name) {
-        $sql = "SELECT 1
-                FROM information_schema.columns
-                WHERE table_schema = DATABASE()
-                  AND table_name = ?
-                  AND column_name = ?
-                LIMIT 1";
-        $stmt = mysqli_prepare($conn, $sql);
-        if (!$stmt) {
+        static $cache = [];
+        $table_name = trim((string)$table_name);
+        $column_name = trim((string)$column_name);
+        $cache_key = $table_name . '.' . $column_name;
+
+        if ($table_name === '' || $column_name === '' || !$conn) {
             return false;
         }
+        if (array_key_exists($cache_key, $cache)) {
+            return $cache[$cache_key];
+        }
+        if (!hrTableExists($conn, $table_name)) {
+            return $cache[$cache_key] = false;
+        }
 
-        mysqli_stmt_bind_param($stmt, "ss", $table_name, $column_name);
-        mysqli_stmt_execute($stmt);
-        $result = mysqli_stmt_get_result($stmt);
-        $exists = $result && mysqli_num_rows($result) > 0;
-        mysqli_stmt_close($stmt);
-
+        $safe_table = mysqli_real_escape_string($conn, $table_name);
+        $safe_col = mysqli_real_escape_string($conn, $column_name);
+        $result = @mysqli_query($conn, "SHOW COLUMNS FROM `{$safe_table}` LIKE '{$safe_col}'");
+        $exists = ($result instanceof mysqli_result) && (mysqli_num_rows($result) > 0);
+        $cache[$cache_key] = $exists;
         return $exists;
     }
 }
 
 if (!function_exists('hrIndexExists')) {
     function hrIndexExists($conn, $table_name, $index_name) {
-        $sql = "SELECT 1
-                FROM information_schema.statistics
-                WHERE table_schema = DATABASE()
-                  AND table_name = ?
-                  AND index_name = ?
-                LIMIT 1";
-        $stmt = mysqli_prepare($conn, $sql);
-        if (!$stmt) {
+        static $cache = [];
+        $table_name = trim((string)$table_name);
+        $index_name = trim((string)$index_name);
+        $cache_key = $table_name . '.' . $index_name;
+
+        if ($table_name === '' || $index_name === '' || !$conn) {
             return false;
         }
+        if (array_key_exists($cache_key, $cache)) {
+            return $cache[$cache_key];
+        }
+        if (!hrTableExists($conn, $table_name)) {
+            return $cache[$cache_key] = false;
+        }
 
-        mysqli_stmt_bind_param($stmt, "ss", $table_name, $index_name);
-        mysqli_stmt_execute($stmt);
-        $result = mysqli_stmt_get_result($stmt);
-        $exists = $result && mysqli_num_rows($result) > 0;
-        mysqli_stmt_close($stmt);
-
+        $safe_table = mysqli_real_escape_string($conn, $table_name);
+        $safe_idx = mysqli_real_escape_string($conn, $index_name);
+        $result = @mysqli_query($conn, "SHOW INDEX FROM `{$safe_table}` WHERE Key_name = '{$safe_idx}'");
+        $exists = ($result instanceof mysqli_result) && (mysqli_num_rows($result) > 0);
+        $cache[$cache_key] = $exists;
         return $exists;
     }
 }
 
 if (!function_exists('hrHasForeignKeyReference')) {
     function hrHasForeignKeyReference($conn, $table_name, $column_name, $referenced_table, $referenced_column = 'id') {
-        $sql = "SELECT 1
-                FROM information_schema.key_column_usage
-                WHERE table_schema = DATABASE()
-                  AND table_name = ?
-                  AND column_name = ?
-                  AND referenced_table_name = ?
-                  AND referenced_column_name = ?
-                LIMIT 1";
-        $stmt = mysqli_prepare($conn, $sql);
-        if (!$stmt) {
+        if (!$conn || !hrTableExists($conn, $table_name)) {
             return false;
         }
-
-        mysqli_stmt_bind_param($stmt, "ssss", $table_name, $column_name, $referenced_table, $referenced_column);
-        mysqli_stmt_execute($stmt);
-        $result = mysqli_stmt_get_result($stmt);
-        $exists = $result && mysqli_num_rows($result) > 0;
-        mysqli_stmt_close($stmt);
-
-        return $exists;
+        $safe_table = mysqli_real_escape_string($conn, $table_name);
+        $res = @mysqli_query($conn, "SHOW CREATE TABLE `{$safe_table}`");
+        if ($res instanceof mysqli_result && ($row = mysqli_fetch_row($res))) {
+            $create_sql = (string)($row[1] ?? '');
+            $expected = "FOREIGN KEY (`{$column_name}`) REFERENCES `{$referenced_table}`";
+            return stripos($create_sql, $expected) !== false;
+        }
+        return false;
     }
 }
 
@@ -250,6 +248,54 @@ if (!function_exists('formatEmployeeFullName')) {
     }
 }
 
+if (!function_exists('hrEnsureDepartmentsTable')) {
+    function hrEnsureDepartmentsTable($conn) {
+        if (!$conn) return false;
+        if (!hrTableExists($conn, 'departments')) {
+            @mysqli_query($conn, "CREATE TABLE IF NOT EXISTS `departments` (
+                `id` int NOT NULL AUTO_INCREMENT,
+                `department_name` varchar(100) NOT NULL,
+                `description` text,
+                `manager_id` int DEFAULT NULL,
+                `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (`id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci");
+        }
+        if (hrTableExists($conn, 'departments') && !hrColumnExists($conn, 'departments', 'manager_id')) {
+            @mysqli_query($conn, "ALTER TABLE departments ADD COLUMN manager_id INT NULL AFTER description");
+        }
+        return hrTableExists($conn, 'departments');
+    }
+}
+
+if (!function_exists('hrEnsureJobPositionsTable')) {
+    function hrEnsureJobPositionsTable($conn) {
+        if (!$conn) return false;
+        hrEnsureDepartmentsTable($conn);
+        if (!hrTableExists($conn, 'job_positions')) {
+            @mysqli_query($conn, "CREATE TABLE IF NOT EXISTS `job_positions` (
+                `id` int NOT NULL AUTO_INCREMENT,
+                `position_title` varchar(100) NOT NULL,
+                `department_id` int DEFAULT NULL,
+                `description` text,
+                `requirements` text,
+                `salary_range_min` decimal(12,2) DEFAULT NULL,
+                `salary_range_max` decimal(12,2) DEFAULT NULL,
+                `employment_type` varchar(50) DEFAULT NULL,
+                `status` enum('open','filled','closed','on_hold') DEFAULT 'open',
+                `posted_date` date DEFAULT NULL,
+                `closing_date` date DEFAULT NULL,
+                `created_by` int DEFAULT NULL,
+                `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (`id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci");
+        }
+        return hrTableExists($conn, 'job_positions');
+    }
+}
+
 if (!function_exists('hrEnsureNormalizedPositionModel')) {
     function hrEnsureNormalizedPositionModel($conn) {
         static $done = false;
@@ -258,11 +304,51 @@ if (!function_exists('hrEnsureNormalizedPositionModel')) {
         }
         $done = true;
 
-        if (!hrTableExists($conn, 'employees') || !hrTableExists($conn, 'job_positions')) {
+        if (!$conn) {
+            return false;
+        }
+
+        hrEnsureDepartmentsTable($conn);
+        hrEnsureJobPositionsTable($conn);
+
+        if (!hrTableExists($conn, 'employees')) {
             return false;
         }
 
         hrEnsureEmployeeNameFields($conn);
+
+        if (hrTableExists($conn, 'roles')) {
+            if (!hrColumnExists($conn, 'roles', 'department_id')) {
+                @mysqli_query($conn, "ALTER TABLE roles ADD COLUMN department_id INT NULL AFTER description");
+            }
+            if (!hrColumnExists($conn, 'roles', 'owner_user_id')) {
+                @mysqli_query($conn, "ALTER TABLE roles ADD COLUMN owner_user_id INT NULL AFTER department_id");
+            }
+        }
+
+        if (hrTableExists($conn, 'employees')) {
+            if (!hrColumnExists($conn, 'employees', 'employment_basis')) {
+                @mysqli_query($conn, "ALTER TABLE employees ADD COLUMN employment_basis ENUM('monthly','daily') DEFAULT 'monthly'");
+            }
+            if (!hrColumnExists($conn, 'employees', 'daily_rate')) {
+                @mysqli_query($conn, "ALTER TABLE employees ADD COLUMN daily_rate DECIMAL(10,2) DEFAULT 0.00");
+            }
+            if (!hrColumnExists($conn, 'employees', 'sss_number')) {
+                @mysqli_query($conn, "ALTER TABLE employees ADD COLUMN sss_number VARCHAR(50) NULL");
+            }
+            if (!hrColumnExists($conn, 'employees', 'philhealth_number')) {
+                @mysqli_query($conn, "ALTER TABLE employees ADD COLUMN philhealth_number VARCHAR(50) NULL");
+            }
+            if (!hrColumnExists($conn, 'employees', 'pagibig_number')) {
+                @mysqli_query($conn, "ALTER TABLE employees ADD COLUMN pagibig_number VARCHAR(50) NULL");
+            }
+            if (!hrColumnExists($conn, 'employees', 'tin_number')) {
+                @mysqli_query($conn, "ALTER TABLE employees ADD COLUMN tin_number VARCHAR(50) NULL");
+            }
+            if (!hrColumnExists($conn, 'employees', 'photo')) {
+                @mysqli_query($conn, "ALTER TABLE employees ADD COLUMN photo VARCHAR(255) NULL");
+            }
+        }
 
         if (!hrEnsureEmployeesPositionIdColumn($conn)) {
             return false;
@@ -781,7 +867,7 @@ if (!function_exists('hrIsLogisticsEmployeeByUserId')) {
 
 if (!function_exists('hrFetchDepartmentCatalog')) {
     function hrFetchDepartmentCatalog($conn, $department_scope_sql = '1=1') {
-        if (!hrTableExists($conn, 'departments')) {
+        if (!$conn || !hrTableExists($conn, 'departments')) {
             return [];
         }
 
@@ -791,15 +877,19 @@ if (!function_exists('hrFetchDepartmentCatalog')) {
         }
         $query .= " ORDER BY d.department_name";
 
-        $result = mysqli_query($conn, $query);
         $departments = [];
-        if ($result) {
-            while ($row = mysqli_fetch_assoc($result)) {
-                $departments[] = [
-                    'id' => (int)($row['id'] ?? 0),
-                    'department_name' => (string)($row['department_name'] ?? '')
-                ];
+        try {
+            $result = @mysqli_query($conn, $query);
+            if ($result instanceof mysqli_result) {
+                while ($row = mysqli_fetch_assoc($result)) {
+                    $departments[] = [
+                        'id' => (int)($row['id'] ?? 0),
+                        'department_name' => (string)($row['department_name'] ?? '')
+                    ];
+                }
             }
+        } catch (Throwable $e) {
+            error_log("hrFetchDepartmentCatalog error: " . $e->getMessage());
         }
 
         return $departments;
@@ -808,6 +898,9 @@ if (!function_exists('hrFetchDepartmentCatalog')) {
 
 if (!function_exists('hrFetchPositionCatalog')) {
     function hrFetchPositionCatalog($conn, $department_scope_sql = '1=1', $employee_scope_sql = '1=1') {
+        if (!$conn) {
+            return ['all' => [], 'by_department' => [], 'by_id' => []];
+        }
         hrEnsureNormalizedPositionModel($conn);
         if (!hrTableExists($conn, 'job_positions')) {
             return ['all' => [], 'by_department' => [], 'by_id' => []];
@@ -822,28 +915,32 @@ if (!function_exists('hrFetchPositionCatalog')) {
         }
         $query .= " ORDER BY jp.position_title";
 
-        $result = mysqli_query($conn, $query);
         $all = [];
         $by_department = [];
         $by_id = [];
-        if ($result) {
-            while ($row = mysqli_fetch_assoc($result)) {
-                $position = [
-                    'id' => (int)($row['id'] ?? 0),
-                    'title' => (string)($row['position_title'] ?? ''),
-                    'department_id' => isset($row['department_id']) ? (int)$row['department_id'] : 0
-                ];
-                if ($position['id'] <= 0 || $position['title'] === '') {
-                    continue;
+        try {
+            $result = @mysqli_query($conn, $query);
+            if ($result instanceof mysqli_result) {
+                while ($row = mysqli_fetch_assoc($result)) {
+                    $position = [
+                        'id' => (int)($row['id'] ?? 0),
+                        'title' => (string)($row['position_title'] ?? ''),
+                        'department_id' => isset($row['department_id']) ? (int)$row['department_id'] : 0
+                    ];
+                    if ($position['id'] <= 0 || $position['title'] === '') {
+                        continue;
+                    }
+                    $all[] = $position;
+                    $by_id[(string)$position['id']] = $position;
+                    $dept_key = (string)$position['department_id'];
+                    if (!isset($by_department[$dept_key])) {
+                        $by_department[$dept_key] = [];
+                    }
+                    $by_department[$dept_key][] = $position;
                 }
-                $all[] = $position;
-                $by_id[(string)$position['id']] = $position;
-                $dept_key = (string)$position['department_id'];
-                if (!isset($by_department[$dept_key])) {
-                    $by_department[$dept_key] = [];
-                }
-                $by_department[$dept_key][] = $position;
             }
+        } catch (Throwable $e) {
+            error_log("hrFetchPositionCatalog error: " . $e->getMessage());
         }
 
         return ['all' => $all, 'by_department' => $by_department, 'by_id' => $by_id];

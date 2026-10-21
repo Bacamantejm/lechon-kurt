@@ -1,18 +1,29 @@
 <?php
-session_start();
-include 'auth.php';
-include '../includes/config.php';
-include 'hr_module_common.php';
+ini_set('display_errors', '1');
+ini_set('display_startup_errors', '1');
+error_reporting(E_ALL);
+
+if (session_status() === PHP_SESSION_NONE && !headers_sent()) {
+    session_start();
+}
+include_once __DIR__ . '/../includes/config.php';
+include_once __DIR__ . '/../includes/security.php';
+include_once __DIR__ . '/auth.php';
+include_once __DIR__ . '/hr_module_common.php';
 
 checkAdminAccess();
 
+// Self-heal normalized schema
+if (function_exists('hrEnsureNormalizedPositionModel') && isset($conn) && $conn) {
+    hrEnsureNormalizedPositionModel($conn);
+}
+
 // Enforce page-level permission
-$admin_info = getAdminInfo($conn);
+$admin_info = getAdminInfo($conn) ?: [];
 $is_partner_scoped_hr = hrIsPartnerScopeEnabled($conn);
 $partner_scope_owner_id = hrPartnerScopeOwnerUserId($conn);
 $employee_scope_sql = hrEmployeeScopeSql($conn, 'e', 'user_id');
 $department_scope_sql = hrDepartmentScopeSql($conn, 'd', 'e_scope');
-hrEnsureNormalizedPositionModel($conn);
 if (!$is_partner_scoped_hr) {
     requirePermission('employees.view');
 }
@@ -764,38 +775,53 @@ if ($is_partner_scoped_hr) {
 
 $where_clause = count($where_clauses) > 0 ? "WHERE " . implode(" AND ", $where_clauses) : "";
 
-$employees_query = "SELECT e.*, d.department_name, u.user_type, u.email as user_email, u.profile_image as user_profile_image,
+$has_dept = hrTableExists($conn, 'departments');
+$has_jp = hrTableExists($conn, 'job_positions');
+$has_pos_col = hrColumnExists($conn, 'employees', 'position_id');
+
+$dept_col = $has_dept ? "d.department_name" : "'' AS department_name";
+$dept_join = $has_dept ? "LEFT JOIN departments d ON e.department_id = d.id" : "";
+$jp_col = ($has_jp && $has_pos_col) ? "COALESCE(jp.position_title, e.position) AS position_label" : "COALESCE(e.position, 'Staff') AS position_label";
+$jp_join = ($has_jp && $has_pos_col) ? "LEFT JOIN job_positions jp ON jp.id = e.position_id" : "";
+
+$employees_query = "SELECT e.*, {$dept_col}, u.user_type, u.email as user_email, u.profile_image as user_profile_image,
                            r.name as system_role_name, r.id as system_role_id,
-                           COALESCE(jp.position_title, e.position) AS position_label
+                           {$jp_col}
                     FROM employees e
-                    LEFT JOIN departments d ON e.department_id = d.id
-                    LEFT JOIN job_positions jp ON jp.id = e.position_id
+                    {$dept_join}
+                    {$jp_join}
                     LEFT JOIN users u ON e.user_id = u.id
                     LEFT JOIN roles r ON u.role_id = r.id
                     $where_clause
                     ORDER BY e.first_name ASC";
 
-$employees_stmt = mysqli_prepare($conn, $employees_query);
 $employees_list = [];
-if ($employees_stmt === false) {
-    $_SESSION['error'] = "Unable to load employees.";
-    $employees_result = false;
-} else {
-    if (count($params) > 0) {
-        $bind_params = [$employees_stmt, $param_types];
-        foreach ($params as $key => $value) {
-            $bind_params[] = &$params[$key];
+try {
+    $employees_stmt = @mysqli_prepare($conn, $employees_query);
+    if ($employees_stmt === false) {
+        $_SESSION['error'] = "Unable to load employees.";
+        $employees_result = false;
+    } else {
+        if (count($params) > 0) {
+            $bind_params = [$employees_stmt, $param_types];
+            foreach ($params as $key => $value) {
+                $bind_params[] = &$params[$key];
+            }
+            call_user_func_array('mysqli_stmt_bind_param', $bind_params);
         }
-        call_user_func_array('mysqli_stmt_bind_param', $bind_params);
-    }
 
-    mysqli_stmt_execute($employees_stmt);
-    $employees_result = mysqli_stmt_get_result($employees_stmt);
-    if ($employees_result) {
-        while ($emp_row = mysqli_fetch_assoc($employees_result)) {
-            $employees_list[] = $emp_row;
+        mysqli_stmt_execute($employees_stmt);
+        $employees_result = mysqli_stmt_get_result($employees_stmt);
+        if ($employees_result) {
+            while ($emp_row = mysqli_fetch_assoc($employees_result)) {
+                $employees_list[] = $emp_row;
+            }
         }
+        mysqli_stmt_close($employees_stmt);
     }
+} catch (Throwable $e) {
+    error_log("Error loading employees query: " . $e->getMessage());
+    $employees_list = [];
 }
 $total_employees_count = count($employees_list);
 
@@ -827,12 +853,22 @@ $position_catalog = hrFetchPositionCatalog(
 );
 
 // Get roles for user creation
-$roles_query_sql = "
-    SELECT r.id, r.name, d.department_name
-    FROM roles r
-    LEFT JOIN departments d ON r.department_id = d.id
-    WHERE r.name != 'super_admin'
-";
+$has_dept_table = hrTableExists($conn, 'departments');
+$has_role_dept_col = hrColumnExists($conn, 'roles', 'department_id');
+if ($has_dept_table && $has_role_dept_col) {
+    $roles_query_sql = "
+        SELECT r.id, r.name, d.department_name
+        FROM roles r
+        LEFT JOIN departments d ON r.department_id = d.id
+        WHERE r.name != 'super_admin'
+    ";
+} else {
+    $roles_query_sql = "
+        SELECT r.id, r.name, '' AS department_name
+        FROM roles r
+        WHERE r.name != 'super_admin'
+    ";
+}
 if ($is_partner_scoped_hr) {
     if (employeesRoleOwnerColumnExists($conn) && $partner_scope_owner_id > 0) {
         $roles_query_sql .= " AND r.owner_user_id = " . (int)$partner_scope_owner_id;
@@ -840,11 +876,13 @@ if ($is_partner_scoped_hr) {
         $roles_query_sql .= " AND 1=0";
     }
 }
-$roles_query_sql .= " ORDER BY d.department_name, r.name";
-$roles_query = mysqli_query($conn, $roles_query_sql);
+$roles_query_sql .= " ORDER BY " . ($has_dept_table && $has_role_dept_col ? "d.department_name, " : "") . "r.name";
+$roles_query = @mysqli_query($conn, $roles_query_sql);
 $roles = [];
-if ($roles_query) while ($r = mysqli_fetch_assoc($roles_query)) {
-    $roles[] = $r;
+if ($roles_query instanceof mysqli_result) {
+    while ($r = mysqli_fetch_assoc($roles_query)) {
+        $roles[] = $r;
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -1697,7 +1735,7 @@ if ($roles_query) while ($r = mysqli_fetch_assoc($roles_query)) {
                             <i class="fas fa-moon"></i>
                         </button>
                         <div class="admin-profile">
-                            <span><?php echo htmlspecialchars($admin_info['full_name']); ?></span>
+                            <span><?php echo htmlspecialchars($admin_info['full_name'] ?? ($_SESSION['full_name'] ?? 'Administrator')); ?></span>
                             <i class="fas fa-user-circle"></i>
                         </div>
                     </div>
