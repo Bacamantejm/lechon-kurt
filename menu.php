@@ -207,13 +207,13 @@ $store_result = mysqli_query($conn, $store_query);
 
 if ($store_result && mysqli_num_rows($store_result) > 0) {
     while ($store = mysqli_fetch_assoc($store_result)) {
-        $street_address = trim((string)($store['address'] ?? ''));
-        $city_name = trim((string)($store['city'] ?? ''));
-        $province_name = trim((string)($store['province'] ?? ''));
+        $street_address = fixMojibakeText(trim((string)($store['address'] ?? '')));
+        $city_name = fixMojibakeText(trim((string)($store['city'] ?? '')));
+        $province_name = fixMojibakeText(trim((string)($store['province'] ?? '')));
         $store_locations[] = [
             'id' => (int)$store['store_id'],
             'owner_user_id' => (int)($store['owner_user_id'] ?? 0),
-            'name' => (string)$store['store_name'],
+            'name' => fixMojibakeText((string)$store['store_name']),
             'street_address' => $street_address,
             'address' => menuAddressLabel($street_address, '', $city_name, $province_name),
             'city' => $city_name,

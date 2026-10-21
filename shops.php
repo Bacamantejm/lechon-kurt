@@ -94,12 +94,12 @@ if ($branch_res) {
 
         $shops[] = [
             'key' => 'branch-' . $store_id,
-            'name' => trim((string)$row['store_name']),
+            'name' => fixMojibakeText(trim((string)$row['store_name'])),
             'type' => 'Pickup Branch',
             'cat_key' => 'branch',
-            'summary' => 'Official branch location offering pickup & delivery: ' . $location_display,
-            'location' => $city_label,
-            'city' => $city_label,
+            'summary' => 'Official branch location offering pickup & delivery: ' . fixMojibakeText($location_display),
+            'location' => fixMojibakeText($city_label),
+            'city' => fixMojibakeText($city_label),
             'start_price' => $start_price,
             'rating' => 4.9,
             'reviews' => 12,

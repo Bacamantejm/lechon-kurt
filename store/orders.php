@@ -14,6 +14,10 @@ require_once $root_path . '/includes/config.php';
 require_once $root_path . '/includes/security.php';
 require_once $root_path . '/includes/CommissionAndWalletService.php';
 
+if (function_exists('ensureOrdersTableSchema')) {
+    ensureOrdersTableSchema($conn);
+}
+
 // Check user authentication
 if (!isset($_SESSION['user_id'])) {
     header("Location: ../login.php?redirect=" . urlencode($_SERVER['REQUEST_URI']));
@@ -78,27 +82,33 @@ if ($order_id > 0) {
     // ==========================================
 
     // Fetch order
+    $has_store_id = function_exists('appColumnExists') ? appColumnExists($conn, 'orders', 'store_id') : false;
+    $store_join_col = $has_store_id ? "COALESCE(NULLIF(o.store_id, 0), o.pickup_location)" : "o.pickup_location";
+
     $stmt = mysqli_prepare($conn, "
         SELECT o.*, 
                sl.store_name, sl.address AS store_address, sl.city AS store_city, sl.province AS store_province,
                COALESCE(u_cust.full_name, o.customer_name) AS safe_customer_name
         FROM orders o
-        LEFT JOIN store_locations sl ON sl.store_id = COALESCE(NULLIF(o.store_id, 0), o.pickup_location)
+        LEFT JOIN store_locations sl ON sl.store_id = {$store_join_col}
         LEFT JOIN users u_cust ON u_cust.id = o.user_id
         WHERE o.id = ? 
         LIMIT 1");
-    mysqli_stmt_bind_param($stmt, "i", $order_id);
-    mysqli_stmt_execute($stmt);
-    $res = mysqli_stmt_get_result($stmt);
-    $order = $res ? mysqli_fetch_assoc($res) : null;
-    mysqli_stmt_close($stmt);
+    $order = null;
+    if ($stmt) {
+        mysqli_stmt_bind_param($stmt, "i", $order_id);
+        mysqli_stmt_execute($stmt);
+        $res = mysqli_stmt_get_result($stmt);
+        $order = $res ? mysqli_fetch_assoc($res) : null;
+        mysqli_stmt_close($stmt);
+    }
 
     if (!$order) {
         http_response_code(404);
         die("Order #{$order_id} not found.");
     }
 
-    $order_store_id = (int)($order['store_id'] ?: $order['pickup_location'] ?: 0);
+    $order_store_id = (int)(($order['store_id'] ?? 0) ?: ($order['pickup_location'] ?? 0));
 
     // CRITICAL DATA ISOLATION ENFORCEMENT:
     // Verify order.store_id === auth.current_store_id
@@ -444,43 +454,104 @@ $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
 $per_page = 20;
 $offset = ($page - 1) * $per_page;
 
+$has_store_id = function_exists('appColumnExists') ? appColumnExists($conn, 'orders', 'store_id') : false;
+$has_is_archived = function_exists('appColumnExists') ? appColumnExists($conn, 'orders', 'is_archived') : false;
+$archived_clause = $has_is_archived ? "AND o.is_archived = 0" : "";
+
+$store_where_conditions = ["o.pickup_location = ?"];
+$bind_types = "s";
+$bind_values = [(string)$current_store_id];
+
+if ($has_store_id) {
+    $store_where_conditions[] = "o.store_id = ?";
+    $bind_types .= "i";
+    $bind_values[] = (int)$current_store_id;
+}
+
+if (function_exists('appColumnExists') && appColumnExists($conn, 'orders', 'seller_id') && appTableExists($conn, 'store_locations')) {
+    $store_where_conditions[] = "o.seller_id IN (SELECT owner_user_id FROM store_locations WHERE store_id = ?)";
+    $bind_types .= "i";
+    $bind_values[] = (int)$current_store_id;
+}
+
+$store_scope_sql = "(" . implode(" OR ", $store_where_conditions) . ")";
+
 // Count orders for this store ONLY
-$count_stmt = mysqli_prepare($conn, "
-    SELECT COUNT(*) AS total 
-    FROM orders o 
-    WHERE (o.store_id = ? OR o.pickup_location = ?) AND o.is_archived = 0");
-mysqli_stmt_bind_param($count_stmt, "ii", $current_store_id, $current_store_id);
-mysqli_stmt_execute($count_stmt);
-$count_res = mysqli_stmt_get_result($count_stmt);
-$total_orders = $count_res ? (int)mysqli_fetch_assoc($count_res)['total'] : 0;
-mysqli_stmt_close($count_stmt);
+$count_sql = "SELECT COUNT(*) AS total FROM orders o WHERE {$store_scope_sql} {$archived_clause}";
+$count_stmt = mysqli_prepare($conn, $count_sql);
+$total_orders = 0;
+if ($count_stmt) {
+    mysqli_stmt_bind_param($count_stmt, $bind_types, ...$bind_values);
+    mysqli_stmt_execute($count_stmt);
+    $count_res = mysqli_stmt_get_result($count_stmt);
+    $total_orders = $count_res ? (int)mysqli_fetch_assoc($count_res)['total'] : 0;
+    mysqli_stmt_close($count_stmt);
+}
 
 // Fetch orders strictly belonging to this store
-$orders_stmt = mysqli_prepare($conn, "
+$has_splits = function_exists('appTableExists') ? appTableExists($conn, 'order_payout_splits') : false;
+$has_lt = function_exists('appTableExists') ? appTableExists($conn, 'logistics_tracking') : false;
+$has_riders = function_exists('appTableExists') ? appTableExists($conn, 'riders') : false;
+$has_users = function_exists('appTableExists') ? appTableExists($conn, 'users') : false;
+$has_employees = function_exists('appTableExists') ? appTableExists($conn, 'employees') : false;
+
+$splits_join = $has_splits ? "LEFT JOIN order_payout_splits ops ON ops.order_id = o.id AND ops.store_id = ?" : "";
+$splits_cols = $has_splits ? "ops.food_subtotal, ops.platform_commission_amount, ops.store_net_cut, ops.split_status," : "NULL AS food_subtotal, NULL AS platform_commission_amount, NULL AS store_net_cut, 'unsplit' AS split_status,";
+
+$lt_join = $has_lt ? "LEFT JOIN logistics_tracking lt ON lt.order_id = o.id" : "";
+$riders_join = ($has_lt && $has_riders) ? "LEFT JOIN riders r ON r.id = lt.driver_id" : "";
+$users_join = ($has_lt && $has_riders && $has_users) ? "LEFT JOIN users u_rdr ON u_rdr.id = r.user_id" : "";
+$employees_join = ($has_lt && $has_riders && $has_employees) ? "LEFT JOIN employees e_rdr ON e_rdr.id = r.employee_id" : "";
+
+$rider_code_col = ($has_lt && $has_riders) ? "r.rider_code," : "'' AS rider_code,";
+$rider_name_col = ($has_lt && $has_riders && $has_users && $has_employees)
+    ? "COALESCE(u_rdr.full_name, CONCAT(e_rdr.first_name, ' ', e_rdr.last_name), lt.driver_name, 'Rider') AS rider_name"
+    : ($has_lt ? "COALESCE(lt.driver_name, 'Rider') AS rider_name" : "'Rider' AS rider_name");
+
+$orders_sql = "
     SELECT o.id, o.order_number, o.customer_name, o.delivery_option, o.payment_method, o.status, o.subtotal, o.delivery_fee, o.created_at,
-           ops.food_subtotal, ops.platform_commission_amount, ops.store_net_cut, ops.split_status,
-           r.rider_code,
-           COALESCE(u_rdr.full_name, CONCAT(e_rdr.first_name, ' ', e_rdr.last_name), lt.driver_name, 'Rider') AS rider_name
+           {$splits_cols}
+           {$rider_code_col}
+           {$rider_name_col}
     FROM orders o
-    LEFT JOIN order_payout_splits ops ON ops.order_id = o.id AND ops.store_id = ?
-    LEFT JOIN logistics_tracking lt ON lt.order_id = o.id
-    LEFT JOIN riders r ON r.id = lt.driver_id
-    LEFT JOIN users u_rdr ON u_rdr.id = r.user_id
-    LEFT JOIN employees e_rdr ON e_rdr.id = r.employee_id
-    WHERE (o.store_id = ? OR o.pickup_location = ?) AND o.is_archived = 0
+    {$splits_join}
+    {$lt_join}
+    {$riders_join}
+    {$users_join}
+    {$employees_join}
+    WHERE {$store_scope_sql} {$archived_clause}
     ORDER BY o.created_at DESC
-    LIMIT ? OFFSET ?");
-mysqli_stmt_bind_param($orders_stmt, "iiiii", $current_store_id, $current_store_id, $current_store_id, $per_page, $offset);
-mysqli_stmt_execute($orders_stmt);
-$orders_res = mysqli_stmt_get_result($orders_stmt);
-$store_orders = [];
-while ($orders_res && ($row = mysqli_fetch_assoc($orders_res))) {
-    $store_orders[] = $row;
+    LIMIT ? OFFSET ?";
+
+$list_bind_types = ($has_splits ? "i" : "") . $bind_types . "ii";
+$list_bind_values = [];
+if ($has_splits) {
+    $list_bind_values[] = (int)$current_store_id;
 }
-mysqli_stmt_close($orders_stmt);
+foreach ($bind_values as $bv) {
+    $list_bind_values[] = $bv;
+}
+$list_bind_values[] = (int)$per_page;
+$list_bind_values[] = (int)$offset;
+
+$orders_stmt = mysqli_prepare($conn, $orders_sql);
+$store_orders = [];
+if ($orders_stmt) {
+    mysqli_stmt_bind_param($orders_stmt, $list_bind_types, ...$list_bind_values);
+    mysqli_stmt_execute($orders_stmt);
+    $orders_res = mysqli_stmt_get_result($orders_stmt);
+    while ($orders_res && ($row = mysqli_fetch_assoc($orders_res))) {
+        $store_orders[] = $row;
+    }
+    mysqli_stmt_close($orders_stmt);
+}
 
 // Fetch store wallet overview
-$wallet = $walletService->getStoreWallet($current_store_id);
+$wallet = $walletService->getStoreWallet($current_store_id) ?: [
+    'available_balance' => 0,
+    'total_lifetime_earnings' => 0,
+    'pending_payout_amount' => 0
+];
 ?>
 <!DOCTYPE html>
 <html lang="en">

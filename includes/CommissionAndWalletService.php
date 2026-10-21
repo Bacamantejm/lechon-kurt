@@ -101,18 +101,23 @@ class CommissionAndWalletService
             return false;
         }
 
+        $has_store_id = function_exists('appColumnExists') ? appColumnExists($this->conn, 'orders', 'store_id') : false;
+        $store_cond = $has_store_id ? "store_id = ? OR " : "";
+        $types = ($has_store_id ? "i" : "") . "iii";
+        $params = $has_store_id ? [$order_id, $store_id, $store_id, $store_id] : [$order_id, $store_id, $store_id];
+
         $stmt = mysqli_prepare($this->conn, "
             SELECT id FROM orders 
             WHERE id = ? AND (
-                store_id = ? 
-                OR pickup_location = ?
+                {$store_cond}
+                pickup_location = ?
                 OR seller_id IN (SELECT owner_user_id FROM store_locations WHERE store_id = ?)
             ) LIMIT 1");
         if (!$stmt) {
             return false;
         }
 
-        mysqli_stmt_bind_param($stmt, "iiii", $order_id, $store_id, $store_id, $store_id);
+        mysqli_stmt_bind_param($stmt, $types, ...$params);
         mysqli_stmt_execute($stmt);
         $res = mysqli_stmt_get_result($stmt);
         $authorized = ($res && mysqli_num_rows($res) > 0);
@@ -156,12 +161,14 @@ class CommissionAndWalletService
         }
 
         // Fetch order details
+        $has_store_id = function_exists('appColumnExists') ? appColumnExists($this->conn, 'orders', 'store_id') : false;
+        $store_join_col = $has_store_id ? "COALESCE(NULLIF(o.store_id, 0), o.pickup_location)" : "o.pickup_location";
         $stmt = mysqli_prepare($this->conn, "
             SELECT o.*, 
                    sl.store_name, sl.address AS store_address, sl.city AS store_city,
                    lt.driver_id, lt.delivery_method_id, lt.total_distance_km
             FROM orders o
-            LEFT JOIN store_locations sl ON sl.store_id = COALESCE(NULLIF(o.store_id, 0), o.pickup_location)
+            LEFT JOIN store_locations sl ON sl.store_id = {$store_join_col}
             LEFT JOIN logistics_tracking lt ON lt.order_id = o.id
             WHERE o.id = ? 
             LIMIT 1");

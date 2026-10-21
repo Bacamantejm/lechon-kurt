@@ -272,18 +272,93 @@ if (!function_exists('shouldUseGoogleGeocoding')) {
     }
 }
 
+if (!function_exists('fixMojibakeText')) {
+    /**
+     * Repair text with broken UTF-8, CP437, Windows-1252, or double-encoded characters.
+     * Specifically fixes corrupted Philippine city/branch names like Dasmariñas (e.g. Dasmari├░as, Dasmari├▒as, DasmariÃ±as).
+     */
+    function fixMojibakeText($str) {
+        if (!is_string($str) || $str === '') {
+            return $str;
+        }
+
+        static $replacements = [
+            'Dasmari├░as' => 'Dasmariñas',
+            'Dasmari├▒as' => 'Dasmariñas',
+            'DasmariÃ±as' => 'Dasmariñas',
+            'DasmariÃƒÂ±as' => 'Dasmariñas',
+            'Dasmari├â╞Æ├é┬▒as' => 'Dasmariñas',
+            'DasmariΓö£ΓûÆas' => 'Dasmariñas',
+            '├░' => 'ñ',
+            '├▒' => 'ñ',
+            '├æ' => 'Ñ',
+            'ÃƒÂ±' => 'ñ',
+            'ÃƒÂ‘' => 'Ñ',
+            'Ã±' => 'ñ',
+            'Ã‘' => 'Ñ',
+            '├â╞Æ├é┬▒' => 'ñ',
+            'Γö£ΓûÆ' => 'ñ',
+            'Ã©' => 'é',
+            'Ã¨' => 'è',
+            'Ã³' => 'ó',
+            'Ã¡' => 'á',
+            'Ãº' => 'ú',
+            'â‚±' => '₱',
+            'Γé▒' => '₱',
+            'â€¢' => '•',
+            'â€“' => '–',
+            'â€”' => '—',
+        ];
+
+        $cleaned = str_replace(array_keys($replacements), array_values($replacements), $str);
+        if (strpos($cleaned, 'Dasmari') !== false) {
+            $cleaned = preg_replace('/Dasmari[^\w\s]{1,8}as/iu', 'Dasmariñas', $cleaned);
+        }
+        if (strpos($cleaned, 'Para') !== false) {
+            $cleaned = preg_replace('/Para[^\w\s]{1,8}aque/iu', 'Parañaque', $cleaned);
+        }
+
+        return $cleaned;
+    }
+}
+
+if (!function_exists('appTableExists')) {
+    function appTableExists($conn, $table_name) {
+        static $table_cache = [];
+        $table_name = trim((string)$table_name);
+        if ($table_name === '' || !$conn) {
+            return false;
+        }
+        if (array_key_exists($table_name, $table_cache)) {
+            return $table_cache[$table_name];
+        }
+        $safe_table = mysqli_real_escape_string($conn, $table_name);
+        $res = @mysqli_query($conn, "SHOW TABLES LIKE '{$safe_table}'");
+        return $table_cache[$table_name] = ($res && mysqli_num_rows($res) > 0);
+    }
+}
+
+if (!function_exists('appColumnExists')) {
+    function appColumnExists($conn, $table_name, $column_name) {
+        static $column_cache = [];
+        $table_name = trim((string)$table_name);
+        $column_name = trim((string)$column_name);
+        if ($table_name === '' || $column_name === '' || !$conn) {
+            return false;
+        }
+        $cache_key = strtolower($table_name . '.' . $column_name);
+        if (array_key_exists($cache_key, $column_cache)) {
+            return $column_cache[$cache_key];
+        }
+        $safe_table = mysqli_real_escape_string($conn, $table_name);
+        $safe_col = mysqli_real_escape_string($conn, $column_name);
+        $res = @mysqli_query($conn, "SHOW COLUMNS FROM `{$safe_table}` LIKE '{$safe_col}'");
+        return $column_cache[$cache_key] = ($res && mysqli_num_rows($res) > 0);
+    }
+}
+
 function userAccountControlColumnExists($conn, $column_name) {
-    static $column_cache = [];
-    $column_name = trim((string)$column_name);
-    if ($column_name === '') {
-        return false;
-    }
-    if (array_key_exists($column_name, $column_cache)) {
-        return $column_cache[$column_name];
-    }
-    $safe_column = mysqli_real_escape_string($conn, $column_name);
-    $result = mysqli_query($conn, "SHOW COLUMNS FROM `users` LIKE '{$safe_column}'");
-    return $column_cache[$column_name] = ($result && mysqli_num_rows($result) > 0);
+    return appColumnExists($conn, 'users', $column_name);
 }
 
 function normalizeUserAvatarPath($value) {
@@ -334,14 +409,38 @@ if (!function_exists('ensureOrdersTableSchema')) {
         if ($checked || !$conn) return;
         $checked = true;
 
-        $res = @mysqli_query($conn, "SHOW COLUMNS FROM orders LIKE 'order_number'");
-        if ($res && $row = mysqli_fetch_assoc($res)) {
-            if (strpos(strtolower($row['Type'] ?? ''), 'varchar(64)') === false) {
-                @mysqli_query($conn, "SET SESSION sql_mode = ''");
-                @mysqli_query($conn, "UPDATE `orders` SET `delivery_date` = CURDATE() WHERE CAST(`delivery_date` AS CHAR) LIKE '0000%' OR `delivery_date` IS NULL");
-                @mysqli_query($conn, "UPDATE `orders` SET `created_at` = NOW() WHERE CAST(`created_at` AS CHAR) LIKE '0000%'");
-                @mysqli_query($conn, "ALTER TABLE `orders` MODIFY COLUMN `order_number` VARCHAR(64) NOT NULL");
+        try {
+            if (!appTableExists($conn, 'orders')) {
+                return;
             }
+
+            // Ensure order_number is VARCHAR(64)
+            $res = @mysqli_query($conn, "SHOW COLUMNS FROM orders LIKE 'order_number'");
+            if ($res && $row = mysqli_fetch_assoc($res)) {
+                if (strpos(strtolower($row['Type'] ?? ''), 'varchar(64)') === false) {
+                    @mysqli_query($conn, "SET SESSION sql_mode = ''");
+                    @mysqli_query($conn, "UPDATE `orders` SET `delivery_date` = CURDATE() WHERE CAST(`delivery_date` AS CHAR) LIKE '0000%' OR `delivery_date` IS NULL");
+                    @mysqli_query($conn, "UPDATE `orders` SET `created_at` = NOW() WHERE CAST(`created_at` AS CHAR) LIKE '0000%'");
+                    @mysqli_query($conn, "ALTER TABLE `orders` MODIFY COLUMN `order_number` VARCHAR(64) NOT NULL");
+                }
+            }
+
+            // Ensure store_id column exists
+            if (!appColumnExists($conn, 'orders', 'store_id')) {
+                @mysqli_query($conn, "ALTER TABLE `orders` ADD COLUMN `store_id` INT NULL AFTER `seller_id`");
+            }
+
+            // Ensure rider_id column exists
+            if (!appColumnExists($conn, 'orders', 'rider_id')) {
+                @mysqli_query($conn, "ALTER TABLE `orders` ADD COLUMN `rider_id` INT NULL AFTER `store_id`");
+            }
+
+            // Ensure is_archived column exists
+            if (!appColumnExists($conn, 'orders', 'is_archived')) {
+                @mysqli_query($conn, "ALTER TABLE `orders` ADD COLUMN `is_archived` TINYINT(1) NOT NULL DEFAULT 0");
+            }
+        } catch (Throwable $e) {
+            // Silently allow continuation
         }
     }
 }

@@ -488,6 +488,19 @@ if (!function_exists('getFranchiseScopedOrderExistsSql')) {
 
         $seller_scope_condition = getFranchiseSellerScopeConditionSql($conn, 'p_scope.seller_id', $owner_id);
 
+        $direct_scope_clauses = ["o_scope.seller_id = {$owner_id}"];
+        if (adminAuthColumnExists($conn, 'orders', 'store_id') && adminAuthTableExists($conn, 'store_locations')) {
+            $direct_scope_clauses[] = "o_scope.store_id IN (SELECT store_id FROM store_locations WHERE owner_user_id = {$owner_id})";
+        }
+        if (adminAuthColumnExists($conn, 'orders', 'pickup_location') && adminAuthTableExists($conn, 'store_locations')) {
+            $direct_scope_clauses[] = "o_scope.pickup_location IN (SELECT store_id FROM store_locations WHERE owner_user_id = {$owner_id})";
+            $direct_scope_clauses[] = "o_scope.pickup_location IN (SELECT store_name FROM store_locations WHERE owner_user_id = {$owner_id})";
+        }
+        if (adminAuthColumnExists($conn, 'orders', 'special_instructions') && adminAuthTableExists($conn, 'store_locations')) {
+            $direct_scope_clauses[] = "(o_scope.special_instructions IS NOT NULL AND o_scope.special_instructions LIKE CONCAT('%', (SELECT store_name FROM store_locations WHERE owner_user_id = {$owner_id} LIMIT 1), '%'))";
+        }
+        $direct_scope_sql = implode(" OR ", $direct_scope_clauses);
+
         return "((EXISTS (
             SELECT 1
             FROM order_items oi_scope
@@ -503,15 +516,7 @@ if (!function_exists('getFranchiseScopedOrderExistsSql')) {
             SELECT 1
             FROM orders o_scope
             WHERE o_scope.id = {$order_id_expr}
-              AND (
-                  o_scope.seller_id = {$owner_id}
-                  OR o_scope.store_id IN (SELECT store_id FROM store_locations WHERE owner_user_id = {$owner_id})
-                  OR o_scope.pickup_location IN (SELECT store_id FROM store_locations WHERE owner_user_id = {$owner_id})
-                  OR (
-                      o_scope.special_instructions IS NOT NULL 
-                      AND o_scope.special_instructions LIKE CONCAT('%', (SELECT store_name FROM store_locations WHERE owner_user_id = {$owner_id} LIMIT 1), '%')
-                  )
-              )
+              AND ({$direct_scope_sql})
         )))";
     }
 }

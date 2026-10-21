@@ -151,7 +151,7 @@ if ($branch_result) {
             continue;
         }
         $branch = [
-            'id'=>(int)$row['store_id'],'owner_user_id'=>(int)($row['owner_user_id'] ?? 0),'name'=>trim((string)$row['store_name']),'address'=>trim((string)$row['address']),'city'=>trim((string)$row['city']),'province'=>trim((string)$row['province']),
+            'id'=>(int)$row['store_id'],'owner_user_id'=>(int)($row['owner_user_id'] ?? 0),'name'=>fixMojibakeText(trim((string)$row['store_name'])),'address'=>fixMojibakeText(trim((string)$row['address'])),'city'=>fixMojibakeText(trim((string)$row['city'])),'province'=>fixMojibakeText(trim((string)$row['province'])),
             'phone'=>trim((string)$row['phone']),'email'=>strtolower(trim((string)$row['email'])),'hours'=>trim((string)$row['opening_hours']),
             'opening_time'=>trim((string)($row['opening_time'] ?? '')),'closing_time'=>trim((string)($row['closing_time'] ?? '')),'operating_days'=>trim((string)($row['operating_days'] ?? '1,2,3,4,5,6,7')),'availability_mode'=>trim((string)($row['availability_mode'] ?? 'schedule')),'manual_status'=>trim((string)($row['manual_status'] ?? 'closed')),'is_active'=>(int)($row['is_active'] ?? 1),
             'latitude'=>isset($row['latitude']) && $row['latitude'] !== null ? (float)$row['latitude'] : null,

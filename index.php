@@ -228,10 +228,10 @@ if ($branch_result) {
         $branch = [
             'id' => (int)$row['store_id'],
             'owner_user_id' => (int)($row['owner_user_id'] ?? 0),
-            'name' => trim((string)$row['store_name']),
-            'address' => trim((string)$row['address']),
-            'city' => trim((string)$row['city']),
-            'province' => trim((string)$row['province']),
+            'name' => fixMojibakeText(trim((string)$row['store_name'])),
+            'address' => fixMojibakeText(trim((string)$row['address'])),
+            'city' => fixMojibakeText(trim((string)$row['city'])),
+            'province' => fixMojibakeText(trim((string)$row['province'])),
             'phone' => trim((string)$row['phone']),
             'email' => strtolower(trim((string)$row['email'])),
             'hours' => trim((string)($availability['schedule'] ?? $row['opening_hours'])),
@@ -363,7 +363,7 @@ $seller_result = mysqli_query($conn, "SELECT u.id, u.full_name, u.email, u.phone
                                       ORDER BY COALESCE(NULLIF(TRIM(u.business_name), ''), u.full_name)");
 if ($seller_result) {
     while ($row = mysqli_fetch_assoc($seller_result)) {
-        $name = trim((string)$row['business_name']) !== '' ? trim((string)$row['business_name']) : trim((string)$row['full_name']) . ' Store';
+        $name = fixMojibakeText(trim((string)$row['business_name']) !== '' ? trim((string)$row['business_name']) : trim((string)$row['full_name']) . ' Store');
         $email = strtolower(trim((string)$row['email']));
         $seller_id = (int)$row['id'];
         $match = $branch_by_owner[$seller_id] ?? ($branch_by_email[$email] ?? ($branch_by_name[norm_key($name)] ?? null));
@@ -521,7 +521,7 @@ foreach ($branches as $branch) {
         : sahResolveStoreAvailability($branch);
     $stores['branch-' . $branch['id']] = [
         'key' => 'branch-' . $branch['id'],
-        'name' => $branch['name'],
+        'name' => fixMojibakeText($branch['name']),
         'type' => 'branch',
         'seller_id' => 0,
         'branch_id' => (int)$branch['id'],
@@ -3496,6 +3496,190 @@ body:not(.dark-mode) {
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
     gap: 16px;
 }
+/* Minimized Voucher Ticket Cards (Matching compact coupon stub UI) */
+.voucher-deal-ticket {
+    background: #ffffff;
+    border: 1px solid #e0e2ec;
+    border-radius: 14px;
+    display: flex !important;
+    flex-direction: row !important;
+    position: relative;
+    overflow: hidden;
+    min-height: 124px;
+    padding: 0 !important;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.voucher-deal-ticket:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(16, 24, 40, 0.08);
+    border-color: #cbd5e1;
+}
+
+.voucher-deal-ticket .voucher-ticket-stub {
+    width: 36px;
+    min-width: 36px;
+    background: linear-gradient(180deg, #5c35cc 0%, #4a28a8 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    user-select: none;
+    flex-shrink: 0;
+}
+
+.voucher-deal-ticket .voucher-ticket-stub::before {
+    content: "";
+    position: absolute;
+    left: -7px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: inset -1px 0 1px rgba(0, 0, 0, 0.08);
+    z-index: 2;
+}
+
+.voucher-deal-ticket .voucher-ticket-stub-text {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.18em;
+    color: #ffffff;
+    text-transform: uppercase;
+    font-family: 'Outfit', -apple-system, sans-serif;
+    line-height: 1;
+}
+
+.voucher-deal-ticket .voucher-ticket-body {
+    flex: 1;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-width: 0;
+}
+
+.voucher-deal-ticket .voucher-ticket-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 2px;
+}
+
+.voucher-deal-ticket .voucher-ticket-discount {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #475467;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.voucher-deal-ticket .voucher-ticket-icon-wrap {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #f8f9fa;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    flex-shrink: 0;
+    border: 1px solid #f2f4f7;
+}
+
+.voucher-deal-ticket .voucher-ticket-dots {
+    display: flex;
+    align-items: center;
+    position: relative;
+    width: 16px;
+    height: 10px;
+}
+
+.voucher-deal-ticket .voucher-ticket-dots .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    position: absolute;
+    top: 0;
+}
+
+.voucher-deal-ticket .voucher-ticket-dots .dot-1 {
+    left: 0;
+    background: #991b1b;
+}
+
+.voucher-deal-ticket .voucher-ticket-dots .dot-2 {
+    left: 6px;
+    background: #ea580c;
+    opacity: 0.9;
+}
+
+.voucher-deal-ticket .voucher-ticket-code {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: #101828;
+    letter-spacing: 0.4px;
+    line-height: 1.2;
+    margin: 1px 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.voucher-deal-ticket .voucher-ticket-desc {
+    font-size: 0.72rem;
+    color: #667085;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 2px;
+}
+
+.voucher-deal-ticket .voucher-ticket-terms {
+    font-size: 0.67rem;
+    color: #5c35cc;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 6px;
+}
+
+.voucher-deal-ticket .voucher-pill-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    border: 1px solid #d0d5dd;
+    background: #ffffff;
+    color: #1d2939;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.18s ease;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
+.voucher-deal-ticket .voucher-pill-btn:hover {
+    background: #f8f9fa;
+    border-color: #5c35cc;
+    color: #5c35cc;
+}
+
 .deal-card {
     background: #ffffff;
     border: 1px solid #eaecf0;
@@ -4015,94 +4199,118 @@ document.addEventListener('DOMContentLoaded', function() {
 
                         <div class="first-user-deals-grid">
                             <!-- Deal 1 -->
-                            <article class="deal-card">
-                                <div>
-                                    <div class="deal-card-top">
-                                        <span class="deal-badge deal-badge-primary"><i class="fas fa-sparkles"></i> Welcome Gift</span>
-                                        <span style="font-size:0.76rem; color:#667085; font-weight:600;">1st Order Only</span>
-                                    </div>
-                                    <div class="deal-discount-val">₱100 OFF</div>
-                                    <p class="deal-desc">Get ₱100 flat discount on your very first freshly roasted lechon order. Min. spend ₱200.</p>
+                            <article class="deal-card voucher-deal-ticket">
+                                <div class="voucher-ticket-stub">
+                                    <span class="voucher-ticket-stub-text">DISCOUNT</span>
                                 </div>
-                                <div>
-                                    <div class="deal-code-row">
-                                        <span class="deal-code-text">WELCOME100</span>
-                                        <button type="button" class="deal-copy-btn" onclick="copyWelcomePromoCode('WELCOME100', this)">
-                                            <i class="fas fa-copy"></i> Copy
-                                        </button>
+                                <div class="voucher-ticket-body">
+                                    <div class="voucher-ticket-top">
+                                        <span class="voucher-ticket-discount">Flat ₱100 off*</span>
+                                        <div class="voucher-ticket-icon-wrap" title="Welcome Gift - 1st Order Only">
+                                            <div class="voucher-ticket-dots">
+                                                <span class="dot dot-1"></span>
+                                                <span class="dot dot-2"></span>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <a href="javascript:void(0)" onclick="claimAndUseWelcomeDeal('WELCOME100', 'shops.php')" class="deal-action-btn">
-                                        <i class="fas fa-utensils"></i> Claim &amp; Order Now
-                                    </a>
+                                    <div class="voucher-ticket-code">WELCOME100</div>
+                                    <div class="voucher-ticket-desc" title="Get ₱100 flat discount on your very first roasted lechon order.">₱100 off on first lechon order</div>
+                                    <div class="voucher-ticket-terms">*Min. spend ₱200</div>
+                                    <div style="display:flex; gap:6px;">
+                                        <button type="button" class="voucher-pill-btn" onclick="copyWelcomePromoCode('WELCOME100', this)" title="Copy promo code" style="flex:0 0 auto; width:auto; padding:5px 9px;">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                        <a href="javascript:void(0)" onclick="claimAndUseWelcomeDeal('WELCOME100', 'shops.php')" class="voucher-pill-btn" style="flex:1;">
+                                            Apply Code
+                                        </a>
+                                    </div>
                                 </div>
                             </article>
 
                             <!-- Deal 2 -->
-                            <article class="deal-card">
-                                <div>
-                                    <div class="deal-card-top">
-                                        <span class="deal-badge deal-badge-success"><i class="fas fa-truck-fast"></i> Free Delivery</span>
-                                        <span style="font-size:0.76rem; color:#667085; font-weight:600;">Whole &amp; Half Lechon</span>
-                                    </div>
-                                    <div class="deal-discount-val">Free Shipping</div>
-                                    <p class="deal-desc">Enjoy zero delivery fee on your first party celebration or whole lechon delivery across Cavite. Min. spend ₱600.</p>
+                            <article class="deal-card voucher-deal-ticket">
+                                <div class="voucher-ticket-stub" style="background: linear-gradient(180deg, #027a48 0%, #05603a 100%);">
+                                    <span class="voucher-ticket-stub-text">FREE SHIP</span>
                                 </div>
-                                <div>
-                                    <div class="deal-code-row">
-                                        <span class="deal-code-text">FREESHIP</span>
-                                        <button type="button" class="deal-copy-btn" onclick="copyWelcomePromoCode('FREESHIP', this)">
-                                            <i class="fas fa-copy"></i> Copy
-                                        </button>
+                                <div class="voucher-ticket-body">
+                                    <div class="voucher-ticket-top">
+                                        <span class="voucher-ticket-discount">Free Shipping*</span>
+                                        <div class="voucher-ticket-icon-wrap" title="Free Delivery - Whole & Half Lechon">
+                                            <div class="voucher-ticket-dots">
+                                                <span class="dot" style="background:#027a48;"></span>
+                                                <span class="dot" style="left:6px; background:#10b981; opacity:0.9;"></span>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <a href="javascript:void(0)" onclick="claimAndUseWelcomeDeal('FREESHIP', 'preorder.php')" class="deal-action-btn" style="background:#027a48;">
-                                        <i class="fas fa-calendar-check"></i> Claim Free Shipping
-                                    </a>
+                                    <div class="voucher-ticket-code">FREESHIP</div>
+                                    <div class="voucher-ticket-desc" title="Zero delivery fee on party celebrations or whole lechon.">Zero delivery fee on whole/half lechon</div>
+                                    <div class="voucher-ticket-terms" style="color:#027a48;">*Min. spend ₱600</div>
+                                    <div style="display:flex; gap:6px;">
+                                        <button type="button" class="voucher-pill-btn" onclick="copyWelcomePromoCode('FREESHIP', this)" title="Copy promo code" style="flex:0 0 auto; width:auto; padding:5px 9px;">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                        <a href="javascript:void(0)" onclick="claimAndUseWelcomeDeal('FREESHIP', 'preorder.php')" class="voucher-pill-btn" style="flex:1;">
+                                            Apply Code
+                                        </a>
+                                    </div>
                                 </div>
                             </article>
 
                             <!-- Deal 3 -->
-                            <article class="deal-card">
-                                <div>
-                                    <div class="deal-card-top">
-                                        <span class="deal-badge deal-badge-warning"><i class="fas fa-percent"></i> Best Value</span>
-                                        <span style="font-size:0.76rem; color:#667085; font-weight:600;">Advance Booking</span>
-                                    </div>
-                                    <div class="deal-discount-val">15% OFF</div>
-                                    <p class="deal-desc">Save 15% (up to ₱300) when booking your weekend family feasts and birthdays in advance. Min. spend ₱400.</p>
+                            <article class="deal-card voucher-deal-ticket">
+                                <div class="voucher-ticket-stub" style="background: linear-gradient(180deg, #b45309 0%, #92400e 100%);">
+                                    <span class="voucher-ticket-stub-text">DISCOUNT</span>
                                 </div>
-                                <div>
-                                    <div class="deal-code-row">
-                                        <span class="deal-code-text">LECHON15</span>
-                                        <button type="button" class="deal-copy-btn" onclick="copyWelcomePromoCode('LECHON15', this)">
-                                            <i class="fas fa-copy"></i> Copy
-                                        </button>
+                                <div class="voucher-ticket-body">
+                                    <div class="voucher-ticket-top">
+                                        <span class="voucher-ticket-discount">15% off*</span>
+                                        <div class="voucher-ticket-icon-wrap" title="Advance Booking - Save 15%">
+                                            <div class="voucher-ticket-dots">
+                                                <span class="dot" style="background:#b45309;"></span>
+                                                <span class="dot" style="left:6px; background:#f59e0b; opacity:0.9;"></span>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <a href="javascript:void(0)" onclick="claimAndUseWelcomeDeal('LECHON15', 'preorder.php')" class="deal-action-btn" style="background:#b54708;">
-                                        <i class="fas fa-ticket"></i> Claim 15% OFF
-                                    </a>
+                                    <div class="voucher-ticket-code">LECHON15</div>
+                                    <div class="voucher-ticket-desc" title="Save 15% (up to ₱300) when booking feasts in advance.">15% off weekend family feasts</div>
+                                    <div class="voucher-ticket-terms" style="color:#b45309;">*Min. spend ₱400</div>
+                                    <div style="display:flex; gap:6px;">
+                                        <button type="button" class="voucher-pill-btn" onclick="copyWelcomePromoCode('LECHON15', this)" title="Copy promo code" style="flex:0 0 auto; width:auto; padding:5px 9px;">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                        <a href="javascript:void(0)" onclick="claimAndUseWelcomeDeal('LECHON15', 'preorder.php')" class="voucher-pill-btn" style="flex:1;">
+                                            Apply Code
+                                        </a>
+                                    </div>
                                 </div>
                             </article>
 
                             <!-- Deal 4 -->
-                            <article class="deal-card">
-                                <div>
-                                    <div class="deal-card-top">
-                                        <span class="deal-badge deal-badge-info"><i class="fas fa-drumstick-bite"></i> Snack &amp; Meal</span>
-                                        <span style="font-size:0.76rem; color:#667085; font-weight:600;">Belly &amp; Meals</span>
-                                    </div>
-                                    <div class="deal-discount-val">₱50 OFF</div>
-                                    <p class="deal-desc">Direct discount on crispy lechon belly rolls, sisig packs, or kilo boxes. Min. spend ₱150.</p>
+                            <article class="deal-card voucher-deal-ticket">
+                                <div class="voucher-ticket-stub" style="background: linear-gradient(180deg, #1d4ed8 0%, #1e40af 100%);">
+                                    <span class="voucher-ticket-stub-text">DISCOUNT</span>
                                 </div>
-                                <div>
-                                    <div class="deal-code-row">
-                                        <span class="deal-code-text">BELLY50</span>
-                                        <button type="button" class="deal-copy-btn" onclick="copyWelcomePromoCode('BELLY50', this)">
-                                            <i class="fas fa-copy"></i> Copy
-                                        </button>
+                                <div class="voucher-ticket-body">
+                                    <div class="voucher-ticket-top">
+                                        <span class="voucher-ticket-discount">Flat ₱50 off*</span>
+                                        <div class="voucher-ticket-icon-wrap" title="Snack & Meal - Belly & Meals">
+                                            <div class="voucher-ticket-dots">
+                                                <span class="dot" style="background:#1d4ed8;"></span>
+                                                <span class="dot" style="left:6px; background:#3b82f6; opacity:0.9;"></span>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <a href="javascript:void(0)" onclick="claimAndUseWelcomeDeal('BELLY50', 'shops.php')" class="deal-action-btn" style="background:#175cd3;">
-                                        <i class="fas fa-store"></i> Claim ₱50 OFF
-                                    </a>
+                                    <div class="voucher-ticket-code">BELLY50</div>
+                                    <div class="voucher-ticket-desc" title="Discount on crispy lechon belly rolls or kilo boxes.">₱50 off crispy belly rolls &amp; packs</div>
+                                    <div class="voucher-ticket-terms" style="color:#1d4ed8;">*Min. spend ₱150</div>
+                                    <div style="display:flex; gap:6px;">
+                                        <button type="button" class="voucher-pill-btn" onclick="copyWelcomePromoCode('BELLY50', this)" title="Copy promo code" style="flex:0 0 auto; width:auto; padding:5px 9px;">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                        <a href="javascript:void(0)" onclick="claimAndUseWelcomeDeal('BELLY50', 'shops.php')" class="voucher-pill-btn" style="flex:1;">
+                                            Apply Code
+                                        </a>
+                                    </div>
                                 </div>
                             </article>
                         </div>
@@ -4150,42 +4358,39 @@ document.addEventListener('DOMContentLoaded', function() {
                             <?php foreach ($featured_store_promos as $sp): ?>
                                 <?php
                                     $is_pct = ($sp['discount_type'] === 'percent');
-                                    $sp_disc = $is_pct ? (rtrim(rtrim(number_format((float)$sp['discount_value'], 2), '0'), '.') . '% OFF') : ('₱' . number_format((float)$sp['discount_value'], 0) . ' OFF');
+                                    $sp_disc = $is_pct ? (rtrim(rtrim(number_format((float)$sp['discount_value'], 2), '0'), '.') . '% off*') : ('Flat ₱' . number_format((float)$sp['discount_value'], 0) . ' off*');
                                     $sp_min = (float)$sp['min_order_amount'];
-                                    $sp_min_label = $sp_min > 0 ? ('Min. spend ₱' . number_format($sp_min, 2)) : 'No minimum spend';
+                                    $sp_min_label = $sp_min > 0 ? ('*Min. spend ₱' . number_format($sp_min, 2)) : '*Terms & conditions apply';
                                     $sp_code = htmlspecialchars((string)$sp['code']);
                                     $sp_seller_id = (int)$sp['seller_id'];
                                     $sp_shop_name = htmlspecialchars((string)$sp['shop_name']);
                                     $sp_target_url = 'menu.php?seller_id=' . $sp_seller_id;
                                 ?>
-                                <article class="deal-card" style="border-left: none; display: flex; flex-direction: column; justify-content: space-between;">
-                                    <div>
-                                        <div class="deal-card-top" style="margin-bottom: 8px;">
-                                            <span class="deal-badge" style="background:#eff8ff; color:#175cd3; border:1px solid #b2ddff;">
-                                                <i class="fas fa-store"></i> <?php echo $sp_shop_name; ?>
-                                            </span>
-                                            <span style="font-size:0.75rem; color:#667085; font-weight:700;">Store Exclusive</span>
-                                        </div>
-                                        <div class="deal-discount-val" style="color:#b3261e; font-size:1.5rem; font-weight:900; margin-bottom: 4px;">
-                                            <?php echo $sp_disc; ?>
-                                        </div>
-                                        <div style="font-weight:700; font-size:0.92rem; color:#101828; margin-bottom: 4px;">
-                                            <?php echo htmlspecialchars((string)$sp['name']); ?>
-                                        </div>
-                                        <p class="deal-desc" style="font-size:0.8rem; color:#475467; margin-bottom: 12px;">
-                                            <?php echo htmlspecialchars((string)($sp['description'] ?: 'Exclusive promo voucher for ' . $sp['shop_name'] . ' customers.')); ?> <?php echo $sp_min_label; ?>.
-                                        </p>
+                                <article class="deal-card voucher-deal-ticket">
+                                    <div class="voucher-ticket-stub" style="background: linear-gradient(180deg, #175cd3 0%, #1e40af 100%);">
+                                        <span class="voucher-ticket-stub-text">PROMO</span>
                                     </div>
-                                    <div>
-                                        <div class="deal-code-row" style="margin-bottom: 8px;">
-                                            <span class="deal-code-text"><?php echo $sp_code; ?></span>
-                                            <button type="button" class="deal-copy-btn" onclick="copyWelcomePromoCode('<?php echo $sp_code; ?>', this)">
-                                                <i class="fas fa-copy"></i> Copy
-                                            </button>
+                                    <div class="voucher-ticket-body">
+                                        <div class="voucher-ticket-top">
+                                            <span class="voucher-ticket-discount"><?php echo htmlspecialchars($sp_disc); ?></span>
+                                            <div class="voucher-ticket-icon-wrap" title="<?php echo $sp_shop_name; ?>">
+                                                <div class="voucher-ticket-dots">
+                                                    <span class="dot" style="background:#175cd3;"></span>
+                                                    <span class="dot" style="left:6px; background:#60a5fa; opacity:0.9;"></span>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <a href="javascript:void(0)" onclick="claimAndUseWelcomeDeal('<?php echo $sp_code; ?>', '<?php echo $sp_target_url; ?>')" class="deal-action-btn" style="background:#b3261e;">
-                                            <i class="fas fa-store"></i> Claim &amp; Shop Store
-                                        </a>
+                                        <div class="voucher-ticket-code"><?php echo $sp_code; ?></div>
+                                        <div class="voucher-ticket-desc" title="<?php echo htmlspecialchars((string)$sp['name']); ?>"><?php echo htmlspecialchars((string)$sp['name']); ?></div>
+                                        <div class="voucher-ticket-terms" style="color:#175cd3;"><?php echo htmlspecialchars($sp_min_label); ?></div>
+                                        <div style="display:flex; gap:6px;">
+                                            <button type="button" class="voucher-pill-btn" onclick="copyWelcomePromoCode('<?php echo $sp_code; ?>', this)" title="Copy promo code" style="flex:0 0 auto; width:auto; padding:5px 9px;">
+                                                <i class="fas fa-copy"></i>
+                                            </button>
+                                            <a href="javascript:void(0)" onclick="claimAndUseWelcomeDeal('<?php echo $sp_code; ?>', '<?php echo $sp_target_url; ?>')" class="voucher-pill-btn" style="flex:1;">
+                                                Apply Code
+                                            </a>
+                                        </div>
                                     </div>
                                 </article>
                             <?php endforeach; ?>
@@ -4260,7 +4465,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             <?php foreach ($top_rated_stores as $top_store): ?>
                                 <a href="<?php echo htmlspecialchars($top_store['menu_link']); ?>" class="panda-brand-item">
                                     <div class="panda-brand-avatar" style="background-image:url('<?php echo htmlspecialchars($top_store['image']); ?>');"></div>
-                                    <div class="panda-brand-name"><?php echo htmlspecialchars($top_store['name']); ?></div>
+                                    <div class="panda-brand-name"><?php echo htmlspecialchars(fixMojibakeText($top_store['name'])); ?></div>
                                     <div class="panda-brand-meta">
                                         <i class="fas fa-star" style="color:#ef6b2e;"></i> <?php echo $top_store['rating'] > 0 ? number_format((float)$top_store['rating'], 1) : '4.9'; ?>
                                         • 25-35m

@@ -6,7 +6,10 @@ include 'auth.php';
 
 checkAdminAccess();
 requirePermission('orders.view');
-$admin_info = getAdminInfo($conn);
+if (function_exists('ensureOrdersTableSchema')) {
+    ensureOrdersTableSchema($conn);
+}
+$admin_info = getAdminInfo($conn) ?: [];
 $csrf_token = generateCSRFToken();
 $current_user_id = (int)($_SESSION['user_id'] ?? 0);
 $is_partner_scoped_admin = isApprovedFranchiseSellerAccount($conn, $current_user_id);
@@ -49,6 +52,9 @@ if ($current_page_number < 1) {
 }
 $offset = ($current_page_number - 1) * $records_per_page;
 
+$has_archived_col = function_exists('appColumnExists') ? appColumnExists($conn, 'orders', 'is_archived') : adminAuthColumnExists($conn, 'orders', 'is_archived');
+$archived_clause = $has_archived_col ? "o.is_archived = 0" : "1=1";
+
 // Get statistics for orders
 $stats_query = "SELECT 
     COUNT(*) as total,
@@ -57,9 +63,9 @@ $stats_query = "SELECT
     SUM(CASE WHEN status = 'preparing' THEN 1 ELSE 0 END) as preparing,
     SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END) as delivered,
     SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as cancelled
-    FROM orders o WHERE o.is_archived = 0" . ($seller_scope_id !== null ? " AND {$seller_scoped_orders_exists}" : "");
+    FROM orders o WHERE {$archived_clause}" . ($seller_scope_id !== null ? " AND {$seller_scoped_orders_exists}" : "");
 $stats_result = mysqli_query($conn, $stats_query);
-$order_stats = $stats_result ? (mysqli_fetch_assoc($stats_result) ?: []) : [
+$order_stats = ($stats_result instanceof mysqli_result) ? (mysqli_fetch_assoc($stats_result) ?: []) : [
     'total' => 0,
     'pending' => 0,
     'confirmed' => 0,
@@ -235,7 +241,7 @@ if ($status_filter !== '' && !in_array($status_filter, $allowed_filter_statuses,
 }
 
 // Build query
-$where_clauses = ["o.is_archived = 0"];
+$where_clauses = [$archived_clause];
 if ($seller_scope_id !== null) {
     $where_clauses[] = $seller_scoped_orders_exists;
 }
@@ -264,29 +270,58 @@ $where_clause = implode(" AND ", $where_clauses);
 // Count total records for pagination
 $count_query = "SELECT COUNT(*) as total FROM orders o WHERE $where_clause";
 $count_result = mysqli_query($conn, $count_query);
-$total_records = mysqli_fetch_assoc($count_result)['total'];
-$total_pages = ceil($total_records / $records_per_page);
-
-$has_admin_pod_table = false;
-$res_pod_check = mysqli_query($conn, "SHOW TABLES LIKE 'proof_of_delivery'");
-if ($res_pod_check && mysqli_num_rows($res_pod_check) > 0) {
-    $has_admin_pod_table = true;
+$total_records = 0;
+if ($count_result instanceof mysqli_result) {
+    $c_row = mysqli_fetch_assoc($count_result);
+    $total_records = (int)($c_row['total'] ?? 0);
 }
+$total_pages = ceil(max(1, $total_records) / $records_per_page);
+
+$has_admin_pod_table = adminAuthTableExists($conn, 'proof_of_delivery');
 $proof_photo_expr = $has_admin_pod_table
     ? "COALESCE(lt.proof_of_delivery_path, (SELECT photo_path FROM proof_of_delivery WHERE order_id = o.id ORDER BY id DESC LIMIT 1), '')"
     : "COALESCE(lt.proof_of_delivery_path, '')";
 
+$has_lt = adminAuthTableExists($conn, 'logistics_tracking');
+$has_riders = adminAuthTableExists($conn, 'riders');
+$has_users = adminAuthTableExists($conn, 'users');
+$has_employees = adminAuthTableExists($conn, 'employees');
+
+$join_sql = "";
+if ($has_lt) {
+    $join_sql .= " LEFT JOIN logistics_tracking lt ON lt.order_id = o.id";
+    if ($has_riders) {
+        $join_sql .= " LEFT JOIN riders r ON lt.driver_id = r.id";
+        if ($has_users) {
+            $join_sql .= " LEFT JOIN users u_rdr ON r.user_id = u_rdr.id";
+        }
+        if ($has_employees) {
+            $join_sql .= " LEFT JOIN employees e_rdr ON r.employee_id = e_rdr.id";
+        }
+    }
+}
+
+$driver_name_expr = "''";
+if ($has_lt && $has_riders && $has_users && $has_employees) {
+    $driver_name_expr = "COALESCE(NULLIF(lt.driver_name, ''), u_rdr.full_name, CONCAT(e_rdr.first_name, ' ', e_rdr.last_name), '')";
+} elseif ($has_lt && $has_riders && $has_users) {
+    $driver_name_expr = "COALESCE(NULLIF(lt.driver_name, ''), u_rdr.full_name, '')";
+} elseif ($has_lt) {
+    $driver_name_expr = "COALESCE(NULLIF(lt.driver_name, ''), '')";
+}
+
+$tracking_id_expr = $has_lt ? "lt.id" : "NULL";
+$tracking_status_expr = $has_lt ? "lt.current_status" : "''";
+$rider_code_expr = ($has_lt && $has_riders) ? "r.rider_code" : "''";
+
 $orders_query = "SELECT o.*{$partner_order_amount_sql},
-    lt.id AS tracking_id,
-    lt.current_status AS tracking_status,
+    {$tracking_id_expr} AS tracking_id,
+    {$tracking_status_expr} AS tracking_status,
     {$proof_photo_expr} AS proof_photo,
-    COALESCE(NULLIF(lt.driver_name, ''), u_rdr.full_name, CONCAT(e_rdr.first_name, ' ', e_rdr.last_name), '') AS driver_name,
-    r.rider_code
+    {$driver_name_expr} AS driver_name,
+    {$rider_code_expr} AS rider_code
 FROM orders o
-LEFT JOIN logistics_tracking lt ON lt.order_id = o.id
-LEFT JOIN riders r ON lt.driver_id = r.id
-LEFT JOIN users u_rdr ON r.user_id = u_rdr.id
-LEFT JOIN employees e_rdr ON r.employee_id = e_rdr.id
+{$join_sql}
 WHERE $where_clause
 ORDER BY o.created_at DESC
 LIMIT $records_per_page OFFSET $offset";
@@ -411,7 +446,7 @@ $orders_result = mysqli_query($conn, $orders_query);
                     <div class="topbar-right">
                         <div class="date-display" id="currentDate"></div>
                         <div class="admin-profile">
-                            <span><?php echo htmlspecialchars($admin_info['full_name']); ?></span>
+                            <span><?php echo htmlspecialchars($admin_info['full_name'] ?? ($_SESSION['full_name'] ?? 'Administrator')); ?></span>
                             <i class="fas fa-user-circle"></i>
                         </div>
                     </div>
@@ -495,7 +530,7 @@ $orders_result = mysqli_query($conn, $orders_query);
                         </thead>
                         <tbody>
                             <?php
-                            if (mysqli_num_rows($orders_result) > 0) {
+                            if ($orders_result instanceof mysqli_result && mysqli_num_rows($orders_result) > 0) {
                                 while ($order = mysqli_fetch_assoc($orders_result)) { 
                                     $status_class = match($order['status']) {
                                         'pending' => 'badge-warning',
