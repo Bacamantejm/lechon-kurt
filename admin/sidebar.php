@@ -2065,6 +2065,33 @@ body.dark-mode .sidebar-menu .menu-item.active i {
 
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
+    // Global SweetAlert2 Default Configuration
+    if (typeof Swal !== 'undefined' && !Swal.__defaultThemed) {
+        Swal.__defaultThemed = true;
+        const _origSwalFire = Swal.fire.bind(Swal);
+        Swal.fire = function(...args) {
+            let opts = {};
+            if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+                opts = Object.assign({}, args[0]);
+            } else if (typeof args[0] === 'string') {
+                opts = {
+                    title: args[0],
+                    html: args[1] || '',
+                    icon: args[2] || undefined
+                };
+            }
+
+            if (!opts.confirmButtonColor) {
+                opts.confirmButtonColor = 'var(--danger, #ef4444)';
+            }
+            if (!opts.cancelButtonColor) {
+                opts.cancelButtonColor = 'var(--secondary, #64748b)';
+            }
+
+            return _origSwalFire(opts);
+        };
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         const topbarProfile = {
             name: <?php echo json_encode($sidebar_logged_in_name); ?>,
@@ -2639,8 +2666,8 @@ body.dark-mode .sidebar-menu .menu-item.active i {
                 icon: 'warning',
                 confirmButtonText: 'Confirm',
                 cancelButtonText: 'Cancel',
-                confirmButtonColor: '#3085d6',
-                cancelButtonColor: '#d33'
+                confirmButtonColor: 'var(--danger, #ef4444)',
+                cancelButtonColor: 'var(--secondary, #64748b)'
             }, options || {});
 
             if (typeof Swal !== 'undefined') {
@@ -2677,8 +2704,8 @@ body.dark-mode .sidebar-menu .menu-item.active i {
                         icon: form.dataset.swConfirmIcon || 'warning',
                         confirmButtonText: form.dataset.swConfirmConfirmText || 'Confirm',
                         cancelButtonText: form.dataset.swConfirmCancelText || 'Cancel',
-                        confirmButtonColor: form.dataset.swConfirmConfirmColor || '#3085d6',
-                        cancelButtonColor: form.dataset.swConfirmCancelColor || '#d33'
+                        confirmButtonColor: form.dataset.swConfirmConfirmColor || 'var(--danger, #ef4444)',
+                        cancelButtonColor: form.dataset.swConfirmCancelColor || 'var(--secondary, #64748b)'
                     }).then((confirmed) => {
                         if (confirmed) {
                             form.dataset.swConfirmed = '1';

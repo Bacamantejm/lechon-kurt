@@ -2551,8 +2551,8 @@ window.swalConfirmAction = window.swalConfirmAction || function(options) {
         icon: 'warning',
         confirmButtonText: 'Confirm',
         cancelButtonText: 'Cancel',
-        confirmButtonColor: '#171922',
-        cancelButtonColor: '#98a2b3'
+        confirmButtonColor: 'var(--danger, #ef4444)',
+        cancelButtonColor: 'var(--secondary, #64748b)'
     }, options || {});
 
     if (typeof Swal !== 'undefined') {
@@ -2591,8 +2591,8 @@ window.bindSwalConfirmForms = window.bindSwalConfirmForms || function(root) {
                 icon: form.dataset.swConfirmIcon || 'warning',
                 confirmButtonText: form.dataset.swConfirmConfirmText || 'Confirm',
                 cancelButtonText: form.dataset.swConfirmCancelText || 'Cancel',
-                confirmButtonColor: form.dataset.swConfirmConfirmColor || '#171922',
-                cancelButtonColor: form.dataset.swConfirmCancelColor || '#98a2b3'
+                confirmButtonColor: form.dataset.swConfirmConfirmColor || 'var(--danger, #ef4444)',
+                cancelButtonColor: form.dataset.swConfirmCancelColor || 'var(--secondary, #64748b)'
             }).then(function(confirmed) {
                 if (confirmed) {
                     form.dataset.swConfirmed = '1';
