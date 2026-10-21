@@ -2071,7 +2071,6 @@ window.openMobileNavSidebar = function(e) {
 };
 window.closeMobileNavSidebar = function(e) {
     if (e) {
-        if (e.cancelable && typeof e.preventDefault === 'function') e.preventDefault();
         if (typeof e.stopPropagation === 'function') e.stopPropagation();
     }
     var m = document.getElementById('mobileMenu');
