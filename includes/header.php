@@ -2107,7 +2107,7 @@ document.addEventListener('click', function(e) {
     }
     var navLink = e.target.closest('.mobile-nav a');
     if (navLink) {
-        window.closeMobileNavSidebar(e);
+        window.closeMobileNavSidebar();
     }
 }, true);
 
