@@ -20,11 +20,11 @@ if (isset($rider['id'])) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Lechon Delight | <?php echo htmlspecialchars($page_title); ?> — Rider Portal</title>
     <!-- Favicon & Brand Logo Icons -->
-    <link rel="icon" type="image/x-icon" href="../favicon.ico">
-    <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32x32.png">
-    <link rel="icon" type="image/jpeg" href="../assets/images/logo.jpg">
-    <link rel="shortcut icon" type="image/x-icon" href="../favicon.ico">
-    <link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32x32.png?v=lechon2">
+    <link rel="icon" type="image/png" sizes="16x16" href="../favicon-16x16.png?v=lechon2">
+    <link rel="icon" type="image/x-icon" href="../favicon.ico?v=lechon2">
+    <link rel="shortcut icon" type="image/x-icon" href="../favicon.ico?v=lechon2">
+    <link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png?v=lechon2">
     <!-- Bootstrap 5 CSS -->
     <link href="../css/bootstrap.min.css" rel="stylesheet">
     <!-- FontAwesome 6 -->

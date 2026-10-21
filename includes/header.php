@@ -164,11 +164,11 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
     ?>
     <title><?php echo htmlspecialchars($rendered_tab_title); ?></title>
     <!-- Favicon & Brand Logo Icons -->
-    <link rel="icon" type="image/x-icon" href="<?php echo $path_prefix; ?>favicon.ico">
-    <link rel="icon" type="image/png" sizes="32x32" href="<?php echo $path_prefix; ?>favicon-32x32.png">
-    <link rel="icon" type="image/jpeg" href="<?php echo $path_prefix; ?>assets/images/logo.jpg">
-    <link rel="shortcut icon" type="image/x-icon" href="<?php echo $path_prefix; ?>favicon.ico">
-    <link rel="apple-touch-icon" sizes="180x180" href="<?php echo $path_prefix; ?>apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="<?php echo $path_prefix; ?>favicon-32x32.png?v=lechon2">
+    <link rel="icon" type="image/png" sizes="16x16" href="<?php echo $path_prefix; ?>favicon-16x16.png?v=lechon2">
+    <link rel="icon" type="image/x-icon" href="<?php echo $path_prefix; ?>favicon.ico?v=lechon2">
+    <link rel="shortcut icon" type="image/x-icon" href="<?php echo $path_prefix; ?>favicon.ico?v=lechon2">
+    <link rel="apple-touch-icon" sizes="180x180" href="<?php echo $path_prefix; ?>apple-touch-icon.png?v=lechon2">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
