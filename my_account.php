@@ -1122,6 +1122,19 @@ include 'includes/header.php';
         padding: 18px 16px;
         box-shadow: 0 4px 16px -2px rgba(16, 24, 40, 0.04);
     }
+
+    /* Mobile Uncluttering: hide repetitive panel captions */
+    .acc-panel-head p {
+        display: none !important;
+    }
+    .acc-panel-head h3 {
+        font-size: 1.05rem !important;
+        margin: 0 !important;
+    }
+    .acc-panel-head {
+        margin-bottom: 12px !important;
+        padding-bottom: 8px !important;
+    }
 }
 
 /* ==========================================================================

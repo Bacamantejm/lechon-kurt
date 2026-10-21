@@ -596,6 +596,83 @@ html, body {
         height: 120px !important;
         border-radius: 14px !important;
     }
+
+    /* ==========================================================================
+       SHOPS MOBILE UNCLUTTERING (Scoped strictly to <= 768px)
+       ========================================================================== */
+    .shops-map-banner {
+        padding: 14px 14px !important;
+        border-radius: 18px !important;
+        margin-bottom: 18px !important;
+    }
+
+    .shops-map-banner h2 {
+        font-size: 1.15rem !important;
+        margin: 0 !important;
+    }
+
+    #shopsNearbyMap {
+        height: 185px !important;
+        border-radius: 14px !important;
+        touch-action: pan-y !important;
+    }
+
+    #userLocationBadge {
+        padding: 4px 10px !important;
+        font-size: 0.74rem !important;
+        border-radius: 8px !important;
+    }
+
+    #mapDetectLocationBtn {
+        padding: 5px 10px !important;
+        font-size: 0.74rem !important;
+        border-radius: 8px !important;
+    }
+
+    #nearbySectionTitle,
+    #otherSectionTitle {
+        font-size: 1.15rem !important;
+        margin: 0 !important;
+    }
+
+    #nearbyCountLabel,
+    #otherCountLabel {
+        font-size: 0.76rem !important;
+    }
+
+    .shops-section-block {
+        margin-bottom: 22px !important;
+    }
+
+    /* Hide redundant stacked uppercase mini-pills above section titles on mobile */
+    .shops-section-block > div:first-child > div > div[style*="display:inline-flex"] {
+        display: none !important;
+    }
+
+    /* Clean typography on cards to prevent text wrapping clutter */
+    .shop-card-item .store-card-row-head h3 {
+        font-size: 0.88rem !important;
+        font-weight: 800 !important;
+    }
+
+    .shop-card-item .store-card-rating {
+        font-size: 0.76rem !important;
+    }
+
+    .shop-card-item .store-card-meta-line,
+    .shop-card-item .store-card-delivery-line {
+        font-size: 0.72rem !important;
+    }
+
+    .shop-card-item .store-card-promo-line {
+        font-size: 0.7rem !important;
+    }
+
+    .market-type-pill,
+    .market-ad-pill {
+        font-size: 0.6rem !important;
+        padding: 2px 5px !important;
+    }
 }
 
 @media (max-width: 480px) {

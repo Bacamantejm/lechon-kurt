@@ -1396,7 +1396,34 @@ include 'includes/header.php';
 }
 
 @media (max-width: 768px) {
-    .issue-cards,
+    .help-card-head p,
+    #orderFieldHint,
+    #shopFieldHint,
+    .issue-card span:last-child {
+        display: none !important;
+    }
+
+    .issue-cards {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 8px !important;
+    }
+
+    .issue-card {
+        padding: 10px 12px !important;
+        gap: 4px !important;
+        border-radius: 10px !important;
+    }
+
+    .issue-card strong {
+        font-size: 0.85rem !important;
+    }
+
+    .issue-card-icon {
+        width: 30px !important;
+        height: 30px !important;
+        font-size: 0.85rem !important;
+    }
+
     .help-form-grid {
         grid-template-columns: 1fr;
     }

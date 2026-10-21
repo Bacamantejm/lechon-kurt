@@ -51,7 +51,7 @@
                     </ul>
                 </div>
                 
-                <div class="footer-col">
+                <div class="footer-col footer-col-partner">
                     <h4>Business Partner</h4>
                     <ul>
                         <li><a href="<?php echo $footer_path_prefix; ?>franchise_application.php">Become a Partner</a></li>
@@ -212,7 +212,7 @@
             display: flex;
         }
         .site-main, main, .main-content {
-            padding-bottom: 96px !important;
+            padding-bottom: 0 !important;
         }
         .floating-chat-btn {
             bottom: 88px !important;
@@ -233,7 +233,7 @@
             z-index: 1199 !important;
         }
         .footer {
-            padding-bottom: 100px !important;
+            padding: 16px 14px 92px 14px !important;
         }
     }
     </style>
@@ -967,24 +967,103 @@
         }
 
         @media (max-width: 860px) {
-            .footer-grid {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-                gap: 20px;
+            .footer {
+                font-size: 0.78rem !important;
+                padding: 16px 14px 92px 14px !important;
             }
             .footer-container {
-                padding: 20px 16px 14px;
+                padding: 0 !important;
+                max-width: 100% !important;
+            }
+            .footer-grid {
+                grid-template-columns: repeat(2, 1fr) !important;
+                gap: 10px 16px !important;
+                margin-bottom: 8px !important;
+            }
+            .footer-brand-col {
+                grid-column: span 2 !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: space-between !important;
+                flex-wrap: wrap !important;
+                gap: 8px !important;
+                margin-bottom: 4px !important;
+                padding-bottom: 8px !important;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+            }
+            .footer-brand-desc {
+                display: none !important;
+            }
+            .footer-logo {
+                margin-bottom: 0 !important;
+            }
+            .footer-col {
+                padding: 0 !important;
+            }
+            .footer-col h4 {
+                font-size: 0.76rem !important;
+                margin: 0 0 4px !important;
+                color: #f8fafc !important;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+            }
+            .footer-col ul {
+                gap: 3px !important;
+            }
+            .footer-col a {
+                font-size: 0.74rem !important;
+                color: #94a3b8 !important;
+            }
+            .footer-col.footer-col-partner {
+                grid-column: span 2 !important;
+                margin-top: 4px !important;
+                padding-top: 8px !important;
+                border-top: 1px solid rgba(255, 255, 255, 0.06) !important;
+            }
+            .footer-col.footer-col-partner ul {
+                display: grid !important;
+                grid-template-columns: 1fr 1fr !important;
+                gap: 3px 14px !important;
+            }
+            .social-links {
+                gap: 6px !important;
+                margin-top: 0 !important;
+            }
+            .social-links a,
+            .social-link {
+                width: 28px !important;
+                height: 28px !important;
+                font-size: 0.75rem !important;
+            }
+            .footer-bottom {
+                margin-top: 8px !important;
+                padding-top: 8px !important;
+                border-top: 1px solid rgba(255, 255, 255, 0.06) !important;
+                flex-direction: column !important;
+                align-items: center !important;
+                text-align: center !important;
+                gap: 6px !important;
+                font-size: 0.72rem !important;
+            }
+            .footer-bottom p {
+                font-size: 0.7rem !important;
+                color: #64748b !important;
+                margin: 0 !important;
+            }
+            .footer-links {
+                gap: 12px !important;
+                justify-content: center !important;
+            }
+            .footer-links a {
+                font-size: 0.72rem !important;
+                color: #94a3b8 !important;
             }
         }
 
         @media (max-width: 520px) {
             .footer-grid {
-                grid-template-columns: 1fr;
-                gap: 18px;
-            }
-            .footer-bottom {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 8px;
+                grid-template-columns: 1fr 1fr !important;
+                gap: 8px 12px !important;
             }
         }
 
@@ -1228,20 +1307,11 @@
 
         @media (max-width: 768px) {
             .footer .container {
-                padding-top: 32px;
-            }
-
-            .footer-grid {
-                grid-template-columns: 1fr;
+                padding-top: 14px;
             }
 
             .footer-col {
-                padding: 16px;
-            }
-
-            .footer-bottom {
-                flex-direction: column;
-                align-items: flex-start;
+                padding: 0;
             }
 
             #backToTopBtn {

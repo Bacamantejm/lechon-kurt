@@ -1485,6 +1485,14 @@ unset($order);
         padding: 14px 10px 220px 10px !important;
     }
 
+    .orders-header {
+        margin-bottom: 12px !important;
+    }
+
+    .orders-header p {
+        display: none !important;
+    }
+
     /* Glassmorphic Order Cards on Mobile */
     .ecom-order-card,
     .empty-orders-state {

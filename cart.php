@@ -698,8 +698,8 @@ $downpayment = round($grand_total * 0.30, 2);
     }
 
     .qty-btn {
-        width: 26px !important;
-        height: 26px !important;
+        width: 32px !important;
+        height: 32px !important;
         font-size: 0.85rem !important;
     }
 
@@ -718,8 +718,35 @@ $downpayment = round($grand_total * 0.30, 2);
         font-size: 0.74rem !important;
     }
 
+    .mobile-bottom-nav {
+        display: none !important;
+    }
+
+    .cart-page-header p,
+    .cart-panel-note,
+    .checkout-choice-note,
+    .checkout-security-note {
+        display: none !important;
+    }
+
     .cart-header-stats {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 6px !important;
+        margin-top: 10px !important;
+    }
+
+    .cart-header-stat {
+        padding: 6px 8px !important;
+        border-radius: 8px !important;
+        gap: 1px !important;
+    }
+
+    .cart-header-stat-label {
+        font-size: 0.68rem !important;
+    }
+
+    .cart-header-stat strong {
+        font-size: 0.85rem !important;
     }
 
     .cart-mobile-sticky-bar {
@@ -727,14 +754,14 @@ $downpayment = round($grand_total * 0.30, 2);
         align-items: center !important;
         justify-content: space-between !important;
         position: fixed !important;
-        bottom: 64px !important;
+        bottom: 0 !important;
         left: 0 !important;
         right: 0 !important;
         background: rgba(255, 255, 255, 0.98) !important;
         backdrop-filter: blur(14px) !important;
         -webkit-backdrop-filter: blur(14px) !important;
         border-top: 1px solid #eaecf0 !important;
-        padding: 10px 16px !important;
+        padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px)) !important;
         z-index: 1000 !important;
         box-shadow: 0 -4px 16px rgba(16, 24, 40, 0.08) !important;
     }

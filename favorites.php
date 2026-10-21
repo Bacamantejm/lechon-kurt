@@ -396,6 +396,75 @@ include 'includes/header.php';
     background: #981b15;
 }
 
+
+@media (max-width: 768px) {
+    .favorites-page {
+        padding: 16px 0 150px !important;
+    }
+
+    .favorites-head {
+        margin-bottom: 14px !important;
+        padding-bottom: 10px !important;
+    }
+
+    .favorites-head p {
+        display: none !important;
+    }
+
+    .favorite-section-head {
+        margin-bottom: 10px !important;
+    }
+
+    .favorite-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 10px !important;
+    }
+
+    .favorite-cover {
+        height: 105px !important;
+    }
+
+    .favorite-toggle {
+        width: 28px !important;
+        height: 28px !important;
+        font-size: 0.75rem !important;
+        top: 6px !important;
+        right: 6px !important;
+    }
+
+    .favorite-body {
+        padding: 10px 12px !important;
+    }
+
+    .favorite-subtitle {
+        font-size: 0.65rem !important;
+        margin-bottom: 2px !important;
+    }
+
+    .favorite-title {
+        font-size: 0.86rem !important;
+        margin-bottom: 4px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+
+    .favorite-meta {
+        font-size: 0.74rem !important;
+        margin-bottom: 8px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+
+    .favorite-link {
+        width: 100% !important;
+        justify-content: center !important;
+        padding: 6px 8px !important;
+        font-size: 0.75rem !important;
+    }
+}
+
 /* ==========================================================================
    FAVORITES PAGE DARK THEME ENGINE
    ========================================================================== */

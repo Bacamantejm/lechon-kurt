@@ -854,6 +854,7 @@ body.dark-mode .bestsellers-section {
 
 body.dark-mode .bestseller-card,
 body.dark-mode .market-store-row,
+body.dark-mode .top-restaurant-card,
 body.dark-mode .panda-card-link {
     background: #1e293b !important;
     border-color: #334155 !important;
@@ -862,7 +863,8 @@ body.dark-mode .panda-card-link {
 }
 
 body.dark-mode .bestseller-card:hover,
-body.dark-mode .market-store-row:hover {
+body.dark-mode .market-store-row:hover,
+body.dark-mode .top-restaurant-card:hover {
     border-color: #b3261e !important;
     transform: translateY(-3px) !important;
 }
@@ -1024,13 +1026,7 @@ html, body {
     max-width: 100vw !important;
 }
 
-.market-home {
-    overflow-x: clip !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    box-sizing: border-box !important;
-    padding-bottom: 120px !important;
-}
+.market-home { overflow-x: clip !important; width: 100% !important; max-width: 100% !important; box-sizing: border-box !important; padding-bottom: 24px !important; }
 
 .market-home .container {
     max-width: 1280px;
@@ -1695,8 +1691,17 @@ body.dark-mode .m-ref-cat-card span {
 
 /* Comprehensive Responsive System for Viewports <= 768px */
 @media (max-width: 768px) {
-    .market-home {
-        padding-bottom: 200px !important;
+    .market-home { 
+        padding-top: 10px !important;
+        padding-bottom: 0 !important; 
+    }
+    #marketplaceStores {
+        padding-top: 12px !important;
+        padding-bottom: 12px !important;
+    }
+    .market-pagination {
+        margin-top: 12px !important;
+        margin-bottom: 6px !important;
     }
 
     .m-ref-home-container {
@@ -1711,25 +1716,7 @@ body.dark-mode .m-ref-cat-card span {
         display: none !important;
     }
 
-    /* Filters & Sort as clean rounded pill */
-    .market-sidebar-toggle-btn {
-        display: inline-flex !important;
-        align-items: center !important;
-        gap: 8px !important;
-        border-radius: 999px !important;
-        padding: 8px 18px !important;
-        background: rgba(255, 255, 255, 0.88) !important;
-        backdrop-filter: blur(14px) !important;
-        -webkit-backdrop-filter: blur(14px) !important;
-        border: 1px solid rgba(234, 236, 240, 0.85) !important;
-        color: #344054 !important;
-        font-size: 0.82rem !important;
-        font-weight: 700 !important;
-        box-shadow: 0 2px 8px rgba(16, 24, 40, 0.04) !important;
-        margin-bottom: 16px !important;
-        cursor: pointer;
-        width: auto !important;
-    }
+
 
     .market-explorer > div {
         min-width: 0 !important;
@@ -1738,12 +1725,11 @@ body.dark-mode .m-ref-cat-card span {
         box-sizing: border-box !important;
     }
 
-    /* Universal Horizontal Swipe Tracks for Menu, Top Store, Store, and Deals */
+    /* Universal Horizontal Swipe Tracks for Menu, Top Store, and Deals Carousels */
     .bestsellers-grid,
     .top-shops-swipe-grid,
     .partner-store-deals-grid,
-    .first-user-deals-grid,
-    .market-store-list.store-list-grid {
+    .first-user-deals-grid {
         display: flex !important;
         flex-direction: row !important;
         flex-wrap: nowrap !important;
@@ -1765,8 +1751,7 @@ body.dark-mode .m-ref-cat-card span {
     .bestsellers-grid::-webkit-scrollbar,
     .top-shops-swipe-grid::-webkit-scrollbar,
     .partner-store-deals-grid::-webkit-scrollbar,
-    .first-user-deals-grid::-webkit-scrollbar,
-    .market-store-list.store-list-grid::-webkit-scrollbar {
+    .first-user-deals-grid::-webkit-scrollbar {
         display: none !important;
     }
 
@@ -1787,6 +1772,7 @@ body.dark-mode .m-ref-cat-card span {
     }
 
     /* Top Store (Top Restaurants) Swipe Cards */
+    .top-shops-swipe-grid .top-restaurant-card,
     .top-shops-swipe-grid .market-store-row {
         flex: 0 0 clamp(200px, 68vw, 250px) !important;
         width: clamp(200px, 68vw, 250px) !important;
@@ -1825,17 +1811,20 @@ body.dark-mode .m-ref-cat-card span {
         gap: 4px !important;
     }
 
-    /* All Stores Mobile Swipe Cards */
+    /* All Stores Mobile Vertical Feed Grid */
+    .market-store-list.store-list-grid {
+        display: grid !important;
+        grid-template-columns: 1fr !important;
+        gap: 16px !important;
+        width: 100% !important;
+    }
+
     .market-store-list.store-list-grid .market-store-row {
-        flex: 0 0 clamp(200px, 68vw, 250px) !important;
-        width: clamp(200px, 68vw, 250px) !important;
-        min-width: clamp(200px, 68vw, 250px) !important;
-        max-width: clamp(200px, 68vw, 250px) !important;
+        display: flex !important;
         flex-direction: column !important;
-        align-items: stretch !important;
-        scroll-snap-align: start !important;
-        scroll-snap-stop: normal !important;
-        touch-action: pan-x pan-y !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
         border-radius: 16px !important;
         background: #ffffff !important;
         border: 1px solid #eaecf0 !important;
@@ -1843,25 +1832,26 @@ body.dark-mode .m-ref-cat-card span {
         box-sizing: border-box !important;
         padding: 0 !important;
         gap: 0 !important;
+        box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04) !important;
     }
 
     .market-store-list.store-list-grid .store-card-image-wrap {
-        height: 115px !important;
-        width: calc(100% - 12px) !important;
-        margin: 6px !important;
+        height: 140px !important;
+        width: calc(100% - 16px) !important;
+        margin: 8px !important;
         border-radius: 12px !important;
         overflow: hidden !important;
         position: relative !important;
-        flex: 0 0 115px !important;
+        flex: 0 0 140px !important;
     }
 
     .market-store-list.store-list-grid .store-card-details {
-        padding: 6px 10px 10px 10px !important;
+        padding: 8px 12px 14px 12px !important;
         display: flex !important;
         flex-direction: column !important;
         flex: 1 1 auto !important;
         justify-content: space-between !important;
-        gap: 4px !important;
+        gap: 6px !important;
     }
 
     /* Store Deals & Welcome Deals Swipe Cards */
@@ -1917,6 +1907,212 @@ body.dark-mode .m-ref-cat-card span {
         background: rgba(30, 41, 59, 0.88) !important;
         border-color: rgba(51, 65, 85, 0.85) !important;
         color: #f8fafc !important;
+    }
+
+    /* ==========================================================================
+       MOBILE CLEAN-UP & ANTI-OVERCROWDING RULES (Scoped strictly to <= 768px)
+       ========================================================================== */
+
+    /* Hide redundant descriptive subtitles and paragraph filler */
+    .market-head p,
+    .first-user-deals-section .market-head p,
+    .store-promos-section .market-head p,
+    .bestsellers-section .market-head p,
+    .market-mini-section .market-head p,
+    .market-helper,
+    .panda-brand-slider + p {
+        display: none !important;
+    }
+
+    
+    /* Best Sellers Section Mobile Improvements */
+    .bestsellers-section .market-head {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        flex-wrap: nowrap !important;
+        margin-bottom: 10px !important;
+        gap: 8px !important;
+    }
+    .bestsellers-section .market-head h2 {
+        font-size: 1.15rem !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        margin: 0 !important;
+    }
+    .bestsellers-section .market-head a.btn-outline {
+        border: none !important;
+        background: transparent !important;
+        color: #b3261e !important;
+        font-size: 0.78rem !important;
+        font-weight: 700 !important;
+        padding: 0 !important;
+        white-space: nowrap !important;
+        flex-shrink: 0 !important;
+    }
+    .bestseller-card .store-card-details .btn-primary,
+    .bestseller-card .bestseller-order-btn {
+        white-space: nowrap !important;
+        padding: 5px 12px !important;
+        font-size: 0.74rem !important;
+        border-radius: 999px !important;
+        flex-shrink: 0 !important;
+        letter-spacing: 0 !important;
+        background: #b3261e !important;
+        color: #ffffff !important;
+        box-shadow: 0 2px 6px rgba(179,38,30,0.2) !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 4px !important;
+    }
+    .bestseller-card {
+        flex: 0 0 clamp(200px, 62vw, 240px) !important;
+        width: clamp(200px, 62vw, 240px) !important;
+        min-width: clamp(200px, 62vw, 240px) !important;
+    }
+
+    /* Streamline mobile section headers */
+    .market-head {
+        margin-bottom: 10px !important;
+        gap: 6px !important;
+    }
+
+    .market-head h2,
+    .market-head h3 {
+        font-size: 1.15rem !important;
+        line-height: 1.25 !important;
+        margin: 0 !important;
+    }
+
+    /* Hide stacked uppercase mini-pills above headers on mobile */
+    .first-user-deals-section .market-head > div > div[style*="display:inline-flex"],
+    .store-promos-section .market-head > div > div[style*="display:inline-flex"],
+    .bestsellers-section .market-head > div > div[style*="display:inline-flex"],
+    #marketplaceStores .market-head > div > div[style*="display:inline-flex"] {
+        display: none !important;
+    }
+
+    /* Eliminate heavy desktop card borders around section blocks */
+    .first-user-deals-section,
+    .store-promos-section,
+    .bestsellers-section,
+    .market-mini-section {
+        margin-bottom: 18px !important;
+        padding: 0 !important;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
+
+    /* Sleek mobile category row: clean icon cards with smooth horizontal swipe */
+    .m-ref-categories-section {
+        margin-bottom: 14px !important;
+    }
+
+    .m-ref-categories-row {
+        gap: 14px !important;
+        padding: 4px 4px 14px 4px !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        scrollbar-width: none !important;
+    }
+
+    .m-ref-categories-row::-webkit-scrollbar {
+        display: none !important;
+    }
+
+    .m-ref-cat-card {
+        flex: 0 0 76px !important;
+        width: 76px !important;
+        gap: 6px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+    }
+
+    .m-ref-cat-icon {
+        width: 54px !important;
+        height: 54px !important;
+        border-radius: 50% !important;
+        font-size: 1.25rem !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    .m-ref-cat-card span {
+        font-size: 0.72rem !important;
+        font-weight: 700 !important;
+        text-align: center !important;
+        white-space: normal !important;
+        line-height: 1.18 !important;
+        word-break: normal !important;
+        max-width: 76px !important;
+        display: block !important;
+    }
+
+    /* Compact mobile promo banner */
+    .m-ref-promo-banner {
+        padding: 14px 16px !important;
+        border-radius: 18px !important;
+        margin-bottom: 14px !important;
+        min-height: auto !important;
+    }
+
+    .m-ref-promo-title {
+        font-size: 0.98rem !important;
+        line-height: 1.25 !important;
+        margin-bottom: 8px !important;
+    }
+
+    .m-ref-promo-btn {
+        padding: 6px 14px !important;
+        font-size: 0.75rem !important;
+        min-height: 32px !important;
+    }
+
+    .m-ref-promo-img-wrap {
+        width: 80px !important;
+        height: 80px !important;
+    }
+
+    /* Popular Searches chips */
+    .m-ref-popular-searches {
+        margin-bottom: 14px !important;
+    }
+
+    .m-ref-popular-chips-row {
+        gap: 6px !important;
+        padding-bottom: 4px !important;
+    }
+
+    .m-pop-chip {
+        padding: 5px 12px !important;
+        font-size: 0.74rem !important;
+        min-height: 32px !important;
+    }
+
+    /* Pickup Banner on mobile: compact and scroll-friendly */
+    .foodpanda-pickup-banner {
+        padding: 16px !important;
+        border-radius: 18px !important;
+        margin: 20px 0 !important;
+    }
+
+    .foodpanda-pickup-banner h2 {
+        font-size: 1.15rem !important;
+    }
+
+    .foodpanda-pickup-banner p {
+        font-size: 0.78rem !important;
+        margin-bottom: 10px !important;
+    }
+
+    #pickupLeafletMap {
+        height: 180px !important;
+        border-radius: 12px !important;
+        touch-action: pan-y !important;
     }
 }
 
@@ -3002,7 +3198,8 @@ body.dark-mode .m-ref-cat-card span {
 }
 
 .market-product-card,
-.market-store-row {
+.market-store-row,
+.top-restaurant-card {
     display: flex !important;
     flex-direction: column !important;
     background: #ffffff !important;
@@ -3016,7 +3213,8 @@ body.dark-mode .m-ref-cat-card span {
 }
 
 .market-product-card:hover,
-.market-store-row:hover {
+.market-store-row:hover,
+.top-restaurant-card:hover {
     transform: translateY(-3px) !important;
     box-shadow: 0 10px 24px rgba(74, 32, 20, 0.1) !important;
     border-color: #ebd7c5 !important;
@@ -3446,44 +3644,145 @@ body:not(.dark-mode) {
 }
 @media (max-width: 768px) {
     .market-sidebar {
-        border-radius: 14px !important;
-        padding: 12px 16px !important;
-        margin-bottom: 14px !important;
+        position: relative !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        margin: 0 0 16px 0 !important;
+        max-height: none !important;
+        overflow: visible !important;
+        align-self: auto !important;
+        border-radius: 12px !important;
+        padding: 0 !important;
         max-width: 100% !important;
-        border: 1px solid #eaecf0 !important;
-        background: #ffffff !important;
+        border: none !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        z-index: 100 !important;
     }
     .market-sidebar-toggle-btn {
         display: flex !important;
-        align-items: center;
-        justify-content: space-between;
-        font-weight: 800;
-        font-size: 0.92rem;
-        color: #1e293b;
-        cursor: pointer;
-        padding: 4px 0;
-        user-select: none;
+        align-items: center !important;
+        justify-content: space-between !important;
+        font-weight: 700 !important;
+        font-size: 0.88rem !important;
+        color: #101828 !important;
+        cursor: pointer !important;
+        padding: 10px 14px !important;
+        border: 1px solid #eaecf0 !important;
+        border-radius: 12px !important;
+        background: #ffffff !important;
+        box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04) !important;
+        user-select: none !important;
+        transition: border-color 0.2s ease, background 0.2s ease !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    .market-sidebar:not(.is-collapsed-mobile) .market-sidebar-toggle-btn {
+        border-color: #b3261e !important;
+        background: #fff8f8 !important;
     }
     .market-sidebar-toggle-btn i.fa-sliders {
         color: #b3261e;
         margin-right: 6px;
     }
-    .market-sidebar.is-collapsed-mobile .market-sidebar-section,
-    .market-sidebar.is-collapsed-mobile .market-sidebar-header {
+    .market-sidebar-dropdown-body {
+        position: absolute !important;
+        top: calc(100% + 6px) !important;
+        left: 0 !important;
+        right: 0 !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        background: #ffffff !important;
+        border: 1px solid #eaecf0 !important;
+        border-radius: 16px !important;
+        box-shadow: 0 16px 36px -4px rgba(16, 24, 40, 0.18), 0 6px 16px -2px rgba(16, 24, 40, 0.1) !important;
+        z-index: 1050 !important;
+        max-height: min(72vh, 480px) !important;
+        overflow-y: auto !important;
+        padding: 16px !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+    .market-sidebar.is-collapsed-mobile .market-sidebar-dropdown-body {
         display: none !important;
     }
-    .market-sidebar.is-collapsed-mobile .toggle-icon {
-        transform: rotate(-90deg);
-        transition: transform 0.2s ease;
+    .market-sidebar:not(.is-collapsed-mobile) .market-sidebar-dropdown-body {
+        display: block !important;
+        animation: marketDropdownFade 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
     }
-    .market-sidebar:not(.is-collapsed-mobile) .toggle-icon {
+    .market-sidebar.is-collapsed-mobile .toggle-icon {
         transform: rotate(0deg);
         transition: transform 0.2s ease;
     }
+    .market-sidebar:not(.is-collapsed-mobile) .toggle-icon {
+        transform: rotate(180deg);
+        transition: transform 0.2s ease;
+    }
+    .market-sidebar-header {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        margin-bottom: 12px !important;
+    }
+    .market-sidebar-close-btn {
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: #f4f5f7;
+        border: none;
+        color: #667085;
+        cursor: pointer;
+        font-size: 0.8rem;
+    }
+    .market-sidebar-apply-bar {
+        display: block !important;
+        margin-top: 14px;
+        padding-top: 12px;
+        border-top: 1px solid #f1f5f9;
+    }
+    .market-sidebar-apply-btn {
+        width: 100%;
+        padding: 10px;
+        border-radius: 999px;
+        background: #b3261e;
+        color: #ffffff;
+        font-weight: 700;
+        font-size: 0.85rem;
+        border: none;
+        cursor: pointer;
+        box-shadow: 0 2px 6px rgba(179,38,30,0.25);
+        transition: background 0.15s ease;
+    }
+    .market-sidebar-apply-btn:hover {
+        background: #981b15;
+    }
+}
+@keyframes marketDropdownFade {
+    from {
+        opacity: 0;
+        transform: translateY(-6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 @media (min-width: 769px) {
-    .market-sidebar-toggle-btn {
+    .market-sidebar-toggle-btn,
+    .market-sidebar-close-btn,
+    .market-sidebar-apply-bar {
         display: none !important;
+    }
+    .market-sidebar-dropdown-body {
+        display: block !important;
+        position: static !important;
+        box-shadow: none !important;
+        border: none !important;
+        padding: 0 !important;
+        max-height: none !important;
     }
 }
 
@@ -3659,7 +3958,18 @@ body.dark-mode .market-check span {
 }
 
 body.dark-mode .market-sidebar-toggle-btn {
+    background: #1e293b !important;
+    border-color: #334155 !important;
     color: #f8fafc !important;
+}
+body.dark-mode .market-sidebar-dropdown-body {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5) !important;
+}
+body.dark-mode .market-sidebar-close-btn {
+    background: #334155 !important;
+    color: #cbd5e1 !important;
 }
 
 /* Pick-up Map Banner in Dark Mode */
@@ -3819,48 +4129,8 @@ document.addEventListener('DOMContentLoaded', function() {
 <?php endif; ?>
 
 <div class="market-home">
-    <section class="market-section" id="marketplaceStores">
-        <div class="container">
-            <div class="market-explorer">
-                <aside class="market-sidebar is-collapsed-mobile" id="marketSidebar">
-                    <div class="market-sidebar-toggle-btn" id="marketSidebarToggleBtn" onclick="document.getElementById('marketSidebar').classList.toggle('is-collapsed-mobile')">
-                        <span><i class="fas fa-sliders"></i> Filters & Sort</span>
-                        <i class="fas fa-chevron-down toggle-icon"></i>
-                    </div>
-
-                    <div class="market-sidebar-header">
-                        <h3>Filters</h3>
-                    </div>
-                    <div class="market-sidebar-section market-sort-section">
-                        <h4>Sort by</h4>
-                        <div class="market-radio-list">
-                            <label class="market-radio"><input type="radio" name="storeSort" value="relevance" checked> <span>Relevance</span></label>
-                            <label class="market-radio"><input type="radio" name="storeSort" value="fastest"> <span>Fastest delivery</span></label>
-                            <label class="market-radio"><input type="radio" name="storeSort" value="distance"> <span>Distance</span></label>
-                            <label class="market-radio"><input type="radio" name="storeSort" value="top_rated"> <span>Top rated</span></label>
-                        </div>
-                    </div>
-                    <div class="market-sidebar-section">
-                        <h4>Quick filters</h4>
-                        <div class="market-check-list">
-                            <label class="market-check"><input type="checkbox" id="filterRatings4"> <span>Ratings 4+</span></label>
-                            <label class="market-check"><input type="checkbox" id="filterLiveOnly"> <span>Open now only</span></label>
-                            <label class="market-check"><input type="checkbox" id="filterPartnerOnly"> <span>Partner stores</span></label>
-                            <label class="market-check"><input type="checkbox" id="filterBranchOnly"> <span>Pickup branches</span></label>
-                            <label class="market-check"><input type="checkbox" id="filterNearbyOnly"> <span>Nearby only</span></label>
-                        </div>
-                    </div>
-                    <div class="market-sidebar-section" id="nearestShopsSidebarSection">
-                        <h4>Nearest Cavite lechon shops</h4>
-                        <p class="market-helper">Allow location access and the page will rank the closest saved Cavite branches first using your browser position and store coordinates.</p>
-                        <button type="button" class="market-btn market-detect-btn" id="detectNearestStores"><i class="fas fa-location-crosshairs"></i> Detect nearest shops</button>
-                        <p class="market-helper" id="nearestDetectStatus" style="margin-top:12px;">Waiting for location permission.</p>
-                    </div>
-                </aside>
-
-                <div>
-
-                    <!-- Mobile-Only Hero Promo & Categories Carousel (Reference Screen 2) -->
+    <div class="container">
+        <!-- Mobile-Only Hero Promo & Categories Carousel (Reference Screen 2) -->
                     <div class="m-ref-home-container">
                         <!-- Screen 2 Promo Banner -->
                         <div class="m-ref-promo-banner">
@@ -3925,6 +4195,57 @@ document.addEventListener('DOMContentLoaded', function() {
                             </div>
                         </div>
                     </div>
+    </div>
+    <section class="market-section" id="marketplaceStores">
+        <div class="container">
+            <div class="market-explorer">
+                <aside class="market-sidebar is-collapsed-mobile" id="marketSidebar">
+                    <div class="market-sidebar-toggle-btn" id="marketSidebarToggleBtn">
+                        <span class="filter-toggle-label"><i class="fas fa-sliders"></i> Filters &amp; Sort</span>
+                        <i class="fas fa-chevron-down toggle-icon"></i>
+                    </div>
+
+                    <div class="market-sidebar-dropdown-body" id="marketSidebarDropdownBody">
+                        <div class="market-sidebar-header">
+                            <h3>Filters &amp; Sort</h3>
+                            <button type="button" class="market-sidebar-close-btn" id="marketSidebarCloseBtn" aria-label="Close filters">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="market-sidebar-section market-sort-section">
+                            <h4>Sort by</h4>
+                            <div class="market-radio-list">
+                                <label class="market-radio"><input type="radio" name="storeSort" value="relevance" checked> <span>Relevance</span></label>
+                                <label class="market-radio"><input type="radio" name="storeSort" value="fastest"> <span>Fastest delivery</span></label>
+                                <label class="market-radio"><input type="radio" name="storeSort" value="distance"> <span>Distance</span></label>
+                                <label class="market-radio"><input type="radio" name="storeSort" value="top_rated"> <span>Top rated</span></label>
+                            </div>
+                        </div>
+                        <div class="market-sidebar-section">
+                            <h4>Quick filters</h4>
+                            <div class="market-check-list">
+                                <label class="market-check"><input type="checkbox" id="filterRatings4"> <span>Ratings 4+</span></label>
+                                <label class="market-check"><input type="checkbox" id="filterLiveOnly"> <span>Open now only</span></label>
+                                <label class="market-check"><input type="checkbox" id="filterPartnerOnly"> <span>Partner stores</span></label>
+                                <label class="market-check"><input type="checkbox" id="filterBranchOnly"> <span>Pickup branches</span></label>
+                                <label class="market-check"><input type="checkbox" id="filterNearbyOnly"> <span>Nearby only</span></label>
+                            </div>
+                        </div>
+                        <div class="market-sidebar-section" id="nearestShopsSidebarSection">
+                            <h4>Nearest Cavite lechon shops</h4>
+                            <p class="market-helper">Allow location access and the page will rank the closest saved Cavite branches first using your browser position and store coordinates.</p>
+                            <button type="button" class="market-btn market-detect-btn" id="detectNearestStores"><i class="fas fa-location-crosshairs"></i> Detect nearest shops</button>
+                            <p class="market-helper" id="nearestDetectStatus" style="margin-top:12px;">Waiting for location permission.</p>
+                        </div>
+                        <div class="market-sidebar-apply-bar">
+                            <button type="button" class="market-sidebar-apply-btn" id="marketSidebarApplyBtn">Apply Filters</button>
+                        </div>
+                    </div>
+                </aside>
+
+                <div>
+
+                    
 
 
                     <?php if (empty($is_pickup_mode) && !empty($_SESSION['user_id'])): 
@@ -4274,16 +4595,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     <?php if (!empty($featured_products)): ?>
                     <!-- Prominent Best Sellers & Top Rated Dishes Section -->
                     <section class="bestsellers-section" style="margin-bottom: 24px; padding: 18px 20px; background: linear-gradient(135deg, #fff9f2 0%, #ffffff 100%); border: 1px solid #efddcd; border-radius: 16px; box-shadow: 0 6px 18px rgba(42,33,29,0.04);">
-                        <div class="market-head" style="margin-bottom: 14px; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 10px;">
-                            <div>
+                        <div class="market-head" style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: nowrap; gap: 8px;">
+                            <div style="min-width:0; flex:1;">
                                 <div style="display:inline-flex; align-items:center; gap:5px; padding:3px 10px; background:#fff1f2; border:1px solid #ffe4e6; border-radius:999px; color:#b3261e; font-size:0.72rem; font-weight:800; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:4px;">
-                                    <i class="fas fa-fire" style="color:#ef6b2e;"></i> Top Customer Choices
+                                    <i class="fas fa-fire" style="color:#b3261e;"></i> Top Customer Choices
                                 </div>
-                                <h2 style="font-family:'Outfit',sans-serif; font-size:1.3rem; font-weight:800; color:#171922; margin:0 0 3px 0;">Best Sellers & Top Rated Dishes</h2>
+                                <h2 style="font-family:'Outfit',sans-serif; font-size:1.25rem; font-weight:800; color:#171922; margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Best Sellers &amp; Top Rated</h2>
                                 <p style="font-size:0.82rem; color:#7b6d64; margin:0;">Hand-picked customer favorites with high sales volume and top customer ratings across Cavite.</p>
                             </div>
-                            <a href="menu.php" class="btn-outline btn-sm" style="border-radius:999px; font-weight:700; text-decoration:none; padding:6px 14px; font-size:0.78rem;">
-                                Explore Full Menu <i class="fas fa-arrow-right" style="margin-left:4px;"></i>
+                            <a href="menu.php" class="btn-outline btn-sm" style="border-radius:999px; font-weight:700; text-decoration:none; padding:5px 12px; font-size:0.78rem; white-space:nowrap; flex-shrink:0; display:inline-flex; align-items:center; gap:4px;">
+                                Explore Full Menu <i class="fas fa-arrow-right" style="margin-left:2px; font-size:0.7rem;"></i>
                             </a>
                         </div>
 
@@ -4293,11 +4614,12 @@ document.addEventListener('DOMContentLoaded', function() {
                                 $prod_id_val = (string)($product['id'] ?? '');
                                 $is_prod_fav = !empty($favorite_product_ids[(int)$prod_id_val]);
                                 $rank_num = $idx + 1;
+                                $fmt_price = ($product['price'] == (int)$product['price']) ? number_format((float)$product['price']) : number_format((float)$product['price'], 2);
                                 ?>
                                 <a href="<?php echo htmlspecialchars($product['menu_link'] ?? 'menu.php'); ?>" class="bestseller-card panda-card-link" style="background:#ffffff; border:1px solid #efddcd; border-radius:14px; overflow:hidden; display:flex; flex-direction:column; transition:transform 0.25s ease, box-shadow 0.25s ease; text-decoration:none; position:relative;">
                                     <div class="store-card-image-wrap" style="height: 115px; position:relative; overflow:hidden;">
                                         <div class="market-store-row-thumb" style="background-image: url('<?php echo htmlspecialchars($product['image']); ?>'); width:100%; height:100%; background-size:cover; background-position:center; transition:transform 0.4s ease;"></div>
-                                        <span class="bestseller-rank-badge" style="position:absolute; top:8px; left:8px; background:linear-gradient(135deg, #b3261e, #ef6b2e); color:#ffffff; font-weight:800; font-size:0.68rem; padding:3px 8px; border-radius:999px; box-shadow:0 3px 8px rgba(179,38,30,0.25); display:inline-flex; align-items:center; gap:3px; z-index:2;">
+                                        <span class="bestseller-rank-badge" style="position:absolute; top:8px; left:8px; background:#b3261e; color:#ffffff; font-weight:800; font-size:0.68rem; padding:3px 8px; border-radius:999px; box-shadow:0 3px 8px rgba(179,38,30,0.25); display:inline-flex; align-items:center; gap:3px; z-index:2;">
                                             <i class="fas fa-fire"></i> #<?php echo $rank_num; ?> Best Seller
                                         </span>
                                         <button
@@ -4328,13 +4650,13 @@ document.addEventListener('DOMContentLoaded', function() {
                                             <i class="fas fa-store" style="color:#ef6b2e;"></i> <span><?php echo htmlspecialchars($product['store']); ?></span>
                                         </div>
 
-                                        <div style="margin-top:auto; padding-top:8px; border-top:1px dashed #efddcd; display:flex; justify-content:space-between; align-items:center;">
-                                            <div>
-                                                <strong style="font-size:0.92rem; color:#b3261e; font-weight:800; display:block;">PHP <?php echo number_format((float)$product['price'], 2); ?></strong>
-                                                <span style="font-size:0.7rem; color:#7b6d64; font-weight:600;"><?php echo number_format((int)$product['sold']); ?> sold</span>
+                                        <div style="margin-top:auto; padding-top:8px; border-top:1px dashed #efddcd; display:flex; justify-content:space-between; align-items:center; gap:6px;">
+                                            <div style="min-width:0; flex:1;">
+                                                <strong style="font-size:0.92rem; color:#b3261e; font-weight:800; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">₱<?php echo $fmt_price; ?></strong>
+                                                <span style="font-size:0.7rem; color:#667085; font-weight:600; display:block;"><?php echo number_format((int)$product['sold']); ?> sold</span>
                                             </div>
-                                            <span class="btn-primary btn-sm" style="padding:5px 10px; font-size:0.72rem; border-radius:6px; pointer-events:none; background:linear-gradient(135deg, #b3261e, #ef6b2e); color:#fff; font-weight:700;">
-                                                Order Now <i class="fas fa-arrow-right" style="font-size:0.7rem;"></i>
+                                            <span class="bestseller-order-btn" style="padding:5px 11px; font-size:0.74rem; border-radius:999px; pointer-events:none; background:#b3261e; color:#fff; font-weight:700; white-space:nowrap; flex-shrink:0; display:inline-flex; align-items:center; gap:4px; box-shadow:0 2px 6px rgba(179,38,30,0.2);">
+                                                Order <i class="fas fa-arrow-right" style="font-size:0.65rem;"></i>
                                             </span>
                                         </div>
                                     </div>
@@ -4371,7 +4693,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 $s_is_fav = !empty($favorite_store_keys[$s_key_val]);
                                 $s_city_lbl = !empty($s_item['city']) ? $s_item['city'] . ', Cavite' : $s_item['location'];
                                 ?>
-                                <a href="<?php echo htmlspecialchars($s_item['menu_link']); ?>" class="market-store-row panda-card-link" style="background:#ffffff; border:1px solid #efddcd; border-radius:18px; overflow:hidden; display:flex; flex-direction:column; text-decoration:none; position:relative; box-shadow:0 4px 14px -2px rgba(16,24,40,0.04);">
+                                <a href="<?php echo htmlspecialchars($s_item['menu_link']); ?>" class="top-restaurant-card panda-card-link" style="background:#ffffff; border:1px solid #efddcd; border-radius:18px; overflow:hidden; display:flex; flex-direction:column; text-decoration:none; position:relative; box-shadow:0 4px 14px -2px rgba(16,24,40,0.04);">
                                     <div class="store-card-image-wrap" style="height:120px; position:relative; overflow:hidden; border-radius:14px; margin:6px;">
                                         <div class="market-store-row-thumb" style="background-image:url('<?php echo htmlspecialchars($s_item['image']); ?>'); width:100%; height:100%; background-size:cover; background-position:center;"></div>
                                         <span class="market-type-pill"><?php echo htmlspecialchars($s_type_label); ?></span>
@@ -4416,7 +4738,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <div class="panda-store-header-bar">
                             <div class="panda-store-header-title">
                                 <h2 class="panda-main-heading">All Cavite stores</h2>
-                                <p style="font-size: 0.8rem; color: #7b6d64; margin: 2px 0 0;">Swipe to explore verified stores and branches across Cavite.</p>
+                                <p style="font-size: 0.8rem; color: #7b6d64; margin: 2px 0 0;">Explore verified stores and branches across Cavite.</p>
                             </div>
                         </div>
 
@@ -4496,7 +4818,10 @@ document.addEventListener('DOMContentLoaded', function() {
                             <button type="button" class="market-btn-soft" id="marketLoadMoreBtn">Show more stores</button>
                         </div>
                     </section>
-
+                </div>
+            </div>
+        </div>
+    </section>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -4522,7 +4847,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 popupAnchor: [0, -34]
             });
 
-            const rowsList = Array.from(document.querySelectorAll('.market-store-row'));
+            const rowsList = Array.from(document.querySelectorAll('#marketStoreGrid .market-store-row'));
             const bounds = [];
 
             rowsList.forEach(row => {
@@ -4562,7 +4887,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const gridSearch = document.getElementById('gridStoreSearch');
     const headerSearch = document.getElementById('marketHeaderSearch');
     const storeGrid = document.getElementById('marketStoreGrid');
-    const rows = Array.from(document.querySelectorAll('.market-store-row'));
+    const rows = storeGrid ? Array.from(storeGrid.querySelectorAll('.market-store-row')) : [];
     const visibleCount = document.getElementById('visibleStoreCount');
     const paginationNote = document.getElementById('marketPaginationNote');
     const loadMoreButton = document.getElementById('marketLoadMoreBtn');
@@ -5376,10 +5701,10 @@ document.addEventListener('DOMContentLoaded', function () {
         display: none !important;
     }
     .bestsellers-grid .bestseller-card {
-        flex: 0 0 180px !important;
-        width: 180px !important;
-        min-width: 180px !important;
-        max-width: 180px !important;
+        flex: 0 0 clamp(200px, 62vw, 240px) !important;
+        width: clamp(200px, 62vw, 240px) !important;
+        min-width: clamp(200px, 62vw, 240px) !important;
+        max-width: clamp(200px, 62vw, 240px) !important;
         scroll-snap-align: start !important;
     }
 }
@@ -5907,5 +6232,99 @@ document.addEventListener('DOMContentLoaded', function () {
         }, true);
     });
 });
+</script>
+<script>
+(function() {
+    function placeSidebarOnMobile() {
+        const sidebar = document.getElementById("marketSidebar");
+        const storeGrid = document.getElementById("marketStoreGrid");
+        const explorer = document.querySelector(".market-explorer");
+        if (window.innerWidth <= 768) {
+            if (sidebar && storeGrid && storeGrid.parentNode && sidebar.nextElementSibling !== storeGrid) {
+                storeGrid.parentNode.insertBefore(sidebar, storeGrid);
+            }
+        } else {
+            if (sidebar && explorer && sidebar.parentNode !== explorer) {
+                explorer.insertBefore(sidebar, explorer.firstElementChild);
+            }
+        }
+    }
+
+    function initFilterDropdown() {
+        const sidebar = document.getElementById("marketSidebar");
+        const toggleBtn = document.getElementById("marketSidebarToggleBtn");
+        const closeBtn = document.getElementById("marketSidebarCloseBtn");
+        const applyBtn = document.getElementById("marketSidebarApplyBtn");
+        const dropdownBody = document.getElementById("marketSidebarDropdownBody");
+
+        if (toggleBtn && sidebar) {
+            toggleBtn.addEventListener("click", function(e) {
+                e.stopPropagation();
+                sidebar.classList.toggle("is-collapsed-mobile");
+            });
+        }
+        if (closeBtn && sidebar) {
+            closeBtn.addEventListener("click", function(e) {
+                e.stopPropagation();
+                sidebar.classList.add("is-collapsed-mobile");
+            });
+        }
+        if (applyBtn && sidebar) {
+            applyBtn.addEventListener("click", function(e) {
+                e.stopPropagation();
+                sidebar.classList.add("is-collapsed-mobile");
+            });
+        }
+        if (dropdownBody) {
+            dropdownBody.addEventListener("click", function(e) {
+                e.stopPropagation();
+            });
+        }
+        document.addEventListener("click", function(e) {
+            if (sidebar && !sidebar.contains(e.target) && !sidebar.classList.contains("is-collapsed-mobile")) {
+                sidebar.classList.add("is-collapsed-mobile");
+            }
+        });
+
+        // Dynamic active filter counter badge on the toggle button
+        function updateFilterBadge() {
+            if (!toggleBtn) return;
+            let activeCount = 0;
+            const sortVal = document.querySelector('input[name="storeSort"]:checked')?.value;
+            if (sortVal && sortVal !== "relevance") activeCount++;
+            ["filterRatings4", "filterLiveOnly", "filterPartnerOnly", "filterBranchOnly", "filterNearbyOnly"].forEach(function(id) {
+                const el = document.getElementById(id);
+                if (el && el.checked) activeCount++;
+            });
+            const label = toggleBtn.querySelector(".filter-toggle-label");
+            if (label) {
+                label.innerHTML = activeCount > 0 
+                    ? `<i class="fas fa-sliders" style="color:#b3261e; margin-right:6px;"></i> Filters &amp; Sort <span style="background:#b3261e; color:#fff; font-size:0.72rem; padding:1px 7px; border-radius:999px; margin-left:6px; font-weight:800;">${activeCount}</span>`
+                    : `<i class="fas fa-sliders" style="color:#b3261e; margin-right:6px;"></i> Filters &amp; Sort`;
+            }
+        }
+
+        const sortInputs = document.querySelectorAll('input[name="storeSort"]');
+        sortInputs.forEach(function(inp) {
+            inp.addEventListener("change", updateFilterBadge);
+        });
+        ["filterRatings4", "filterLiveOnly", "filterPartnerOnly", "filterBranchOnly", "filterNearbyOnly"].forEach(function(id) {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener("change", updateFilterBadge);
+        });
+        updateFilterBadge();
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", function() {
+            placeSidebarOnMobile();
+            initFilterDropdown();
+        });
+    } else {
+        placeSidebarOnMobile();
+        initFilterDropdown();
+    }
+    window.addEventListener("resize", placeSidebarOnMobile, { passive: true });
+})();
 </script>
 <?php include 'includes/footer.php'; ?>

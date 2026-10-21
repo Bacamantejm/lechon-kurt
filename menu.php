@@ -5107,13 +5107,58 @@ body {
 
 @media (max-width: 768px) {
     .page-header {
-        padding-top: 108px;
-        padding-bottom: 62px;
+        padding-top: 24px !important;
+        padding-bottom: 14px !important;
+        text-align: left !important;
+    }
+
+    .page-header h1 {
+        font-size: 1.65rem !important;
+        margin: 0 0 4px 0 !important;
+    }
+
+    .page-header p {
+        display: none !important; /* Hide redundant filler description on mobile */
     }
 
     .category-nav {
         top: calc(var(--site-header-offset, 78px) + 8px);
-        border-radius: 12px;
+        border-radius: 999px !important;
+        padding: 6px 10px !important;
+        margin-bottom: 14px !important;
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+        gap: 6px !important;
+    }
+
+    .category-nav::-webkit-scrollbar {
+        display: none !important;
+    }
+
+    .category-btn {
+        flex: 0 0 auto !important;
+        white-space: nowrap !important;
+        padding: 7px 14px !important;
+        font-size: 0.8rem !important;
+        min-height: 38px !important;
+        border-radius: 999px !important;
+    }
+
+    .menu-section {
+        padding-top: 14px !important;
+        padding-bottom: 140px !important;
+    }
+
+    .category-title {
+        font-size: 1.25rem !important;
+        margin-bottom: 12px !important;
+    }
+
+    .category-desc {
+        display: none !important; /* Hide category description paragraphs on mobile */
     }
 }
 

@@ -2625,6 +2625,56 @@ body {
         order: 2 !important;
     }
 }
+
+@media (max-width: 768px) {
+    .mobile-bottom-nav {
+        display: none !important;
+    }
+
+    .checkout-section {
+        padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px)) !important;
+    }
+
+    /* Anti-overcrowding: hide redundant descriptive copy on mobile */
+    .checkout-type-note,
+    .checkout-mode-copy p,
+    .delivery-fee-info-box p:first-child,
+    .co-delivery-map-card > div > div > p,
+    .co-delivery-map-card > div:last-child > div:last-child {
+        display: none !important;
+    }
+
+    .checkout-mode-card {
+        padding: 12px 14px !important;
+        gap: 10px !important;
+    }
+
+    .checkout-type-switch {
+        padding: 12px 14px !important;
+        margin-bottom: 14px !important;
+    }
+
+    /* Map canvas & scroll ergonomics */
+    #deliveryOverviewMapShell,
+    #checkoutDeliveryOverviewMap {
+        height: 190px !important;
+        min-height: 190px !important;
+        touch-action: pan-y !important;
+    }
+
+    .co-delivery-map-card {
+        padding: 14px !important;
+        margin-bottom: 16px !important;
+        border-radius: 12px !important;
+    }
+
+    /* 2x2 grid for metrics strip */
+    .co-delivery-map-card > div:nth-child(2) {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 6px !important;
+    }
+}
+
 /* ==========================================================================
    CHECKOUT PAGE DARK THEME ENGINE
    ========================================================================== */

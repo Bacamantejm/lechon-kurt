@@ -1495,11 +1495,11 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
         /* Foodpanda Style Mobile Ready Layout */
         @media (max-width: 768px) {
             .site-header {
-                box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04) !important;
-                background: rgba(255, 255, 255, 0.88) !important;
-                backdrop-filter: blur(18px) !important;
-                -webkit-backdrop-filter: blur(18px) !important;
-                border-bottom: 1px solid rgba(234, 236, 240, 0.8) !important;
+                box-shadow: 0 2px 10px rgba(16, 24, 40, 0.04) !important;
+                background: #ffffff !important;
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+                border-bottom: 1px solid #eaecf0 !important;
                 position: sticky !important;
                 top: 0 !important;
                 z-index: 1200 !important;
@@ -1509,21 +1509,26 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
                 align-items: center !important;
                 justify-content: space-between !important;
                 gap: 8px !important;
-                min-height: 52px !important;
+                min-height: 48px !important;
                 padding: 6px 12px !important;
                 flex-wrap: nowrap !important;
             }
             .mobile-toggle {
                 display: inline-flex !important;
-                width: 36px !important;
-                height: 36px !important;
-                border-radius: 10px !important;
+                width: 38px !important;
+                height: 38px !important;
+                border-radius: 50% !important;
                 border: 1px solid #eaecf0 !important;
-                background: #ffffff !important;
-                color: #101828 !important;
+                background: #f4f5f7 !important;
+                color: #1e293b !important;
                 flex-shrink: 0 !important;
                 align-items: center !important;
                 justify-content: center !important;
+                font-size: 0.92rem !important;
+                transition: background 0.15s ease !important;
+            }
+            .mobile-toggle:active {
+                background: #e4e7ec !important;
             }
             .market-header-top.has-address-bar .logo-link {
                 display: none !important;
@@ -1652,11 +1657,11 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
                 margin-top: 0 !important;
             }
             .market-home-search {
-                min-height: 42px !important;
-                background: rgba(244, 245, 247, 0.85) !important;
-                backdrop-filter: blur(12px) !important;
-                -webkit-backdrop-filter: blur(12px) !important;
-                border: 1px solid rgba(234, 236, 240, 0.85) !important;
+                min-height: 40px !important;
+                background: #f4f5f7 !important;
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+                border: 1px solid #eaecf0 !important;
                 border-radius: 999px !important;
                 padding: 0 16px !important;
             }
