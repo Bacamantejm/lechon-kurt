@@ -27,24 +27,30 @@ if ($seller_scope_id !== null) {
 }
 
 // Get order details (store-scoped for partner admins)
+$has_store_id = function_exists('appColumnExists') ? appColumnExists($conn, 'orders', 'store_id') : false;
+$store_join_col = $has_store_id ? "COALESCE(NULLIF(o.store_id, 0), o.pickup_location)" : "o.pickup_location";
+
 $order_query = "SELECT o.*, 
                        sl.store_name, sl.address AS store_address, sl.city AS store_city, sl.province AS store_province
                 FROM orders o 
-                LEFT JOIN store_locations sl ON sl.store_id = COALESCE(NULLIF(o.store_id, 0), o.pickup_location)
+                LEFT JOIN store_locations sl ON sl.store_id = {$store_join_col}
                 WHERE o.id = ?" . ($seller_scope_id !== null ? " AND {$seller_scoped_orders_exists}" : "");
 $stmt = mysqli_prepare($conn, $order_query);
-mysqli_stmt_bind_param($stmt, "i", $order_id);
-mysqli_stmt_execute($stmt);
-$order_result = mysqli_stmt_get_result($stmt);
-$order = mysqli_fetch_assoc($order_result);
-mysqli_stmt_close($stmt);
+$order = null;
+if ($stmt) {
+    mysqli_stmt_bind_param($stmt, "i", $order_id);
+    mysqli_stmt_execute($stmt);
+    $order_result = mysqli_stmt_get_result($stmt);
+    $order = $order_result ? mysqli_fetch_assoc($order_result) : null;
+    mysqli_stmt_close($stmt);
+}
 
 if (!$order) {
     die("<div class='p-3 text-danger fw-bold'><i class='fas fa-exclamation-circle me-1'></i> Order not found or you do not have permission to view this order.</div>");
 }
 
 // Multi-tenant check: If shop owner, order.store_id must match current_store_id
-$order_store_id = (int)($order['store_id'] ?: $order['pickup_location'] ?: 0);
+$order_store_id = (int)(($order['store_id'] ?? 0) ?: ($order['pickup_location'] ?? 0));
 if ($current_store_id !== null && $current_store_id > 0 && $order_store_id !== $current_store_id && ($_SESSION['role_name'] ?? '') !== 'super_admin') {
     die("<div class='alert alert-danger m-3'><i class='fas fa-shield-alt me-1'></i> <strong>Access Denied:</strong> This order belongs to another branch. You are only authorized to view orders from your store.</div>");
 }

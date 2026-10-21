@@ -16,6 +16,7 @@ class CommissionAndWalletService
     public function __construct(mysqli $conn)
     {
         $this->conn = $conn;
+        $this->ensureSchema();
     }
 
     public static function getInstance(mysqli $conn): CommissionAndWalletService
@@ -772,7 +773,8 @@ class CommissionAndWalletService
      */
     public function getPlatformAggregateFinancials(): array
     {
-        $res = mysqli_query($this->conn, "
+        $overview = [];
+        $res = @mysqli_query($this->conn, "
             SELECT 
                 COUNT(*) AS total_splits,
                 COALESCE(SUM(food_subtotal), 0) AS total_gross_food,
@@ -783,25 +785,152 @@ class CommissionAndWalletService
                 COALESCE(SUM(rider_net_cut), 0) AS total_rider_payouts,
                 COALESCE(SUM(delivery_fee), 0) AS total_delivery_fees
             FROM order_payout_splits");
-        $overview = $res ? mysqli_fetch_assoc($res) : [];
+        if ($res instanceof \mysqli_result) {
+            $overview = mysqli_fetch_assoc($res) ?: [];
+        }
 
-        $store_wallets_res = mysqli_query($this->conn, "
+        $store_wallets = [];
+        $store_wallets_res = @mysqli_query($this->conn, "
             SELECT 
                 COALESCE(SUM(available_balance), 0) AS total_store_available_balance,
                 COALESCE(SUM(total_lifetime_earnings), 0) AS total_store_lifetime_earnings,
                 COALESCE(SUM(total_withdrawn), 0) AS total_store_withdrawn
             FROM store_wallets");
-        $store_wallets = $store_wallets_res ? mysqli_fetch_assoc($store_wallets_res) : [];
+        if ($store_wallets_res instanceof \mysqli_result) {
+            $store_wallets = mysqli_fetch_assoc($store_wallets_res) ?: [];
+        }
 
-        $rider_wallets_res = mysqli_query($this->conn, "
+        $rider_wallets = [];
+        $rider_wallets_res = @mysqli_query($this->conn, "
             SELECT 
                 COALESCE(SUM(available_balance), 0) AS total_rider_available_balance,
                 COALESCE(SUM(remittance_debt), 0) AS total_rider_remittance_debt,
                 COUNT(CASE WHEN status = 'blocked_remittance_exceeded' THEN 1 END) AS blocked_riders_count
             FROM rider_wallets");
-        $rider_wallets = $rider_wallets_res ? mysqli_fetch_assoc($rider_wallets_res) : [];
+        if ($rider_wallets_res instanceof \mysqli_result) {
+            $rider_wallets = mysqli_fetch_assoc($rider_wallets_res) ?: [];
+        }
 
-        return array_merge($overview ?: [], $store_wallets ?: [], $rider_wallets ?: []);
+        return array_merge([
+            'total_splits' => 0,
+            'total_gross_food' => 0,
+            'total_commissions' => 0,
+            'total_service_fees' => 0,
+            'total_platform_profit' => 0,
+            'total_merchant_payouts' => 0,
+            'total_rider_payouts' => 0,
+            'total_delivery_fees' => 0,
+            'total_store_available_balance' => 0,
+            'total_store_lifetime_earnings' => 0,
+            'total_store_withdrawn' => 0,
+            'total_rider_available_balance' => 0,
+            'total_rider_remittance_debt' => 0,
+            'blocked_riders_count' => 0
+        ], $overview, $store_wallets, $rider_wallets);
+    }
+
+    private function ensureSchema(): void
+    {
+        static $checked = false;
+        if ($checked) {
+            return;
+        }
+        $checked = true;
+
+        try {
+            @mysqli_query($this->conn, "CREATE TABLE IF NOT EXISTS `order_payout_splits` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `order_id` INT NOT NULL,
+                `store_id` INT NOT NULL,
+                `rider_id` INT NULL,
+                `food_subtotal` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `platform_commission_rate` DECIMAL(5,2) NOT NULL DEFAULT 15.00,
+                `platform_commission_amount` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `platform_service_fee` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `platform_cut` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `store_net_cut` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `base_delivery_fee` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `distance_surcharge` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `customer_tip` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `delivery_fee` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `rider_net_cut` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `total_bill` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `payment_method` ENUM('cod', 'online') NOT NULL DEFAULT 'cod',
+                `split_status` ENUM('pending', 'settled', 'cancelled', 'refunded') NOT NULL DEFAULT 'pending',
+                `settled_at` DATETIME NULL,
+                `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY `uniq_order_payout_split` (`order_id`, `store_id`),
+                KEY `idx_split_store_id` (`store_id`, `created_at`),
+                KEY `idx_split_rider_id` (`rider_id`),
+                KEY `idx_split_status` (`split_status`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+            @mysqli_query($this->conn, "CREATE TABLE IF NOT EXISTS `store_wallets` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `store_id` INT NOT NULL,
+                `available_balance` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `pending_balance` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `total_lifetime_earnings` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `total_withdrawn` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `last_payout_at` DATETIME NULL,
+                `payout_method` VARCHAR(50) NOT NULL DEFAULT 'gcash',
+                `payout_account_number` VARCHAR(100) NULL,
+                `payout_account_name` VARCHAR(100) NULL,
+                `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY `uniq_store_wallet_store` (`store_id`),
+                KEY `idx_store_wallet_balance` (`available_balance`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+            @mysqli_query($this->conn, "CREATE TABLE IF NOT EXISTS `store_transactions` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `store_id` INT NOT NULL,
+                `order_id` INT NULL,
+                `amount` DECIMAL(12,2) NOT NULL,
+                `type` ENUM('order_credit', 'cashout_debit', 'fee_deduction', 'adjustment') NOT NULL,
+                `reference_no` VARCHAR(100) NOT NULL,
+                `balance_after` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `description` TEXT NULL,
+                `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                KEY `idx_store_tx_store` (`store_id`, `created_at`),
+                KEY `idx_store_tx_order` (`order_id`),
+                KEY `idx_store_tx_ref` (`reference_no`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+            @mysqli_query($this->conn, "CREATE TABLE IF NOT EXISTS `rider_wallets` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `rider_id` INT NOT NULL,
+                `available_balance` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `remittance_debt` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `safety_ceiling` DECIMAL(12,2) NOT NULL DEFAULT 3000.00,
+                `status` ENUM('active', 'blocked_remittance_exceeded', 'suspended') NOT NULL DEFAULT 'active',
+                `last_remitted_at` DATETIME NULL,
+                `total_lifetime_earnings` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY `uniq_rider_wallet_rider` (`rider_id`),
+                KEY `idx_rider_wallet_status` (`status`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+            @mysqli_query($this->conn, "CREATE TABLE IF NOT EXISTS `rider_transactions` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `rider_id` INT NOT NULL,
+                `order_id` INT NULL,
+                `amount` DECIMAL(12,2) NOT NULL,
+                `type` ENUM('order_credit', 'remittance_payment', 'cod_debt_incurred', 'cashout_debit') NOT NULL,
+                `reference_no` VARCHAR(100) NOT NULL,
+                `balance_after` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `debt_after` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                `notes` TEXT NULL,
+                `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                KEY `idx_rider_tx_rider` (`rider_id`, `created_at`),
+                KEY `idx_rider_tx_order` (`order_id`),
+                KEY `idx_rider_tx_ref` (`reference_no`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        } catch (\Throwable $e) {
+            // Silently allow continuation
+        }
     }
 
     private function ensureStoreWalletExists(int $store_id): void

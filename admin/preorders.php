@@ -109,7 +109,7 @@ $preorder_stats_query = "SELECT
     SUM(CASE WHEN reservation_status = 'completed' THEN 1 ELSE 0 END) as completed
     FROM pre_orders po" . ($seller_scope_id !== null ? " INNER JOIN products p_scope ON p_scope.id = po.product_id AND {$partner_product_scope_sql}" : "");
 $preorder_stats_result = mysqli_query($conn, $preorder_stats_query);
-$preorder_stats = mysqli_fetch_assoc($preorder_stats_result);
+$preorder_stats = ($preorder_stats_result instanceof mysqli_result) ? (mysqli_fetch_assoc($preorder_stats_result) ?: []) : [];
 
 // Get status filter
 $status_filter = isset($_GET['status']) ? trim($_GET['status']) : 'pending';
@@ -141,8 +141,8 @@ $count_query = "SELECT COUNT(*) as total
                 ($seller_scope_id !== null ? " JOIN products p_scope ON p_scope.id = po.product_id AND {$partner_product_scope_sql}" : "") .
                 " $where_sql";
 $count_result = mysqli_query($conn, $count_query);
-$total_records = mysqli_fetch_assoc($count_result)['total'];
-$total_pages = ceil($total_records / $records_per_page);
+$total_records = ($count_result instanceof mysqli_result) ? ((int)(mysqli_fetch_assoc($count_result)['total'] ?? 0)) : 0;
+$total_pages = max(1, ceil($total_records / $records_per_page));
 
 // Get pre-orders for the current page
 $query = "SELECT po.*, u.email, u.full_name FROM pre_orders po 
@@ -763,7 +763,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
                         </thead>
                         <tbody>
                     <?php
-                    if (mysqli_num_rows($result) > 0) {
+                    if ($result instanceof mysqli_result && mysqli_num_rows($result) > 0) {
                         while ($preorder = mysqli_fetch_assoc($result)) {
                             $status_class = 'badge-' . str_replace('_', '-', $preorder['reservation_status']);
                             ?>

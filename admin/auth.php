@@ -1042,6 +1042,7 @@ function getAdminModuleByPage($page_name) {
         'subscription_plans.php' => 'billing',
         'receipt_settings.php' => 'billing',
         'partner_banking.php' => 'billing',
+        'store_wallet.php' => 'finance',
         'business_account.php' => 'billing',
         'operations_dashboard.php' => 'operations',
         'operations_dashboard_feed.php' => 'operations',
@@ -1676,6 +1677,7 @@ function checkAdminAccess() {
             'billing_invoice_view.php',
             'billing_invoice_pdf.php',
             'shop_owner_tutorial_modal.php',
+            'store_wallet.php',
             'tenant_scope_migration.php'
         ];
 

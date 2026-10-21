@@ -484,7 +484,7 @@ if ($count_stmt) {
     mysqli_stmt_bind_param($count_stmt, $bind_types, ...$bind_values);
     mysqli_stmt_execute($count_stmt);
     $count_res = mysqli_stmt_get_result($count_stmt);
-    $total_orders = $count_res ? (int)mysqli_fetch_assoc($count_res)['total'] : 0;
+    $total_orders = ($count_res instanceof mysqli_result) ? (int)(mysqli_fetch_assoc($count_res)['total'] ?? 0) : 0;
     mysqli_stmt_close($count_stmt);
 }
 

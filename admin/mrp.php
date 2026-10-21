@@ -1017,8 +1017,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         mysqli_query($conn, "UPDATE inventory SET current_stock = current_stock + $qty_received WHERE product_id = $mat_id AND inventory_date = '$today'");
                     } else {
                         // Get min level
-                        $mat_info = mysqli_fetch_assoc(mysqli_query($conn, "SELECT min_level FROM materials WHERE id = $mat_id"));
-                        $min = $mat_info['min_level'];
+                        $mat_res = mysqli_query($conn, "SELECT min_level FROM materials WHERE id = $mat_id");
+                        $mat_info = ($mat_res instanceof mysqli_result) ? mysqli_fetch_assoc($mat_res) : null;
+                        $min = (float)($mat_info['min_level'] ?? 0);
                         mysqli_query($conn, "INSERT INTO inventory (product_id, inventory_date, current_stock, min_stock_level) VALUES ($mat_id, '$today', $qty_received, $min)");
                     }
 

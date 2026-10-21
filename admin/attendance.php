@@ -476,12 +476,13 @@ if ($emp_res) {
                         COUNT(CASE WHEN late_minutes > 0 THEN 1 END) as late,
                         COUNT(CASE WHEN status = 'on_leave' THEN 1 END) as on_leave
                         FROM attendance WHERE $stats_where";
-                    $stats = mysqli_fetch_assoc(mysqli_query($conn, $stats_query));
+                    $stats_res = mysqli_query($conn, $stats_query);
+                    $stats = ($stats_res instanceof mysqli_result) ? (mysqli_fetch_assoc($stats_res) ?: []) : [];
                     ?>
                     <div class="col-md-3">
                         <div class="card bg-success text-white">
                             <div class="card-body">
-                                <h5><?php echo $stats['present']; ?></h5>
+                                <h5><?php echo (int)($stats['present'] ?? 0); ?></h5>
                                 <small>Present</small>
                             </div>
                         </div>
@@ -489,7 +490,7 @@ if ($emp_res) {
                     <div class="col-md-3">
                         <div class="card bg-warning text-dark">
                             <div class="card-body">
-                                <h5><?php echo $stats['late']; ?></h5>
+                                <h5><?php echo (int)($stats['late'] ?? 0); ?></h5>
                                 <small>Late Arrivals</small>
                             </div>
                         </div>
@@ -497,7 +498,7 @@ if ($emp_res) {
                     <div class="col-md-3">
                         <div class="card bg-danger text-white">
                             <div class="card-body">
-                                <h5><?php echo $stats['absent']; ?></h5>
+                                <h5><?php echo (int)($stats['absent'] ?? 0); ?></h5>
                                 <small>Absent</small>
                             </div>
                         </div>
@@ -505,7 +506,7 @@ if ($emp_res) {
                     <div class="col-md-3">
                         <div class="card bg-info text-white">
                             <div class="card-body">
-                                <h5><?php echo $stats['on_leave']; ?></h5>
+                                <h5><?php echo (int)($stats['on_leave'] ?? 0); ?></h5>
                                 <small>On Leave</small>
                             </div>
                         </div>

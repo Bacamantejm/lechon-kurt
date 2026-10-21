@@ -11,12 +11,16 @@ require_once dirname(__DIR__) . '/includes/security.php';
 require_once 'auth.php';
 require_once dirname(__DIR__) . '/includes/CommissionAndWalletService.php';
 
+if (function_exists('ensureOrdersTableSchema') && isset($conn) && $conn) {
+    ensureOrdersTableSchema($conn);
+}
+
 checkAdminAccess();
 
 $current_user_id = (int)($_SESSION['user_id'] ?? 0);
 $current_role = strtolower(trim((string)($_SESSION['role_name'] ?? '')));
 $is_super_admin = ($current_role === 'super_admin');
-$admin_info = getAdminInfo($conn);
+$admin_info = getAdminInfo($conn) ?: [];
 
 $walletService = CommissionAndWalletService::getInstance($conn);
 $user_store_id = $walletService->getStoreIdForUser($current_user_id);
@@ -93,39 +97,97 @@ if ($is_super_admin && empty($selected_store_id)) {
     $aggregate = $walletService->getPlatformAggregateFinancials();
     
     // All store wallets list
-    $all_stores_res = mysqli_query($conn, "
-        SELECT sl.store_id, sl.store_name, sl.city, sl.owner_user_id,
-               sw.available_balance, sw.total_lifetime_earnings, sw.total_withdrawn, sw.last_payout_at
-        FROM store_locations sl
-        LEFT JOIN store_wallets sw ON sw.store_id = sl.store_id
-        ORDER BY sl.store_name ASC");
     $all_stores = [];
-    while ($all_stores_res && ($s = mysqli_fetch_assoc($all_stores_res))) {
-        $all_stores[] = $s;
+    if (function_exists('appTableExists') && appTableExists($conn, 'store_locations')) {
+        $has_sw = appTableExists($conn, 'store_wallets');
+        $store_sql = $has_sw ? "
+            SELECT sl.store_id, sl.store_name, sl.city, sl.owner_user_id,
+                   COALESCE(sw.available_balance, 0.00) AS available_balance,
+                   COALESCE(sw.total_lifetime_earnings, 0.00) AS total_lifetime_earnings,
+                   COALESCE(sw.total_withdrawn, 0.00) AS total_withdrawn,
+                   sw.last_payout_at
+            FROM store_locations sl
+            LEFT JOIN store_wallets sw ON sw.store_id = sl.store_id
+            ORDER BY sl.store_name ASC" : "
+            SELECT sl.store_id, sl.store_name, sl.city, sl.owner_user_id,
+                   0.00 AS available_balance, 0.00 AS total_lifetime_earnings, 0.00 AS total_withdrawn, NULL AS last_payout_at
+            FROM store_locations sl
+            ORDER BY sl.store_name ASC";
+        $all_stores_res = @mysqli_query($conn, $store_sql);
+        if ($all_stores_res instanceof mysqli_result) {
+            while ($s = mysqli_fetch_assoc($all_stores_res)) {
+                $all_stores[] = $s;
+            }
+        }
     }
 
     // All rider wallets list
-    $all_riders_res = mysqli_query($conn, "
-        SELECT r.id AS rider_id, r.rider_code, r.vehicle_type, r.vehicle_plate,
-               COALESCE(u.full_name, CONCAT(e.first_name, ' ', e.last_name), 'Rider') AS rider_name,
-               COALESCE(u.phone, e.phone, '') AS rider_phone,
-               rw.available_balance, rw.remittance_debt, rw.safety_ceiling, rw.status AS wallet_status, rw.last_remitted_at
-        FROM riders r
-        LEFT JOIN rider_wallets rw ON rw.rider_id = r.id
-        LEFT JOIN users u ON u.id = r.user_id
-        LEFT JOIN employees e ON e.id = r.employee_id
-        ORDER BY rw.remittance_debt DESC, r.id ASC");
     $all_riders = [];
-    while ($all_riders_res && ($r = mysqli_fetch_assoc($all_riders_res))) {
-        $all_riders[] = $r;
+    if (function_exists('appTableExists') && appTableExists($conn, 'riders')) {
+        $has_rw = appTableExists($conn, 'rider_wallets');
+        $has_emp = appTableExists($conn, 'employees');
+        $has_u = appTableExists($conn, 'users');
+        $has_plate = function_exists('appColumnExists') && appColumnExists($conn, 'riders', 'vehicle_plate');
+
+        $name_expr = "COALESCE(";
+        if ($has_u) $name_expr .= "u.full_name, ";
+        if ($has_emp) $name_expr .= "CONCAT(e.first_name, ' ', e.last_name), ";
+        $name_expr .= "'Rider')";
+
+        $phone_expr = "COALESCE(";
+        if ($has_u) $phone_expr .= "u.phone, ";
+        if ($has_emp) $phone_expr .= "e.phone, ";
+        $phone_expr .= "'' )";
+
+        $join_u = $has_u ? "LEFT JOIN users u ON u.id = r.user_id" : "";
+        $join_e = $has_emp ? "LEFT JOIN employees e ON e.id = r.employee_id" : "";
+        $join_rw = $has_rw ? "LEFT JOIN rider_wallets rw ON rw.rider_id = r.id" : "";
+
+        $plate_col = $has_plate ? "r.vehicle_plate" : "NULL AS vehicle_plate";
+        $bal_col = $has_rw ? "COALESCE(rw.available_balance, 0.00) AS available_balance" : "0.00 AS available_balance";
+        $debt_col = $has_rw ? "COALESCE(rw.remittance_debt, 0.00) AS remittance_debt" : "0.00 AS remittance_debt";
+        $ceiling_col = $has_rw ? "COALESCE(rw.safety_ceiling, 3000.00) AS safety_ceiling" : "3000.00 AS safety_ceiling";
+        $status_col = $has_rw ? "COALESCE(rw.status, 'active') AS wallet_status" : "'active' AS wallet_status";
+        $remitted_col = $has_rw ? "rw.last_remitted_at" : "NULL AS last_remitted_at";
+
+        $rider_sql = "
+            SELECT r.id AS rider_id, r.rider_code, 
+                   COALESCE(r.vehicle_type, 'Motorcycle') AS vehicle_type,
+                   {$plate_col},
+                   {$name_expr} AS rider_name,
+                   {$phone_expr} AS rider_phone,
+                   {$bal_col},
+                   {$debt_col},
+                   {$ceiling_col},
+                   {$status_col},
+                   {$remitted_col}
+            FROM riders r
+            {$join_rw}
+            {$join_u}
+            {$join_e}
+            ORDER BY " . ($has_rw ? "rw.remittance_debt DESC, " : "") . "r.id ASC";
+        $all_riders_res = @mysqli_query($conn, $rider_sql);
+        if ($all_riders_res instanceof mysqli_result) {
+            while ($r = mysqli_fetch_assoc($all_riders_res)) {
+                $all_riders[] = $r;
+            }
+        }
     }
 } else {
     // Store-Scoped View
     $active_store_id = $selected_store_id ?: 1;
-    $store_info = $walletService->getStoreDetails($active_store_id);
-    $wallet = $walletService->getStoreWallet($active_store_id);
-    $splits = $walletService->getStoreOrderSplits($active_store_id, 30);
-    $transactions = $walletService->getStoreTransactions($active_store_id, 30);
+    $store_info = $walletService->getStoreDetails($active_store_id) ?: ['store_name' => 'Store #' . $active_store_id, 'city' => 'Active'];
+    $wallet = $walletService->getStoreWallet($active_store_id) ?: [
+        'available_balance' => 0.00,
+        'pending_balance' => 0.00,
+        'total_lifetime_earnings' => 0.00,
+        'total_withdrawn' => 0.00,
+        'payout_method' => 'gcash',
+        'payout_account_number' => '',
+        'payout_account_name' => ''
+    ];
+    $splits = $walletService->getStoreOrderSplits($active_store_id, 30) ?: [];
+    $transactions = $walletService->getStoreTransactions($active_store_id, 30) ?: [];
 }
 ?>
 <!DOCTYPE html>
