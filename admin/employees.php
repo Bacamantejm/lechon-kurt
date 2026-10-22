@@ -1631,7 +1631,7 @@ if ($roles_query instanceof mysqli_result) {
         }
 
         /* =========================================================
-           TIIMI-STYLE MODERN EMPLOYEE CARD DIRECTORY STYLES
+           MODERN EMPLOYEE CARD DIRECTORY STYLES (Matching Reference Mockup)
            ========================================================= */
         .emp-directory-toolbar {
             display: flex;
@@ -1654,14 +1654,45 @@ if ($roles_query instanceof mysqli_result) {
             color: #f8fafc;
         }
 
+        .emp-stats-strip {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #667085;
+            margin-top: 4px;
+        }
+
+        body.dark-mode .emp-stats-strip {
+            color: #94a3b8;
+        }
+
+        .emp-stat-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+            vertical-align: middle;
+        }
+
+        .emp-stat-dot.active {
+            background: #12b76a;
+        }
+
+        .emp-stat-dot.inactive {
+            background: #f04438;
+        }
+
         .emp-card-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
             gap: 20px;
             margin-bottom: 24px;
         }
 
-        @media (min-width: 1200px) {
+        @media (min-width: 1400px) {
             .emp-card-grid {
                 grid-template-columns: repeat(4, 1fr);
             }
@@ -1671,17 +1702,17 @@ if ($roles_query instanceof mysqli_result) {
             background: #ffffff;
             border: 1px solid #eaecf0;
             border-radius: 16px;
-            padding: 18px 16px 14px 16px;
+            padding: 22px 20px 20px 20px;
             position: relative;
             display: flex;
             flex-direction: column;
-            box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04), 0 1px 2px rgba(16, 24, 40, 0.02);
+            box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
             transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
         .emp-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 12px 24px -4px rgba(16, 24, 40, 0.08), 0 4px 6px -2px rgba(16, 24, 40, 0.03);
+            transform: translateY(-3px);
+            box-shadow: 0 12px 24px -4px rgba(16, 24, 40, 0.08);
             border-color: #d0d5dd;
         }
 
@@ -1696,72 +1727,102 @@ if ($roles_query instanceof mysqli_result) {
             box-shadow: 0 12px 24px -4px rgba(0, 0, 0, 0.4);
         }
 
-        .emp-card-header {
+        /* Card Top: Avatar with status dot on left, Checkbox & 3-dots on right */
+        .emp-card-top {
             display: flex;
             justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 14px;
+        }
+
+        .emp-avatar-wrap {
+            position: relative;
+            display: inline-block;
+        }
+
+        .emp-avatar-circle {
+            width: 58px;
+            height: 58px;
+            border-radius: 50%;
+            overflow: hidden;
+            display: flex;
             align-items: center;
-            margin-bottom: 10px;
+            justify-content: center;
+            position: relative;
+            box-shadow: 0 2px 6px rgba(16, 24, 40, 0.06);
+            border: 2px solid #ffffff;
+        }
+
+        body.dark-mode .emp-avatar-circle {
+            border-color: #27303f;
+        }
+
+        .emp-avatar-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .emp-avatar-initials {
+            font-size: 20px;
+            font-weight: 700;
+            color: #ffffff;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+            user-select: none;
+        }
+
+        .emp-status-dot {
+            position: absolute;
+            bottom: 1px;
+            right: 1px;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 2.5px solid #ffffff;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+
+        body.dark-mode .emp-status-dot {
+            border-color: #181d26;
+        }
+
+        .emp-status-dot.active {
+            background: #12b76a;
+        }
+
+        .emp-status-dot.inactive {
+            background: #f04438;
+        }
+
+        .emp-status-dot.on_leave {
+            background: #f79009;
+        }
+
+        .emp-status-dot.terminated {
+            background: #667085;
         }
 
         .emp-card-check {
-            width: 18px;
-            height: 18px;
+            width: 17px;
+            height: 17px;
             cursor: pointer;
             border-radius: 4px;
             border: 1.5px solid #d0d5dd;
-        }
-
-        .emp-card-badge-wrap {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .emp-status-pill {
-            font-size: 11px;
-            font-weight: 600;
-            padding: 3px 10px;
-            border-radius: 20px;
-            display: inline-flex;
-            align-items: center;
-            line-height: 1.2;
-        }
-
-        .emp-status-pill.active {
-            background: #ecfdf3;
-            color: #027a48;
-            border: 1px solid #abefc6;
-        }
-
-        .emp-status-pill.inactive {
-            background: #fff1f0;
-            color: #b3261e;
-            border: 1px solid #fee4e2;
-        }
-
-        .emp-status-pill.on_leave {
-            background: #fffaeb;
-            color: #b54708;
-            border: 1px solid #fedf89;
-        }
-
-        .emp-status-pill.terminated {
-            background: #f2f4f7;
-            color: #344054;
-            border: 1px solid #eaecf0;
+            margin: 0;
         }
 
         .emp-more-btn {
             background: transparent;
             border: none;
             color: #98a2b3;
-            width: 28px;
-            height: 28px;
-            border-radius: 6px;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
+            font-size: 16px;
             transition: all 0.15s ease;
             padding: 0;
         }
@@ -1776,71 +1837,16 @@ if ($roles_query instanceof mysqli_result) {
             color: #f8fafc;
         }
 
-        .emp-avatar-section {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            position: relative;
-            margin-bottom: 10px;
-        }
-
-        .emp-avatar-circle {
-            width: 76px;
-            height: 76px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            position: relative;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
-            border: 3px solid #ffffff;
-            overflow: hidden;
-            flex-shrink: 0;
-        }
-
-        body.dark-mode .emp-avatar-circle {
-            border-color: #27303f;
-        }
-
-        .emp-avatar-img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .emp-avatar-initials {
-            font-size: 26px;
-            font-weight: 800;
-            color: #ffffff;
-            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-            user-select: none;
-        }
-
-        .emp-new-hire-tag {
-            background: #0f172a;
-            color: #ffffff;
-            font-size: 10px;
-            font-weight: 700;
-            padding: 2px 8px;
-            border-radius: 12px;
-            margin-top: -10px;
-            z-index: 2;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
-            display: inline-flex;
-            align-items: center;
-            gap: 3px;
-        }
-
+        /* Full Name & Position (Left aligned) */
         .emp-card-name {
-            font-size: 1.05rem;
+            font-size: 1.08rem;
             font-weight: 700;
             color: #101828;
-            text-align: center;
-            margin: 4px 0 2px 0;
+            margin: 0 0 3px 0;
+            text-align: left;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            width: 100%;
         }
 
         body.dark-mode .emp-card-name {
@@ -1848,79 +1854,73 @@ if ($roles_query instanceof mysqli_result) {
         }
 
         .emp-card-role {
-            font-size: 0.84rem;
+            font-size: 0.86rem;
             color: #667085;
-            text-align: center;
             font-weight: 500;
-            margin-bottom: 12px;
+            margin: 0 0 16px 0;
+            text-align: left;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            width: 100%;
         }
 
         body.dark-mode .emp-card-role {
             color: #94a3b8;
         }
 
-        .emp-meta-container {
+        /* 2-Column Info Grid */
+        .emp-info-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 8px;
-            background: #f8f9fa;
-            border: 1px solid #eaecf0;
-            border-radius: 10px;
-            padding: 9px 12px;
-            margin-bottom: 12px;
+            gap: 12px;
+            margin-bottom: 16px;
         }
 
-        body.dark-mode .emp-meta-container {
-            background: #13171f !important;
-            border-color: #27303f !important;
-        }
-
-        .emp-meta-col {
+        .emp-info-col {
             display: flex;
             flex-direction: column;
             overflow: hidden;
         }
 
-        .emp-meta-label {
+        .emp-info-label {
             font-size: 11px;
-            color: #667085;
-            margin-bottom: 2px;
-            text-transform: capitalize;
             font-weight: 500;
+            color: #98a2b3;
+            margin-bottom: 3px;
+            display: block;
         }
 
-        body.dark-mode .emp-meta-label {
-            color: #94a3b8;
+        body.dark-mode .emp-info-label {
+            color: #64748b;
         }
 
-        .emp-meta-val {
-            font-size: 12.5px;
+        .emp-info-val {
+            font-size: 13px;
             font-weight: 600;
-            color: #1d2939;
+            color: #101828;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            display: block;
         }
 
-        body.dark-mode .emp-meta-val {
+        body.dark-mode .emp-info-val {
             color: #e2e8f0;
         }
 
+        /* Contact List */
         .emp-contact-list {
-            margin-bottom: 10px;
-            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+            margin-top: auto;
         }
 
         .emp-contact-item {
             display: flex;
             align-items: center;
-            font-size: 12px;
+            font-size: 12.5px;
             color: #475467;
-            margin-bottom: 5px;
             overflow: hidden;
         }
 
@@ -1929,9 +1929,10 @@ if ($roles_query instanceof mysqli_result) {
         }
 
         .emp-contact-item i {
-            width: 14px;
+            width: 16px;
             margin-right: 8px;
             color: #98a2b3;
+            font-size: 12.5px;
             flex-shrink: 0;
             text-align: center;
         }
@@ -1942,19 +1943,6 @@ if ($roles_query instanceof mysqli_result) {
             text-overflow: ellipsis;
         }
 
-        .emp-account-strip {
-            margin-top: auto;
-            padding-top: 10px;
-            border-top: 1px solid #f2f4f7;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        body.dark-mode .emp-account-strip {
-            border-top-color: #27303f;
-        }
-
         .emp-role-tag {
             font-size: 11px;
             font-weight: 600;
@@ -1963,10 +1951,6 @@ if ($roles_query instanceof mysqli_result) {
             display: inline-flex;
             align-items: center;
             gap: 4px;
-            max-width: 100%;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
         }
 
         .emp-role-tag.linked {
@@ -1975,28 +1959,11 @@ if ($roles_query instanceof mysqli_result) {
             border: 1px solid #b2ddff;
         }
 
-        body.dark-mode .emp-role-tag.linked {
-            background: #172554;
-            color: #93c5fd;
-            border-color: #1e3a8a;
-        }
-
         .emp-role-tag.unlinked {
             background: #f8f9fa;
             color: #667085;
             border: 1px dashed #d0d5dd;
             cursor: pointer;
-        }
-
-        body.dark-mode .emp-role-tag.unlinked {
-            background: #1e2430;
-            color: #94a3b8;
-            border-color: #3b4758;
-        }
-
-        .emp-role-tag.unlinked:hover {
-            color: #b3261e;
-            border-color: #b3261e;
         }
     </style>
 </head>
@@ -2035,23 +2002,34 @@ if ($roles_query instanceof mysqli_result) {
                     </div>
                 <?php endif; ?>
                 
+                <?php
+                $active_emp_count = 0;
+                $inactive_emp_count = 0;
+                $recent_hire_count = 0;
+                $now_ts = time();
+                foreach ($employees_list as $e_check) {
+                    if (($e_check['status'] ?? 'active') === 'active') {
+                        $active_emp_count++;
+                    } else {
+                        $inactive_emp_count++;
+                    }
+                    if (!empty($e_check['hire_date']) && ($now_ts - strtotime($e_check['hire_date'])) <= (45 * 86400)) {
+                        $recent_hire_count++;
+                    }
+                }
+                ?>
                 <div class="emp-directory-toolbar">
-                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <div>
                         <h2 class="emp-directory-title"><?php echo $total_employees_count; ?> Employees</h2>
-                        <?php
-                        $recent_hire_count = 0;
-                        $now_ts = time();
-                        foreach ($employees_list as $e_check) {
-                            if (!empty($e_check['hire_date']) && ($now_ts - strtotime($e_check['hire_date'])) <= (45 * 86400)) {
-                                $recent_hire_count++;
-                            }
-                        }
-                        if ($recent_hire_count > 0):
-                        ?>
-                            <span class="badge" style="background: #f1f5f9; color: #334155; font-size: 11px; font-weight: 700; padding: 5px 10px; border-radius: 20px; border: 1px solid #cbd5e1;">
-                                +<?php echo $recent_hire_count; ?> New Hire
-                            </span>
-                        <?php endif; ?>
+                        <div class="emp-stats-strip">
+                            <span><span class="emp-stat-dot active"></span> Active <?php echo number_format($active_emp_count); ?></span>
+                            <span><span class="emp-stat-dot inactive"></span> Inactive <?php echo number_format($inactive_emp_count); ?></span>
+                            <?php if ($recent_hire_count > 0): ?>
+                                <span class="badge" style="background: #f1f5f9; color: #334155; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; border: 1px solid #cbd5e1;">
+                                    +<?php echo $recent_hire_count; ?> New Hire
+                                </span>
+                            <?php endif; ?>
+                        </div>
                     </div>
 
                     <div class="d-flex align-items-center gap-2 flex-wrap">
@@ -2197,12 +2175,21 @@ if ($roles_query instanceof mysqli_result) {
                                 $system_role_id = (int)($emp['system_role_id'] ?? 0);
                             ?>
                             <div class="emp-card" id="empCard_<?php echo $emp_id; ?>">
-                                <div class="emp-card-header">
-                                    <input type="checkbox" class="form-check-input emp-card-check employee-checkbox" name="employee_ids[]" value="<?php echo $emp_id; ?>" onchange="updateSelectedCount()">
-                                    <div class="emp-card-badge-wrap">
-                                        <span class="emp-status-pill <?php echo $status_pill_class; ?>" id="cardStatusPill_<?php echo $emp_id; ?>">
-                                            <?php echo $status_label; ?>
-                                        </span>
+                                <!-- Top Row: Avatar with status dot on left, Checkbox & 3-dots on right -->
+                                <div class="emp-card-top">
+                                    <div class="emp-avatar-wrap">
+                                        <div class="emp-avatar-circle" style="<?php echo !$has_real_photo ? 'background: ' . $avatar_gradient . ';' : ''; ?>">
+                                            <?php if ($has_real_photo): ?>
+                                                <img src="<?php echo htmlspecialchars($photo_path); ?>" alt="<?php echo $full_name_safe; ?>" class="emp-avatar-img">
+                                            <?php else: ?>
+                                                <span class="emp-avatar-initials"><?php echo htmlspecialchars($initials); ?></span>
+                                            <?php endif; ?>
+                                        </div>
+                                        <span class="emp-status-dot <?php echo $status_pill_class; ?>" title="<?php echo $status_label; ?>"></span>
+                                    </div>
+
+                                    <div class="d-flex align-items-center gap-2">
+                                        <input type="checkbox" class="form-check-input emp-card-check employee-checkbox" name="employee_ids[]" value="<?php echo $emp_id; ?>" onchange="updateSelectedCount()">
                                         <div class="dropdown">
                                             <button type="button" class="emp-more-btn" data-bs-toggle="dropdown" aria-expanded="false" title="More Actions">
                                                 <i class="fas fa-ellipsis-h"></i>
@@ -2247,26 +2234,36 @@ if ($roles_query instanceof mysqli_result) {
                                                         <i class="fas fa-money-check-alt me-2"></i> Payroll
                                                     </a>
                                                 </li>
+                                                <li><hr class="dropdown-divider my-1"></li>
+                                                <li><h6 class="dropdown-header text-muted py-1" style="font-size: 10.5px; font-weight: 700;">CHANGE STATUS</h6></li>
+                                                <?php foreach (['active' => 'Active', 'inactive' => 'Inactive', 'on_leave' => 'On Leave', 'terminated' => 'Terminated'] as $s_key => $s_name): ?>
+                                                    <?php if ($s_key !== $emp_status): ?>
+                                                        <li>
+                                                            <a class="dropdown-item py-1" href="javascript:void(0)" onclick="quickChangeStatus(<?php echo $emp_id; ?>, '<?php echo $s_key; ?>')">
+                                                                <span class="emp-stat-dot <?php echo $s_key; ?>"></span> Mark <?php echo $s_name; ?>
+                                                            </a>
+                                                        </li>
+                                                    <?php endif; ?>
+                                                <?php endforeach; ?>
                                             </ul>
                                         </div>
                                     </div>
+
+                                    <!-- Hidden Status Form for AJAX updates -->
+                                    <form method="POST" id="statusForm<?php echo $emp_id; ?>" style="display:none;">
+                                        <input type="hidden" name="employee_id" value="<?php echo $emp_id; ?>">
+                                        <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+                                        <input type="hidden" name="update_status" value="1">
+                                        <select name="new_status" data-current-status="<?php echo $emp_status; ?>">
+                                            <option value="active" <?php echo $emp_status === 'active' ? 'selected' : ''; ?>>Active</option>
+                                            <option value="inactive" <?php echo $emp_status === 'inactive' ? 'selected' : ''; ?>>Inactive</option>
+                                            <option value="on_leave" <?php echo $emp_status === 'on_leave' ? 'selected' : ''; ?>>On Leave</option>
+                                            <option value="terminated" <?php echo $emp_status === 'terminated' ? 'selected' : ''; ?>>Terminated</option>
+                                        </select>
+                                    </form>
                                 </div>
 
-                                <!-- Circular Avatar Section -->
-                                <div class="emp-avatar-section">
-                                    <div class="emp-avatar-circle" style="<?php echo !$has_real_photo ? 'background: ' . $avatar_gradient . ';' : ''; ?>">
-                                        <?php if ($has_real_photo): ?>
-                                            <img src="<?php echo htmlspecialchars($photo_path); ?>" alt="<?php echo $full_name_safe; ?>" class="emp-avatar-img">
-                                        <?php else: ?>
-                                            <span class="emp-avatar-initials"><?php echo htmlspecialchars($initials); ?></span>
-                                        <?php endif; ?>
-                                    </div>
-                                    <?php if ($is_new_hire): ?>
-                                        <span class="emp-new-hire-tag"><i class="fas fa-sparkles"></i> 1 New hire</span>
-                                    <?php endif; ?>
-                                </div>
-
-                                <!-- Full Name & Position Title -->
+                                <!-- Full Name & Position Title (Left aligned) -->
                                 <h3 class="emp-card-name" title="<?php echo $full_name_safe; ?>" onclick="loadEmployeeDetails(<?php echo $emp_id; ?>)" data-bs-toggle="modal" data-bs-target="#employeeModal" style="cursor: pointer;">
                                     <?php echo $full_name_safe; ?>
                                 </h3>
@@ -2274,17 +2271,17 @@ if ($roles_query instanceof mysqli_result) {
                                     <?php echo htmlspecialchars($position_title); ?>
                                 </div>
 
-                                <!-- 2-Column Rounded Box (Department & Date Hired) -->
-                                <div class="emp-meta-container">
-                                    <div class="emp-meta-col">
-                                        <span class="emp-meta-label">Department</span>
-                                        <span class="emp-meta-val" title="<?php echo htmlspecialchars($department_title); ?>">
+                                <!-- 2-Column Info Grid: Department & Hired Date -->
+                                <div class="emp-info-grid">
+                                    <div class="emp-info-col">
+                                        <span class="emp-info-label">Department</span>
+                                        <span class="emp-info-val" title="<?php echo htmlspecialchars($department_title); ?>">
                                             <?php echo htmlspecialchars($department_title); ?>
                                         </span>
                                     </div>
-                                    <div class="emp-meta-col">
-                                        <span class="emp-meta-label">Date Hired</span>
-                                        <span class="emp-meta-val"><?php echo $hire_date_formatted; ?></span>
+                                    <div class="emp-info-col">
+                                        <span class="emp-info-label">Hired Date</span>
+                                        <span class="emp-info-val"><?php echo $hire_date_formatted; ?></span>
                                     </div>
                                 </div>
 
@@ -2298,32 +2295,6 @@ if ($roles_query instanceof mysqli_result) {
                                         <i class="fas fa-phone-alt"></i>
                                         <span><?php echo $phone_clean !== '' ? $phone_clean : 'No phone'; ?></span>
                                     </div>
-                                </div>
-
-                                <!-- User Account Role Strip -->
-                                <div class="emp-account-strip">
-                                    <?php if ($has_user_account): ?>
-                                        <span class="emp-role-tag linked" title="Assigned Role: <?php echo htmlspecialchars($system_role_name); ?> (Click to reassign)" onclick="openReassignRoleModal(<?php echo $emp_id; ?>, <?php echo $emp_name_js; ?>, <?php echo $system_role_id; ?>)">
-                                            <i class="fas fa-shield-alt"></i> Role: <?php echo htmlspecialchars($system_role_name); ?>
-                                        </span>
-                                    <?php else: ?>
-                                        <span class="emp-role-tag unlinked" title="Click to assign system role & create login" onclick="openLinkUserModal(<?php echo $emp_id; ?>, <?php echo $emp_name_js; ?>, <?php echo $emp_email_js; ?>)">
-                                            <i class="fas fa-plus-circle"></i> Assign Role
-                                        </span>
-                                    <?php endif; ?>
-                                    
-                                    <form method="POST" id="statusForm<?php echo $emp_id; ?>" style="display:inline; margin: 0;">
-                                        <input type="hidden" name="employee_id" value="<?php echo $emp_id; ?>">
-                                        <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
-                                        <select name="new_status" class="form-select form-select-sm" data-current-status="<?php echo $emp_status; ?>" onchange="confirmStatusChange(this, <?php echo $emp_id; ?>)" style="font-size: 11px; padding: 2px 6px; width: auto; border-radius: 6px; border-color: #eaecf0;">
-                                            <option value="">Status</option>
-                                            <option value="active" <?php echo $emp_status === 'active' ? 'selected' : ''; ?>>Active</option>
-                                            <option value="inactive" <?php echo $emp_status === 'inactive' ? 'selected' : ''; ?>>Inactive</option>
-                                            <option value="on_leave" <?php echo $emp_status === 'on_leave' ? 'selected' : ''; ?>>On Leave</option>
-                                            <option value="terminated" <?php echo $emp_status === 'terminated' ? 'selected' : ''; ?>>Terminated</option>
-                                        </select>
-                                        <input type="hidden" name="update_status" value="1">
-                                    </form>
                                 </div>
                             </div>
                             <?php endforeach; ?>
@@ -3274,6 +3245,15 @@ if ($roles_query instanceof mysqli_result) {
                     Swal.fire('Error', 'Could not fetch employee details', 'error');
                 }
             });
+        }
+
+        function quickChangeStatus(empId, newStatus) {
+            const form = document.getElementById('statusForm' + empId);
+            if (!form) return;
+            const select = form.querySelector('select[name="new_status"]');
+            if (!select) return;
+            select.value = newStatus;
+            confirmStatusChange(select, empId);
         }
 
         function confirmStatusChange(selectElement, empId) {
