@@ -1700,7 +1700,14 @@ if ($roles_query instanceof mysqli_result) {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 10px;
+            margin-bottom: 12px;
+            position: relative;
+        }
+
+        .emp-card-header-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
         .emp-card-check {
@@ -1728,14 +1735,14 @@ if ($roles_query instanceof mysqli_result) {
         }
 
         .emp-status-pill.active {
-            background: #ecfdf3;
-            color: #027a48;
-            border: 1px solid #abefc6;
+            background: #eefcf4;
+            color: #12b76a;
+            border: 1px solid #d1fadf;
         }
 
         .emp-status-pill.inactive {
-            background: #fff1f0;
-            color: #b3261e;
+            background: #fef3f2;
+            color: #f04438;
             border: 1px solid #fee4e2;
         }
 
@@ -1785,15 +1792,14 @@ if ($roles_query instanceof mysqli_result) {
         }
 
         .emp-avatar-circle {
-            width: 76px;
-            height: 76px;
-            border-radius: 50%;
+            width: 72px;
+            height: 72px;
+            border-radius: 18px; /* NodoHR squircle shape */
             display: flex;
             align-items: center;
             justify-content: center;
             position: relative;
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
-            border: 3px solid #ffffff;
             overflow: hidden;
             flex-shrink: 0;
         }
@@ -1848,10 +1854,10 @@ if ($roles_query instanceof mysqli_result) {
         }
 
         .emp-card-role {
-            font-size: 0.84rem;
-            color: #667085;
+            font-size: 12px;
+            color: #175cd3; /* NodoHR brand blue */
             text-align: center;
-            font-weight: 500;
+            font-weight: 600;
             margin-bottom: 12px;
             white-space: nowrap;
             overflow: hidden;
@@ -1864,13 +1870,11 @@ if ($roles_query instanceof mysqli_result) {
         }
 
         .emp-meta-container {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-            background: #f8f9fa;
-            border: 1px solid #eaecf0;
-            border-radius: 10px;
-            padding: 9px 12px;
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-top: 1px solid #f2f4f7;
+            border-bottom: 1px solid #f2f4f7;
             margin-bottom: 12px;
         }
 
@@ -2174,7 +2178,7 @@ if ($roles_query instanceof mysqli_result) {
 
                                 // Hire Date formatting (d/m/Y like reference screenshot)
                                 $hire_date_raw = $emp['hire_date'] ?? '';
-                                $hire_date_formatted = !empty($hire_date_raw) ? date('d/m/Y', strtotime($hire_date_raw)) : 'N/A';
+                                $hire_date_formatted = !empty($hire_date_raw) ? date('d M Y', strtotime($hire_date_raw)) : 'N/A';
                                 $is_new_hire = (!empty($hire_date_raw) && (time() - strtotime($hire_date_raw)) <= (45 * 86400));
 
                                 // Photo / Avatar
@@ -2198,12 +2202,13 @@ if ($roles_query instanceof mysqli_result) {
                             ?>
                             <div class="emp-card" id="empCard_<?php echo $emp_id; ?>">
                                 <div class="emp-card-header">
-                                    <input type="checkbox" class="form-check-input emp-card-check employee-checkbox" name="employee_ids[]" value="<?php echo $emp_id; ?>" onchange="updateSelectedCount()">
-                                    <div class="emp-card-badge-wrap">
+                                    <div class="emp-card-header-left">
+                                        <input type="checkbox" class="form-check-input emp-card-check employee-checkbox" name="employee_ids[]" value="<?php echo $emp_id; ?>" onchange="updateSelectedCount()">
                                         <span class="emp-status-pill <?php echo $status_pill_class; ?>" id="cardStatusPill_<?php echo $emp_id; ?>">
                                             <?php echo $status_label; ?>
                                         </span>
-                                        <div class="dropdown">
+                                    </div>
+                                    <div class="dropdown">
                                             <button type="button" class="emp-more-btn" data-bs-toggle="dropdown" aria-expanded="false" title="More Actions">
                                                 <i class="fas fa-ellipsis-h"></i>
                                             </button>
@@ -2282,8 +2287,8 @@ if ($roles_query instanceof mysqli_result) {
                                             <?php echo htmlspecialchars($department_title); ?>
                                         </span>
                                     </div>
-                                    <div class="emp-meta-col">
-                                        <span class="emp-meta-label">Date Hired</span>
+                                    <div class="emp-meta-col" style="text-align: right;">
+                                        <span class="emp-meta-label">Hired Date</span>
                                         <span class="emp-meta-val"><?php echo $hire_date_formatted; ?></span>
                                     </div>
                                 </div>

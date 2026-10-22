@@ -1412,7 +1412,14 @@ body.dark-mode .user-card:hover {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 10px;
+    margin-bottom: 12px;
+    position: relative;
+}
+
+.user-card-header-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .user-id-tag {
@@ -1448,15 +1455,19 @@ body.dark-mode .user-id-tag {
 }
 
 .user-status-pill.active {
-    background: #ecfdf3;
-    color: #027a48;
-    border: 1px solid #abefc6;
+    background: #eefcf4;
+    color: #12b76a;
+    border: 1px solid #d1fadf;
 }
 
 .user-status-pill.inactive {
-    background: #fff1f0;
-    color: #b3261e;
+    background: #fef3f2;
+    color: #f04438;
     border: 1px solid #fee4e2;
+}
+
+.user-card .dropdown {
+    position: relative;
 }
 
 .user-more-btn {
@@ -1484,6 +1495,21 @@ body.dark-mode .user-more-btn:hover {
     color: #f8fafc;
 }
 
+.user-card .dropdown-menu {
+    border-radius: 10px;
+    border: 1px solid #eaecf0;
+    font-size: 13px;
+    min-width: 175px;
+    box-shadow: 0 10px 25px rgba(16, 24, 40, 0.1);
+    z-index: 1050;
+    margin-top: 4px !important;
+}
+
+.user-card .dropdown-menu.dropdown-menu-end {
+    right: 0 !important;
+    left: auto !important;
+}
+
 .user-avatar-section {
     display: flex;
     flex-direction: column;
@@ -1493,15 +1519,14 @@ body.dark-mode .user-more-btn:hover {
 }
 
 .user-avatar-circle {
-    width: 76px;
-    height: 76px;
-    border-radius: 50%;
+    width: 72px;
+    height: 72px;
+    border-radius: 18px; /* NodoHR squircle shape */
     display: flex;
     align-items: center;
     justify-content: center;
     position: relative;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
-    border: 3px solid #ffffff;
     overflow: hidden;
     flex-shrink: 0;
 }
@@ -1517,8 +1542,8 @@ body.dark-mode .user-avatar-circle {
 }
 
 .user-avatar-initials {
-    font-size: 26px;
-    font-weight: 800;
+    font-size: 24px;
+    font-weight: 700;
     color: #ffffff;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     user-select: none;
@@ -1531,7 +1556,7 @@ body.dark-mode .user-avatar-circle {
     font-weight: 700;
     padding: 2px 8px;
     border-radius: 12px;
-    margin-top: -10px;
+    margin-top: -8px;
     z-index: 2;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
     display: inline-flex;
@@ -1549,7 +1574,7 @@ body.dark-mode .user-new-hire-tag {
 }
 
 .user-card-name {
-    font-size: 1.05rem;
+    font-size: 15px;
     font-weight: 700;
     color: #101828;
     text-align: center;
@@ -1565,10 +1590,10 @@ body.dark-mode .user-card-name {
 }
 
 .user-card-role {
-    font-size: 0.84rem;
-    color: #667085;
+    font-size: 12px;
+    color: #175cd3; /* NodoHR blue title */
     text-align: center;
-    font-weight: 500;
+    font-weight: 600;
     margin-bottom: 12px;
     white-space: nowrap;
     overflow: hidden;
@@ -1577,22 +1602,19 @@ body.dark-mode .user-card-name {
 }
 
 body.dark-mode .user-card-role {
-    color: #94a3b8;
+    color: #60a5fa;
 }
 
 .user-meta-container {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-    background: #f8f9fa;
-    border: 1px solid #eaecf0;
-    border-radius: 10px;
-    padding: 9px 12px;
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-top: 1px solid #f2f4f7;
+    border-bottom: 1px solid #f2f4f7;
     margin-bottom: 12px;
 }
 
 body.dark-mode .user-meta-container {
-    background: #13171f !important;
     border-color: #27303f !important;
 }
 
@@ -1604,27 +1626,27 @@ body.dark-mode .user-meta-container {
 
 .user-meta-label {
     font-size: 11px;
-    color: #667085;
+    color: #98a2b3;
     margin-bottom: 2px;
     text-transform: capitalize;
     font-weight: 500;
 }
 
 body.dark-mode .user-meta-label {
-    color: #94a3b8;
+    color: #64748b;
 }
 
 .user-meta-val {
     font-size: 12.5px;
     font-weight: 600;
-    color: #1d2939;
+    color: #344054;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
 body.dark-mode .user-meta-val {
-    color: #e2e8f0;
+    color: #cbd5e1;
 }
 
 .user-contact-list {

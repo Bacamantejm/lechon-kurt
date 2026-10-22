@@ -299,6 +299,378 @@ if ($has_apps) {
 
 saRenderModuleHeader('User & Business Management', 'User & Business Management', $admin_info);
 ?>
+<style>
+/* ==========================================================================
+   Super Admin User & Business Management — Card Directory Styles
+   (Self-contained style block immune to browser CSS cache latency)
+   ========================================================================== */
+.user-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 20px;
+    margin-bottom: 24px;
+}
+
+@media (min-width: 1200px) {
+    .user-card-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+.user-card {
+    background: #ffffff;
+    border: 1px solid #eaecf0;
+    border-radius: 16px;
+    padding: 18px 16px 14px 16px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04), 0 1px 2px rgba(16, 24, 40, 0.02);
+    transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.user-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px -4px rgba(16, 24, 40, 0.08), 0 4px 6px -2px rgba(16, 24, 40, 0.03);
+    border-color: #d0d5dd;
+}
+
+body.dark-mode .user-card {
+    background: #181d26 !important;
+    border-color: #27303f !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+body.dark-mode .user-card:hover {
+    border-color: #3b4758 !important;
+    box-shadow: 0 12px 24px -4px rgba(0, 0, 0, 0.4);
+}
+
+.user-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    position: relative;
+}
+
+.user-card-header-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.user-status-pill {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 20px;
+    display: inline-flex;
+    align-items: center;
+    line-height: 1.2;
+}
+
+.user-status-pill.active {
+    background: #eefcf4;
+    color: #12b76a;
+    border: 1px solid #d1fadf;
+}
+
+.user-status-pill.inactive {
+    background: #fef3f2;
+    color: #f04438;
+    border: 1px solid #fee4e2;
+}
+
+.user-id-tag {
+    font-size: 11px;
+    font-weight: 700;
+    color: #667085;
+    background: #f8f9fa;
+    padding: 2px 7px;
+    border-radius: 6px;
+    border: 1px solid #eaecf0;
+}
+
+body.dark-mode .user-id-tag {
+    background: #1e2430;
+    border-color: #3b4758;
+    color: #94a3b8;
+}
+
+.user-card .dropdown {
+    position: relative;
+}
+
+.user-more-btn {
+    background: transparent;
+    border: none;
+    color: #98a2b3;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    padding: 0;
+}
+
+.user-more-btn:hover {
+    background: #f2f4f7;
+    color: #344054;
+}
+
+body.dark-mode .user-more-btn:hover {
+    background: #27303f;
+    color: #f8fafc;
+}
+
+.user-card .dropdown-menu {
+    border-radius: 10px;
+    border: 1px solid #eaecf0;
+    font-size: 13px;
+    min-width: 175px;
+    box-shadow: 0 10px 25px rgba(16, 24, 40, 0.1);
+    z-index: 1050;
+    margin-top: 4px !important;
+}
+
+.user-card .dropdown-menu.dropdown-menu-end {
+    right: 0 !important;
+    left: auto !important;
+}
+
+.user-avatar-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    margin-bottom: 10px;
+}
+
+.user-avatar-circle {
+    width: 72px;
+    height: 72px;
+    border-radius: 18px; /* NodoHR squircle shape */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+body.dark-mode .user-avatar-circle {
+    border-color: #27303f;
+}
+
+.user-avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.user-avatar-initials {
+    font-size: 24px;
+    font-weight: 700;
+    color: #ffffff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    user-select: none;
+}
+
+.user-new-hire-tag {
+    background: #0f172a;
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 12px;
+    margin-top: -8px;
+    z-index: 2;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    max-width: 85%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+body.dark-mode .user-new-hire-tag {
+    background: #334155;
+    color: #f8fafc;
+}
+
+.user-card-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: #101828;
+    text-align: center;
+    margin: 4px 0 2px 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+}
+
+body.dark-mode .user-card-name {
+    color: #f8fafc;
+}
+
+.user-card-role {
+    font-size: 12px;
+    color: #175cd3; /* NodoHR blue title */
+    text-align: center;
+    font-weight: 600;
+    margin-bottom: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+}
+
+body.dark-mode .user-card-role {
+    color: #60a5fa;
+}
+
+.user-meta-container {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-top: 1px solid #f2f4f7;
+    border-bottom: 1px solid #f2f4f7;
+    margin-bottom: 12px;
+}
+
+body.dark-mode .user-meta-container {
+    border-color: #27303f !important;
+}
+
+.user-meta-col {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.user-meta-label {
+    font-size: 11px;
+    color: #98a2b3;
+    margin-bottom: 2px;
+    text-transform: capitalize;
+    font-weight: 500;
+}
+
+body.dark-mode .user-meta-label {
+    color: #64748b;
+}
+
+.user-meta-val {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #344054;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+body.dark-mode .user-meta-val {
+    color: #cbd5e1;
+}
+
+.user-contact-list {
+    margin-bottom: 10px;
+    flex-grow: 1;
+}
+
+.user-contact-item {
+    display: flex;
+    align-items: center;
+    font-size: 12px;
+    color: #475467;
+    margin-bottom: 6px;
+    overflow: hidden;
+}
+
+body.dark-mode .user-contact-item {
+    color: #94a3b8;
+}
+
+.user-contact-item i {
+    width: 14px;
+    margin-right: 8px;
+    color: #98a2b3;
+    flex-shrink: 0;
+    text-align: center;
+}
+
+.user-contact-item span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.user-account-strip {
+    margin-top: auto;
+    padding-top: 10px;
+    border-top: 1px solid #f2f4f7;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+body.dark-mode .user-account-strip {
+    border-top-color: #27303f;
+}
+
+.user-role-tag {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 65%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.user-role-tag.linked {
+    background: #eff8ff;
+    color: #175cd3;
+    border: 1px solid #b2ddff;
+    cursor: pointer;
+}
+
+body.dark-mode .user-role-tag.linked {
+    background: #172554;
+    color: #93c5fd;
+    border-color: #1e3a8a;
+}
+
+.user-role-tag.unlinked {
+    background: #f8f9fa;
+    color: #667085;
+    border: 1px dashed #d0d5dd;
+    cursor: pointer;
+}
+
+body.dark-mode .user-role-tag.unlinked {
+    background: #1e2430;
+    color: #94a3b8;
+    border-color: #3b4758;
+}
+
+.user-role-tag.unlinked:hover {
+    color: #b3261e;
+    border-color: #b3261e;
+}
+</style>
 <div class="module-section">
     <div class="module-section-header">
         <div>
@@ -434,50 +806,50 @@ saRenderModuleHeader('User & Business Management', 'User & Business Management',
                         $status_confirm_color = $next_is_active ? '#166534' : '#b3261e';
                     ?>
                     <div class="user-card" id="userCard_<?php echo $user_id; ?>">
-                        <!-- Top Header: ID tag on left, status pill and 3-dots on right -->
+                        <!-- Top Header: Status pill & ID on left, 3-dots on right (NodoHR style) -->
                         <div class="user-card-header">
-                            <span class="user-id-tag">#<?php echo $user_id; ?></span>
-                            <div class="user-card-badge-wrap">
+                            <div class="user-card-header-left">
                                 <span class="user-status-pill <?php echo $is_active ? 'active' : 'inactive'; ?>" id="cardStatusPill_<?php echo $user_id; ?>">
                                     <?php echo $is_active ? 'Active' : 'Inactive'; ?>
                                 </span>
-                                <div class="dropdown">
-                                    <button type="button" class="user-more-btn" data-bs-toggle="dropdown" aria-expanded="false" title="More Actions">
-                                        <i class="fas fa-ellipsis-h"></i>
-                                    </button>
-                                    <ul class="dropdown-menu dropdown-menu-end shadow-sm" style="border-radius: 10px; border: 1px solid #eaecf0; font-size: 13px; min-width: 175px;">
-                                        <?php if ($has_roles): ?>
-                                            <li>
-                                                <a class="dropdown-item py-2 text-primary" href="javascript:void(0)" onclick="openAssignRoleModal(<?php echo $user_id; ?>, <?php echo htmlspecialchars(json_encode($full_name), ENT_QUOTES); ?>, <?php echo (int)($user['role_id'] ?? 0); ?>)">
-                                                    <i class="fas fa-user-shield me-2"></i> Reassign Role
-                                                </a>
-                                            </li>
-                                            <li><hr class="dropdown-divider my-1"></li>
-                                        <?php endif; ?>
+                                <span class="user-id-tag">#<?php echo $user_id; ?></span>
+                            </div>
+                            <div class="dropdown">
+                                <button type="button" class="user-more-btn" data-bs-toggle="dropdown" aria-expanded="false" title="More Actions">
+                                    <i class="fas fa-ellipsis-h"></i>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                                    <?php if ($has_roles): ?>
                                         <li>
-                                            <form method="POST" style="margin: 0;">
-                                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
-                                                <input type="hidden" name="action" value="toggle_user_status">
-                                                <input type="hidden" name="user_id" value="<?php echo $user_id; ?>">
-                                                <input type="hidden" name="next_status" value="<?php echo $is_active ? 0 : 1; ?>">
-                                                <button type="submit"
-                                                        class="dropdown-item py-2 <?php echo $is_active ? 'text-danger' : 'text-success'; ?>"
-                                                        data-sa-confirm="1"
-                                                        data-sa-confirm-title="<?php echo htmlspecialchars($status_confirm_title, ENT_QUOTES, 'UTF-8'); ?>"
-                                                        data-sa-confirm-text="<?php echo htmlspecialchars($status_confirm_text, ENT_QUOTES, 'UTF-8'); ?>"
-                                                        data-sa-confirm-confirm-text="<?php echo htmlspecialchars($status_confirm_button, ENT_QUOTES, 'UTF-8'); ?>"
-                                                        data-sa-confirm-confirm-color="<?php echo htmlspecialchars($status_confirm_color, ENT_QUOTES, 'UTF-8'); ?>">
-                                                    <i class="fas <?php echo $is_active ? 'fa-user-slash' : 'fa-user-check'; ?> me-2"></i>
-                                                    <?php echo $is_active ? 'Deactivate Account' : 'Activate Account'; ?>
-                                                </button>
-                                            </form>
+                                            <a class="dropdown-item py-2 text-primary" href="javascript:void(0)" onclick="openAssignRoleModal(<?php echo $user_id; ?>, <?php echo htmlspecialchars(json_encode($full_name), ENT_QUOTES); ?>, <?php echo (int)($user['role_id'] ?? 0); ?>)">
+                                                <i class="fas fa-user-shield me-2"></i> Reassign Role
+                                            </a>
                                         </li>
-                                    </ul>
-                                </div>
+                                        <li><hr class="dropdown-divider my-1"></li>
+                                    <?php endif; ?>
+                                    <li>
+                                        <form method="POST" style="margin: 0;">
+                                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+                                            <input type="hidden" name="action" value="toggle_user_status">
+                                            <input type="hidden" name="user_id" value="<?php echo $user_id; ?>">
+                                            <input type="hidden" name="next_status" value="<?php echo $is_active ? 0 : 1; ?>">
+                                            <button type="submit"
+                                                    class="dropdown-item py-2 <?php echo $is_active ? 'text-danger' : 'text-success'; ?>"
+                                                    data-sa-confirm="1"
+                                                    data-sa-confirm-title="<?php echo htmlspecialchars($status_confirm_title, ENT_QUOTES, 'UTF-8'); ?>"
+                                                    data-sa-confirm-text="<?php echo htmlspecialchars($status_confirm_text, ENT_QUOTES, 'UTF-8'); ?>"
+                                                    data-sa-confirm-confirm-text="<?php echo htmlspecialchars($status_confirm_button, ENT_QUOTES, 'UTF-8'); ?>"
+                                                    data-sa-confirm-confirm-color="<?php echo htmlspecialchars($status_confirm_color, ENT_QUOTES, 'UTF-8'); ?>">
+                                                <i class="fas <?php echo $is_active ? 'fa-user-slash' : 'fa-user-check'; ?> me-2"></i>
+                                                <?php echo $is_active ? 'Deactivate Account' : 'Activate Account'; ?>
+                                            </button>
+                                        </form>
+                                    </li>
+                                </ul>
                             </div>
                         </div>
 
-                        <!-- Centered Circular Avatar with optional badge tag below -->
+                        <!-- Centered Squircle Avatar with optional badge tag below (NodoHR style) -->
                         <div class="user-avatar-section">
                             <div class="user-avatar-circle" style="<?php echo !$has_real_photo ? 'background: ' . $avatar_gradient . ';' : ''; ?>">
                                 <?php if ($has_real_photo): ?>
@@ -497,7 +869,7 @@ saRenderModuleHeader('User & Business Management', 'User & Business Management',
                             <?php endif; ?>
                         </div>
 
-                        <!-- Full Name & Subtitle -->
+                        <!-- Full Name & Blue Role Title -->
                         <h3 class="user-card-name" title="<?php echo $full_name_safe; ?>">
                             <?php echo $full_name_safe; ?>
                         </h3>
@@ -505,7 +877,7 @@ saRenderModuleHeader('User & Business Management', 'User & Business Management',
                             <?php echo htmlspecialchars($role_name !== '' ? $role_name : $user_type); ?>
                         </div>
 
-                        <!-- 2-Column Rounded Box (Account Type & Joined Date) -->
+                        <!-- 2-Column Metadata Row (NodoHR flat divider layout) -->
                         <div class="user-meta-container">
                             <div class="user-meta-col">
                                 <span class="user-meta-label">Account Type</span>
@@ -513,9 +885,9 @@ saRenderModuleHeader('User & Business Management', 'User & Business Management',
                                     <?php echo $account_type; ?>
                                 </span>
                             </div>
-                            <div class="user-meta-col">
-                                <span class="user-meta-label">Date Joined</span>
-                                <span class="user-meta-val"><?php echo htmlspecialchars(saFormatDateTime($user['created_at'] ?? null, 'd/m/Y', 'N/A')); ?></span>
+                            <div class="user-meta-col" style="text-align: right;">
+                                <span class="user-meta-label">Joined Date</span>
+                                <span class="user-meta-val"><?php echo htmlspecialchars(saFormatDateTime($user['created_at'] ?? null, 'd M Y', 'N/A')); ?></span>
                             </div>
                         </div>
 

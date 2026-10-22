@@ -309,8 +309,8 @@ function saRenderModuleHeader($page_title, $page_heading, $admin_info) {
     <link rel="stylesheet" href="../font_awesome/css/all.css">
     <link rel="stylesheet" href="../css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="../super_admin/modules.css">
+    <link rel="stylesheet" href="style.css?v=<?php echo file_exists(__DIR__ . '/../admin/style.css') ? filemtime(__DIR__ . '/../admin/style.css') : time(); ?>">
+    <link rel="stylesheet" href="../super_admin/modules.css?v=<?php echo file_exists(__DIR__ . '/modules.css') ? filemtime(__DIR__ . '/modules.css') : time(); ?>">
     <style>
         .sa-topbar-action-wrap { position:relative; margin-right:8px; }
         .sa-topbar-action-btn { position:relative; width:38px; height:38px; border:1px solid #d0d5dd; border-radius:9px; background:#fff; color:#344054; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; transition:all 0.2s ease; }
