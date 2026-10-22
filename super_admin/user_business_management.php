@@ -25,6 +25,25 @@ if (!function_exists('saUserBizChipClass')) {
     }
 }
 
+if (!function_exists('saGetUserAvatarGradient')) {
+    function saGetUserAvatarGradient($name) {
+        $gradients = [
+            'linear-gradient(135deg, #f43f5e, #fb7185)',
+            'linear-gradient(135deg, #6366f1, #818cf8)',
+            'linear-gradient(135deg, #0ea5e9, #38bdf8)',
+            'linear-gradient(135deg, #10b981, #34d399)',
+            'linear-gradient(135deg, #f59e0b, #fbbf24)',
+            'linear-gradient(135deg, #8b5cf6, #a78bfa)',
+            'linear-gradient(135deg, #ec4899, #f472b6)',
+            'linear-gradient(135deg, #14b8a6, #2dd4bf)',
+            'linear-gradient(135deg, #3b82f6, #60a5fa)',
+            'linear-gradient(135deg, #d97706, #f59e0b)'
+        ];
+        $idx = abs(crc32((string)$name)) % count($gradients);
+        return $gradients[$idx];
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     saRequireValidCsrf($_POST['csrf_token'] ?? '', $page_file);
 
@@ -253,7 +272,7 @@ if ($has_users) {
             LIMIT 1) AS verification_status"
         : "'unverified' AS verification_status";
 
-    $users_query = "SELECT u.id, u.full_name, u.email, u.phone, u.user_type, u.account_type, u.business_name,
+    $users_query = "SELECT u.id, u.full_name, u.email, u.phone, u.profile_image, u.user_type, u.account_type, u.business_name,
                            u.role_id, u.is_active, u.created_at, u.last_login,
                            r.name AS role_name,
                            {$verification_sql}
@@ -313,8 +332,19 @@ saRenderModuleHeader('User & Business Management', 'User & Business Management',
             <h3>Users and Account Controls</h3>
             <p class="module-subtext">View users, update role assignments, and activate/deactivate accounts.</p>
         </div>
+        <div class="d-flex align-items-center gap-2">
+            <span class="user-count-badge"><?php echo count($users); ?> Users</span>
+            <div class="view-mode-toggle" role="group" aria-label="View toggle">
+                <button type="button" class="view-mode-btn active" id="saViewModeCards" onclick="switchSaUserView('cards')" title="Card Grid View">
+                    <i class="fas fa-th-large"></i>
+                </button>
+                <button type="button" class="view-mode-btn" id="saViewModeTable" onclick="switchSaUserView('table')" title="Table Spreadsheet View">
+                    <i class="fas fa-list"></i>
+                </button>
+            </div>
+        </div>
     </div>
-    <form method="GET" class="module-form-grid" style="margin-bottom: 12px;">
+    <form method="GET" class="module-form-grid" style="margin-bottom: 16px;">
         <input type="text" class="form-control" name="search" placeholder="Search by name, email, business..." value="<?php echo htmlspecialchars($search); ?>">
         <select name="account_type" class="form-select">
             <option value="all" <?php echo $account_filter === 'all' ? 'selected' : ''; ?>>All Account Types</option>
@@ -340,7 +370,191 @@ saRenderModuleHeader('User & Business Management', 'User & Business Management',
     <?php if (!$has_users): ?>
         <div class="note-box">`users` table is unavailable in this environment.</div>
     <?php else: ?>
-        <div class="table-wrap">
+        <!-- Modern Card Grid View (Tiimi / Shop Owner Style) -->
+        <div class="user-card-grid" id="saUsersCardGrid">
+            <?php if (empty($users)): ?>
+                <div class="user-cards-empty">
+                    <i class="fas fa-users-slash fa-3x mb-3 text-muted" style="opacity: 0.5;"></i>
+                    <h5 class="fw-bold">No users found</h5>
+                    <p class="text-muted mb-0">No registered users matched the selected filter criteria.</p>
+                </div>
+            <?php else: ?>
+                <?php foreach ($users as $user): ?>
+                    <?php
+                        $user_id = (int)$user['id'];
+                        $full_name = trim((string)($user['full_name'] ?? 'Unknown User'));
+                        $full_name_safe = htmlspecialchars($full_name !== '' ? $full_name : 'Unknown User');
+                        $email_clean = htmlspecialchars((string)($user['email'] ?? ''));
+                        $phone_clean = htmlspecialchars((string)($user['phone'] ?? ''));
+                        $user_type = ucfirst((string)($user['user_type'] ?? 'user'));
+                        $account_type = ucfirst((string)($user['account_type'] ?? 'individual'));
+                        $business_name = trim((string)($user['business_name'] ?? ''));
+                        $role_name = !empty($user['role_name']) ? (string)$user['role_name'] : '';
+                        $is_active = (int)($user['is_active'] ?? 0) === 1;
+
+                        $verification = strtolower(trim((string)($user['verification_status'] ?? '')));
+                        if ($verification === '') {
+                            $verification = 'unverified';
+                        }
+
+                        // Avatar photo or initials gradient
+                        $photo_path = '';
+                        $has_real_photo = false;
+                        if (!empty($user['profile_image'])) {
+                            $raw_img = trim((string)$user['profile_image']);
+                            if (preg_match('/^https?:\/\//i', $raw_img)) {
+                                $photo_path = $raw_img;
+                                $has_real_photo = true;
+                            } else {
+                                $clean_img = ltrim($raw_img, '/');
+                                if (file_exists(dirname(__DIR__) . '/' . $clean_img)) {
+                                    $photo_path = '../' . $clean_img;
+                                    $has_real_photo = true;
+                                }
+                            }
+                        }
+
+                        $avatar_gradient = saGetUserAvatarGradient($full_name);
+                        $name_parts = preg_split('/\s+/', $full_name);
+                        $initials = '';
+                        if (!empty($name_parts[0])) {
+                            $initials .= mb_strtoupper(mb_substr($name_parts[0], 0, 1));
+                        }
+                        if (count($name_parts) > 1 && !empty($name_parts[count($name_parts) - 1])) {
+                            $initials .= mb_strtoupper(mb_substr($name_parts[count($name_parts) - 1], 0, 1));
+                        }
+                        if ($initials === '') {
+                            $initials = 'U';
+                        }
+
+                        // Status toggle SweetAlert confirmation data
+                        $next_is_active = !$is_active;
+                        $status_confirm_title = $next_is_active ? 'Activate User Account?' : 'Deactivate User Account?';
+                        $status_confirm_text = $next_is_active
+                            ? 'This user will regain access to platform modules.'
+                            : 'This user will be blocked from logging in until reactivated.';
+                        $status_confirm_button = $next_is_active ? 'Yes, Activate' : 'Yes, Deactivate';
+                        $status_confirm_color = $next_is_active ? '#166534' : '#b3261e';
+                    ?>
+                    <div class="user-card" id="userCard_<?php echo $user_id; ?>">
+                        <div class="user-card-header">
+                            <div class="d-flex align-items-center gap-1">
+                                <span class="user-id-tag">#<?php echo $user_id; ?></span>
+                                <span class="user-acct-badge <?php echo $account_type === 'Organization' ? 'badge-org' : 'badge-ind'; ?>">
+                                    <i class="<?php echo $account_type === 'Organization' ? 'fas fa-building' : 'fas fa-user'; ?>"></i>
+                                    <?php echo $account_type; ?>
+                                </span>
+                            </div>
+                            <div class="user-card-badges">
+                                <span class="status-chip <?php echo saUserBizChipClass($verification); ?>" style="font-size: 11px; padding: 2px 8px;">
+                                    <?php echo htmlspecialchars(ucfirst($verification)); ?>
+                                </span>
+                                <span class="user-status-pill <?php echo $is_active ? 'active' : 'inactive'; ?>">
+                                    <?php echo $is_active ? 'Active' : 'Inactive'; ?>
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="user-avatar-section">
+                            <div class="user-avatar-circle" style="<?php echo !$has_real_photo ? 'background: ' . $avatar_gradient . ';' : ''; ?>">
+                                <?php if ($has_real_photo): ?>
+                                    <img src="<?php echo htmlspecialchars($photo_path); ?>" alt="<?php echo $full_name_safe; ?>" class="user-avatar-img">
+                                <?php else: ?>
+                                    <span class="user-avatar-initials"><?php echo htmlspecialchars($initials); ?></span>
+                                <?php endif; ?>
+                            </div>
+                            <?php if ($business_name !== ''): ?>
+                                <span class="user-business-badge" title="<?php echo htmlspecialchars($business_name); ?>">
+                                    <i class="fas fa-store me-1"></i><?php echo htmlspecialchars($business_name); ?>
+                                </span>
+                            <?php endif; ?>
+                        </div>
+
+                        <h4 class="user-card-name" title="<?php echo $full_name_safe; ?>">
+                            <?php echo $full_name_safe; ?>
+                        </h4>
+                        <div class="user-card-subtitle">
+                            <span class="user-type-tag"><?php echo htmlspecialchars($user_type); ?></span>
+                            <?php if ($role_name !== ''): ?>
+                                <span class="text-muted">·</span>
+                                <span class="text-primary fw-semibold"><?php echo htmlspecialchars($role_name); ?></span>
+                            <?php endif; ?>
+                        </div>
+
+                        <div class="user-meta-container">
+                            <div class="user-meta-col">
+                                <span class="user-meta-label">Role Assignment</span>
+                                <span class="user-meta-val" title="<?php echo htmlspecialchars($role_name !== '' ? $role_name : 'No Role'); ?>">
+                                    <?php echo htmlspecialchars($role_name !== '' ? $role_name : 'No Role'); ?>
+                                </span>
+                            </div>
+                            <div class="user-meta-col">
+                                <span class="user-meta-label">Last Login</span>
+                                <span class="user-meta-val" title="<?php echo htmlspecialchars(saFormatDateTime($user['last_login'] ?? null, 'M d, Y h:i A', 'Never')); ?>">
+                                    <?php echo htmlspecialchars(saFormatDateTime($user['last_login'] ?? null, 'M d, Y', 'Never')); ?>
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="user-contact-list">
+                            <div class="user-contact-item" title="<?php echo $email_clean; ?>">
+                                <i class="far fa-envelope"></i>
+                                <span><?php echo $email_clean !== '' ? $email_clean : 'No email'; ?></span>
+                            </div>
+                            <div class="user-contact-item" title="<?php echo $phone_clean; ?>">
+                                <i class="fas fa-phone-alt"></i>
+                                <span><?php echo $phone_clean !== '' ? $phone_clean : 'No phone'; ?></span>
+                            </div>
+                            <div class="user-contact-item" title="Joined <?php echo htmlspecialchars(saFormatDateTime($user['created_at'] ?? null, 'M d, Y', 'N/A')); ?>">
+                                <i class="far fa-calendar-alt"></i>
+                                <span>Joined <?php echo htmlspecialchars(saFormatDateTime($user['created_at'] ?? null, 'M d, Y', 'N/A')); ?></span>
+                            </div>
+                        </div>
+
+                        <div class="user-card-actions">
+                            <?php if ($has_roles): ?>
+                                <form method="POST" class="user-role-form">
+                                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+                                    <input type="hidden" name="action" value="update_user_role">
+                                    <input type="hidden" name="user_id" value="<?php echo $user_id; ?>">
+                                    <div class="input-group input-group-sm">
+                                        <select name="role_id" class="form-select user-role-select">
+                                            <option value="">No Role</option>
+                                            <?php foreach ($roles as $role): ?>
+                                                <option value="<?php echo (int)$role['id']; ?>" <?php echo ((int)$user['role_id'] === (int)$role['id']) ? 'selected' : ''; ?>>
+                                                    <?php echo htmlspecialchars((string)$role['name']); ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                        <button type="submit" class="btn btn-outline-primary user-role-btn">Save</button>
+                                    </div>
+                                </form>
+                            <?php endif; ?>
+
+                            <form method="POST" class="user-status-form">
+                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+                                <input type="hidden" name="action" value="toggle_user_status">
+                                <input type="hidden" name="user_id" value="<?php echo $user_id; ?>">
+                                <input type="hidden" name="next_status" value="<?php echo $is_active ? 0 : 1; ?>">
+                                <button type="submit"
+                                        class="btn btn-sm w-100 <?php echo $is_active ? 'btn-outline-danger' : 'btn-outline-success'; ?> user-toggle-btn"
+                                        data-sa-confirm="1"
+                                        data-sa-confirm-title="<?php echo htmlspecialchars($status_confirm_title, ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-sa-confirm-text="<?php echo htmlspecialchars($status_confirm_text, ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-sa-confirm-confirm-text="<?php echo htmlspecialchars($status_confirm_button, ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-sa-confirm-confirm-color="<?php echo htmlspecialchars($status_confirm_color, ENT_QUOTES, 'UTF-8'); ?>">
+                                    <i class="fas <?php echo $is_active ? 'fa-user-slash' : 'fa-user-check'; ?> me-1"></i>
+                                    <?php echo $is_active ? 'Deactivate Account' : 'Activate Account'; ?>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
+
+        <!-- Table View (Preserved as alternative spreadsheet view) -->
+        <div class="table-wrap d-none" id="saUsersTableView">
             <table class="module-table">
                 <thead>
                     <tr>
@@ -560,5 +774,40 @@ saRenderModuleHeader('User & Business Management', 'User & Business Management',
         </div>
     <?php endif; ?>
 </div>
+
+<script>
+function switchSaUserView(mode) {
+    const cardGrid = document.getElementById('saUsersCardGrid');
+    const tableView = document.getElementById('saUsersTableView');
+    const btnCards = document.getElementById('saViewModeCards');
+    const btnTable = document.getElementById('saViewModeTable');
+
+    if (!cardGrid || !tableView) return;
+
+    if (mode === 'table') {
+        cardGrid.classList.add('d-none');
+        tableView.classList.remove('d-none');
+        if (btnCards) btnCards.classList.remove('active');
+        if (btnTable) btnTable.classList.add('active');
+        localStorage.setItem('sa_user_biz_view_mode', 'table');
+    } else {
+        cardGrid.classList.remove('d-none');
+        tableView.classList.add('d-none');
+        if (btnCards) btnCards.classList.add('active');
+        if (btnTable) btnTable.classList.remove('active');
+        localStorage.setItem('sa_user_biz_view_mode', 'cards');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const savedView = localStorage.getItem('sa_user_biz_view_mode');
+    if (savedView === 'table') {
+        switchSaUserView('table');
+    } else {
+        switchSaUserView('cards');
+    }
+});
+</script>
+
 <?php
 saRenderModuleFooter();
