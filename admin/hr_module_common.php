@@ -74,16 +74,20 @@ if (!function_exists('hrTableExists')) {
 }
 
 if (!function_exists('hrColumnExists')) {
-    function hrColumnExists($conn, $table_name, $column_name) {
+    function hrColumnExists($conn, $table_name, $column_name, $fresh = false) {
         static $cache = [];
         $table_name = trim((string)$table_name);
         $column_name = trim((string)$column_name);
         $cache_key = $table_name . '.' . $column_name;
 
+        if ($fresh && array_key_exists($cache_key, $cache)) {
+            unset($cache[$cache_key]);
+        }
+
         if ($table_name === '' || $column_name === '' || !$conn) {
             return false;
         }
-        if (array_key_exists($cache_key, $cache)) {
+        if (!$fresh && array_key_exists($cache_key, $cache)) {
             return $cache[$cache_key];
         }
         if (!hrTableExists($conn, $table_name)) {
@@ -217,9 +221,29 @@ if (!function_exists('hrEnsureEmployeeNameFields')) {
         }
         if (!hrColumnExists($conn, 'employees', 'middle_initial')) {
             hrTrySchemaQuery($conn, "ALTER TABLE employees ADD COLUMN middle_initial VARCHAR(10) NULL DEFAULT NULL AFTER first_name");
+            hrColumnExists($conn, 'employees', 'middle_initial', true);
         }
         if (!hrColumnExists($conn, 'employees', 'suffix')) {
             hrTrySchemaQuery($conn, "ALTER TABLE employees ADD COLUMN suffix VARCHAR(20) NULL DEFAULT NULL AFTER last_name");
+            hrColumnExists($conn, 'employees', 'suffix', true);
+        }
+        hrEnsureUserNameFields($conn);
+        return true;
+    }
+}
+
+if (!function_exists('hrEnsureUserNameFields')) {
+    function hrEnsureUserNameFields($conn) {
+        if (!$conn || !hrTableExists($conn, 'users')) {
+            return false;
+        }
+        if (!hrColumnExists($conn, 'users', 'middle_name')) {
+            hrTrySchemaQuery($conn, "ALTER TABLE users ADD COLUMN middle_name VARCHAR(80) NULL DEFAULT NULL AFTER full_name");
+            hrColumnExists($conn, 'users', 'middle_name', true);
+        }
+        if (!hrColumnExists($conn, 'users', 'suffix')) {
+            hrTrySchemaQuery($conn, "ALTER TABLE users ADD COLUMN suffix VARCHAR(20) NULL DEFAULT NULL AFTER middle_name");
+            hrColumnExists($conn, 'users', 'suffix', true);
         }
         return true;
     }
@@ -360,6 +384,7 @@ if (!function_exists('hrEnsureNormalizedPositionModel')) {
         }
 
         hrEnsureEmployeeNameFields($conn);
+        hrEnsureUserNameFields($conn);
 
         if (hrTableExists($conn, 'roles')) {
             if (!hrColumnExists($conn, 'roles', 'department_id')) {

@@ -200,6 +200,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             $query = "UPDATE employees SET department_id = ? WHERE id IN ($ids_placeholder)";
             $stmt = mysqli_prepare($conn, $query);
+            if (!$stmt) {
+                $_SESSION['error'] = "Failed to prepare bulk assignment: " . mysqli_error($conn);
+                header("Location: employees.php");
+                exit();
+            }
 
             $types = 'i' . str_repeat('i', count($employee_ids));
             $params_to_bind = array_merge([$department_id], $employee_ids);
@@ -298,9 +303,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $emp_lookup_sql .= " AND {$employee_scope_sql}";
         }
         $emp_stmt = mysqli_prepare($conn, $emp_lookup_sql);
-        mysqli_stmt_bind_param($emp_stmt, "i", $employee_id_to_link);
-        mysqli_stmt_execute($emp_stmt);
-        $emp_result = mysqli_stmt_get_result($emp_stmt);
+        if ($emp_stmt) {
+            mysqli_stmt_bind_param($emp_stmt, "i", $employee_id_to_link);
+            mysqli_stmt_execute($emp_stmt);
+            $emp_result = mysqli_stmt_get_result($emp_stmt);
+        } else {
+            $emp_result = false;
+        }
 
         if ($emp_result && mysqli_num_rows($emp_result) > 0) {
             $employee = mysqli_fetch_assoc($emp_result);
@@ -310,20 +319,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // Check if user account with this email already exists
             $user_check_stmt = mysqli_prepare($conn, "SELECT id FROM users WHERE email = ?");
-            mysqli_stmt_bind_param($user_check_stmt, "s", $email);
-            mysqli_stmt_execute($user_check_stmt);
-            $user_check_result = mysqli_stmt_get_result($user_check_stmt);
+            $has_existing_email = false;
+            if ($user_check_stmt) {
+                mysqli_stmt_bind_param($user_check_stmt, "s", $email);
+                mysqli_stmt_execute($user_check_stmt);
+                $user_check_result = mysqli_stmt_get_result($user_check_stmt);
+                $has_existing_email = ($user_check_result && mysqli_num_rows($user_check_result) > 0);
+                mysqli_stmt_close($user_check_stmt);
+            }
 
-            if (mysqli_num_rows($user_check_result) > 0) {
+            if ($has_existing_email) {
                 $_SESSION['error'] = "An account with this email already exists. Cannot create a new one.";
             } elseif (empty($user_password) || empty($user_role_id)) {
                 $_SESSION['error'] = "Password and Role are required.";
             } else {
                 // Create user account
                 $hashed_password = password_hash($user_password, PASSWORD_DEFAULT);
-                $user_query = "INSERT INTO users (full_name, email, phone, password, user_type, role_id, is_active) VALUES (?, ?, ?, ?, 'employee', ?, 1)";
-                $stmt_user = mysqli_prepare($conn, $user_query);
-                mysqli_stmt_bind_param($stmt_user, "ssssi", $full_name, $email, $phone, $hashed_password, $user_role_id);
+                $has_u_middle = function_exists('hrColumnExists') && hrColumnExists($conn, 'users', 'middle_name');
+                $has_u_suffix = function_exists('hrColumnExists') && hrColumnExists($conn, 'users', 'suffix');
+
+                $stmt_user = false;
+                if ($has_u_middle && $has_u_suffix) {
+                    $user_query = "INSERT INTO users (full_name, middle_name, suffix, email, phone, password, user_type, role_id, is_active) VALUES (?, ?, ?, ?, ?, ?, 'employee', ?, 1)";
+                    $stmt_user = mysqli_prepare($conn, $user_query);
+                    if ($stmt_user) {
+                        $emp_mi = $employee['middle_initial'] ?? '';
+                        $emp_suf = $employee['suffix'] ?? '';
+                        mysqli_stmt_bind_param($stmt_user, "ssssssi", $full_name, $emp_mi, $emp_suf, $email, $phone, $hashed_password, $user_role_id);
+                    }
+                }
+
+                if (!$stmt_user) {
+                    $user_query = "INSERT INTO users (full_name, email, phone, password, user_type, role_id, is_active) VALUES (?, ?, ?, ?, 'employee', ?, 1)";
+                    $stmt_user = mysqli_prepare($conn, $user_query);
+                    if ($stmt_user) {
+                        mysqli_stmt_bind_param($stmt_user, "ssssi", $full_name, $email, $phone, $hashed_password, $user_role_id);
+                    }
+                }
+
+                if (!$stmt_user) {
+                    $_SESSION['error'] = "User account creation failed: " . mysqli_error($conn);
+                    header("Location: employees.php");
+                    exit();
+                }
                 
                 if (mysqli_stmt_execute($stmt_user)) {
                     $new_user_id = mysqli_insert_id($conn);
@@ -343,16 +381,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // Link to employee record
                     $link_query = "UPDATE employees SET user_id = ? WHERE id = ?";
                     $stmt_link = mysqli_prepare($conn, $link_query);
-                    mysqli_stmt_bind_param($stmt_link, "ii", $new_user_id, $employee_id_to_link);
-                    
-                    if (mysqli_stmt_execute($stmt_link)) {
-                        require_once __DIR__ . '/../includes/rider_helper.php';
-                        isDeliveryDriverUser($conn, $new_user_id);
-                        $_SESSION['success'] = "User account created and linked to employee successfully.";
+                    if ($stmt_link) {
+                        mysqli_stmt_bind_param($stmt_link, "ii", $new_user_id, $employee_id_to_link);
+                        if (mysqli_stmt_execute($stmt_link)) {
+                            require_once __DIR__ . '/../includes/rider_helper.php';
+                            isDeliveryDriverUser($conn, $new_user_id);
+                            $_SESSION['success'] = "User account created and linked to employee successfully.";
+                        } else {
+                            $_SESSION['error'] = "Account created, but failed to link to employee record.";
+                        }
+                        mysqli_stmt_close($stmt_link);
                     } else {
-                        $_SESSION['error'] = "Account created, but failed to link to employee record.";
+                        $_SESSION['error'] = "Account created, but failed to prepare link to employee record.";
                     }
-                    mysqli_stmt_close($stmt_link);
                 } else {
                     $_SESSION['error'] = "User account creation failed: " . mysqli_error($conn);
                 }
@@ -441,13 +482,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $user_check_stmt = mysqli_prepare($conn, "SELECT id FROM users WHERE email = ?");
-        mysqli_stmt_bind_param($user_check_stmt, "s", $email);
-        mysqli_stmt_execute($user_check_stmt);
-        $user_check_result = mysqli_stmt_get_result($user_check_stmt);
+        $user_check_has_rows = false;
+        if ($user_check_stmt) {
+            mysqli_stmt_bind_param($user_check_stmt, "s", $email);
+            mysqli_stmt_execute($user_check_stmt);
+            $user_check_result = mysqli_stmt_get_result($user_check_stmt);
+            $user_check_has_rows = ($user_check_result && mysqli_num_rows($user_check_result) > 0);
+            mysqli_stmt_close($user_check_stmt);
+        }
 
         if ($create_user && (empty($user_password) || empty($user_role_id))) {
             $_SESSION['error'] = "Password and Role are required when creating a user account.";
-        } elseif ($create_user && mysqli_num_rows($user_check_result) > 0) {
+        } elseif ($create_user && $user_check_has_rows) {
             $_SESSION['error'] = "Email is already registered to a user account.";
         } elseif ($first_name === '' || $last_name === '' || $email === '' || $phone === '') {
             $_SESSION['error'] = "Please fill in all required personal fields (First Name, Last Name, Email, and Phone).";
@@ -483,10 +529,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($create_user) {
                 $hashed_password = password_hash($user_password, PASSWORD_DEFAULT);
                 $full_name = formatEmployeeFullName($first_name, $middle_initial, $last_name, $suffix);
-                // Changed user_type from 'admin' to 'employee'
-                $user_query = "INSERT INTO users (full_name, middle_name, suffix, email, phone, password, user_type, role_id, is_active) VALUES (?, ?, ?, ?, ?, ?, 'employee', ?, 1)";
-                $stmt_user = mysqli_prepare($conn, $user_query);
-                mysqli_stmt_bind_param($stmt_user, "ssssssi", $full_name, $middle_initial, $suffix, $email, $phone, $hashed_password, $user_role_id);
+
+                if (function_exists('hrEnsureUserNameFields')) {
+                    hrEnsureUserNameFields($conn);
+                }
+
+                $has_u_middle = function_exists('hrColumnExists') && hrColumnExists($conn, 'users', 'middle_name');
+                $has_u_suffix = function_exists('hrColumnExists') && hrColumnExists($conn, 'users', 'suffix');
+
+                $stmt_user = false;
+                if ($has_u_middle && $has_u_suffix) {
+                    $user_query = "INSERT INTO users (full_name, middle_name, suffix, email, phone, password, user_type, role_id, is_active) VALUES (?, ?, ?, ?, ?, ?, 'employee', ?, 1)";
+                    $stmt_user = mysqli_prepare($conn, $user_query);
+                    if ($stmt_user) {
+                        mysqli_stmt_bind_param($stmt_user, "ssssssi", $full_name, $middle_initial, $suffix, $email, $phone, $hashed_password, $user_role_id);
+                    }
+                } elseif ($has_u_middle) {
+                    $user_query = "INSERT INTO users (full_name, middle_name, email, phone, password, user_type, role_id, is_active) VALUES (?, ?, ?, ?, ?, 'employee', ?, 1)";
+                    $stmt_user = mysqli_prepare($conn, $user_query);
+                    if ($stmt_user) {
+                        mysqli_stmt_bind_param($stmt_user, "sssssi", $full_name, $middle_initial, $email, $phone, $hashed_password, $user_role_id);
+                    }
+                } elseif ($has_u_suffix) {
+                    $user_query = "INSERT INTO users (full_name, suffix, email, phone, password, user_type, role_id, is_active) VALUES (?, ?, ?, ?, ?, 'employee', ?, 1)";
+                    $stmt_user = mysqli_prepare($conn, $user_query);
+                    if ($stmt_user) {
+                        mysqli_stmt_bind_param($stmt_user, "sssssi", $full_name, $suffix, $email, $phone, $hashed_password, $user_role_id);
+                    }
+                }
+
+                if (!$stmt_user) {
+                    $user_query = "INSERT INTO users (full_name, email, phone, password, user_type, role_id, is_active) VALUES (?, ?, ?, ?, 'employee', ?, 1)";
+                    $stmt_user = mysqli_prepare($conn, $user_query);
+                    if ($stmt_user) {
+                        mysqli_stmt_bind_param($stmt_user, "ssssi", $full_name, $email, $phone, $hashed_password, $user_role_id);
+                    }
+                }
+
+                if (!$stmt_user) {
+                    $_SESSION['error'] = "User account creation failed: " . mysqli_error($conn);
+                    header("Location: employees.php");
+                    exit();
+                }
+
                 if (mysqli_stmt_execute($stmt_user)) {
                     $user_id_for_employee = mysqli_insert_id($conn); // Get the ID of the newly created user
                     if ($is_partner_scoped_hr) {
@@ -498,7 +583,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             mysqli_stmt_close($stmt_user);
                             $_SESSION['error'] = "Unable to secure partner scope for the new user account. Please run Tenant Scope Migration and try again.";
                             header("Location: employees.php");
-                            exit;
+                            exit();
                         }
                     }
                     $_SESSION['success'] = "User account created successfully.";
@@ -507,7 +592,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // If user creation fails, don't add employee record
                     mysqli_stmt_close($stmt_user);
                     header("Location: employees.php");
-                    exit;
+                    exit();
                 }
                 mysqli_stmt_close($stmt_user);
             }
@@ -554,6 +639,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = mysqli_prepare($conn, $query);
             if ($stmt) {
                 mysqli_stmt_bind_param($stmt, "ssssssisssssiissssdds", $employee_id, $first_name, $middle_initial, $last_name, $suffix, $email, $user_id_param, $phone, $sss, $philhealth, $pagibig, $tin, $dept_id_param, $pos_id_param, $position, $hire_date, $employment_type, $employment_basis, $salary, $daily_rate, $photo_db_path);
+            } else {
+                // Dynamic fallback if optional columns are absent in database schema
+                $all_cols = [
+                    'employee_id' => ['s', $employee_id],
+                    'first_name' => ['s', $first_name],
+                    'middle_initial' => ['s', $middle_initial],
+                    'last_name' => ['s', $last_name],
+                    'suffix' => ['s', $suffix],
+                    'email' => ['s', $email],
+                    'user_id' => ['nullif', $user_id_param],
+                    'phone' => ['s', $phone],
+                    'sss_number' => ['s', $sss],
+                    'philhealth_number' => ['s', $philhealth],
+                    'pagibig_number' => ['s', $pagibig],
+                    'tin_number' => ['s', $tin],
+                    'department_id' => ['nullif', $dept_id_param],
+                    'position_id' => ['nullif', $pos_id_param],
+                    'position' => ['s', $position],
+                    'hire_date' => ['s', $hire_date],
+                    'employment_type' => ['s', $employment_type],
+                    'employment_basis' => ['s', $employment_basis],
+                    'salary' => ['d', $salary],
+                    'daily_rate' => ['d', $daily_rate],
+                    'photo' => ['s', $photo_db_path],
+                    'status' => ['s', 'active']
+                ];
+
+                $ins_cols = [];
+                $ins_ph = [];
+                $ins_types = '';
+                $ins_params = [];
+
+                foreach ($all_cols as $c_name => $c_def) {
+                    if (hrColumnExists($conn, 'employees', $c_name)) {
+                        $ins_cols[] = "`$c_name`";
+                        if ($c_def[0] === 'nullif') {
+                            $ins_ph[] = 'NULLIF(?,0)';
+                            $ins_types .= 'i';
+                            $ins_params[] = (int)$c_def[1];
+                        } else {
+                            $ins_ph[] = '?';
+                            $ins_types .= $c_def[0];
+                            $ins_params[] = $c_def[1];
+                        }
+                    }
+                }
+
+                if (!empty($ins_cols)) {
+                    $dyn_query = "INSERT INTO employees (" . implode(', ', $ins_cols) . ") VALUES (" . implode(', ', $ins_ph) . ")";
+                    $stmt = mysqli_prepare($conn, $dyn_query);
+                    if ($stmt) {
+                        mysqli_stmt_bind_param($stmt, $ins_types, ...$ins_params);
+                    }
+                }
+            }
+
+            if ($stmt) {
 
                 if (mysqli_stmt_execute($stmt)) {
                     $new_emp_pk = mysqli_insert_id($conn);
@@ -648,9 +790,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $query = "UPDATE employees SET first_name=?, middle_initial=?, last_name=?, suffix=?, email=?, phone=?, department_id=NULLIF(?,0), position_id=NULLIF(?,0), position=?, hire_date=?, employment_type=?, employment_basis=?, salary=?, daily_rate=?, sss_number=?, philhealth_number=?, pagibig_number=?, tin_number=? WHERE id=?";
         $stmt = mysqli_prepare($conn, $query);
-        mysqli_stmt_bind_param($stmt, "ssssssiissssddssssi", $first_name, $middle_initial, $last_name, $suffix, $email, $phone, $dept_id_param, $pos_id_param, $position, $hire_date, $employment_type, $employment_basis, $salary, $daily_rate, $sss, $philhealth, $pagibig, $tin, $id);
+        if ($stmt) {
+            mysqli_stmt_bind_param($stmt, "ssssssiissssddssssi", $first_name, $middle_initial, $last_name, $suffix, $email, $phone, $dept_id_param, $pos_id_param, $position, $hire_date, $employment_type, $employment_basis, $salary, $daily_rate, $sss, $philhealth, $pagibig, $tin, $id);
+        } else {
+            // Dynamic fallback update for employees
+            $all_upd = [
+                'first_name' => ['s', $first_name],
+                'middle_initial' => ['s', $middle_initial],
+                'last_name' => ['s', $last_name],
+                'suffix' => ['s', $suffix],
+                'email' => ['s', $email],
+                'phone' => ['s', $phone],
+                'department_id' => ['nullif', $dept_id_param],
+                'position_id' => ['nullif', $pos_id_param],
+                'position' => ['s', $position],
+                'hire_date' => ['s', $hire_date],
+                'employment_type' => ['s', $employment_type],
+                'employment_basis' => ['s', $employment_basis],
+                'salary' => ['d', $salary],
+                'daily_rate' => ['d', $daily_rate],
+                'sss_number' => ['s', $sss],
+                'philhealth_number' => ['s', $philhealth],
+                'pagibig_number' => ['s', $pagibig],
+                'tin_number' => ['s', $tin],
+            ];
+            $upd_sets = [];
+            $upd_types = '';
+            $upd_params = [];
+            foreach ($all_upd as $col => $cfg) {
+                if (hrColumnExists($conn, 'employees', $col)) {
+                    if ($cfg[0] === 'nullif') {
+                        $upd_sets[] = "`$col` = NULLIF(?,0)";
+                        $upd_types .= 'i';
+                        $upd_params[] = (int)$cfg[1];
+                    } else {
+                        $upd_sets[] = "`$col` = ?";
+                        $upd_types .= $cfg[0];
+                        $upd_params[] = $cfg[1];
+                    }
+                }
+            }
+            if (!empty($upd_sets)) {
+                $upd_query = "UPDATE employees SET " . implode(', ', $upd_sets) . " WHERE id = ?";
+                $upd_types .= 'i';
+                $upd_params[] = $id;
+                $stmt = mysqli_prepare($conn, $upd_query);
+                if ($stmt) {
+                    mysqli_stmt_bind_param($stmt, $upd_types, ...$upd_params);
+                }
+            }
+        }
+        if (!$stmt) {
+            $_SESSION['error'] = "Error preparing employee update: " . mysqli_error($conn);
+            header("Location: employees.php");
+            exit();
+        }
 
-        if ($stmt && mysqli_stmt_execute($stmt)) {
+        if (mysqli_stmt_execute($stmt)) {
             // Handle optional photo upload
             if (!empty($_FILES['employee_photo']['name']) && $_FILES['employee_photo']['error'] === UPLOAD_ERR_OK) {
                 $allowed_exts = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
@@ -697,9 +893,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($sync_user_id > 0) {
                 $full_name = formatEmployeeFullName($first_name, $middle_initial, $last_name, $suffix);
-                $u_upd = mysqli_prepare($conn, "UPDATE users SET full_name = ?, middle_name = ?, suffix = ? WHERE id = ?");
+                $has_u_middle = function_exists('hrColumnExists') && hrColumnExists($conn, 'users', 'middle_name');
+                $has_u_suffix = function_exists('hrColumnExists') && hrColumnExists($conn, 'users', 'suffix');
+
+                $u_upd = false;
+                if ($has_u_middle && $has_u_suffix) {
+                    $u_upd = mysqli_prepare($conn, "UPDATE users SET full_name = ?, middle_name = ?, suffix = ? WHERE id = ?");
+                    if ($u_upd) {
+                        mysqli_stmt_bind_param($u_upd, "sssi", $full_name, $middle_initial, $suffix, $sync_user_id);
+                    }
+                } elseif ($has_u_middle) {
+                    $u_upd = mysqli_prepare($conn, "UPDATE users SET full_name = ?, middle_name = ? WHERE id = ?");
+                    if ($u_upd) {
+                        mysqli_stmt_bind_param($u_upd, "ssi", $full_name, $middle_initial, $sync_user_id);
+                    }
+                } elseif ($has_u_suffix) {
+                    $u_upd = mysqli_prepare($conn, "UPDATE users SET full_name = ?, suffix = ? WHERE id = ?");
+                    if ($u_upd) {
+                        mysqli_stmt_bind_param($u_upd, "ssi", $full_name, $suffix, $sync_user_id);
+                    }
+                }
+
+                if (!$u_upd) {
+                    $u_upd = mysqli_prepare($conn, "UPDATE users SET full_name = ? WHERE id = ?");
+                    if ($u_upd) {
+                        mysqli_stmt_bind_param($u_upd, "si", $full_name, $sync_user_id);
+                    }
+                }
+
                 if ($u_upd) {
-                    mysqli_stmt_bind_param($u_upd, "sssi", $full_name, $middle_initial, $suffix, $sync_user_id);
                     mysqli_stmt_execute($u_upd);
                     mysqli_stmt_close($u_upd);
                 }
@@ -765,26 +987,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $query = "UPDATE employees SET status = ? WHERE id = ?";
             $stmt = mysqli_prepare($conn, $query);
-            mysqli_stmt_bind_param($stmt, "si", $new_status, $employee_id);
-
-            if ($stmt && mysqli_stmt_execute($stmt)) {
-                employeesSyncLinkedUserStatus($conn, (int)($employee_context['user_id'] ?? 0), $new_status);
-                if ($new_status === 'terminated') {
-                    employeesEnsureTurnoverRecord($conn, $employee_id, (int)($_SESSION['user_id'] ?? 0));
-                }
-                $_SESSION['success'] = "Employee status updated to " . ucfirst(str_replace('_', ' ', $new_status)) . ".";
-                employeesRespond(true, $_SESSION['success'], [
-                    'new_status' => $new_status,
-                    'status_label' => ucfirst(str_replace('_', ' ', $new_status)),
-                    'status_badge_class' => 'badge-' . str_replace('_', '-', $new_status),
-                    'employee_id' => $employee_id
-                ]);
-            } else {
-                $_SESSION['error'] = "Unable to update status.";
-                employeesRespond(false, $_SESSION['error']);
-            }
             if ($stmt) {
+                mysqli_stmt_bind_param($stmt, "si", $new_status, $employee_id);
+                if (mysqli_stmt_execute($stmt)) {
+                    employeesSyncLinkedUserStatus($conn, (int)($employee_context['user_id'] ?? 0), $new_status);
+                    if ($new_status === 'terminated') {
+                        employeesEnsureTurnoverRecord($conn, $employee_id, (int)($_SESSION['user_id'] ?? 0));
+                    }
+                    $_SESSION['success'] = "Employee status updated to " . ucfirst(str_replace('_', ' ', $new_status)) . ".";
+                    employeesRespond(true, $_SESSION['success'], [
+                        'new_status' => $new_status,
+                        'status_label' => ucfirst(str_replace('_', ' ', $new_status)),
+                        'status_badge_class' => 'badge-' . str_replace('_', '-', $new_status),
+                        'employee_id' => $employee_id
+                    ]);
+                } else {
+                    $_SESSION['error'] = "Unable to update status: " . mysqli_error($conn);
+                    employeesRespond(false, $_SESSION['error']);
+                }
                 mysqli_stmt_close($stmt);
+            } else {
+                $_SESSION['error'] = "Failed to prepare employee status update: " . mysqli_error($conn);
+                employeesRespond(false, $_SESSION['error']);
             }
         }
     }
