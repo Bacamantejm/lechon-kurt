@@ -434,80 +434,92 @@ saRenderModuleHeader('User & Business Management', 'User & Business Management',
                         $status_confirm_color = $next_is_active ? '#166534' : '#b3261e';
                     ?>
                     <div class="user-card" id="userCard_<?php echo $user_id; ?>">
-                        <!-- Top Row: Avatar with status dot on LEFT, 3-dots on RIGHT -->
-                        <div class="user-card-top">
-                            <div class="user-avatar-wrap">
-                                <div class="user-avatar-circle" style="<?php echo !$has_real_photo ? 'background: ' . $avatar_gradient . ';' : ''; ?>">
-                                    <?php if ($has_real_photo): ?>
-                                        <img src="<?php echo htmlspecialchars($photo_path); ?>" alt="<?php echo $full_name_safe; ?>" class="user-avatar-img">
-                                    <?php else: ?>
-                                        <span class="user-avatar-initials"><?php echo htmlspecialchars($initials); ?></span>
-                                    <?php endif; ?>
-                                </div>
-                                <span class="user-status-dot <?php echo $is_active ? 'active' : 'inactive'; ?>" title="<?php echo $is_active ? 'Active' : 'Inactive'; ?>"></span>
-                            </div>
-
-                            <div class="dropdown">
-                                <button type="button" class="user-more-btn" data-bs-toggle="dropdown" aria-expanded="false" title="Actions">
-                                    <i class="fas fa-ellipsis-h"></i>
-                                </button>
-                                <ul class="dropdown-menu dropdown-menu-end shadow-sm" style="border-radius: 10px; border: 1px solid #eaecf0; font-size: 13px; min-width: 180px;">
-                                    <?php if ($has_roles): ?>
+                        <!-- Top Header: ID tag on left, status pill and 3-dots on right -->
+                        <div class="user-card-header">
+                            <span class="user-id-tag">#<?php echo $user_id; ?></span>
+                            <div class="user-card-badge-wrap">
+                                <span class="user-status-pill <?php echo $is_active ? 'active' : 'inactive'; ?>" id="cardStatusPill_<?php echo $user_id; ?>">
+                                    <?php echo $is_active ? 'Active' : 'Inactive'; ?>
+                                </span>
+                                <div class="dropdown">
+                                    <button type="button" class="user-more-btn" data-bs-toggle="dropdown" aria-expanded="false" title="More Actions">
+                                        <i class="fas fa-ellipsis-h"></i>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end shadow-sm" style="border-radius: 10px; border: 1px solid #eaecf0; font-size: 13px; min-width: 175px;">
+                                        <?php if ($has_roles): ?>
+                                            <li>
+                                                <a class="dropdown-item py-2 text-primary" href="javascript:void(0)" onclick="openAssignRoleModal(<?php echo $user_id; ?>, <?php echo htmlspecialchars(json_encode($full_name), ENT_QUOTES); ?>, <?php echo (int)($user['role_id'] ?? 0); ?>)">
+                                                    <i class="fas fa-user-shield me-2"></i> Reassign Role
+                                                </a>
+                                            </li>
+                                            <li><hr class="dropdown-divider my-1"></li>
+                                        <?php endif; ?>
                                         <li>
-                                            <a class="dropdown-item py-2 text-primary" href="javascript:void(0)" onclick="openAssignRoleModal(<?php echo $user_id; ?>, <?php echo htmlspecialchars(json_encode($full_name), ENT_QUOTES); ?>, <?php echo (int)($user['role_id'] ?? 0); ?>)">
-                                                <i class="fas fa-user-shield me-2"></i> Assign Role
-                                            </a>
+                                            <form method="POST" style="margin: 0;">
+                                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+                                                <input type="hidden" name="action" value="toggle_user_status">
+                                                <input type="hidden" name="user_id" value="<?php echo $user_id; ?>">
+                                                <input type="hidden" name="next_status" value="<?php echo $is_active ? 0 : 1; ?>">
+                                                <button type="submit"
+                                                        class="dropdown-item py-2 <?php echo $is_active ? 'text-danger' : 'text-success'; ?>"
+                                                        data-sa-confirm="1"
+                                                        data-sa-confirm-title="<?php echo htmlspecialchars($status_confirm_title, ENT_QUOTES, 'UTF-8'); ?>"
+                                                        data-sa-confirm-text="<?php echo htmlspecialchars($status_confirm_text, ENT_QUOTES, 'UTF-8'); ?>"
+                                                        data-sa-confirm-confirm-text="<?php echo htmlspecialchars($status_confirm_button, ENT_QUOTES, 'UTF-8'); ?>"
+                                                        data-sa-confirm-confirm-color="<?php echo htmlspecialchars($status_confirm_color, ENT_QUOTES, 'UTF-8'); ?>">
+                                                    <i class="fas <?php echo $is_active ? 'fa-user-slash' : 'fa-user-check'; ?> me-2"></i>
+                                                    <?php echo $is_active ? 'Deactivate Account' : 'Activate Account'; ?>
+                                                </button>
+                                            </form>
                                         </li>
-                                        <li><hr class="dropdown-divider my-1"></li>
-                                    <?php endif; ?>
-                                    <li>
-                                        <form method="POST" style="margin: 0;">
-                                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
-                                            <input type="hidden" name="action" value="toggle_user_status">
-                                            <input type="hidden" name="user_id" value="<?php echo $user_id; ?>">
-                                            <input type="hidden" name="next_status" value="<?php echo $is_active ? 0 : 1; ?>">
-                                            <button type="submit"
-                                                    class="dropdown-item py-2 <?php echo $is_active ? 'text-danger' : 'text-success'; ?>"
-                                                    data-sa-confirm="1"
-                                                    data-sa-confirm-title="<?php echo htmlspecialchars($status_confirm_title, ENT_QUOTES, 'UTF-8'); ?>"
-                                                    data-sa-confirm-text="<?php echo htmlspecialchars($status_confirm_text, ENT_QUOTES, 'UTF-8'); ?>"
-                                                    data-sa-confirm-confirm-text="<?php echo htmlspecialchars($status_confirm_button, ENT_QUOTES, 'UTF-8'); ?>"
-                                                    data-sa-confirm-confirm-color="<?php echo htmlspecialchars($status_confirm_color, ENT_QUOTES, 'UTF-8'); ?>">
-                                                <i class="fas <?php echo $is_active ? 'fa-user-slash' : 'fa-user-check'; ?> me-2"></i>
-                                                <?php echo $is_active ? 'Deactivate Account' : 'Activate Account'; ?>
-                                            </button>
-                                        </form>
-                                    </li>
-                                </ul>
+                                    </ul>
+                                </div>
                             </div>
                         </div>
 
-                        <!-- User Name & Role / Position (Left aligned) -->
-                        <h4 class="user-card-name" title="<?php echo $full_name_safe; ?>">
-                            <?php echo $full_name_safe; ?>
-                        </h4>
-                        <div class="user-card-role" title="<?php echo htmlspecialchars($role_name !== '' ? $role_name : $user_type); ?>">
-                            <?php echo htmlspecialchars($role_name !== '' ? $role_name : $user_type); ?>
+                        <!-- Centered Circular Avatar with optional badge tag below -->
+                        <div class="user-avatar-section">
+                            <div class="user-avatar-circle" style="<?php echo !$has_real_photo ? 'background: ' . $avatar_gradient . ';' : ''; ?>">
+                                <?php if ($has_real_photo): ?>
+                                    <img src="<?php echo htmlspecialchars($photo_path); ?>" alt="<?php echo $full_name_safe; ?>" class="user-avatar-img">
+                                <?php else: ?>
+                                    <span class="user-avatar-initials"><?php echo htmlspecialchars($initials); ?></span>
+                                <?php endif; ?>
+                            </div>
                             <?php if ($business_name !== ''): ?>
-                                <span class="text-muted">·</span> <?php echo htmlspecialchars($business_name); ?>
+                                <span class="user-new-hire-tag" title="<?php echo htmlspecialchars($business_name); ?>">
+                                    <i class="fas fa-store"></i> <?php echo htmlspecialchars($business_name); ?>
+                                </span>
+                            <?php elseif ($verification !== 'unverified'): ?>
+                                <span class="user-new-hire-tag">
+                                    <i class="fas fa-shield-alt"></i> <?php echo ucfirst($verification); ?>
+                                </span>
                             <?php endif; ?>
                         </div>
 
-                        <!-- 2-Column Info Grid (Account Type & Joined Date) -->
-                        <div class="user-info-grid">
-                            <div class="user-info-col">
-                                <span class="user-info-label">Account Type</span>
-                                <span class="user-info-val" title="<?php echo $account_type; ?>">
+                        <!-- Full Name & Subtitle -->
+                        <h3 class="user-card-name" title="<?php echo $full_name_safe; ?>">
+                            <?php echo $full_name_safe; ?>
+                        </h3>
+                        <div class="user-card-role" title="<?php echo htmlspecialchars($role_name !== '' ? $role_name : $user_type); ?>">
+                            <?php echo htmlspecialchars($role_name !== '' ? $role_name : $user_type); ?>
+                        </div>
+
+                        <!-- 2-Column Rounded Box (Account Type & Joined Date) -->
+                        <div class="user-meta-container">
+                            <div class="user-meta-col">
+                                <span class="user-meta-label">Account Type</span>
+                                <span class="user-meta-val" title="<?php echo $account_type; ?>">
                                     <?php echo $account_type; ?>
                                 </span>
                             </div>
-                            <div class="user-info-col">
-                                <span class="user-info-label">Joined Date</span>
-                                <span class="user-info-val"><?php echo htmlspecialchars(saFormatDateTime($user['created_at'] ?? null, 'd/m/Y', 'N/A')); ?></span>
+                            <div class="user-meta-col">
+                                <span class="user-meta-label">Date Joined</span>
+                                <span class="user-meta-val"><?php echo htmlspecialchars(saFormatDateTime($user['created_at'] ?? null, 'd/m/Y', 'N/A')); ?></span>
                             </div>
                         </div>
 
-                        <!-- Contact List (Email & Phone) -->
+                        <!-- Contact Info Rows -->
                         <div class="user-contact-list">
                             <div class="user-contact-item" title="<?php echo $email_clean; ?>">
                                 <i class="far fa-envelope"></i>
@@ -517,6 +529,29 @@ saRenderModuleHeader('User & Business Management', 'User & Business Management',
                                 <i class="fas fa-phone-alt"></i>
                                 <span><?php echo $phone_clean !== '' ? $phone_clean : 'No phone'; ?></span>
                             </div>
+                        </div>
+
+                        <!-- User Account Role Strip -->
+                        <div class="user-account-strip">
+                            <?php if ($role_name !== ''): ?>
+                                <span class="user-role-tag linked" title="Assigned Role: <?php echo htmlspecialchars($role_name); ?> (Click to reassign)" onclick="openAssignRoleModal(<?php echo $user_id; ?>, <?php echo htmlspecialchars(json_encode($full_name), ENT_QUOTES); ?>, <?php echo (int)($user['role_id'] ?? 0); ?>)">
+                                    <i class="fas fa-shield-alt"></i> Role: <?php echo htmlspecialchars($role_name); ?>
+                                </span>
+                            <?php else: ?>
+                                <span class="user-role-tag unlinked" title="Click to assign system role" onclick="openAssignRoleModal(<?php echo $user_id; ?>, <?php echo htmlspecialchars(json_encode($full_name), ENT_QUOTES); ?>, <?php echo (int)($user['role_id'] ?? 0); ?>)">
+                                    <i class="fas fa-plus-circle"></i> Assign Role
+                                </span>
+                            <?php endif; ?>
+
+                            <form method="POST" style="display:inline; margin: 0;">
+                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+                                <input type="hidden" name="action" value="toggle_user_status">
+                                <input type="hidden" name="user_id" value="<?php echo $user_id; ?>">
+                                <input type="hidden" name="next_status" value="<?php echo $is_active ? 0 : 1; ?>">
+                                <button type="submit" class="btn btn-sm <?php echo $is_active ? 'btn-outline-danger' : 'btn-outline-success'; ?>" style="font-size: 11px; padding: 2px 8px; border-radius: 6px; font-weight: 600;" data-sa-confirm="1" data-sa-confirm-title="<?php echo htmlspecialchars($status_confirm_title, ENT_QUOTES, 'UTF-8'); ?>" data-sa-confirm-text="<?php echo htmlspecialchars($status_confirm_text, ENT_QUOTES, 'UTF-8'); ?>" data-sa-confirm-confirm-text="<?php echo htmlspecialchars($status_confirm_button, ENT_QUOTES, 'UTF-8'); ?>" data-sa-confirm-confirm-color="<?php echo htmlspecialchars($status_confirm_color, ENT_QUOTES, 'UTF-8'); ?>">
+                                    <?php echo $is_active ? 'Deactivate' : 'Activate'; ?>
+                                </button>
+                            </form>
                         </div>
                     </div>
                 <?php endforeach; ?>
