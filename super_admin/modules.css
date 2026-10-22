@@ -1796,3 +1796,196 @@ body.dark-mode .view-mode-btn.active {
     border: 1px dashed var(--sa-border-muted);
     border-radius: var(--sa-radius-lg);
 }
+
+
+/* ==========================================================================
+   Super Admin Users Management — Horizontal Reference Card Directory Styles
+   (Matching User Management Mockup: 4-Col Grid, Round Avatar, Name, Handle, Role, ⋮)
+   ========================================================================== */
+.user-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+@media (min-width: 1400px) {
+    .user-cards-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+.user-card-item {
+    background: #ffffff;
+    border: 1px solid #eaecf0;
+    border-radius: 14px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    min-height: 84px;
+}
+
+.user-card-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px -3px rgba(16, 24, 40, 0.08);
+    border-color: #d0d5dd;
+}
+
+body.dark-mode .user-card-item {
+    background: #181d26 !important;
+    border-color: #27303f !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+body.dark-mode .user-card-item:hover {
+    border-color: #3b4758 !important;
+    box-shadow: 0 12px 24px -4px rgba(0, 0, 0, 0.4);
+}
+
+.user-card-main {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.user-avatar-wrap {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    overflow: hidden;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    font-weight: 700;
+    box-shadow: 0 2px 6px rgba(16, 24, 40, 0.06);
+}
+
+.user-avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.user-info-wrap {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.user-name-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.user-card-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: #101828;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+body.dark-mode .user-card-name {
+    color: #f8fafc;
+}
+
+.user-status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.user-status-dot.active {
+    background: #12b76a;
+}
+
+.user-status-dot.inactive {
+    background: #f04438;
+}
+
+.user-card-handle {
+    font-size: 11.5px;
+    color: #98a2b3;
+    font-weight: 400;
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+body.dark-mode .user-card-handle {
+    color: #64748b;
+}
+
+.user-card-title {
+    font-size: 12px;
+    color: #344054;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+body.dark-mode .user-card-title {
+    color: #94a3b8;
+}
+
+.user-card-item .dropdown {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.user-action-dots {
+    background: transparent;
+    border: none;
+    color: #98a2b3;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    padding: 0;
+    margin-left: 6px;
+}
+
+.user-action-dots:hover {
+    background: #f2f4f7;
+    color: #344054;
+}
+
+body.dark-mode .user-action-dots:hover {
+    background: #27303f;
+    color: #f8fafc;
+}
+
+.user-card-item .dropdown-menu {
+    border-radius: 10px;
+    border: 1px solid #eaecf0;
+    font-size: 13px;
+    min-width: 165px;
+    box-shadow: 0 10px 25px rgba(16, 24, 40, 0.1);
+    z-index: 1050;
+    margin-top: 4px !important;
+}
+
+.user-card-item .dropdown-menu.dropdown-menu-end {
+    right: 0 !important;
+    left: auto !important;
+}
