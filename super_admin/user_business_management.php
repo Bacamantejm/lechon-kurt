@@ -1142,6 +1142,10 @@ body.dark-mode .sa-folder-action-btn {
 }
 
 /* Active Folder Banner */
+#saFoldersView, #saActiveFolderView {
+    min-height: 420px;
+}
+
 .sa-active-folder-header {
     background: #ffffff;
     border: 1px solid #eaecf0;
@@ -2169,6 +2173,10 @@ function openFolder(folderKey, updateUrl = true) {
         liveSearchInput.value = '';
     }
 
+    // Determine target anchor scroll position at the top of the directory section
+    const section = activeView.closest('.module-section') || foldersView.closest('.module-section');
+    const targetScrollY = section ? (section.getBoundingClientRect().top + window.pageYOffset - 16) : window.pageYOffset;
+
     if (folderKey === 'all_users') {
         if (breadcrumbName) breadcrumbName.textContent = 'All Platform Users';
         if (folderTitle) folderTitle.textContent = 'All Platform Users';
@@ -2227,12 +2235,21 @@ function openFolder(folderKey, updateUrl = true) {
             : window.location.pathname;
         history.pushState({ folder: folderKey }, '', newUrl);
     }
+
+    // Keep page firmly anchored at the top of the folder view so it never scrolls down
+    window.scrollTo({
+        top: Math.max(0, targetScrollY),
+        behavior: 'instant'
+    });
 }
 
 function showAllFolders(updateUrl = true) {
     currentFolderKey = '';
     const foldersView = document.getElementById('saFoldersView');
     const activeView = document.getElementById('saActiveFolderView');
+
+    const section = (foldersView ? foldersView.closest('.module-section') : null) || (activeView ? activeView.closest('.module-section') : null);
+    const targetScrollY = section ? (section.getBoundingClientRect().top + window.pageYOffset - 16) : window.pageYOffset;
 
     if (foldersView) foldersView.style.display = 'block';
     if (activeView) activeView.style.display = 'none';
@@ -2248,6 +2265,12 @@ function showAllFolders(updateUrl = true) {
     if (updateUrl) {
         history.pushState({}, '', window.location.pathname);
     }
+
+    // Keep page firmly anchored at the top of the directories so it never scrolls down
+    window.scrollTo({
+        top: Math.max(0, targetScrollY),
+        behavior: 'instant'
+    });
 }
 
 function filterUserElements(folderKey, searchQuery) {
