@@ -916,8 +916,8 @@ body.dark-mode .user-role-tag.unlinked {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 14px;
-    padding-bottom: 8px;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
     border-bottom: 1px solid #eaecf0;
 }
 
@@ -926,7 +926,7 @@ body.dark-mode .sa-folder-category-header {
 }
 
 .sa-folder-category-title {
-    font-size: 15px;
+    font-size: 13.5px;
     font-weight: 700;
     color: #101828;
     margin: 0;
@@ -942,8 +942,8 @@ body.dark-mode .sa-folder-category-title {
 .sa-folder-category-badge {
     font-size: 11px;
     font-weight: 600;
-    padding: 2px 8px;
-    border-radius: 12px;
+    padding: 2px 7px;
+    border-radius: 10px;
     background: #f2f4f7;
     color: #475467;
 }
@@ -955,9 +955,9 @@ body.dark-mode .sa-folder-category-badge {
 
 .sa-folder-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 16px;
-    margin-bottom: 24px;
+    grid-template-columns: repeat(auto-fill, minmax(235px, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
 }
 
 @media (min-width: 1400px) {
@@ -969,48 +969,52 @@ body.dark-mode .sa-folder-category-badge {
 .sa-folder-card {
     background: #ffffff;
     border: 1px solid #eaecf0;
-    border-radius: 16px;
-    padding: 18px 18px 16px 18px;
+    border-radius: 12px;
+    padding: 9px 12px;
     cursor: pointer;
-    transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
     position: relative;
-    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.03);
 }
 
 .sa-folder-card:hover {
-    transform: translateY(-3px);
+    transform: translateY(-2px);
     border-color: #b3261e;
-    box-shadow: 0 12px 24px -4px rgba(16, 24, 40, 0.08), 0 4px 6px -2px rgba(16, 24, 40, 0.03);
+    box-shadow: 0 6px 14px -2px rgba(16, 24, 40, 0.08);
 }
 
 body.dark-mode .sa-folder-card {
     background: #181d26 !important;
     border-color: #27303f !important;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 body.dark-mode .sa-folder-card:hover {
     border-color: #b3261e !important;
-    box-shadow: 0 12px 24px -4px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 8px 16px -2px rgba(0, 0, 0, 0.35);
 }
 
-.sa-folder-top {
+.sa-folder-card-main {
     display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 12px;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    flex: 1;
 }
 
 .sa-folder-icon-box {
-    width: 46px;
-    height: 46px;
-    border-radius: 12px;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 20px;
+    font-size: 16px;
     flex-shrink: 0;
 }
 
@@ -1029,28 +1033,17 @@ body.dark-mode .sa-folder-card:hover {
     color: #027a48;
 }
 
-.sa-folder-count-pill {
-    font-size: 11.5px;
-    font-weight: 700;
-    padding: 3px 10px;
-    border-radius: 20px;
-    background: #f8f9fa;
-    border: 1px solid #eaecf0;
-    color: #344054;
-}
-
-body.dark-mode .sa-folder-count-pill {
-    background: #1e2430;
-    border-color: #3b4758;
-    color: #cbd5e1;
+.sa-folder-text-wrap {
+    min-width: 0;
+    flex: 1;
 }
 
 .sa-folder-title {
-    font-size: 16px;
+    font-size: 13.5px;
     font-weight: 700;
     color: #101828;
-    margin: 0 0 4px 0;
-    line-height: 1.3;
+    margin: 0;
+    line-height: 1.25;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1060,85 +1053,53 @@ body.dark-mode .sa-folder-title {
     color: #f8fafc;
 }
 
-.sa-folder-desc {
-    font-size: 12px;
+.sa-folder-sub {
+    font-size: 11.5px;
     color: #667085;
-    margin-bottom: 12px;
-    line-height: 1.4;
-    min-height: 34px;
-}
-
-body.dark-mode .sa-folder-desc {
-    color: #94a3b8;
-}
-
-.sa-folder-meta-list {
-    border-top: 1px solid #f2f4f7;
-    padding-top: 10px;
-    margin-top: auto;
-    margin-bottom: 12px;
-}
-
-body.dark-mode .sa-folder-meta-list {
-    border-color: #27303f;
-}
-
-.sa-folder-meta-item {
-    font-size: 12px;
-    color: #475467;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 4px;
+    margin-top: 2px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    line-height: 1.2;
 }
 
-body.dark-mode .sa-folder-meta-item {
+body.dark-mode .sa-folder-sub {
     color: #94a3b8;
 }
 
-.sa-folder-meta-item i {
-    width: 14px;
-    color: #98a2b3;
-    text-align: center;
+.sa-folder-side-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     flex-shrink: 0;
 }
 
-.sa-folder-action-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-    padding: 8px 12px;
+.sa-folder-count-pill {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 10px;
     background: #f8f9fa;
     border: 1px solid #eaecf0;
-    border-radius: 8px;
-    font-size: 12px;
-    font-weight: 600;
-    color: #b3261e;
-    transition: all 0.15s ease;
+    color: #344054;
+    white-space: nowrap;
 }
 
-body.dark-mode .sa-folder-action-btn {
+body.dark-mode .sa-folder-count-pill {
     background: #1e2430;
     border-color: #3b4758;
-    color: #f87171;
+    color: #cbd5e1;
 }
 
-.sa-folder-card:hover .sa-folder-action-btn {
-    background: #b3261e;
-    color: #ffffff;
-    border-color: #b3261e;
+.sa-folder-chevron {
+    font-size: 11px;
+    color: #98a2b3;
+    transition: transform 0.15s ease, color 0.15s ease;
 }
 
-.sa-folder-card:hover .sa-folder-action-btn i {
-    transform: translateX(3px);
-}
-
-.sa-folder-action-btn i {
-    transition: transform 0.15s ease;
+.sa-folder-card:hover .sa-folder-chevron {
+    color: #b3261e;
+    transform: translateX(2px);
 }
 
 /* Active Folder Banner */
@@ -1386,62 +1347,40 @@ body.dark-mode .sa-view-all-pill {
             </div>
             <div class="sa-folder-grid">
                 <!-- Customers Folder Card -->
-                <div class="sa-folder-card" onclick="openFolder('customers')" data-folder-key="customers">
-                    <div class="sa-folder-top">
+                <div class="sa-folder-card" onclick="openFolder('customers')" data-folder-key="customers" title="Open Customers Folder">
+                    <div class="sa-folder-card-main">
                         <div class="sa-folder-icon-box folder-customers">
                             <i class="fas fa-users"></i>
                         </div>
-                        <span class="sa-folder-count-pill">
-                            <?php echo $folder_catalog['customers']['total_count']; ?> Users
-                        </span>
-                    </div>
-                    <h4 class="sa-folder-title">Customers</h4>
-                    <p class="sa-folder-desc">
-                        Individual customer retail buyers and public ordering accounts.
-                    </p>
-                    <div class="sa-folder-meta-list">
-                        <div class="sa-folder-meta-item">
-                            <i class="fas fa-check-circle text-success"></i>
-                            <span><?php echo $folder_catalog['customers']['active_count']; ?> Active Accounts</span>
-                        </div>
-                        <div class="sa-folder-meta-item">
-                            <i class="fas fa-shopping-bag"></i>
-                            <span>Online Order Buyers</span>
+                        <div class="sa-folder-text-wrap">
+                            <h4 class="sa-folder-title">Customers</h4>
+                            <div class="sa-folder-sub">
+                                <i class="fas fa-check-circle text-success me-1"></i><?php echo $folder_catalog['customers']['active_count']; ?> Active Buyers
+                            </div>
                         </div>
                     </div>
-                    <div class="sa-folder-action-btn">
-                        <span>Open Customers Folder</span>
-                        <i class="fas fa-arrow-right"></i>
+                    <div class="sa-folder-side-info">
+                        <span class="sa-folder-count-pill"><?php echo $folder_catalog['customers']['total_count']; ?> Users</span>
+                        <i class="fas fa-chevron-right sa-folder-chevron"></i>
                     </div>
                 </div>
 
                 <!-- Platform Administrators Folder Card -->
-                <div class="sa-folder-card" onclick="openFolder('platform_admins')" data-folder-key="platform_admins">
-                    <div class="sa-folder-top">
+                <div class="sa-folder-card" onclick="openFolder('platform_admins')" data-folder-key="platform_admins" title="Open Administrators Folder">
+                    <div class="sa-folder-card-main">
                         <div class="sa-folder-icon-box folder-admins">
                             <i class="fas fa-shield-halved"></i>
                         </div>
-                        <span class="sa-folder-count-pill">
-                            <?php echo $folder_catalog['platform_admins']['total_count']; ?> Team Members
-                        </span>
-                    </div>
-                    <h4 class="sa-folder-title">Platform Administrators</h4>
-                    <p class="sa-folder-desc">
-                        System administrators, operations managers, and platform support personnel.
-                    </p>
-                    <div class="sa-folder-meta-list">
-                        <div class="sa-folder-meta-item">
-                            <i class="fas fa-check-circle text-success"></i>
-                            <span><?php echo $folder_catalog['platform_admins']['active_count']; ?> Active Personnel</span>
-                        </div>
-                        <div class="sa-folder-meta-item">
-                            <i class="fas fa-user-shield"></i>
-                            <span>Full System Privileges</span>
+                        <div class="sa-folder-text-wrap">
+                            <h4 class="sa-folder-title">Platform Administrators</h4>
+                            <div class="sa-folder-sub">
+                                <i class="fas fa-user-shield text-danger me-1"></i><?php echo $folder_catalog['platform_admins']['active_count']; ?> Active Staff
+                            </div>
                         </div>
                     </div>
-                    <div class="sa-folder-action-btn">
-                        <span>Open Administrators Folder</span>
-                        <i class="fas fa-arrow-right"></i>
+                    <div class="sa-folder-side-info">
+                        <span class="sa-folder-count-pill"><?php echo $folder_catalog['platform_admins']['total_count']; ?> Staff</span>
+                        <i class="fas fa-chevron-right sa-folder-chevron"></i>
                     </div>
                 </div>
             </div>
@@ -1453,68 +1392,58 @@ body.dark-mode .sa-view-all-pill {
                 <h4 class="sa-folder-category-title">
                     <i class="fas fa-store text-danger"></i> Approved Stores & Franchises
                 </h4>
-                <span class="sa-folder-category-badge"><?php echo count($approved_stores); ?> Approved Stores</span>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="sa-folder-category-badge"><?php echo count($approved_stores); ?> Approved Stores</span>
+                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" id="toggleStoresCollapseBtn" onclick="toggleStoresCollapse()" style="font-size: 11px; border-radius: 6px;" title="Minimize / Expand Store Folders">
+                        <i class="fas fa-chevron-up" id="storesCollapseIcon"></i> <span id="storesCollapseText">Minimize</span>
+                    </button>
+                </div>
             </div>
-            <p class="text-muted small mb-3">
-                Select any store folder to view its registered store owner, employees, riders, and assigned department roles. Newly approved shops automatically generate folders here.
-            </p>
 
-            <?php if (empty($approved_stores)): ?>
-                <div class="user-cards-empty">
-                    <i class="fas fa-store-slash fa-3x mb-3 text-muted" style="opacity: 0.5;"></i>
-                    <h5 class="fw-bold">No approved stores yet</h5>
-                    <p class="text-muted mb-0">Approve business applications below to automatically create store folders.</p>
-                </div>
-            <?php else: ?>
-                <div class="sa-folder-grid">
-                    <?php foreach ($approved_stores as $s_owner_id => $store): ?>
-                        <?php
-                            $fkey = $store['folder_key'];
-                            $cat = $folder_catalog[$fkey] ?? null;
-                            $total_members = $cat ? $cat['total_count'] : 0;
-                            $active_members = $cat ? $cat['active_count'] : 0;
-                            $owner_count = $cat ? $cat['owner_count'] : 1;
-                            $emp_count = $cat ? $cat['employee_count'] : 0;
-                            $store_city = !empty($store['city']) ? $store['city'] : 'Registered Branch';
-                        ?>
-                        <div class="sa-folder-card" onclick="openFolder('<?php echo htmlspecialchars($fkey); ?>')" data-folder-key="<?php echo htmlspecialchars($fkey); ?>">
-                            <div class="sa-folder-top">
-                                <div class="sa-folder-icon-box folder-store">
-                                    <i class="fas fa-store"></i>
+            <div id="saStoresGridContainer">
+                <?php if (empty($approved_stores)): ?>
+                    <div class="user-cards-empty" style="padding: 20px;">
+                        <i class="fas fa-store-slash fa-2x mb-2 text-muted" style="opacity: 0.5;"></i>
+                        <h6 class="fw-bold">No approved stores yet</h6>
+                        <p class="text-muted small mb-0">Approve business applications below to automatically create store folders.</p>
+                    </div>
+                <?php else: ?>
+                    <div class="sa-folder-grid">
+                        <?php foreach ($approved_stores as $s_owner_id => $store): ?>
+                            <?php
+                                $fkey = $store['folder_key'];
+                                $cat = $folder_catalog[$fkey] ?? null;
+                                $total_members = $cat ? $cat['total_count'] : 0;
+                                $owner_count = $cat ? $cat['owner_count'] : 1;
+                                $emp_count = $cat ? $cat['employee_count'] : 0;
+                                $store_city = !empty($store['city']) ? $store['city'] : '';
+                            ?>
+                            <div class="sa-folder-card" onclick="openFolder('<?php echo htmlspecialchars($fkey); ?>')" data-folder-key="<?php echo htmlspecialchars($fkey); ?>" title="<?php echo htmlspecialchars($store['store_name']); ?>">
+                                <div class="sa-folder-card-main">
+                                    <div class="sa-folder-icon-box folder-store">
+                                        <i class="fas fa-store"></i>
+                                    </div>
+                                    <div class="sa-folder-text-wrap">
+                                        <h4 class="sa-folder-title"><?php echo htmlspecialchars($store['store_name']); ?></h4>
+                                        <div class="sa-folder-sub">
+                                            <span><i class="fas fa-user-tie text-muted me-1"></i><?php echo htmlspecialchars($store['owner_name']); ?></span>
+                                            <?php if ($store_city !== ''): ?>
+                                                <span class="ms-1">· <?php echo htmlspecialchars($store_city); ?></span>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
                                 </div>
-                                <span class="sa-folder-count-pill">
-                                    <?php echo $total_members; ?> <?php echo $total_members === 1 ? 'Member' : 'Members'; ?>
-                                </span>
-                            </div>
-                            <h4 class="sa-folder-title" title="<?php echo htmlspecialchars($store['store_name']); ?>">
-                                <?php echo htmlspecialchars($store['store_name']); ?>
-                            </h4>
-                            <p class="sa-folder-desc">
-                                Authorized franchise store location and branch team.
-                            </p>
-                            <div class="sa-folder-meta-list">
-                                <div class="sa-folder-meta-item" title="Store Owner: <?php echo htmlspecialchars($store['owner_name']); ?>">
-                                    <i class="fas fa-user-tie"></i>
-                                    <span>Owner: <strong><?php echo htmlspecialchars($store['owner_name']); ?></strong></span>
-                                </div>
-                                <div class="sa-folder-meta-item" title="Location: <?php echo htmlspecialchars($store_city); ?>">
-                                    <i class="fas fa-map-marker-alt"></i>
-                                    <span><?php echo htmlspecialchars($store_city); ?></span>
-                                </div>
-                                <div class="sa-folder-meta-item">
-                                    <i class="fas fa-users-cog"></i>
-                                    <span><?php echo $owner_count; ?> Owner · <?php echo $emp_count; ?> <?php echo $emp_count === 1 ? 'Staff Member' : 'Staff Members'; ?></span>
+                                <div class="sa-folder-side-info">
+                                    <span class="sa-folder-count-pill" title="<?php echo $owner_count; ?> Owner, <?php echo $emp_count; ?> Staff">
+                                        <?php echo $total_members; ?> <?php echo $total_members === 1 ? 'member' : 'members'; ?>
+                                    </span>
+                                    <i class="fas fa-chevron-right sa-folder-chevron"></i>
                                 </div>
                             </div>
-                            <div class="sa-folder-action-btn">
-                                <span>Open Store Folder</span>
-                                <i class="fas fa-arrow-right"></i>
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-            <?php endif; ?>
-        </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
     </div>
 
     <!-- ACTIVE FOLDER VIEW (Shown when a folder is selected or via URL) -->
@@ -2362,12 +2291,42 @@ function switchSaUserView(mode) {
     }
 }
 
+function toggleStoresCollapse() {
+    const container = document.getElementById('saStoresGridContainer');
+    const icon = document.getElementById('storesCollapseIcon');
+    const text = document.getElementById('storesCollapseText');
+    if (!container) return;
+
+    if (container.style.display === 'none') {
+        container.style.display = '';
+        if (icon) icon.className = 'fas fa-chevron-up';
+        if (text) text.textContent = 'Minimize';
+        localStorage.setItem('sa_stores_collapsed', '0');
+    } else {
+        container.style.display = 'none';
+        if (icon) icon.className = 'fas fa-chevron-down';
+        if (text) text.textContent = 'Expand';
+        localStorage.setItem('sa_stores_collapsed', '1');
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     const savedView = localStorage.getItem('sa_user_biz_view_mode');
     if (savedView === 'table') {
         switchSaUserView('table');
     } else {
         switchSaUserView('cards');
+    }
+
+    // Restore saved stores collapse state
+    const savedStoresCollapse = localStorage.getItem('sa_stores_collapsed');
+    if (savedStoresCollapse === '1') {
+        const container = document.getElementById('saStoresGridContainer');
+        const icon = document.getElementById('storesCollapseIcon');
+        const text = document.getElementById('storesCollapseText');
+        if (container) container.style.display = 'none';
+        if (icon) icon.className = 'fas fa-chevron-down';
+        if (text) text.textContent = 'Expand';
     }
 
     const liveSearchInput = document.getElementById('saFolderLiveSearch');
