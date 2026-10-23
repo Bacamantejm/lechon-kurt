@@ -276,6 +276,7 @@ if (!function_exists('saveRegistrationValidIdDocument')) {
             'national_id' => 'Philippine National ID (PhilSys)',
             'tin' => 'TIN ID',
             'pag_ibig' => 'Pag-IBIG ID',
+            'pagibig' => 'Pag-IBIG ID',
             'philhealth' => 'PhilHealth ID',
             'senior_citizen' => 'Senior Citizen ID',
             'ofw' => 'OFW ID'
@@ -2448,14 +2449,18 @@ body.dark-mode .leaflet-container {
                             <select id="validIdType" name="valid_id_type" class="form-control" required>
                                 <option value="" disabled <?php echo empty($form_data['valid_id_type']) ? 'selected' : ''; ?>>Select a valid ID type</option>
                                 <option value="national_id" <?php echo ($form_data['valid_id_type'] ?? '') === 'national_id' ? 'selected' : ''; ?>>Philippine National ID (PhilSys)</option>
-                                <option value="passport" <?php echo ($form_data['valid_id_type'] ?? '') === 'passport' ? 'selected' : ''; ?>>Philippine Passport</option>
                                 <option value="drivers_license" <?php echo ($form_data['valid_id_type'] ?? '') === 'drivers_license' ? 'selected' : ''; ?>>Driver's License (LTO)</option>
-                                <option value="umid" <?php echo ($form_data['valid_id_type'] ?? '') === 'umid' ? 'selected' : ''; ?>>UMID Card</option>
-                                <option value="sss" <?php echo ($form_data['valid_id_type'] ?? '') === 'sss' ? 'selected' : ''; ?>>SSS ID</option>
-                                <option value="postal" <?php echo ($form_data['valid_id_type'] ?? '') === 'postal' ? 'selected' : ''; ?>>Postal ID</option>
-                                <option value="prc" <?php echo ($form_data['valid_id_type'] ?? '') === 'prc' ? 'selected' : ''; ?>>PRC ID</option>
-                                <option value="senior_citizen" <?php echo ($form_data['valid_id_type'] ?? '') === 'senior_citizen' ? 'selected' : ''; ?>>Senior Citizen ID</option>
-                                <option value="ofw" <?php echo ($form_data['valid_id_type'] ?? '') === 'ofw' ? 'selected' : ''; ?>>OFW ID</option>
+                                <option value="passport" <?php echo ($form_data['valid_id_type'] ?? '') === 'passport' ? 'selected' : ''; ?>>Philippine Passport</option>
+                                <option value="umid" <?php echo ($form_data['valid_id_type'] ?? '') === 'umid' ? 'selected' : ''; ?>>SSS UMID Card</option>
+                                <option value="sss" <?php echo ($form_data['valid_id_type'] ?? '') === 'sss' ? 'selected' : ''; ?>>Social Security System (SSS) ID</option>
+                                <option value="philhealth" <?php echo ($form_data['valid_id_type'] ?? '') === 'philhealth' ? 'selected' : ''; ?>>PhilHealth ID</option>
+                                <option value="tin" <?php echo ($form_data['valid_id_type'] ?? '') === 'tin' ? 'selected' : ''; ?>>TIN ID (BIR)</option>
+                                <option value="pagibig" <?php echo ($form_data['valid_id_type'] ?? '') === 'pagibig' ? 'selected' : ''; ?>>Pag-IBIG ID / Loyalty Card</option>
+                                <option value="postal" <?php echo ($form_data['valid_id_type'] ?? '') === 'postal' ? 'selected' : ''; ?>>Postal ID (PHLPost)</option>
+                                <option value="prc" <?php echo ($form_data['valid_id_type'] ?? '') === 'prc' ? 'selected' : ''; ?>>PRC ID (Professional Regulation Commission)</option>
+                                <option value="senior_citizen" <?php echo ($form_data['valid_id_type'] ?? '') === 'senior_citizen' ? 'selected' : ''; ?>>Senior Citizen ID (OSCA)</option>
+                                <option value="voters" <?php echo ($form_data['valid_id_type'] ?? '') === 'voters' ? 'selected' : ''; ?>>Voter's ID (COMELEC)</option>
+                                <option value="ofw" <?php echo ($form_data['valid_id_type'] ?? '') === 'ofw' ? 'selected' : ''; ?>>OFW ID (OWWA / DMW)</option>
                             </select>
                         </div>
 
@@ -3592,7 +3597,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let idVerified = false;
 
-    function verifyIdWithBackend(firstName, lastName) {
+    function verifyIdWithBackend(firstName, lastName, dob) {
+        if (!firstName) firstName = (document.getElementById('firstName')?.value || '').trim();
+        if (!lastName) lastName = (document.getElementById('lastName')?.value || '').trim();
+        if (!dob) dob = (document.getElementById('dob')?.value || '').trim();
+
         const validIdType = ((document.getElementById('validIdType') || {}).value || '').trim();
         const frontInput = document.getElementById('validIdFront');
         const frontFile = frontInput && frontInput.files ? frontInput.files[0] : null;
@@ -3609,6 +3618,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const verifyData = new FormData();
         verifyData.append('first_name', firstName);
         verifyData.append('last_name', lastName);
+        verifyData.append('dob', dob);
         verifyData.append('valid_id_type', validIdType);
         verifyData.append('valid_id', frontFile);
         if (backFile) {
@@ -3619,23 +3629,26 @@ document.addEventListener('DOMContentLoaded', function() {
         const progressHtml = `
             <div style="text-align: left; padding: 10px 5px 0;">
                 <div style="font-size: 0.88rem; color: #475467; margin-bottom: 12px;" id="swalScanMsg">
-                    <i class="fas fa-spinner fa-spin" style="color:#b3261e; margin-right: 6px;"></i> Analyzing Philippine government seal & document authenticity...
+                    <i class="fas fa-spinner fa-spin" style="color:#b3261e; margin-right: 6px;"></i> Scanning ID & analyzing document authenticity...
                 </div>
                 <div style="width: 100%; height: 6px; background: #eaecf0; border-radius: 4px; overflow: hidden; margin-bottom: 16px;">
-                    <div id="swalScanBar" style="width: 30%; height: 100%; background: #b3261e; transition: width 0.4s ease;"></div>
+                    <div id="swalScanBar" style="width: 20%; height: 100%; background: #b3261e; transition: width 0.4s ease;"></div>
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 8px; font-size: 0.82rem; color: #667085;">
-                    <div id="chkOrigin" style="display: flex; align-items: center; gap: 8px;">
-                        <i class="fas fa-circle-notch fa-spin" style="color: #b3261e; width: 14px;"></i> <span>Verifying Philippine Government Authority</span>
+                    <div id="chkReadable" style="display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-circle-notch fa-spin" style="color: #b3261e; width: 14px;"></i> <span>Checking photo clarity & readability</span>
                     </div>
-                    <div id="chkDoc" style="display: flex; align-items: center; gap: 8px;">
-                        <i class="far fa-circle" style="color: #d0d5dd; width: 14px;"></i> <span>Validating ID Card Legitimacy</span>
+                    <div id="chkType" style="display: flex; align-items: center; gap: 8px;">
+                        <i class="far fa-circle" style="color: #d0d5dd; width: 14px;"></i> <span>Verifying selected Philippine Government ID type</span>
+                    </div>
+                    <div id="chkExpiry" style="display: flex; align-items: center; gap: 8px;">
+                        <i class="far fa-circle" style="color: #d0d5dd; width: 14px;"></i> <span>Checking ID validity & expiration date</span>
                     </div>
                     <div id="chkName" style="display: flex; align-items: center; gap: 8px;">
-                        <i class="far fa-circle" style="color: #d0d5dd; width: 14px;"></i> <span>Cross-matching Name: <strong>${firstName} ${lastName}</strong></span>
+                        <i class="far fa-circle" style="color: #d0d5dd; width: 14px;"></i> <span>Matching name: <strong>${firstName} ${lastName}</strong></span>
                     </div>
-                    <div id="chkFormat" style="display: flex; align-items: center; gap: 8px;">
-                        <i class="far fa-circle" style="color: #d0d5dd; width: 14px;"></i> <span>Checking Official ID Number Format</span>
+                    <div id="chkDob" style="display: flex; align-items: center; gap: 8px;">
+                        <i class="far fa-circle" style="color: #d0d5dd; width: 14px;"></i> <span>Verifying date of birth match</span>
                     </div>
                 </div>
             </div>
@@ -3649,24 +3662,23 @@ document.addEventListener('DOMContentLoaded', function() {
             showConfirmButton: false,
             didOpen: function() {
                 const bar = document.getElementById('swalScanBar');
-                const msg = document.getElementById('swalScanMsg');
-                const chkOrigin = document.getElementById('chkOrigin');
-                const chkDoc = document.getElementById('chkDoc');
+                const chkReadable = document.getElementById('chkReadable');
+                const chkType = document.getElementById('chkType');
+                const chkExpiry = document.getElementById('chkExpiry');
                 const chkName = document.getElementById('chkName');
-                const chkFormat = document.getElementById('chkFormat');
-
-                // Animate check stages
-                setTimeout(function() {
-                    if (bar) bar.style.width = '55%';
-                    if (chkOrigin) chkOrigin.innerHTML = '<i class="fas fa-check-circle" style="color: #027a48; width: 14px;"></i> <span style="color:#027a48; font-weight:600;">Philippine Government Seal Detected</span>';
-                    if (chkDoc) chkDoc.innerHTML = '<i class="fas fa-circle-notch fa-spin" style="color: #b3261e; width: 14px;"></i> <span>Validating ID Card Legitimacy</span>';
-                }, 1200);
+                const chkDob = document.getElementById('chkDob');
 
                 setTimeout(function() {
-                    if (bar) bar.style.width = '80%';
-                    if (chkDoc) chkDoc.innerHTML = '<i class="fas fa-check-circle" style="color: #027a48; width: 14px;"></i> <span style="color:#027a48; font-weight:600;">ID Card Authenticity Validated</span>';
-                    if (chkName) chkName.innerHTML = '<i class="fas fa-circle-notch fa-spin" style="color: #b3261e; width: 14px;"></i> <span>Cross-matching Name: <strong>' + firstName + ' ' + lastName + '</strong></span>';
-                }, 2200);
+                    if (bar) bar.style.width = '45%';
+                    if (chkReadable) chkReadable.innerHTML = '<i class="fas fa-check-circle" style="color: #027a48; width: 14px;"></i> <span style="color:#027a48; font-weight:600;">Photo text clear & readable</span>';
+                    if (chkType) chkType.innerHTML = '<i class="fas fa-circle-notch fa-spin" style="color: #b3261e; width: 14px;"></i> <span>Verifying selected Philippine Government ID type</span>';
+                }, 1000);
+
+                setTimeout(function() {
+                    if (bar) bar.style.width = '70%';
+                    if (chkType) chkType.innerHTML = '<i class="fas fa-check-circle" style="color: #027a48; width: 14px;"></i> <span style="color:#027a48; font-weight:600;">Philippine Government ID Confirmed</span>';
+                    if (chkExpiry) chkExpiry.innerHTML = '<i class="fas fa-circle-notch fa-spin" style="color: #b3261e; width: 14px;"></i> <span>Checking ID validity & expiration date</span>';
+                }, 1800);
 
                 fetch('api/verify_government_id.php', {
                     method: 'POST',
@@ -3683,26 +3695,37 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     if (status === 200 && data.success && data.verified) {
                         if (bar) bar.style.width = '100%';
-                        if (chkName) chkName.innerHTML = '<i class="fas fa-check-circle" style="color: #027a48; width: 14px;"></i> <span style="color:#027a48; font-weight:600;">Name Matched Registered Account</span>';
-                        if (chkFormat) chkFormat.innerHTML = '<i class="fas fa-check-circle" style="color: #027a48; width: 14px;"></i> <span style="color:#027a48; font-weight:600;">Official Format Verified</span>';
+                        if (chkExpiry) chkExpiry.innerHTML = '<i class="fas fa-check-circle" style="color: #027a48; width: 14px;"></i> <span style="color:#027a48; font-weight:600;">ID is Valid & Unexpired</span>';
+                        if (chkName) chkName.innerHTML = '<i class="fas fa-check-circle" style="color: #027a48; width: 14px;"></i> <span style="color:#027a48; font-weight:600;">Name Matches Account</span>';
+                        if (chkDob) chkDob.innerHTML = '<i class="fas fa-check-circle" style="color: #027a48; width: 14px;"></i> <span style="color:#027a48; font-weight:600;">Date of Birth Matches</span>';
+
+                        const detectedTypeLabel = data.detected_type ? data.detected_type.replace(/_/g, ' ').toUpperCase() : 'PHILIPPINE GOVERNMENT ID';
 
                         setTimeout(function() {
                             Swal.fire({
                                 icon: 'success',
-                                title: 'Philippine ID Verified',
+                                title: 'Government ID Accepted',
                                 html: `
-                                    <div style="text-align: left; font-size: 0.9rem; color: #344054; line-height: 1.6; background: #f8fafc; border: 1px solid #eaecf0; border-radius: 10px; padding: 14px; margin-top: 10px;">
-                                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                                    <div style="text-align: left; font-size: 0.88rem; color: #344054; line-height: 1.6; background: #f8fafc; border: 1px solid #eaecf0; border-radius: 12px; padding: 16px; margin-top: 10px;">
+                                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
                                             <i class="fas fa-check-circle" style="color:#027a48;"></i>
-                                            <span><strong>Document:</strong> Official Philippine Government ID</span>
+                                            <span><strong>Clarity & Readability:</strong> Clear & readable photo</span>
                                         </div>
-                                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                                            <i class="fas fa-check-circle" style="color:#027a48;"></i>
+                                            <span><strong>ID Type:</strong> ${detectedTypeLabel}</span>
+                                        </div>
+                                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                                            <i class="fas fa-check-circle" style="color:#027a48;"></i>
+                                            <span><strong>Status:</strong> Valid & Unexpired</span>
+                                        </div>
+                                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
                                             <i class="fas fa-check-circle" style="color:#027a48;"></i>
                                             <span><strong>Name Match:</strong> ${firstName} ${lastName}</span>
                                         </div>
                                         <div style="display:flex; align-items:center; gap:8px;">
                                             <i class="fas fa-check-circle" style="color:#027a48;"></i>
-                                            <span><strong>Status:</strong> Authenticated & Ready</span>
+                                            <span><strong>Birthday Match:</strong> Verified</span>
                                         </div>
                                     </div>
                                 `,
@@ -3714,27 +3737,41 @@ document.addEventListener('DOMContentLoaded', function() {
                                 idVerified = true;
                                 goToStep(3);
                             });
-                        }, 600);
+                        }, 500);
                     } else {
-                        const errorMsg = data.message || 'Verification failed. Please make sure you upload a clear Philippine Government ID matching your name.';
+                        const errorMsg = data.message || 'Verification failed. Please review the checklist below and upload a clear, valid Philippine Government ID.';
+                        const checks = data.checks || {};
+
+                        const renderCheck = (chk, defaultLabel) => {
+                            if (!chk) {
+                                return `<li><i class="fas fa-circle-question" style="color: #667085; width: 14px; margin-right: 6px;"></i> ${defaultLabel}</li>`;
+                            }
+                            if (chk.passed) {
+                                return `<li style="color: #027a48;"><i class="fas fa-check-circle" style="color: #027a48; width: 14px; margin-right: 6px;"></i> <strong>${chk.label}:</strong> Passed</li>`;
+                            }
+                            return `<li style="color: #b3261e; font-weight: 600;"><i class="fas fa-times-circle" style="color: #b3261e; width: 14px; margin-right: 6px;"></i> <strong>${chk.label}:</strong> ${chk.detail || 'Did not pass'}</li>`;
+                        };
+
                         Swal.fire({
                             icon: 'error',
-                            title: 'ID Verification Failed',
+                            title: 'ID Not Accepted',
                             html: `
                                 <div style="text-align: left; font-size: 0.88rem; color: #344054; line-height: 1.5; margin-top: 8px;">
                                     <div style="background: #fff1f0; border: 1px solid #fee4e2; border-radius: 8px; padding: 12px; color: #b3261e; margin-bottom: 12px;">
                                         <i class="fas fa-exclamation-triangle" style="margin-right: 6px;"></i> ${errorMsg}
                                     </div>
-                                    <div style="font-weight: 600; color: #101828; margin-bottom: 6px;">Requirements Checklist:</div>
-                                    <ul style="margin: 0; padding-left: 18px; color: #475467; font-size: 0.83rem;">
-                                        <li>Must be an authentic Philippine Government ID (PhilSys National ID, Driver's License, Passport, UMID, SSS, PhilHealth, TIN, Postal ID).</li>
-                                        <li>The name on the ID must match: <strong>${firstName} ${lastName}</strong>.</li>
-                                        <li>Ensure good lighting, sharp focus, and all 4 corners visible.</li>
+                                    <div style="font-weight: 600; color: #101828; margin-bottom: 8px;">Verification Checklist:</div>
+                                    <ul style="margin: 0; padding-left: 8px; list-style: none; font-size: 0.83rem; display: flex; flex-direction: column; gap: 6px;">
+                                        ${renderCheck(checks.clear_readable, 'Clear & Readable Photo')}
+                                        ${renderCheck(checks.id_type_match, 'Selected ID Type Match')}
+                                        ${renderCheck(checks.not_expired, 'Valid & Unexpired ID')}
+                                        ${renderCheck(checks.name_match, 'Name Matches Account (' + firstName + ' ' + lastName + ')')}
+                                        ${renderCheck(checks.dob_match, 'Date of Birth Matches Account')}
                                     </ul>
                                 </div>
                             `,
                             confirmButtonColor: '#b3261e',
-                            confirmButtonText: 'Try Again'
+                            confirmButtonText: 'Review & Try Again'
                         });
                     }
                 })
@@ -3750,8 +3787,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Reset ID verification flag if details change
-    ['firstName', 'lastName', 'validIdType', 'validIdFront', 'validIdBack'].forEach(function(id) {
+    // Reset ID verification flag if user changes any personal detail or ID file
+    ['firstName', 'lastName', 'dob', 'validIdType', 'validIdFront', 'validIdBack'].forEach(function(id) {
         const el = document.getElementById(id);
         if (el) {
             el.addEventListener('change', function() { idVerified = false; });
@@ -3814,7 +3851,6 @@ document.addEventListener('DOMContentLoaded', function() {
             return false;
         }
 
-        idVerified = true;
         return true;
     }
 
@@ -4026,9 +4062,17 @@ document.addEventListener('DOMContentLoaded', function() {
     const nextStep2 = document.getElementById('nextStep2');
     if (nextStep2) {
         nextStep2.addEventListener('click', function() {
-            if (validateStep2()) {
-                goToStep(3);
+            if (!validateStep2()) {
+                return;
             }
+            if (idVerified) {
+                goToStep(3);
+                return;
+            }
+            const firstName = (document.getElementById('firstName')?.value || '').trim();
+            const lastName = (document.getElementById('lastName')?.value || '').trim();
+            const dob = (document.getElementById('dob')?.value || '').trim();
+            verifyIdWithBackend(firstName, lastName, dob);
         });
     }
 

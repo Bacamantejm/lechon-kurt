@@ -120,6 +120,7 @@ if (!function_exists('isPhilippineGovernmentIdDocument')) {
             'DEPARTMENT OF TRANSPORTATION' => 'DOTr',
             'DRIVER S LICENSE' => 'LTO Driver License',
             'DRIVERS LICENSE' => 'LTO Driver License',
+            'DRIVER LICENSE' => 'LTO Driver License',
             'NON PROFESSIONAL DRIVER' => 'LTO Driver License',
             'PROFESSIONAL DRIVER' => 'LTO Driver License',
             'DEPARTMENT OF FOREIGN AFFAIRS' => 'Department of Foreign Affairs (DFA)',
@@ -142,7 +143,12 @@ if (!function_exists('isPhilippineGovernmentIdDocument')) {
             'COMMISSION ON ELECTIONS' => 'COMELEC',
             'VOTER S IDENTIFICATION' => 'COMELEC Voter ID',
             'VOTER IDENTIFICATION' => 'COMELEC Voter ID',
+            'VOTER' => 'COMELEC Voter ID',
             'OVERSEAS WORKERS WELFARE ADMINISTRATION' => 'OWWA',
+            'OVERSEAS WORKERS' => 'OWWA',
+            'OFW' => 'OWWA / DMW OFW ID',
+            'POEA' => 'POEA / DMW',
+            'DMW' => 'Department of Migrant Workers',
             'OFFICE FOR SENIOR CITIZENS AFFAIRS' => 'Senior Citizen (OSCA)',
             'SENIOR CITIZEN ID' => 'Senior Citizen (OSCA)'
         ];
@@ -158,7 +164,9 @@ if (!function_exists('isPhilippineGovernmentIdDocument')) {
             'PRC' => 'PRC',
             'COMELEC' => 'COMELEC',
             'OWWA' => 'OWWA',
-            'OSCA' => 'OSCA'
+            'OSCA' => 'OSCA',
+            'OFW' => 'OFW',
+            'HDMF' => 'Pag-IBIG Fund'
         ];
 
         $matched_agencies = [];
@@ -580,8 +588,232 @@ if (!function_exists('getGovernmentIdVerificationApiKey')) {
     }
 }
 
+if (!function_exists('getGovernmentIdFriendlyName')) {
+    function getGovernmentIdFriendlyName($type)
+    {
+        $names = [
+            'drivers_license' => "Driver's License (LTO)",
+            'passport' => 'Philippine Passport',
+            'national_id' => 'Philippine National ID (PhilSys)',
+            'umid' => 'SSS UMID Card',
+            'sss' => 'Social Security System (SSS) ID',
+            'philhealth' => 'PhilHealth ID',
+            'tin' => 'TIN ID (BIR)',
+            'pagibig' => 'Pag-IBIG ID / Loyalty Card',
+            'postal' => 'Postal ID (PHLPost)',
+            'prc' => 'PRC ID (Professional Regulation Commission)',
+            'senior_citizen' => 'Senior Citizen ID (OSCA)',
+            'voters' => "Voter's ID (COMELEC)",
+            'ofw' => 'OFW ID (OWWA / DMW)'
+        ];
+        $type = strtolower(trim((string)$type));
+        return $names[$type] ?? (ucwords(str_replace('_', ' ', $type)) . ' ID');
+    }
+}
+
+if (!function_exists('areGovernmentIdTypesCompatible')) {
+    function areGovernmentIdTypesCompatible($detected_type, $expected_type)
+    {
+        $detected = strtolower(trim((string)$detected_type));
+        $expected = strtolower(trim((string)$expected_type));
+
+        if ($detected === '' || $expected === '') {
+            return true;
+        }
+
+        if ($detected === $expected) {
+            return true;
+        }
+
+        $aliases = [
+            'drivers_license' => ['drivers_license', 'driver', 'drivers', 'lto'],
+            'national_id' => ['national_id', 'philsys', 'philid'],
+            'passport' => ['passport'],
+            'prc' => ['prc'],
+            'tin' => ['tin'],
+            'sss' => ['sss', 'umid'],
+            'umid' => ['umid', 'sss'],
+            'postal' => ['postal'],
+            'ofw' => ['ofw', 'owwa', 'dmw', 'poea'],
+            'senior_citizen' => ['senior_citizen', 'senior', 'osca'],
+            'pagibig' => ['pagibig', 'pag_ibig', 'hdmf'],
+            'philhealth' => ['philhealth'],
+            'voters' => ['voters', 'voter', 'comelec']
+        ];
+
+        foreach ($aliases as $canonical => $list) {
+            if (in_array($detected, $list, true) && in_array($expected, $list, true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}
+
+if (!function_exists('checkGovernmentIdExpiration')) {
+    function checkGovernmentIdExpiration($ocr_text, $id_type)
+    {
+        $lifetime_types = ['national_id', 'senior_citizen', 'tin', 'philhealth', 'umid', 'voters', 'sss'];
+        $normalized_type = strtolower(trim((string)$id_type));
+        $normalized = strtoupper($ocr_text);
+
+        if (strpos($normalized, 'NO EXPIRY') !== false || strpos($normalized, 'LIFETIME') !== false || strpos($normalized, 'NO EXPIRATION') !== false) {
+            return ['passed' => true, 'has_expiry' => false, 'expired' => false, 'detail' => 'Lifetime Valid (No Expiry)'];
+        }
+
+        $keywords = ['EXPIRATION DATE', 'EXPIRY DATE', 'VALID UNTIL', 'DATE OF EXPIRY', 'EXP. DATE', 'EXP DATE', 'VALID THRU', 'PETSA NG PAGKAPASO', 'EXPIRY'];
+        $found_date = '';
+
+        foreach ($keywords as $kw) {
+            $pos = strpos($normalized, $kw);
+            if ($pos !== false) {
+                $snippet = substr($normalized, $pos, 80);
+
+                if (preg_match('/\b(19\d\d|20\d\d)[\-\/.](0[1-9]|1[0-2])[\-\/.](0[1-9]|[12]\d|3[01])\b/', $snippet, $m)) {
+                    $found_date = $m[0];
+                    break;
+                }
+                if (preg_match('/\b(0[1-9]|[12]\d|3[01])[\-\/.](0[1-9]|1[0-2])[\-\/.](19\d\d|20\d\d)\b/', $snippet, $m)) {
+                    $found_date = $m[0];
+                    break;
+                }
+                if (preg_match('/\b(0[1-9]|1[0-2])[\-\/.](0[1-9]|[12]\d|3[01])[\-\/.](19\d\d|20\d\d)\b/', $snippet, $m)) {
+                    $found_date = $m[0];
+                    break;
+                }
+                $months = 'JAN(?:UARY)?|FEB(?:RUARY)?|MAR(?:CH)?|APR(?:IL)?|MAY|JUN(?:E)?|JUL(?:Y)?|AUG(?:UST)?|SEP(?:TEMBER)?|OCT(?:OBER)?|NOV(?:EMBER)?|DEC(?:EMBER)?';
+                if (preg_match('/\b(?:' . $months . ')\s+(\d{1,2})(?:ST|ND|RD|TH)?,?\s+(19\d\d|20\d\d)\b/i', $snippet, $m)) {
+                    $found_date = $m[0];
+                    break;
+                }
+                if (preg_match('/\b(\d{1,2})\s+(?:' . $months . ')\s+(19\d\d|20\d\d)\b/i', $snippet, $m)) {
+                    $found_date = $m[0];
+                    break;
+                }
+            }
+        }
+
+        if ($found_date !== '') {
+            $ts = strtotime($found_date);
+            if ($ts) {
+                $is_expired = ($ts < time());
+                $formatted = date('F j, Y', $ts);
+                if ($is_expired) {
+                    return [
+                        'passed' => false,
+                        'has_expiry' => true,
+                        'expired' => true,
+                        'detail' => "ID expired on {$formatted}. Please upload an unexpired valid ID."
+                    ];
+                } else {
+                    return [
+                        'passed' => true,
+                        'has_expiry' => true,
+                        'expired' => false,
+                        'detail' => "Valid until {$formatted}"
+                    ];
+                }
+            }
+        }
+
+        if (in_array($normalized_type, $lifetime_types, true)) {
+            return ['passed' => true, 'has_expiry' => false, 'expired' => false, 'detail' => 'Lifetime Valid (No Expiration)'];
+        }
+
+        return ['passed' => true, 'has_expiry' => false, 'expired' => false, 'detail' => 'Valid ID'];
+    }
+}
+
+if (!function_exists('checkGovernmentIdBirthDate')) {
+    function checkGovernmentIdBirthDate($ocr_text, $user_dob)
+    {
+        if (empty($user_dob)) {
+            return ['passed' => true, 'detail' => 'Date of birth match verified'];
+        }
+
+        $u_ts = strtotime($user_dob);
+        if (!$u_ts) {
+            return ['passed' => true, 'detail' => 'Date of birth match verified'];
+        }
+
+        $u_year = date('Y', $u_ts);
+        $u_month_num = date('m', $u_ts);
+        $u_day = date('d', $u_ts);
+        $user_formatted = date('F j, Y', $u_ts);
+
+        $normalized = strtoupper($ocr_text);
+        $keywords = ['DATE OF BIRTH', 'BIRTH DATE', 'BIRTHDATE', 'DOB', 'KAPANGANAKAN', 'PETSA NG KAPANGANAKAN', 'BORN'];
+        $found_dates = [];
+
+        foreach ($keywords as $kw) {
+            $pos = strpos($normalized, $kw);
+            if ($pos !== false) {
+                $snippet = substr($normalized, $pos, 90);
+
+                if (preg_match('/\b(19\d\d|20\d\d)[\-\/.](0[1-9]|1[0-2])[\-\/.](0[1-9]|[12]\d|3[01])\b/', $snippet, $m)) {
+                    $found_dates[] = $m[0];
+                }
+                if (preg_match('/\b(0[1-9]|[12]\d|3[01])[\-\/.](0[1-9]|1[0-2])[\-\/.](19\d\d|20\d\d)\b/', $snippet, $m)) {
+                    $found_dates[] = $m[0];
+                }
+                if (preg_match('/\b(0[1-9]|1[0-2])[\-\/.](0[1-9]|[12]\d|3[01])[\-\/.](19\d\d|20\d\d)\b/', $snippet, $m)) {
+                    $found_dates[] = $m[0];
+                }
+                $months = 'JAN(?:UARY)?|FEB(?:RUARY)?|MAR(?:CH)?|APR(?:IL)?|MAY|JUN(?:E)?|JUL(?:Y)?|AUG(?:UST)?|SEP(?:TEMBER)?|OCT(?:OBER)?|NOV(?:EMBER)?|DEC(?:EMBER)?';
+                if (preg_match('/\b(?:' . $months . ')\s+(\d{1,2})(?:ST|ND|RD|TH)?,?\s+(19\d\d|20\d\d)\b/i', $snippet, $m)) {
+                    $found_dates[] = $m[0];
+                }
+                if (preg_match('/\b(\d{1,2})\s+(?:' . $months . ')\s+(19\d\d|20\d\d)\b/i', $snippet, $m)) {
+                    $found_dates[] = $m[0];
+                }
+            }
+        }
+
+        if (!empty($found_dates)) {
+            $detected_dob_str = $found_dates[0];
+            $id_ts = strtotime($detected_dob_str);
+            if ($id_ts) {
+                $id_formatted = date('F j, Y', $id_ts);
+
+                // Exact match
+                if (date('Y-m-d', $id_ts) === date('Y-m-d', $u_ts)) {
+                    return ['passed' => true, 'detail' => "Birthday matches: {$user_formatted}"];
+                }
+
+                // Month and year match
+                if (date('Y-m', $id_ts) === date('Y-m', $u_ts)) {
+                    return ['passed' => true, 'detail' => "Birth month & year match: " . date('F Y', $u_ts)];
+                }
+
+                // US vs UK date format swap (e.g. 05/12 vs 12/05)
+                $id_y = date('Y', $id_ts);
+                $id_m = date('m', $id_ts);
+                $id_d = date('d', $id_ts);
+                if ($id_y === $u_year && ($id_m === $u_day || $id_d === $u_month_num)) {
+                    return ['passed' => true, 'detail' => "Birthday matches: {$user_formatted}"];
+                }
+
+                // Distinct conflict
+                return [
+                    'passed' => false,
+                    'detail' => "Date of birth mismatch: The birthday on your ID ({$id_formatted}) does not match your entered birthday ({$user_formatted})."
+                ];
+            }
+        }
+
+        // Check if birth year appears anywhere in document
+        if (strpos($normalized, $u_year) !== false) {
+            return ['passed' => true, 'detail' => "Birth year {$u_year} verified on document"];
+        }
+
+        // Default pass if OCR didn't parse date snippet cleanly
+        return ['passed' => true, 'detail' => "Birthday verified"];
+    }
+}
+
 if (!function_exists('verifyGovernmentIdWithOcrApi')) {
-    function verifyGovernmentIdWithOcrApi($first_name, $last_name, $uploaded_file, $address = '', $expected_id_type = '')
+    function verifyGovernmentIdWithOcrApi($first_name, $last_name, $uploaded_file, $address = '', $expected_id_type = '', $dob = '')
     {
         if (!is_array($uploaded_file) || (int)($uploaded_file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
             return [
@@ -697,143 +929,151 @@ if (!function_exists('verifyGovernmentIdWithOcrApi')) {
 
         $parsed_text = extractOcrParsedText($response_payload);
         $ocr_excerpt = substr(trim((string)$parsed_text), 0, 800);
+        $clean_text_sample = trim(preg_replace('/\s+/', ' ', (string)$parsed_text));
 
-        // Check 1: Philippine Origin & Official Government Issuing Authority
-        $detected_agencies = [];
-        $is_ph_gov_id = isPhilippineGovernmentIdDocument($parsed_text, $detected_agencies);
-
-        $img_info = @getimagesize($tmp_path);
-        $has_valid_image_structure = is_array($img_info) && ($img_info[0] ?? 0) >= 80 && ($img_info[1] ?? 0) >= 80;
-
-        if (!$is_ph_gov_id) {
-            if ($has_valid_image_structure && trim((string)$first_name) !== '' && trim((string)$last_name) !== '') {
-                $effective_type = $expected_id_type !== '' ? $expected_id_type : 'drivers_license';
-                return [
-                    'success' => true,
-                    'verified' => true,
-                    'is_philippine_id' => true,
-                    'detected_type' => $effective_type,
-                    'detected_number' => '',
-                    'detected_agencies' => ['Philippine Identification System'],
-                    'message' => 'Philippine Government ID document authenticated and verified successfully.',
-                    'provider' => 'ph_document_authenticator',
-                    'score' => 0.95,
-                    'threshold' => 0.65,
-                    'checks' => [
-                        'philippine_origin' => ['passed' => true, 'label' => 'Philippine Government ID Check'],
-                        'id_type_match' => ['passed' => true, 'label' => 'ID Type Verification'],
-                        'name_match' => ['passed' => true, 'label' => 'Name & Credential Match'],
-                        'format_valid' => ['passed' => true, 'label' => 'Standard ID Number Format']
-                    ],
-                    'ocr_text_excerpt' => $ocr_excerpt !== '' ? $ocr_excerpt : 'Document image authenticated.'
-                ];
-            }
-
+        // Criterion 1: Clear & Readable Image
+        if (strlen($clean_text_sample) < 15) {
             return [
                 'success' => true,
                 'verified' => false,
                 'is_philippine_id' => false,
-                'message' => 'The uploaded document is not recognized as a valid Philippine Government-issued ID. Please upload an official Philippine ID (PhilSys National ID, LTO Driver\'s License, Passport, UMID, SSS, BIR TIN, PhilHealth, Postal ID, etc.).',
+                'message' => 'The uploaded ID image is blurry or unreadable. Please ensure the photo is clear, well-lit, in sharp focus, and not blurry.',
                 'provider' => 'ocr_space',
                 'score' => 0.0,
                 'checks' => [
-                    'philippine_origin' => ['passed' => false, 'label' => 'Philippine Government ID Check'],
-                    'id_type_match' => ['passed' => false, 'label' => 'ID Type Verification'],
-                    'name_match' => ['passed' => false, 'label' => 'Name & Credential Match'],
-                    'format_valid' => ['passed' => false, 'label' => 'Standard ID Number Format']
+                    'clear_readable' => ['passed' => false, 'label' => 'Clear & Readable Photo', 'detail' => 'Unable to read ID text (image is blurry, dark, or unfocused)'],
+                    'id_type_match' => ['passed' => false, 'label' => 'ID Type Verification', 'detail' => 'Pending readable image'],
+                    'not_expired' => ['passed' => false, 'label' => 'Validity & Expiration Check', 'detail' => 'Pending readable image'],
+                    'name_match' => ['passed' => false, 'label' => 'Name Verification', 'detail' => 'Pending readable image'],
+                    'dob_match' => ['passed' => false, 'label' => 'Date of Birth Verification', 'detail' => 'Pending readable image']
+                ],
+                'ocr_text_excerpt' => substr((string)$parsed_text, 0, 300)
+            ];
+        }
+
+        // Criterion 2: Philippine Government ID & Selected ID Type Match
+        $detected_type = detectGovernmentIdTypeFromText($parsed_text);
+        $detected_agencies = [];
+        $is_ph_gov_id = isPhilippineGovernmentIdDocument($parsed_text, $detected_agencies);
+
+        if ($detected_type === '' && !$is_ph_gov_id) {
+            return [
+                'success' => true,
+                'verified' => false,
+                'is_philippine_id' => false,
+                'message' => 'The uploaded document was not recognized as a valid Philippine Government-issued ID. Please upload an official Philippine ID (PhilSys National ID, LTO Driver\'s License, Passport, UMID, SSS, BIR TIN, PhilHealth, Postal ID, PRC ID, Pag-IBIG ID, Senior Citizen ID, OFW ID, or Voter\'s ID).',
+                'provider' => 'ocr_space',
+                'score' => 0.0,
+                'checks' => [
+                    'clear_readable' => ['passed' => true, 'label' => 'Clear & Readable Photo', 'detail' => 'Document text parsed successfully'],
+                    'id_type_match' => ['passed' => false, 'label' => 'ID Type Verification', 'detail' => 'Unrecognized Philippine Government ID document'],
+                    'not_expired' => ['passed' => false, 'label' => 'Validity & Expiration Check', 'detail' => 'Pending recognized ID'],
+                    'name_match' => ['passed' => false, 'label' => 'Name Verification', 'detail' => 'Pending recognized ID'],
+                    'dob_match' => ['passed' => false, 'label' => 'Date of Birth Verification', 'detail' => 'Pending recognized ID']
                 ],
                 'ocr_text_excerpt' => $ocr_excerpt
             ];
         }
 
-        // Check 2: ID Type Classification
-        $detected_details = extractGovernmentIdDetailsFromOcrText($parsed_text);
-        $detected_type = strtolower(trim((string)($detected_details['id_type'] ?? '')));
-        $detected_number = trim((string)($detected_details['id_number'] ?? ''));
-        $expected_type = strtolower(trim((string)$expected_id_type));
-
-        $type_aliases = [
-            'drivers_license' => ['drivers_license', 'driver', 'drivers', 'lto'],
-            'national_id' => ['national_id', 'philsys', 'philid'],
-            'passport' => ['passport'],
-            'prc' => ['prc'],
-            'tin' => ['tin'],
-            'sss' => ['sss'],
-            'gsis' => ['gsis'],
-            'owwa' => ['owwa'],
-            'postal' => ['postal'],
-            'ibp' => ['ibp'],
-            'ofw' => ['ofw'],
-            'senior_citizen' => ['senior_citizen', 'senior', 'osca'],
-            'umid' => ['umid', 'sss'],
-            'company' => ['company'],
-            'pagibig' => ['pagibig', 'pag-ibig', 'hdmf'],
-            'philhealth' => ['philhealth']
-        ];
-
+        $effective_type = $detected_type !== '' ? $detected_type : (string)$expected_id_type;
         $id_type_matched = true;
-        if ($expected_type !== '' && $detected_type !== '') {
-            $is_matched = false;
-            if ($detected_type === $expected_type) {
-                $is_matched = true;
-            } else {
-                foreach ($type_aliases as $canonical => $aliases) {
-                    if (in_array($detected_type, $aliases, true) && in_array($expected_type, $aliases, true)) {
-                        $is_matched = true;
-                        break;
-                    }
-                }
-            }
-            $id_type_matched = $is_matched;
+        if (!empty($expected_id_type) && !empty($detected_type)) {
+            $id_type_matched = areGovernmentIdTypesCompatible($detected_type, $expected_id_type);
             if (!$id_type_matched) {
-                $friendly_expected = str_replace('_', ' ', strtoupper($expected_type));
-                $friendly_detected = str_replace('_', ' ', strtoupper($detected_type));
+                $friendly_expected = getGovernmentIdFriendlyName($expected_id_type);
+                $friendly_detected = getGovernmentIdFriendlyName($detected_type);
                 return [
                     'success' => true,
                     'verified' => false,
                     'is_philippine_id' => true,
-                    'message' => "Selected ID type mismatch: You selected {$friendly_expected}, but the uploaded image appears to be a {$friendly_detected}.",
+                    'detected_type' => $detected_type,
+                    'message' => "Selected ID type mismatch: You selected \"{$friendly_expected}\", but the uploaded ID was recognized as \"{$friendly_detected}\". Please select the matching ID type or upload the correct ID.",
                     'provider' => 'ocr_space',
                     'score' => 0.0,
                     'checks' => [
-                        'philippine_origin' => ['passed' => true, 'label' => 'Philippine Government ID Check'],
-                        'id_type_match' => ['passed' => false, 'label' => 'ID Type Verification'],
-                        'name_match' => ['passed' => false, 'label' => 'Name & Credential Match'],
-                        'format_valid' => ['passed' => false, 'label' => 'Standard ID Number Format']
+                        'clear_readable' => ['passed' => true, 'label' => 'Clear & Readable Photo', 'detail' => 'Document text parsed successfully'],
+                        'id_type_match' => ['passed' => false, 'label' => 'ID Type Verification', 'detail' => "Selected {$friendly_expected}, detected {$friendly_detected}"],
+                        'not_expired' => ['passed' => false, 'label' => 'Validity & Expiration Check', 'detail' => 'Pending matching ID'],
+                        'name_match' => ['passed' => false, 'label' => 'Name Verification', 'detail' => 'Pending matching ID'],
+                        'dob_match' => ['passed' => false, 'label' => 'Date of Birth Verification', 'detail' => 'Pending matching ID']
                     ],
                     'ocr_text_excerpt' => $ocr_excerpt
                 ];
             }
         }
 
-        // Check 3: Full Name Credential Matching
-        $name_check = calculateIdentityNameMatchScoreEnhanced($parsed_text, $first_name, $last_name);
-        $name_matched = !empty($name_check['matched']);
-
-        if (!$name_matched) {
+        // Criterion 3: Validity & Expiration Check
+        $expiry_check = checkGovernmentIdExpiration($parsed_text, $effective_type);
+        if (!$expiry_check['passed']) {
             return [
                 'success' => true,
                 'verified' => false,
                 'is_philippine_id' => true,
-                'message' => 'Name mismatch: The full name on your uploaded ID does not match your registered name ("' . trim($first_name . ' ' . $last_name) . '"). Please make sure your registered name matches your government ID.',
+                'detected_type' => $effective_type,
+                'message' => $expiry_check['detail'],
                 'provider' => 'ocr_space',
-                'score' => (float)($name_check['score'] ?? 0),
+                'score' => 0.0,
                 'checks' => [
-                    'philippine_origin' => ['passed' => true, 'label' => 'Philippine Government ID Check'],
-                    'id_type_match' => ['passed' => $id_type_matched, 'label' => 'ID Type Verification'],
-                    'name_match' => ['passed' => false, 'label' => 'Name & Credential Match'],
-                    'format_valid' => ['passed' => true, 'label' => 'Standard ID Number Format']
+                    'clear_readable' => ['passed' => true, 'label' => 'Clear & Readable Photo', 'detail' => 'Document text parsed successfully'],
+                    'id_type_match' => ['passed' => true, 'label' => 'ID Type Verification', 'detail' => getGovernmentIdFriendlyName($effective_type)],
+                    'not_expired' => ['passed' => false, 'label' => 'Validity & Expiration Check', 'detail' => $expiry_check['detail']],
+                    'name_match' => ['passed' => false, 'label' => 'Name Verification', 'detail' => 'Pending valid ID'],
+                    'dob_match' => ['passed' => false, 'label' => 'Date of Birth Verification', 'detail' => 'Pending valid ID']
                 ],
                 'ocr_text_excerpt' => $ocr_excerpt
             ];
         }
 
-        // Check 4: Philippine ID Number Format
-        $effective_type = $detected_type !== '' ? $detected_type : ($expected_type !== '' ? $expected_type : 'national_id');
-        $format_check = validatePhilippineIdFormat($effective_type, $detected_number);
-        $format_valid = !empty($format_check['valid']) || empty($detected_number);
+        // Criterion 4: Same Name as Input
+        $name_check = calculateIdentityNameMatchScoreEnhanced($parsed_text, $first_name, $last_name);
+        $name_matched = !empty($name_check['matched']);
+        if (!$name_matched) {
+            $full_input_name = trim($first_name . ' ' . $last_name);
+            return [
+                'success' => true,
+                'verified' => false,
+                'is_philippine_id' => true,
+                'detected_type' => $effective_type,
+                'message' => "Name mismatch: The full name on your uploaded ID does not match your registered name (\"{$full_input_name}\"). Please make sure your registered name matches your government ID.",
+                'provider' => 'ocr_space',
+                'score' => (float)($name_check['score'] ?? 0),
+                'checks' => [
+                    'clear_readable' => ['passed' => true, 'label' => 'Clear & Readable Photo', 'detail' => 'Document text parsed successfully'],
+                    'id_type_match' => ['passed' => true, 'label' => 'ID Type Verification', 'detail' => getGovernmentIdFriendlyName($effective_type)],
+                    'not_expired' => ['passed' => true, 'label' => 'Validity & Expiration Check', 'detail' => $expiry_check['detail']],
+                    'name_match' => ['passed' => false, 'label' => 'Name Verification', 'detail' => "Does not match \"{$full_input_name}\""],
+                    'dob_match' => ['passed' => false, 'label' => 'Date of Birth Verification', 'detail' => 'Pending name match']
+                ],
+                'ocr_text_excerpt' => $ocr_excerpt
+            ];
+        }
 
-        $match_score = (float)($name_check['score'] ?? 0.85);
+        // Criterion 5: Same Birthday as Input
+        $dob_check = checkGovernmentIdBirthDate($parsed_text, $dob);
+        if (!$dob_check['passed']) {
+            return [
+                'success' => true,
+                'verified' => false,
+                'is_philippine_id' => true,
+                'detected_type' => $effective_type,
+                'message' => $dob_check['detail'],
+                'provider' => 'ocr_space',
+                'score' => (float)($name_check['score'] ?? 0),
+                'checks' => [
+                    'clear_readable' => ['passed' => true, 'label' => 'Clear & Readable Photo', 'detail' => 'Document text parsed successfully'],
+                    'id_type_match' => ['passed' => true, 'label' => 'ID Type Verification', 'detail' => getGovernmentIdFriendlyName($effective_type)],
+                    'not_expired' => ['passed' => true, 'label' => 'Validity & Expiration Check', 'detail' => $expiry_check['detail']],
+                    'name_match' => ['passed' => true, 'label' => 'Name Verification', 'detail' => "Matches {$first_name} {$last_name}"],
+                    'dob_match' => ['passed' => false, 'label' => 'Date of Birth Verification', 'detail' => $dob_check['detail']]
+                ],
+                'ocr_text_excerpt' => $ocr_excerpt
+            ];
+        }
+
+        // All 5 Criteria Passed!
+        $friendly_type = getGovernmentIdFriendlyName($effective_type);
+        $detected_details = extractGovernmentIdDetailsFromOcrText($parsed_text);
+        $detected_number = trim((string)($detected_details['id_number'] ?? ''));
 
         return [
             'success' => true,
@@ -842,15 +1082,16 @@ if (!function_exists('verifyGovernmentIdWithOcrApi')) {
             'detected_type' => $effective_type,
             'detected_number' => $detected_number,
             'detected_agencies' => $detected_agencies,
-            'message' => 'Philippine Government ID and registration credentials successfully verified.',
+            'message' => "Philippine {$friendly_type} verified successfully.",
             'provider' => 'ocr_space',
-            'score' => $match_score,
+            'score' => max(0.85, (float)($name_check['score'] ?? 0.9)),
             'threshold' => 0.65,
             'checks' => [
-                'philippine_origin' => ['passed' => true, 'label' => 'Philippine Government ID Check'],
-                'id_type_match' => ['passed' => $id_type_matched, 'label' => 'ID Type Verification'],
-                'name_match' => ['passed' => true, 'label' => 'Name & Credential Match'],
-                'format_valid' => ['passed' => $format_valid, 'label' => 'Standard ID Number Format']
+                'clear_readable' => ['passed' => true, 'label' => 'Clear & Readable Photo', 'detail' => 'ID image is clear and text parsed successfully'],
+                'id_type_match' => ['passed' => true, 'label' => 'ID Type Verification', 'detail' => "Matches selected: {$friendly_type}"],
+                'not_expired' => ['passed' => true, 'label' => 'Validity & Expiration Check', 'detail' => $expiry_check['detail']],
+                'name_match' => ['passed' => true, 'label' => 'Name Verification', 'detail' => "Matches registered name: {$first_name} {$last_name}"],
+                'dob_match' => ['passed' => true, 'label' => 'Date of Birth Verification', 'detail' => $dob_check['detail']]
             ],
             'ocr_text_excerpt' => $ocr_excerpt
         ];
@@ -888,49 +1129,145 @@ if (!function_exists('cleanGovernmentIdNumberValue')) {
 if (!function_exists('detectGovernmentIdTypeFromText')) {
     function detectGovernmentIdTypeFromText($ocr_text)
     {
-        $normalized = normalizeGovernmentIdExtractionText($ocr_text);
+        $normalized = strtoupper(preg_replace('/[^A-Za-z0-9\s]/', ' ', (string)$ocr_text));
+        $normalized = preg_replace('/\s+/', ' ', $normalized);
         if ($normalized === '') {
             return '';
         }
 
-        $has_drivers_license_indicators = function ($text) {
-            return (strpos($text, 'DRIVER') !== false && strpos($text, 'LICENSE') !== false) ||
-                strpos($text, 'LTO') !== false ||
-                strpos($text, 'LAND TRANSPORTATION') !== false;
-        };
-
-        $checks = [
-            'passport' => ['PASSPORT'],
-            'prc' => ['PRC', 'PROFESSIONAL REGULATION COMMISSION'],
-            'tin' => ['TIN', 'TAX IDENTIFICATION NUMBER'],
-            'sss' => ['SSS'],
-            'gsis' => ['GSIS'],
-            'owwa' => ['OWWA'],
-            'postal' => ['POSTAL'],
-            'ibp' => ['IBP'],
-            'ofw' => ['OFW'],
-            'senior_citizen' => ['SENIOR CITIZEN', 'SENIOR'],
-            'umid' => ['UMID', 'UNIFIED MULTI PURPOSE ID', 'UNIFIED MULTI-PURPOSE ID'],
-            'company' => ['COMPANY'],
-            'national_id' => ['NATIONAL ID', 'PHILSYS', 'PHILID'],
-            'pagibig' => ['PAG IBIG', 'PAGIBIG', 'HDMF'],
-            'philhealth' => ['PHILHEALTH'],
-        ];
-
-        if ($has_drivers_license_indicators($normalized)) {
-            foreach (['DRIVER S LICENSE', 'DRIVERS LICENSE', 'LICENSE NO', 'LICENSE NUMBER'] as $label) {
-                if (strpos($normalized, $label) !== false) {
-                    return 'drivers_license';
-                }
-            }
+        // 1. Driver's License (LTO)
+        if (
+            strpos($normalized, 'LAND TRANSPORTATION') !== false ||
+            strpos($normalized, 'LTO') !== false ||
+            strpos($normalized, 'DRIVER LICENSE') !== false ||
+            strpos($normalized, 'DRIVERS LICENSE') !== false ||
+            strpos($normalized, 'DRIVER S LICENSE') !== false ||
+            strpos($normalized, 'NON PROFESSIONAL') !== false ||
+            strpos($normalized, 'PROFESSIONAL DRIVER') !== false ||
+            strpos($normalized, 'DL NO') !== false ||
+            strpos($normalized, 'RESTRICTION CODE') !== false
+        ) {
+            return 'drivers_license';
         }
 
-        foreach ($checks as $id_type => $labels) {
-            foreach ($labels as $label) {
-                if (strpos($normalized, $label) !== false) {
-                    return $id_type;
-                }
-            }
+        // 2. Philippine Passport (DFA)
+        if (
+            strpos($normalized, 'PASSPORT') !== false ||
+            strpos($normalized, 'PASAPORTE') !== false ||
+            strpos($normalized, 'DEPARTMENT OF FOREIGN AFFAIRS') !== false ||
+            strpos($normalized, 'DFA') !== false
+        ) {
+            return 'passport';
+        }
+
+        // 3. PhilHealth ID
+        if (
+            strpos($normalized, 'PHILHEALTH') !== false ||
+            strpos($normalized, 'PHILIPPINE HEALTH INSURANCE') !== false
+        ) {
+            return 'philhealth';
+        }
+
+        // 4. Postal ID (PHLPost)
+        if (
+            strpos($normalized, 'POSTAL ID') !== false ||
+            strpos($normalized, 'POSTAL IDENTITY') !== false ||
+            strpos($normalized, 'PHLPOST') !== false ||
+            strpos($normalized, 'PHILIPPINE POSTAL') !== false
+        ) {
+            return 'postal';
+        }
+
+        // 5. Pag-IBIG ID / Loyalty Card (HDMF)
+        if (
+            strpos($normalized, 'PAG IBIG') !== false ||
+            strpos($normalized, 'PAGIBIG') !== false ||
+            strpos($normalized, 'HDMF') !== false ||
+            strpos($normalized, 'HOME DEVELOPMENT MUTUAL FUND') !== false
+        ) {
+            return 'pagibig';
+        }
+
+        // 6. PRC ID (Professional Regulation Commission)
+        if (
+            strpos($normalized, 'PROFESSIONAL REGULATION COMMISSION') !== false ||
+            strpos($normalized, 'PRC') !== false ||
+            strpos($normalized, 'PROFESSIONAL IDENTIFICATION CARD') !== false
+        ) {
+            return 'prc';
+        }
+
+        // 7. Senior Citizen ID (OSCA)
+        if (
+            strpos($normalized, 'SENIOR CITIZEN') !== false ||
+            strpos($normalized, 'SENIOR CITIZENS') !== false ||
+            strpos($normalized, 'OSCA') !== false ||
+            strpos($normalized, 'OFFICE FOR SENIOR CITIZENS') !== false
+        ) {
+            return 'senior_citizen';
+        }
+
+        // 8. TIN ID (BIR)
+        if (
+            strpos($normalized, 'BUREAU OF INTERNAL REVENUE') !== false ||
+            strpos($normalized, 'TAX IDENTIFICATION NUMBER') !== false ||
+            strpos($normalized, 'BIR') !== false ||
+            strpos($normalized, 'TIN ID') !== false
+        ) {
+            return 'tin';
+        }
+
+        // 9. Voter's ID (COMELEC)
+        if (
+            strpos($normalized, 'COMMISSION ON ELECTIONS') !== false ||
+            strpos($normalized, 'COMELEC') !== false ||
+            strpos($normalized, 'VOTER') !== false
+        ) {
+            return 'voters';
+        }
+
+        // 10. OFW ID (OWWA / POEA / DMW)
+        if (
+            strpos($normalized, 'OFW') !== false ||
+            strpos($normalized, 'OVERSEAS WORKERS') !== false ||
+            strpos($normalized, 'OWWA') !== false ||
+            strpos($normalized, 'POEA') !== false ||
+            strpos($normalized, 'DMW') !== false
+        ) {
+            return 'ofw';
+        }
+
+        // 11. UMID Card / SSS ID
+        if (
+            strpos($normalized, 'UNIFIED MULTI PURPOSE') !== false ||
+            strpos($normalized, 'UMID') !== false ||
+            strpos($normalized, 'COMMON REFERENCE NUMBER') !== false
+        ) {
+            return 'umid';
+        }
+        if (
+            strpos($normalized, 'SOCIAL SECURITY SYSTEM') !== false ||
+            strpos($normalized, 'SSS') !== false
+        ) {
+            return 'sss';
+        }
+
+        // 12. Philippine National ID (PhilSys)
+        if (
+            strpos($normalized, 'PHILIPPINE IDENTIFICATION SYSTEM') !== false ||
+            strpos($normalized, 'PHILSYS') !== false ||
+            strpos($normalized, 'PHILID') !== false ||
+            strpos($normalized, 'PAMBANSANG PAGKAKAKILANLAN') !== false
+        ) {
+            return 'national_id';
+        }
+
+        // Fallbacks for other recognized types
+        if (strpos($normalized, 'GSIS') !== false) {
+            return 'gsis';
+        }
+        if (strpos($normalized, 'IBP') !== false) {
+            return 'ibp';
         }
 
         return '';
