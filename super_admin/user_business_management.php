@@ -910,6 +910,16 @@ body.dark-mode .user-role-tag.unlinked {
    ========================================================================== */
 .sa-folders-section {
     margin-bottom: 24px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+#saStoresGridContainer {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
 .sa-folder-category-header {
@@ -955,31 +965,33 @@ body.dark-mode .sa-folder-category-badge {
 
 .sa-folder-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(235px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 215px), 1fr));
     gap: 10px;
     margin-bottom: 14px;
-}
-
-@media (min-width: 1400px) {
-    .sa-folder-grid {
-        grid-template-columns: repeat(4, 1fr);
-    }
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 .sa-folder-card {
     background: #ffffff;
     border: 1px solid #eaecf0;
     border-radius: 12px;
-    padding: 9px 12px;
+    padding: 8px 10px;
     cursor: pointer;
     transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
     display: flex;
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
+    gap: 8px;
     position: relative;
     box-shadow: 0 1px 2px rgba(16, 24, 40, 0.03);
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
 .sa-folder-card:hover {
@@ -1002,19 +1014,20 @@ body.dark-mode .sa-folder-card:hover {
 .sa-folder-card-main {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     min-width: 0;
-    flex: 1;
+    flex: 1 1 auto;
+    overflow: hidden;
 }
 
 .sa-folder-icon-box {
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 16px;
+    font-size: 14px;
     flex-shrink: 0;
 }
 
@@ -1035,11 +1048,12 @@ body.dark-mode .sa-folder-card:hover {
 
 .sa-folder-text-wrap {
     min-width: 0;
-    flex: 1;
+    flex: 1 1 auto;
+    overflow: hidden;
 }
 
 .sa-folder-title {
-    font-size: 13.5px;
+    font-size: 13px;
     font-weight: 700;
     color: #101828;
     margin: 0;
@@ -1047,6 +1061,8 @@ body.dark-mode .sa-folder-card:hover {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    display: block;
+    width: 100%;
 }
 
 body.dark-mode .sa-folder-title {
@@ -1054,13 +1070,15 @@ body.dark-mode .sa-folder-title {
 }
 
 .sa-folder-sub {
-    font-size: 11.5px;
+    font-size: 11px;
     color: #667085;
     margin-top: 2px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     line-height: 1.2;
+    display: block;
+    width: 100%;
 }
 
 body.dark-mode .sa-folder-sub {
@@ -1070,14 +1088,14 @@ body.dark-mode .sa-folder-sub {
 .sa-folder-side-info {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
     flex-shrink: 0;
 }
 
 .sa-folder-count-pill {
-    font-size: 11px;
+    font-size: 10.5px;
     font-weight: 700;
-    padding: 2px 7px;
+    padding: 2px 6px;
     border-radius: 10px;
     background: #f8f9fa;
     border: 1px solid #eaecf0;
@@ -1092,7 +1110,7 @@ body.dark-mode .sa-folder-count-pill {
 }
 
 .sa-folder-chevron {
-    font-size: 11px;
+    font-size: 10.5px;
     color: #98a2b3;
     transition: transform 0.15s ease, color 0.15s ease;
 }
@@ -1444,6 +1462,7 @@ body.dark-mode .sa-view-all-pill {
                     </div>
                 <?php endif; ?>
             </div>
+        </div>
     </div>
 
     <!-- ACTIVE FOLDER VIEW (Shown when a folder is selected or via URL) -->
