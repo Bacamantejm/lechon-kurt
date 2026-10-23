@@ -379,7 +379,7 @@ if (!function_exists('callPhilSysVerificationProvider')) {
 }
 
 if (!function_exists('verifyGovernmentIdWithConfiguredProvider')) {
-    function verifyGovernmentIdWithConfiguredProvider($first_name, $last_name, $uploaded_file, $address = '', $expected_id_type = '', $dob = '')
+    function verifyGovernmentIdWithConfiguredProvider($first_name, $last_name, $uploaded_file, $address = '', $expected_id_type = '', $dob = '', $uploaded_back_file = null)
     {
         $provider = getGovernmentVerificationProviderChoice();
         $threshold = 0.75;
@@ -400,7 +400,7 @@ if (!function_exists('verifyGovernmentIdWithConfiguredProvider')) {
         }
 
         if ($provider === 'ocr_space') {
-            return verifyGovernmentIdWithOcrApi($first_name, $last_name, $uploaded_file, $address, $expected_id_type, $dob);
+            return verifyGovernmentIdWithOcrApi($first_name, $last_name, $uploaded_file, $address, $expected_id_type, $dob, $uploaded_back_file);
         }
 
         if (isPhilSysVerificationReady()) {
@@ -420,7 +420,7 @@ if (!function_exists('verifyGovernmentIdWithConfiguredProvider')) {
             }
         }
 
-        return verifyGovernmentIdWithOcrApi($first_name, $last_name, $uploaded_file, $address, $expected_id_type, $dob);
+        return verifyGovernmentIdWithOcrApi($first_name, $last_name, $uploaded_file, $address, $expected_id_type, $dob, $uploaded_back_file);
     }
 }
 

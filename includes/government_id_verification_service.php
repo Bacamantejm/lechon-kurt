@@ -559,6 +559,83 @@ if (!function_exists('calculateIdentityProfileMatchScore')) {
     }
 }
 
+if (!function_exists('compressImageForOcrSpace')) {
+    function compressImageForOcrSpace($input_path, $max_dim = 1600, $quality = 82)
+    {
+        if (!file_exists($input_path) || !is_file($input_path)) {
+            return $input_path;
+        }
+
+        $filesize = filesize($input_path);
+        // If file is already smaller than 500 KB and has standard dimensions, keep it as is
+        if ($filesize > 0 && $filesize < 500 * 1024) {
+            $info = @getimagesize($input_path);
+            if ($info && max($info[0], $info[1]) <= $max_dim) {
+                return $input_path;
+            }
+        }
+
+        if (!function_exists('imagecreatefromstring')) {
+            return $input_path;
+        }
+
+        $data = @file_get_contents($input_path);
+        if ($data === false) {
+            return $input_path;
+        }
+
+        $src = @imagecreatefromstring($data);
+        if (!$src) {
+            return $input_path;
+        }
+
+        $orig_w = imagesx($src);
+        $orig_h = imagesy($src);
+
+        $scale = min(1.0, $max_dim / max(1, max($orig_w, $orig_h)));
+        $new_w = max(1, (int)round($orig_w * $scale));
+        $new_h = max(1, (int)round($orig_h * $scale));
+
+        $dst = imagecreatetruecolor($new_w, $new_h);
+        $white = imagecolorallocate($dst, 255, 255, 255);
+        imagefilledrectangle($dst, 0, 0, $new_w, $new_h, $white);
+
+        imagecopyresampled($dst, $src, 0, 0, 0, 0, $new_w, $new_h, $orig_w, $orig_h);
+        imagedestroy($src);
+
+        // Orient image properly if EXIF orientation exists
+        if (function_exists('exif_read_data')) {
+            $exif = @exif_read_data($input_path);
+            if (!empty($exif['Orientation'])) {
+                switch ((int)$exif['Orientation']) {
+                    case 3:
+                        $rotated = imagerotate($dst, 180, 0);
+                        if ($rotated) { imagedestroy($dst); $dst = $rotated; }
+                        break;
+                    case 6:
+                        $rotated = imagerotate($dst, -90, 0);
+                        if ($rotated) { imagedestroy($dst); $dst = $rotated; }
+                        break;
+                    case 8:
+                        $rotated = imagerotate($dst, 90, 0);
+                        if ($rotated) { imagedestroy($dst); $dst = $rotated; }
+                        break;
+                }
+            }
+        }
+
+        $tmp_file = tempnam(sys_get_temp_dir(), 'ocr_comp_') . '.jpg';
+        imagejpeg($dst, $tmp_file, $quality);
+        imagedestroy($dst);
+
+        if (file_exists($tmp_file) && filesize($tmp_file) > 0) {
+            return $tmp_file;
+        }
+
+        return $input_path;
+    }
+}
+
 if (!function_exists('getGovernmentIdVerificationApiKey')) {
     function getGovernmentIdVerificationApiKey()
     {
@@ -584,7 +661,8 @@ if (!function_exists('getGovernmentIdVerificationApiKey')) {
             }
         }
 
-        return '';
+        // Reliable fallback OCR.space key
+        return 'K85790143788957';
     }
 }
 
@@ -627,7 +705,7 @@ if (!function_exists('areGovernmentIdTypesCompatible')) {
 
         $aliases = [
             'drivers_license' => ['drivers_license', 'driver', 'drivers', 'lto'],
-            'national_id' => ['national_id', 'philsys', 'philid'],
+            'national_id' => ['national_id', 'philsys', 'philid', 'ephilid'],
             'passport' => ['passport'],
             'prc' => ['prc'],
             'tin' => ['tin'],
@@ -663,57 +741,58 @@ if (!function_exists('checkGovernmentIdExpiration')) {
         }
 
         $keywords = ['EXPIRATION DATE', 'EXPIRY DATE', 'VALID UNTIL', 'DATE OF EXPIRY', 'EXP. DATE', 'EXP DATE', 'VALID THRU', 'PETSA NG PAGKAPASO', 'EXPIRY'];
-        $found_date = '';
+        $found_dates = [];
 
         foreach ($keywords as $kw) {
             $pos = strpos($normalized, $kw);
             if ($pos !== false) {
-                $snippet = substr($normalized, $pos, 80);
+                $snippet = substr($normalized, $pos, 90);
 
-                if (preg_match('/\b(19\d\d|20\d\d)[\-\/.](0[1-9]|1[0-2])[\-\/.](0[1-9]|[12]\d|3[01])\b/', $snippet, $m)) {
-                    $found_date = $m[0];
-                    break;
+                if (preg_match_all('/\b(19\d\d|20\d\d)[\-\/.](0[1-9]|1[0-2])[\-\/.](0[1-9]|[12]\d|3[01])\b/', $snippet, $m)) {
+                    foreach ($m[0] as $d) $found_dates[] = $d;
                 }
-                if (preg_match('/\b(0[1-9]|[12]\d|3[01])[\-\/.](0[1-9]|1[0-2])[\-\/.](19\d\d|20\d\d)\b/', $snippet, $m)) {
-                    $found_date = $m[0];
-                    break;
+                if (preg_match_all('/\b(0[1-9]|[12]\d|3[01])[\-\/.](0[1-9]|1[0-2])[\-\/.](19\d\d|20\d\d)\b/', $snippet, $m)) {
+                    foreach ($m[0] as $d) $found_dates[] = $d;
                 }
-                if (preg_match('/\b(0[1-9]|1[0-2])[\-\/.](0[1-9]|[12]\d|3[01])[\-\/.](19\d\d|20\d\d)\b/', $snippet, $m)) {
-                    $found_date = $m[0];
-                    break;
+                if (preg_match_all('/\b(0[1-9]|1[0-2])[\-\/.](0[1-9]|[12]\d|3[01])[\-\/.](19\d\d|20\d\d)\b/', $snippet, $m)) {
+                    foreach ($m[0] as $d) $found_dates[] = $d;
                 }
                 $months = 'JAN(?:UARY)?|FEB(?:RUARY)?|MAR(?:CH)?|APR(?:IL)?|MAY|JUN(?:E)?|JUL(?:Y)?|AUG(?:UST)?|SEP(?:TEMBER)?|OCT(?:OBER)?|NOV(?:EMBER)?|DEC(?:EMBER)?';
-                if (preg_match('/\b(?:' . $months . ')\s+(\d{1,2})(?:ST|ND|RD|TH)?,?\s+(19\d\d|20\d\d)\b/i', $snippet, $m)) {
-                    $found_date = $m[0];
-                    break;
+                if (preg_match_all('/\b(?:' . $months . ')\s+(\d{1,2})(?:ST|ND|RD|TH)?,?\s+(19\d\d|20\d\d)\b/i', $snippet, $m)) {
+                    foreach ($m[0] as $d) $found_dates[] = $d;
                 }
-                if (preg_match('/\b(\d{1,2})\s+(?:' . $months . ')\s+(19\d\d|20\d\d)\b/i', $snippet, $m)) {
-                    $found_date = $m[0];
-                    break;
+                if (preg_match_all('/\b(\d{1,2})\s+(?:' . $months . ')\s+(19\d\d|20\d\d)\b/i', $snippet, $m)) {
+                    foreach ($m[0] as $d) $found_dates[] = $d;
                 }
             }
         }
 
-        if ($found_date !== '') {
+        foreach ($found_dates as $found_date) {
             $ts = strtotime($found_date);
-            if ($ts) {
-                $is_expired = ($ts < time());
-                $formatted = date('F j, Y', $ts);
-                if ($is_expired) {
-                    return [
-                        'passed' => false,
-                        'has_expiry' => true,
-                        'expired' => true,
-                        'detail' => "ID expired on {$formatted}. Please upload an unexpired valid ID."
-                    ];
-                } else {
-                    return [
-                        'passed' => true,
-                        'has_expiry' => true,
-                        'expired' => false,
-                        'detail' => "Valid until {$formatted}"
-                    ];
-                }
+            if (!$ts) continue;
+
+            $cand_year = (int)date('Y', $ts);
+            // Ignore dates before 2018 as they are birth dates or historical dates, not valid expiration dates
+            if ($cand_year < 2018) {
+                continue;
+            }
+
+            $is_expired = ($ts < time());
+            $formatted = date('F j, Y', $ts);
+            if ($is_expired) {
+                return [
+                    'passed' => false,
+                    'has_expiry' => true,
+                    'expired' => true,
+                    'detail' => "ID expired on {$formatted}. Please upload an unexpired valid ID."
+                ];
+            } else {
+                return [
+                    'passed' => true,
+                    'has_expiry' => true,
+                    'expired' => false,
+                    'detail' => "Valid until {$formatted}"
+                ];
             }
         }
 
@@ -743,63 +822,67 @@ if (!function_exists('checkGovernmentIdBirthDate')) {
         $user_formatted = date('F j, Y', $u_ts);
 
         $normalized = strtoupper($ocr_text);
-        $keywords = ['DATE OF BIRTH', 'BIRTH DATE', 'BIRTHDATE', 'DOB', 'KAPANGANAKAN', 'PETSA NG KAPANGANAKAN', 'BORN'];
+        $keywords = ['DATE OF BIRTH', 'BIRTH DATE', 'BIRTHDATE', 'DOB', 'KAPANGANAKAN', 'PETSA NG KAPANGANAKAN', 'BORN', 'BIRTHDAY', 'DATE DE NAISSANCE'];
         $found_dates = [];
 
         foreach ($keywords as $kw) {
             $pos = strpos($normalized, $kw);
             if ($pos !== false) {
-                $snippet = substr($normalized, $pos, 90);
+                $snippet = substr($normalized, $pos, 100);
 
-                if (preg_match('/\b(19\d\d|20\d\d)[\-\/.](0[1-9]|1[0-2])[\-\/.](0[1-9]|[12]\d|3[01])\b/', $snippet, $m)) {
-                    $found_dates[] = $m[0];
+                if (preg_match_all('/\b(19\d\d|20\d\d)[\-\/.](0[1-9]|1[0-2])[\-\/.](0[1-9]|[12]\d|3[01])\b/', $snippet, $m)) {
+                    foreach ($m[0] as $d) $found_dates[] = $d;
                 }
-                if (preg_match('/\b(0[1-9]|[12]\d|3[01])[\-\/.](0[1-9]|1[0-2])[\-\/.](19\d\d|20\d\d)\b/', $snippet, $m)) {
-                    $found_dates[] = $m[0];
+                if (preg_match_all('/\b(0[1-9]|[12]\d|3[01])[\-\/.](0[1-9]|1[0-2])[\-\/.](19\d\d|20\d\d)\b/', $snippet, $m)) {
+                    foreach ($m[0] as $d) $found_dates[] = $d;
                 }
-                if (preg_match('/\b(0[1-9]|1[0-2])[\-\/.](0[1-9]|[12]\d|3[01])[\-\/.](19\d\d|20\d\d)\b/', $snippet, $m)) {
-                    $found_dates[] = $m[0];
+                if (preg_match_all('/\b(0[1-9]|1[0-2])[\-\/.](0[1-9]|[12]\d|3[01])[\-\/.](19\d\d|20\d\d)\b/', $snippet, $m)) {
+                    foreach ($m[0] as $d) $found_dates[] = $d;
                 }
                 $months = 'JAN(?:UARY)?|FEB(?:RUARY)?|MAR(?:CH)?|APR(?:IL)?|MAY|JUN(?:E)?|JUL(?:Y)?|AUG(?:UST)?|SEP(?:TEMBER)?|OCT(?:OBER)?|NOV(?:EMBER)?|DEC(?:EMBER)?';
-                if (preg_match('/\b(?:' . $months . ')\s+(\d{1,2})(?:ST|ND|RD|TH)?,?\s+(19\d\d|20\d\d)\b/i', $snippet, $m)) {
-                    $found_dates[] = $m[0];
+                if (preg_match_all('/\b(?:' . $months . ')\s+(\d{1,2})(?:ST|ND|RD|TH)?,?\s+(19\d\d|20\d\d)\b/i', $snippet, $m)) {
+                    foreach ($m[0] as $d) $found_dates[] = $d;
                 }
-                if (preg_match('/\b(\d{1,2})\s+(?:' . $months . ')\s+(19\d\d|20\d\d)\b/i', $snippet, $m)) {
-                    $found_dates[] = $m[0];
+                if (preg_match_all('/\b(\d{1,2})\s+(?:' . $months . ')\s+(19\d\d|20\d\d)\b/i', $snippet, $m)) {
+                    foreach ($m[0] as $d) $found_dates[] = $d;
                 }
             }
         }
 
-        if (!empty($found_dates)) {
-            $detected_dob_str = $found_dates[0];
-            $id_ts = strtotime($detected_dob_str);
-            if ($id_ts) {
-                $id_formatted = date('F j, Y', $id_ts);
+        $has_conflicting_dob = false;
+        $conflicting_dob_str = '';
 
-                // Exact match
-                if (date('Y-m-d', $id_ts) === date('Y-m-d', $u_ts)) {
-                    return ['passed' => true, 'detail' => "Birthday matches: {$user_formatted}"];
-                }
+        foreach ($found_dates as $candidate_date) {
+            $id_ts = strtotime($candidate_date);
+            if (!$id_ts) continue;
 
-                // Month and year match
-                if (date('Y-m', $id_ts) === date('Y-m', $u_ts)) {
-                    return ['passed' => true, 'detail' => "Birth month & year match: " . date('F Y', $u_ts)];
-                }
-
-                // US vs UK date format swap (e.g. 05/12 vs 12/05)
-                $id_y = date('Y', $id_ts);
-                $id_m = date('m', $id_ts);
-                $id_d = date('d', $id_ts);
-                if ($id_y === $u_year && ($id_m === $u_day || $id_d === $u_month_num)) {
-                    return ['passed' => true, 'detail' => "Birthday matches: {$user_formatted}"];
-                }
-
-                // Distinct conflict
-                return [
-                    'passed' => false,
-                    'detail' => "Date of birth mismatch: The birthday on your ID ({$id_formatted}) does not match your entered birthday ({$user_formatted})."
-                ];
+            $cand_year = (int)date('Y', $id_ts);
+            // Filter out recent issuance/expiration years (within last 10 years or future)
+            if ($cand_year >= ((int)date('Y') - 10)) {
+                continue;
             }
+
+            // Exact match
+            if (date('Y-m-d', $id_ts) === date('Y-m-d', $u_ts)) {
+                return ['passed' => true, 'detail' => "Birthday matches: {$user_formatted}"];
+            }
+
+            // Month and year match
+            if (date('Y-m', $id_ts) === date('Y-m', $u_ts)) {
+                return ['passed' => true, 'detail' => "Birth month & year match: " . date('F Y', $u_ts)];
+            }
+
+            // US vs UK date format swap (e.g. 05/12 vs 12/05)
+            $id_y = date('Y', $id_ts);
+            $id_m = date('m', $id_ts);
+            $id_d = date('d', $id_ts);
+            if ($id_y === $u_year && ($id_m === $u_day || $id_d === $u_month_num)) {
+                return ['passed' => true, 'detail' => "Birthday matches: {$user_formatted}"];
+            }
+
+            // Candidate is a plausible birth date (< current_year - 10) and does not match
+            $has_conflicting_dob = true;
+            $conflicting_dob_str = date('F j, Y', $id_ts);
         }
 
         // Check if birth year appears anywhere in document
@@ -807,13 +890,102 @@ if (!function_exists('checkGovernmentIdBirthDate')) {
             return ['passed' => true, 'detail' => "Birth year {$u_year} verified on document"];
         }
 
+        if ($has_conflicting_dob) {
+            return [
+                'passed' => false,
+                'detail' => "Date of birth mismatch: The birthday on your ID ({$conflicting_dob_str}) does not match your entered birthday ({$user_formatted})."
+            ];
+        }
+
         // Default pass if OCR didn't parse date snippet cleanly
         return ['passed' => true, 'detail' => "Birthday verified"];
     }
 }
 
+if (!function_exists('callOcrSpaceApiForImage')) {
+    function callOcrSpaceApiForImage($file_path, $api_key)
+    {
+        if (!file_exists($file_path) || !is_file($file_path)) {
+            return ['success' => false, 'text' => '', 'error' => 'File not found.'];
+        }
+
+        $compressed_path = compressImageForOcrSpace($file_path, 1600, 82);
+        $clean_compressed = ($compressed_path !== $file_path);
+
+        $endpoint = 'https://api.ocr.space/parse/image';
+        $engines = ['2', '1'];
+        $last_error = '';
+        $best_text = '';
+
+        foreach ($engines as $engine) {
+            $cfile = curl_file_create($compressed_path, 'image/jpeg', basename($compressed_path));
+            $post_fields = [
+                'apikey' => $api_key,
+                'language' => 'eng',
+                'isOverlayRequired' => 'false',
+                'OCREngine' => $engine,
+                'detectOrientation' => 'true',
+                'scale' => 'true',
+                'file' => $cfile
+            ];
+
+            $ch = curl_init($endpoint);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => $post_fields,
+                CURLOPT_TIMEOUT => 30,
+                CURLOPT_CONNECTTIMEOUT => 10
+            ]);
+
+            $raw_response = curl_exec($ch);
+            $curl_err = curl_error($ch);
+            $http_code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($raw_response === false) {
+                $last_error = $curl_err !== '' ? $curl_err : 'Network connection failed';
+                continue;
+            }
+
+            $payload = json_decode((string)$raw_response, true);
+            if (!is_array($payload)) {
+                $last_error = 'Unreadable response from OCR service';
+                continue;
+            }
+
+            if (!empty($payload['IsErroredOnProcessing'])) {
+                $err_msg = '';
+                if (!empty($payload['ErrorMessage'])) {
+                    $err_msg = is_array($payload['ErrorMessage']) ? implode(' ', $payload['ErrorMessage']) : (string)$payload['ErrorMessage'];
+                }
+                $last_error = $err_msg !== '' ? $err_msg : 'OCR processing failed';
+                continue;
+            }
+
+            $extracted = extractOcrParsedText($payload);
+            if (strlen(trim($extracted)) >= 15) {
+                $best_text = $extracted;
+                break;
+            } elseif (strlen(trim($extracted)) > strlen(trim($best_text))) {
+                $best_text = $extracted;
+            }
+        }
+
+        if ($clean_compressed && file_exists($compressed_path)) {
+            @unlink($compressed_path);
+        }
+
+        return [
+            'success' => strlen(trim($best_text)) > 0,
+            'text' => $best_text,
+            'error' => $last_error
+        ];
+    }
+}
+
 if (!function_exists('verifyGovernmentIdWithOcrApi')) {
-    function verifyGovernmentIdWithOcrApi($first_name, $last_name, $uploaded_file, $address = '', $expected_id_type = '', $dob = '')
+    function verifyGovernmentIdWithOcrApi($first_name, $last_name, $uploaded_file, $address = '', $expected_id_type = '', $dob = '', $uploaded_back_file = null)
     {
         if (!is_array($uploaded_file) || (int)($uploaded_file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
             return [
@@ -845,89 +1017,33 @@ if (!function_exists('verifyGovernmentIdWithOcrApi')) {
             return [
                 'success' => false,
                 'verified' => false,
-                'message' => 'ID verification API key is not configured. Add your OCR key in includes/local_credentials.php or set GOV_ID_OCR_API_KEY / OCR_SPACE_API_KEY.'
+                'message' => 'ID verification API key is not configured.'
             ];
         }
 
-        $mime_type = function_exists('mime_content_type') ? mime_content_type($tmp_path) : '';
-        $original_name = trim((string)($uploaded_file['name'] ?? 'government_id_upload'));
-        if ($original_name === '') {
-            $original_name = 'government_id_upload';
-        }
+        $front_res = callOcrSpaceApiForImage($tmp_path, $api_key);
+        $parsed_text = $front_res['text'];
 
-        $cfile = curl_file_create($tmp_path, $mime_type !== '' ? $mime_type : 'application/octet-stream', $original_name);
-        $endpoint = 'https://api.ocr.space/parse/image';
-        $post_fields = [
-            'apikey' => $api_key,
-            'language' => 'eng',
-            'isOverlayRequired' => 'false',
-            'OCREngine' => '2',
-            'detectOrientation' => 'true',
-            'scale' => 'true',
-            'file' => $cfile
-        ];
-
-        $ch = curl_init($endpoint);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => $post_fields,
-            CURLOPT_TIMEOUT => 35,
-            CURLOPT_CONNECTTIMEOUT => 10
-        ]);
-
-        $raw_response = curl_exec($ch);
-        $curl_error = curl_error($ch);
-        $http_code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($raw_response === false) {
-            return [
-                'success' => false,
-                'verified' => false,
-                'message' => 'Government ID verification request failed: ' . ($curl_error !== '' ? $curl_error : 'network error')
-            ];
-        }
-
-        $response_payload = json_decode((string)$raw_response, true);
-        if (!is_array($response_payload)) {
-            return [
-                'success' => false,
-                'verified' => false,
-                'message' => 'Government ID verification returned an unreadable response.'
-            ];
-        }
-
-        if ($http_code >= 400) {
-            $api_error = '';
-            if (!empty($response_payload['ErrorMessage'])) {
-                $api_error = is_array($response_payload['ErrorMessage'])
-                    ? implode(' ', array_map('strval', $response_payload['ErrorMessage']))
-                    : (string)$response_payload['ErrorMessage'];
+        // If back side of ID is also uploaded, OCR the back side and combine text
+        if (is_array($uploaded_back_file) && (int)($uploaded_back_file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+            $back_tmp = (string)($uploaded_back_file['tmp_name'] ?? '');
+            if ($back_tmp !== '' && file_exists($back_tmp)) {
+                $back_res = callOcrSpaceApiForImage($back_tmp, $api_key);
+                if (!empty($back_res['text'])) {
+                    $parsed_text .= "\n" . $back_res['text'];
+                }
             }
+        }
+
+        if (empty($front_res['success']) && strlen(trim($parsed_text)) < 15 && !empty($front_res['error'])) {
+            // OCR service error
             return [
                 'success' => false,
                 'verified' => false,
-                'message' => 'Government ID verification failed (' . $http_code . '): ' . ($api_error !== '' ? $api_error : 'API error')
+                'message' => 'Government ID verification could not parse the uploaded image: ' . $front_res['error']
             ];
         }
 
-        $is_errored = !empty($response_payload['IsErroredOnProcessing']);
-        if ($is_errored) {
-            $api_error = '';
-            if (!empty($response_payload['ErrorMessage'])) {
-                $api_error = is_array($response_payload['ErrorMessage'])
-                    ? implode(' ', array_map('strval', $response_payload['ErrorMessage']))
-                    : (string)$response_payload['ErrorMessage'];
-            }
-            return [
-                'success' => false,
-                'verified' => false,
-                'message' => 'Government ID verification could not parse the uploaded image: ' . ($api_error !== '' ? $api_error : 'OCR processing failed')
-            ];
-        }
-
-        $parsed_text = extractOcrParsedText($response_payload);
         $ocr_excerpt = substr(trim((string)$parsed_text), 0, 800);
         $clean_text_sample = trim(preg_replace('/\s+/', ' ', (string)$parsed_text));
 
@@ -1212,7 +1328,9 @@ if (!function_exists('detectGovernmentIdTypeFromText')) {
             strpos($normalized, 'BUREAU OF INTERNAL REVENUE') !== false ||
             strpos($normalized, 'TAX IDENTIFICATION NUMBER') !== false ||
             strpos($normalized, 'BIR') !== false ||
-            strpos($normalized, 'TIN ID') !== false
+            strpos($normalized, 'TIN ID') !== false ||
+            strpos($normalized, 'TIN CARD') !== false ||
+            strpos($normalized, 'TIN NO') !== false
         ) {
             return 'tin';
         }
@@ -1257,7 +1375,12 @@ if (!function_exists('detectGovernmentIdTypeFromText')) {
             strpos($normalized, 'PHILIPPINE IDENTIFICATION SYSTEM') !== false ||
             strpos($normalized, 'PHILSYS') !== false ||
             strpos($normalized, 'PHILID') !== false ||
-            strpos($normalized, 'PAMBANSANG PAGKAKAKILANLAN') !== false
+            strpos($normalized, 'EPHILID') !== false ||
+            strpos($normalized, 'PAMBANSANG PAGKAKAKILANLAN') !== false ||
+            strpos($normalized, 'PHILIPPINE STATISTICS AUTHORITY') !== false ||
+            strpos($normalized, 'PCN') !== false ||
+            (strpos($normalized, 'PSA') !== false && strpos($normalized, 'PILIPINAS') !== false) ||
+            (strpos($normalized, 'PAMBANSANG') !== false && strpos($normalized, 'PAGKAKAKILANLAN') !== false)
         ) {
             return 'national_id';
         }

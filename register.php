@@ -500,11 +500,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         } elseif (!preg_match('/^[\p{L}\p{M}\'\-\s]{2,60}$/u', $last_name)) {
             $error = 'Please enter a valid last name.';
             $form_data['last_name'] = '';
-        } elseif (!empty($birth_date) && (
-            ($dob_time = strtotime($birth_date)) === false || 
+        } elseif (empty($birth_date)) {
+            $error = 'Please enter your date of birth.';
+            $form_data['birth_date'] = '';
+            $form_data['dob'] = '';
+        } elseif (($dob_time = strtotime($birth_date)) === false || 
             $dob_time > strtotime('-10 years') || 
             $dob_time < strtotime('-100 years')
-        )) {
+        ) {
             $error = 'Please enter a valid date of birth. You must be at least 10 years old to register.';
             $form_data['birth_date'] = '';
             $form_data['dob'] = '';
@@ -513,7 +516,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $form_data['valid_id_type'] = '';
         } elseif (empty($valid_id_front)) {
             $error = 'Please upload a photo of the front side of your valid ID.';
-        } elseif (empty($valid_id_back)) {
+        } elseif ($valid_id_type !== 'passport' && empty($valid_id_back)) {
             $error = 'Please upload a photo of the back side of your valid ID.';
         } elseif ($account_type === 'organization' && empty($business_name)) {
             $error = 'Please enter your restaurant name.';
@@ -526,20 +529,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $form_data['longitude'] = '';
         } else {
             $front_validation = validateRegistrationValidIdUpload($valid_id_front);
-                $back_validation = validateRegistrationValidIdUpload($valid_id_back);
-                if (empty($front_validation['valid'])) {
-                    $error = 'Front of ID: ' . (string)($front_validation['message'] ?? 'Please upload a clear JPG, PNG, or WEBP image up to 10MB.');
-                    if (!empty($_SESSION['temp_valid_id_front']['file_path'])) {
-                        @unlink(__DIR__ . '/' . $_SESSION['temp_valid_id_front']['file_path']);
-                        unset($_SESSION['temp_valid_id_front']);
-                    }
-                } elseif (empty($back_validation['valid'])) {
-                    $error = 'Back of ID: ' . (string)($back_validation['message'] ?? 'Please upload a clear JPG, PNG, or WEBP image up to 10MB.');
-                    if (!empty($_SESSION['temp_valid_id_back']['file_path'])) {
-                        @unlink(__DIR__ . '/' . $_SESSION['temp_valid_id_back']['file_path']);
-                        unset($_SESSION['temp_valid_id_back']);
-                    }
-                } elseif (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $back_validation = (!empty($valid_id_back)) ? validateRegistrationValidIdUpload($valid_id_back) : ['valid' => true];
+            if (empty($front_validation['valid'])) {
+                $error = 'Front of ID: ' . (string)($front_validation['message'] ?? 'Please upload a clear JPG, PNG, or WEBP image up to 10MB.');
+                if (!empty($_SESSION['temp_valid_id_front']['file_path'])) {
+                    @unlink(__DIR__ . '/' . $_SESSION['temp_valid_id_front']['file_path']);
+                    unset($_SESSION['temp_valid_id_front']);
+                }
+            } elseif (empty($back_validation['valid'])) {
+                $error = 'Back of ID: ' . (string)($back_validation['message'] ?? 'Please upload a clear JPG, PNG, or WEBP image up to 10MB.');
+                if (!empty($_SESSION['temp_valid_id_back']['file_path'])) {
+                    @unlink(__DIR__ . '/' . $_SESSION['temp_valid_id_back']['file_path']);
+                    unset($_SESSION['temp_valid_id_back']);
+                }
+            } elseif (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
                     $error = 'Please enter a valid email address.';
                     $form_data['email'] = '';
                 } elseif (empty($phone)) {
@@ -600,7 +603,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $created_user_id = (int)($result['user_id'] ?? 0);
             
             $saved_front = saveRegistrationValidIdDocument($conn, $created_user_id, $valid_id_front, $valid_id_type, 'Front');
-            $saved_back = saveRegistrationValidIdDocument($conn, $created_user_id, $valid_id_back, $valid_id_type, 'Back');
+            $saved_back = (!empty($valid_id_back)) ? saveRegistrationValidIdDocument($conn, $created_user_id, $valid_id_back, $valid_id_type, 'Back') : ['success' => true];
             
             if (empty($saved_front['success']) || empty($saved_back['success'])) {
                 if ($created_user_id > 0) {
@@ -2415,11 +2418,12 @@ body.dark-mode .leaflet-container {
 
                         <div class="form-row">
                             <div class="form-group">
-                                <label for="dob">Date of Birth</label>
-                                <input type="date" id="dob" name="dob" class="form-control"
+                                <label for="dob">Date of Birth *</label>
+                                <input type="date" id="dob" name="dob" class="form-control" required
                                     min="<?php echo date('Y-m-d', strtotime('-100 years')); ?>"
                                     max="<?php echo date('Y-m-d', strtotime('-10 years')); ?>"
-                                    value="<?php echo htmlspecialchars($form_data['dob'] ?? ''); ?>">
+                                    value="<?php echo htmlspecialchars($form_data['dob'] ?? $form_data['birth_date'] ?? ''); ?>">
+                                <small class="text-muted" style="font-size: 0.8rem; display: block; margin-top: 4px;">Must match the date of birth on your government ID.</small>
                             </div>
                             <div class="form-group">
                                 <label for="gender">Gender</label>
@@ -3209,6 +3213,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const initialLng = parseFloat(regLongitude?.value || '');
     if (initialAddress) {
         updateCaviteStatusUI(true, 'Verified address: ' + (regCityName?.value ? regCityName.value + (regProvinceName?.value ? ', ' + regProvinceName.value : '') : initialAddress));
+    } else {
+        updateCaviteStatusUI(false, 'Please type your address, click "Locate Me", or pin your location on the map.');
     }
 
     async function reverseGeocodeLocation(lat, lng) {
@@ -3338,11 +3344,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (regMap) regMap.panTo(pos);
                 reverseGeocodeLocation(pos.lat, pos.lng);
             });
-
-            // Initial check if address field is empty
-            if (!homeAddressInput || !homeAddressInput.value.trim()) {
-                reverseGeocodeLocation(initLat, initLng);
-            }
         }
 
         setTimeout(function() {
@@ -3577,19 +3578,26 @@ document.addEventListener('DOMContentLoaded', function() {
             return false;
         }
 
-        if (dobInput && dobInput.value) {
-            const birthDate = new Date(dobInput.value);
-            const today = new Date();
-            const minAgeDate = new Date(today.getFullYear() - 10, today.getMonth(), today.getDate());
-            const maxAgeDate = new Date(today.getFullYear() - 100, today.getMonth(), today.getDate());
-
-            if (isNaN(birthDate.getTime()) || birthDate > minAgeDate || birthDate < maxAgeDate) {
-                showError('Invalid Date of Birth', 'You must be at least 10 years old to register.');
-                dobInput.value = '';
+        if (!dobInput || !dobInput.value.trim()) {
+            showError('Date of Birth Required', 'Please enter your date of birth. This will be verified against your government ID.');
+            if (dobInput) {
                 dobInput.focus();
                 highlightErrorField(dobInput);
-                return false;
             }
+            return false;
+        }
+
+        const birthDate = new Date(dobInput.value.trim());
+        const today = new Date();
+        const minAgeDate = new Date(today.getFullYear() - 10, today.getMonth(), today.getDate());
+        const maxAgeDate = new Date(today.getFullYear() - 100, today.getMonth(), today.getDate());
+
+        if (isNaN(birthDate.getTime()) || birthDate > minAgeDate || birthDate < maxAgeDate) {
+            showError('Invalid Date of Birth', 'You must be at least 10 years old to register.');
+            dobInput.value = '';
+            dobInput.focus();
+            highlightErrorField(dobInput);
+            return false;
         }
 
         return true;
@@ -3607,7 +3615,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const frontFile = frontInput && frontInput.files ? frontInput.files[0] : null;
         const csrfToken = document.querySelector('input[name="csrf_token"]')?.value || '';
 
-        if (!frontFile) {
+        const hasFrontCached = (document.getElementById('hasCachedFrontId')?.value === '1') || <?php echo $has_cached_front ? 'true' : 'false'; ?>;
+        const hasBackCached = (document.getElementById('hasCachedBackId')?.value === '1') || <?php echo $has_cached_back ? 'true' : 'false'; ?>;
+
+        if (!frontFile && !hasFrontCached) {
             showError('ID Photo Required', 'Please upload or capture the front side of your ID.');
             return;
         }
@@ -3620,9 +3631,15 @@ document.addEventListener('DOMContentLoaded', function() {
         verifyData.append('last_name', lastName);
         verifyData.append('dob', dob);
         verifyData.append('valid_id_type', validIdType);
-        verifyData.append('valid_id', frontFile);
+        if (frontFile) {
+            verifyData.append('valid_id', frontFile);
+        } else if (hasFrontCached) {
+            verifyData.append('use_cached_front', '1');
+        }
         if (backFile) {
             verifyData.append('valid_id_back', backFile);
+        } else if (hasBackCached) {
+            verifyData.append('use_cached_back', '1');
         }
         verifyData.append('csrf_token', csrfToken);
 
@@ -3822,7 +3839,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return false;
         }
 
-        if (!validIdBackFile && !hasBackCached) {
+        if (validIdType !== 'passport' && !validIdBackFile && !hasBackCached) {
             showError('Back ID Photo Required', 'Please upload or capture a photo of the back side of your ID.');
             return false;
         }

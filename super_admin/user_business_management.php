@@ -220,7 +220,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         saSetFlash('warning', 'Unsupported action request.');
     }
 
-    header('Location: ' . $page_file);
+    $return_folder = trim((string)($_POST['return_folder'] ?? ''));
+    $redirect_url = $page_file;
+    if ($return_folder !== '' && $return_folder !== 'all_folders') {
+        $redirect_url .= '?folder=' . urlencode($return_folder);
+    }
+    header('Location: ' . $redirect_url);
     exit;
 }
 
@@ -228,6 +233,7 @@ $search = trim((string)($_GET['search'] ?? ''));
 $account_filter = strtolower(trim((string)($_GET['account_type'] ?? 'all')));
 $status_filter = strtolower(trim((string)($_GET['status'] ?? 'all')));
 $role_filter = trim((string)($_GET['role_id'] ?? 'all'));
+$active_folder = trim((string)($_GET['folder'] ?? ''));
 
 $total_users = $has_users ? (int)saQueryScalar($conn, "SELECT COUNT(*) FROM users", 0) : 0;
 $active_users = $has_users ? (int)saQueryScalar($conn, "SELECT COUNT(*) FROM users WHERE is_active = 1", 0) : 0;
@@ -238,11 +244,121 @@ $roles = [];
 if ($has_roles) {
     $roles = saQueryRows(
         $conn,
-        "SELECT r.id, r.name, r.description, r.is_active,
+        "SELECT r.id, r.name, r.description, r.is_active, r.owner_user_id,
                 (SELECT COUNT(*) FROM users u WHERE u.role_id = r.id) AS assigned_users
          FROM roles r
          ORDER BY r.name ASC"
     );
+}
+
+// --------------------------------------------------------------------------
+// Dynamic Approved Stores & Franchise Directories
+// Automatically registers a new folder whenever an application is approved
+// or a store location is added.
+// --------------------------------------------------------------------------
+$approved_stores = [];
+if ($has_apps) {
+    $apps_q = saQueryRows(
+        $conn,
+        "SELECT fa.id, fa.user_id, fa.business_name, fa.city_name, fa.business_address, fa.contact_person, fa.contact_phone, fa.contact_email,
+                u.full_name AS owner_name, u.profile_image AS owner_profile_image
+         FROM franchise_applications fa
+         LEFT JOIN users u ON u.id = fa.user_id
+         WHERE fa.status = 'approved'
+         ORDER BY fa.id ASC"
+    );
+    foreach ($apps_q as $app) {
+        $owner_id = (int)$app['user_id'];
+        if ($owner_id > 0) {
+            $approved_stores[$owner_id] = [
+                'folder_key' => 'store_' . $owner_id,
+                'owner_user_id' => $owner_id,
+                'owner_name' => trim((string)($app['owner_name'] ?? 'Store Owner')),
+                'store_name' => trim((string)$app['business_name']),
+                'city' => trim((string)($app['city_name'] ?? '')),
+                'address' => trim((string)($app['business_address'] ?? '')),
+                'email' => trim((string)($app['contact_email'] ?? '')),
+                'phone' => trim((string)($app['contact_phone'] ?? '')),
+                'source' => 'franchise_applications'
+            ];
+        }
+    }
+}
+
+if (saTableExists($conn, 'store_locations')) {
+    $locs_q = saQueryRows(
+        $conn,
+        "SELECT sl.store_id, sl.owner_user_id, sl.store_name, sl.address, sl.city, sl.phone, sl.email,
+                u.full_name AS owner_name
+         FROM store_locations sl
+         LEFT JOIN users u ON u.id = sl.owner_user_id
+         WHERE sl.is_active = 1 OR sl.is_active IS NULL
+         ORDER BY sl.store_id ASC"
+    );
+    foreach ($locs_q as $loc) {
+        $owner_id = (int)$loc['owner_user_id'];
+        if ($owner_id > 0) {
+            if (!isset($approved_stores[$owner_id])) {
+                $approved_stores[$owner_id] = [
+                    'folder_key' => 'store_' . $owner_id,
+                    'owner_user_id' => $owner_id,
+                    'owner_name' => trim((string)($loc['owner_name'] ?? 'Store Owner')),
+                    'store_name' => trim((string)$loc['store_name']),
+                    'city' => trim((string)($loc['city'] ?? '')),
+                    'address' => trim((string)($loc['address'] ?? '')),
+                    'email' => trim((string)($loc['email'] ?? '')),
+                    'phone' => trim((string)($loc['phone'] ?? '')),
+                    'source' => 'store_locations'
+                ];
+            } elseif (empty($approved_stores[$owner_id]['city']) && !empty($loc['city'])) {
+                $approved_stores[$owner_id]['city'] = trim((string)$loc['city']);
+            }
+        }
+    }
+}
+
+// Map employees and staff to their respective stores
+$user_to_store_map = [];
+
+// 1. Partner User Links (e.g. store owner delegating managed employee users)
+if (saTableExists($conn, 'partner_user_links')) {
+    $pul_rows = saQueryRows($conn, "SELECT owner_user_id, managed_user_id FROM partner_user_links");
+    foreach ($pul_rows as $pul) {
+        $o_id = (int)$pul['owner_user_id'];
+        $m_id = (int)$pul['managed_user_id'];
+        if ($o_id > 0 && $m_id > 0 && isset($approved_stores[$o_id])) {
+            $user_to_store_map[$m_id] = $o_id;
+        }
+    }
+}
+
+// 2. Department & Employee records (departments.manager_id -> employees.user_id)
+if (saTableExists($conn, 'employees') && saTableExists($conn, 'departments')) {
+    $dept_emp_rows = saQueryRows(
+        $conn,
+        "SELECT e.user_id, d.manager_id, e.position
+         FROM employees e
+         JOIN departments d ON d.id = e.department_id
+         WHERE e.user_id IS NOT NULL AND e.user_id > 0 AND d.manager_id > 0"
+    );
+    foreach ($dept_emp_rows as $de) {
+        $e_uid = (int)$de['user_id'];
+        $mgr_id = (int)$de['manager_id'];
+        if (isset($approved_stores[$mgr_id])) {
+            $user_to_store_map[$e_uid] = $mgr_id;
+        }
+    }
+}
+
+// 3. Store-specific custom roles (roles.owner_user_id)
+$role_owner_map = [];
+if ($has_roles) {
+    foreach ($roles as $r_item) {
+        $r_owner = (int)($r_item['owner_user_id'] ?? 0);
+        if ($r_owner > 0 && isset($approved_stores[$r_owner])) {
+            $role_owner_map[(int)$r_item['id']] = $r_owner;
+        }
+    }
 }
 
 $users = [];
@@ -282,7 +398,125 @@ if ($has_users) {
                     ORDER BY u.created_at DESC
                     LIMIT 300";
     $users = saQueryRows($conn, $users_query);
+
+    // Categorize each user into their appropriate directory folder
+    foreach ($users as &$user_item) {
+        $uid = (int)$user_item['id'];
+        $role_id = (int)($user_item['role_id'] ?? 0);
+        $role_name = (string)($user_item['role_name'] ?? '');
+        $user_type = strtolower((string)($user_item['user_type'] ?? ''));
+
+        $folder_key = 'customers';
+        $is_store_owner = false;
+        $assigned_store_name = '';
+
+        if (isset($approved_stores[$uid])) {
+            // User is the store owner
+            $folder_key = 'store_' . $uid;
+            $is_store_owner = true;
+            $assigned_store_name = $approved_stores[$uid]['store_name'];
+        } elseif (isset($user_to_store_map[$uid]) && isset($approved_stores[$user_to_store_map[$uid]])) {
+            // User is a linked employee/rider/staff member of this store
+            $s_id = $user_to_store_map[$uid];
+            $folder_key = 'store_' . $s_id;
+            $assigned_store_name = $approved_stores[$s_id]['store_name'];
+        } elseif (isset($role_owner_map[$role_id]) && isset($approved_stores[$role_owner_map[$role_id]])) {
+            // User is assigned a store-specific role
+            $s_id = $role_owner_map[$role_id];
+            $folder_key = 'store_' . $s_id;
+            $assigned_store_name = $approved_stores[$s_id]['store_name'];
+        } else {
+            // Match by business_name if specified
+            $matched_store = false;
+            if (!empty($user_item['business_name'])) {
+                foreach ($approved_stores as $s_id => $s_data) {
+                    if (strcasecmp($user_item['business_name'], $s_data['store_name']) === 0) {
+                        $folder_key = 'store_' . $s_id;
+                        $assigned_store_name = $s_data['store_name'];
+                        $matched_store = true;
+                        break;
+                    }
+                }
+            }
+            if (!$matched_store) {
+                if ($user_type === 'admin' || in_array($role_name, ['super_admin', 'admin', 'operations_manager', 'hr_manager', 'viewer', 'driver'], true)) {
+                    $folder_key = 'platform_admins';
+                } else {
+                    $folder_key = 'customers';
+                }
+            }
+        }
+
+        $user_item['folder_key'] = $folder_key;
+        $user_item['is_store_owner'] = $is_store_owner;
+        $user_item['assigned_store_name'] = $assigned_store_name;
+    }
+    unset($user_item);
 }
+
+// Build Folder Catalog with live counts
+$folder_catalog = [
+    'customers' => [
+        'key' => 'customers',
+        'type' => 'core',
+        'title' => 'Customers',
+        'subtitle' => 'Individual customer buyers and retail consumer accounts.',
+        'icon' => 'fas fa-users',
+        'icon_class' => 'folder-customers',
+        'total_count' => 0,
+        'active_count' => 0,
+        'owner_count' => 0,
+        'employee_count' => 0,
+    ],
+    'platform_admins' => [
+        'key' => 'platform_admins',
+        'type' => 'core',
+        'title' => 'Platform Administrators',
+        'subtitle' => 'System administrators, platform operators, and core staff.',
+        'icon' => 'fas fa-shield-halved',
+        'icon_class' => 'folder-admins',
+        'total_count' => 0,
+        'active_count' => 0,
+        'owner_count' => 0,
+        'employee_count' => 0,
+    ],
+];
+
+foreach ($approved_stores as $s_owner_id => $store) {
+    $fkey = $store['folder_key'];
+    $folder_catalog[$fkey] = [
+        'key' => $fkey,
+        'type' => 'store',
+        'store_id' => $s_owner_id,
+        'title' => $store['store_name'],
+        'subtitle' => 'Authorized franchise store and branch personnel.',
+        'icon' => 'fas fa-store',
+        'icon_class' => 'folder-store',
+        'owner_name' => $store['owner_name'],
+        'city' => $store['city'],
+        'total_count' => 0,
+        'active_count' => 0,
+        'owner_count' => 0,
+        'employee_count' => 0,
+    ];
+}
+
+foreach ($users as $u) {
+    $fk = $u['folder_key'] ?? 'customers';
+    if (isset($folder_catalog[$fk])) {
+        $folder_catalog[$fk]['total_count']++;
+        if ((int)($u['is_active'] ?? 0) === 1) {
+            $folder_catalog[$fk]['active_count']++;
+        }
+        if (!empty($u['is_store_owner'])) {
+            $folder_catalog[$fk]['owner_count']++;
+        } else {
+            $folder_catalog[$fk]['employee_count']++;
+        }
+    }
+}
+
+$is_folder_active = ($active_folder !== '' && (isset($folder_catalog[$active_folder]) || $active_folder === 'all_users'));
 
 $applications = [];
 if ($has_apps) {
@@ -670,6 +904,407 @@ body.dark-mode .user-role-tag.unlinked {
     color: #b3261e;
     border-color: #b3261e;
 }
+
+/* ==========================================================================
+   Super Admin Folder Directory System Styles
+   ========================================================================== */
+.sa-folders-section {
+    margin-bottom: 24px;
+}
+
+.sa-folder-category-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #eaecf0;
+}
+
+body.dark-mode .sa-folder-category-header {
+    border-color: #27303f;
+}
+
+.sa-folder-category-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #101828;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+body.dark-mode .sa-folder-category-title {
+    color: #f8fafc;
+}
+
+.sa-folder-category-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 12px;
+    background: #f2f4f7;
+    color: #475467;
+}
+
+body.dark-mode .sa-folder-category-badge {
+    background: #1e2430;
+    color: #94a3b8;
+}
+
+.sa-folder-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+@media (min-width: 1400px) {
+    .sa-folder-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+.sa-folder-card {
+    background: #ffffff;
+    border: 1px solid #eaecf0;
+    border-radius: 16px;
+    padding: 18px 18px 16px 18px;
+    cursor: pointer;
+    transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+}
+
+.sa-folder-card:hover {
+    transform: translateY(-3px);
+    border-color: #b3261e;
+    box-shadow: 0 12px 24px -4px rgba(16, 24, 40, 0.08), 0 4px 6px -2px rgba(16, 24, 40, 0.03);
+}
+
+body.dark-mode .sa-folder-card {
+    background: #181d26 !important;
+    border-color: #27303f !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+body.dark-mode .sa-folder-card:hover {
+    border-color: #b3261e !important;
+    box-shadow: 0 12px 24px -4px rgba(0, 0, 0, 0.4);
+}
+
+.sa-folder-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+}
+
+.sa-folder-icon-box {
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.sa-folder-icon-box.folder-customers {
+    background: #eff8ff;
+    color: #175cd3;
+}
+
+.sa-folder-icon-box.folder-admins {
+    background: #fff1f0;
+    color: #b3261e;
+}
+
+.sa-folder-icon-box.folder-store {
+    background: #ecfdf3;
+    color: #027a48;
+}
+
+.sa-folder-count-pill {
+    font-size: 11.5px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: #f8f9fa;
+    border: 1px solid #eaecf0;
+    color: #344054;
+}
+
+body.dark-mode .sa-folder-count-pill {
+    background: #1e2430;
+    border-color: #3b4758;
+    color: #cbd5e1;
+}
+
+.sa-folder-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #101828;
+    margin: 0 0 4px 0;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+body.dark-mode .sa-folder-title {
+    color: #f8fafc;
+}
+
+.sa-folder-desc {
+    font-size: 12px;
+    color: #667085;
+    margin-bottom: 12px;
+    line-height: 1.4;
+    min-height: 34px;
+}
+
+body.dark-mode .sa-folder-desc {
+    color: #94a3b8;
+}
+
+.sa-folder-meta-list {
+    border-top: 1px solid #f2f4f7;
+    padding-top: 10px;
+    margin-top: auto;
+    margin-bottom: 12px;
+}
+
+body.dark-mode .sa-folder-meta-list {
+    border-color: #27303f;
+}
+
+.sa-folder-meta-item {
+    font-size: 12px;
+    color: #475467;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+body.dark-mode .sa-folder-meta-item {
+    color: #94a3b8;
+}
+
+.sa-folder-meta-item i {
+    width: 14px;
+    color: #98a2b3;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.sa-folder-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 8px 12px;
+    background: #f8f9fa;
+    border: 1px solid #eaecf0;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #b3261e;
+    transition: all 0.15s ease;
+}
+
+body.dark-mode .sa-folder-action-btn {
+    background: #1e2430;
+    border-color: #3b4758;
+    color: #f87171;
+}
+
+.sa-folder-card:hover .sa-folder-action-btn {
+    background: #b3261e;
+    color: #ffffff;
+    border-color: #b3261e;
+}
+
+.sa-folder-card:hover .sa-folder-action-btn i {
+    transform: translateX(3px);
+}
+
+.sa-folder-action-btn i {
+    transition: transform 0.15s ease;
+}
+
+/* Active Folder Banner */
+.sa-active-folder-header {
+    background: #ffffff;
+    border: 1px solid #eaecf0;
+    border-radius: 16px;
+    padding: 18px 22px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+}
+
+body.dark-mode .sa-active-folder-header {
+    background: #181d26 !important;
+    border-color: #27303f !important;
+}
+
+.sa-folder-nav-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.sa-folder-breadcrumb {
+    font-size: 13px;
+    color: #667085;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+body.dark-mode .sa-folder-breadcrumb {
+    color: #94a3b8;
+}
+
+.sa-folder-breadcrumb a {
+    color: #b3261e;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.sa-folder-breadcrumb a:hover {
+    text-decoration: underline;
+}
+
+.sa-folder-banner-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.sa-folder-banner-info {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.sa-folder-banner-title {
+    font-size: 20px;
+    font-weight: 800;
+    color: #101828;
+    margin: 0 0 4px 0;
+}
+
+body.dark-mode .sa-folder-banner-title {
+    color: #f8fafc;
+}
+
+.sa-folder-banner-meta {
+    font-size: 13px;
+    color: #475467;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+body.dark-mode .sa-folder-banner-meta {
+    color: #94a3b8;
+}
+
+.sa-folder-banner-meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.sa-folder-badge-stat {
+    font-size: 11.5px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 12px;
+    background: #f8f9fa;
+    border: 1px solid #eaecf0;
+    color: #344054;
+}
+
+body.dark-mode .sa-folder-badge-stat {
+    background: #1e2430;
+    border-color: #3b4758;
+    color: #cbd5e1;
+}
+
+.sa-back-folders-btn {
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: 1px solid #d0d5dd;
+    background: #ffffff;
+    color: #344054;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s ease;
+    cursor: pointer;
+}
+
+.sa-back-folders-btn:hover {
+    background: #f8f9fa;
+    color: #b3261e;
+    border-color: #b3261e;
+}
+
+body.dark-mode .sa-back-folders-btn {
+    background: #1e2430;
+    border-color: #3b4758;
+    color: #cbd5e1;
+}
+
+body.dark-mode .sa-back-folders-btn:hover {
+    border-color: #b3261e;
+    color: #f87171;
+}
+
+.sa-view-all-pill {
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    color: #475467;
+    background: #ffffff;
+    border: 1px solid #d0d5dd;
+    padding: 6px 12px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s ease;
+}
+
+.sa-view-all-pill:hover {
+    color: #b3261e;
+    border-color: #b3261e;
+}
+
+body.dark-mode .sa-view-all-pill {
+    background: #1e2430;
+    border-color: #3b4758;
+    color: #cbd5e1;
+}
 </style>
 <div class="module-section">
     <div class="module-section-header">
@@ -699,339 +1334,637 @@ body.dark-mode .user-role-tag.unlinked {
 </div>
 
 <div class="module-section">
-    <div class="module-section-header">
-        <div>
-            <h3>Users and Account Controls</h3>
-            <div class="user-stats-strip">
-                <span><span class="user-stat-dot active"></span> Active <?php echo number_format($active_users); ?></span>
-                <span><span class="user-stat-dot inactive"></span> Inactive <?php echo number_format(max(0, $total_users - $active_users)); ?></span>
+    <!-- FOLDERS VIEW (Default Top-Level Directory View) -->
+    <div id="saFoldersView" style="<?php echo $is_folder_active ? 'display: none;' : 'display: block;'; ?>">
+        <div class="module-section-header" style="margin-bottom: 18px;">
+            <div>
+                <h3 class="mb-1">Platform Directories & User Folders</h3>
+                <p class="module-subtext mb-0">Browse platform users, store employees, and assigned roles organized by department and business store.</p>
             </div>
-        </div>
-        <div class="d-flex align-items-center gap-2">
-            <div class="view-mode-toggle" role="group" aria-label="View toggle">
-                <button type="button" class="view-mode-btn active" id="saViewModeCards" onclick="switchSaUserView('cards')" title="Card Grid View">
-                    <i class="fas fa-th-large"></i>
-                </button>
-                <button type="button" class="view-mode-btn" id="saViewModeTable" onclick="switchSaUserView('table')" title="Table Spreadsheet View">
-                    <i class="fas fa-list"></i>
+            <div class="d-flex align-items-center gap-2">
+                <button type="button" class="sa-view-all-pill" onclick="openFolder('all_users')" title="View all users in a flat list">
+                    <i class="fas fa-users-viewfinder"></i> Flat List (All <?php echo count($users); ?> Users)
                 </button>
             </div>
         </div>
-    </div>
-    <form method="GET" class="module-form-grid" style="margin-bottom: 16px;">
-        <input type="text" class="form-control" name="search" placeholder="Search by name, email, business..." value="<?php echo htmlspecialchars($search); ?>">
-        <select name="account_type" class="form-select">
-            <option value="all" <?php echo $account_filter === 'all' ? 'selected' : ''; ?>>All Account Types</option>
-            <option value="individual" <?php echo $account_filter === 'individual' ? 'selected' : ''; ?>>Individual</option>
-            <option value="organization" <?php echo $account_filter === 'organization' ? 'selected' : ''; ?>>Organization</option>
-        </select>
-        <select name="status" class="form-select">
-            <option value="all" <?php echo $status_filter === 'all' ? 'selected' : ''; ?>>All Statuses</option>
-            <option value="active" <?php echo $status_filter === 'active' ? 'selected' : ''; ?>>Active</option>
-            <option value="inactive" <?php echo $status_filter === 'inactive' ? 'selected' : ''; ?>>Inactive</option>
-        </select>
-        <select name="role_id" class="form-select">
-            <option value="all">All Roles</option>
-            <?php foreach ($roles as $role): ?>
-                <option value="<?php echo (int)$role['id']; ?>" <?php echo ($role_filter === (string)$role['id']) ? 'selected' : ''; ?>>
-                    <?php echo htmlspecialchars((string)$role['name']); ?>
-                </option>
-            <?php endforeach; ?>
-        </select>
-        <button type="submit" class="btn btn-primary"><i class="fas fa-filter"></i> Apply Filters</button>
-    </form>
 
-    <?php if (!$has_users): ?>
-        <div class="note-box">`users` table is unavailable in this environment.</div>
-    <?php else: ?>
-        <!-- Modern Card Grid View (Matching Reference Mockup) -->
-        <div class="user-card-grid" id="saUsersCardGrid">
-            <?php if (empty($users)): ?>
+        <!-- Global Search & Filters (Affects folders and user counts) -->
+        <form method="GET" class="module-form-grid" style="margin-bottom: 22px;">
+            <input type="text" class="form-control" name="search" placeholder="Search by name, email, business..." value="<?php echo htmlspecialchars($search); ?>">
+            <select name="account_type" class="form-select">
+                <option value="all" <?php echo $account_filter === 'all' ? 'selected' : ''; ?>>All Account Types</option>
+                <option value="individual" <?php echo $account_filter === 'individual' ? 'selected' : ''; ?>>Individual</option>
+                <option value="organization" <?php echo $account_filter === 'organization' ? 'selected' : ''; ?>>Organization</option>
+            </select>
+            <select name="status" class="form-select">
+                <option value="all" <?php echo $status_filter === 'all' ? 'selected' : ''; ?>>All Statuses</option>
+                <option value="active" <?php echo $status_filter === 'active' ? 'selected' : ''; ?>>Active</option>
+                <option value="inactive" <?php echo $status_filter === 'inactive' ? 'selected' : ''; ?>>Inactive</option>
+            </select>
+            <select name="role_id" class="form-select">
+                <option value="all">All Roles</option>
+                <?php foreach ($roles as $role): ?>
+                    <option value="<?php echo (int)$role['id']; ?>" <?php echo ($role_filter === (string)$role['id']) ? 'selected' : ''; ?>>
+                        <?php echo htmlspecialchars((string)$role['name']); ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-filter"></i> Apply Filters</button>
+        </form>
+
+        <!-- Category 1: Platform & System Directories -->
+        <div class="sa-folders-section">
+            <div class="sa-folder-category-header">
+                <h4 class="sa-folder-category-title">
+                    <i class="fas fa-layer-group text-primary"></i> Platform Directories
+                </h4>
+                <span class="sa-folder-category-badge">2 Directories</span>
+            </div>
+            <div class="sa-folder-grid">
+                <!-- Customers Folder Card -->
+                <div class="sa-folder-card" onclick="openFolder('customers')" data-folder-key="customers">
+                    <div class="sa-folder-top">
+                        <div class="sa-folder-icon-box folder-customers">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <span class="sa-folder-count-pill">
+                            <?php echo $folder_catalog['customers']['total_count']; ?> Users
+                        </span>
+                    </div>
+                    <h4 class="sa-folder-title">Customers</h4>
+                    <p class="sa-folder-desc">
+                        Individual customer retail buyers and public ordering accounts.
+                    </p>
+                    <div class="sa-folder-meta-list">
+                        <div class="sa-folder-meta-item">
+                            <i class="fas fa-check-circle text-success"></i>
+                            <span><?php echo $folder_catalog['customers']['active_count']; ?> Active Accounts</span>
+                        </div>
+                        <div class="sa-folder-meta-item">
+                            <i class="fas fa-shopping-bag"></i>
+                            <span>Online Order Buyers</span>
+                        </div>
+                    </div>
+                    <div class="sa-folder-action-btn">
+                        <span>Open Customers Folder</span>
+                        <i class="fas fa-arrow-right"></i>
+                    </div>
+                </div>
+
+                <!-- Platform Administrators Folder Card -->
+                <div class="sa-folder-card" onclick="openFolder('platform_admins')" data-folder-key="platform_admins">
+                    <div class="sa-folder-top">
+                        <div class="sa-folder-icon-box folder-admins">
+                            <i class="fas fa-shield-halved"></i>
+                        </div>
+                        <span class="sa-folder-count-pill">
+                            <?php echo $folder_catalog['platform_admins']['total_count']; ?> Team Members
+                        </span>
+                    </div>
+                    <h4 class="sa-folder-title">Platform Administrators</h4>
+                    <p class="sa-folder-desc">
+                        System administrators, operations managers, and platform support personnel.
+                    </p>
+                    <div class="sa-folder-meta-list">
+                        <div class="sa-folder-meta-item">
+                            <i class="fas fa-check-circle text-success"></i>
+                            <span><?php echo $folder_catalog['platform_admins']['active_count']; ?> Active Personnel</span>
+                        </div>
+                        <div class="sa-folder-meta-item">
+                            <i class="fas fa-user-shield"></i>
+                            <span>Full System Privileges</span>
+                        </div>
+                    </div>
+                    <div class="sa-folder-action-btn">
+                        <span>Open Administrators Folder</span>
+                        <i class="fas fa-arrow-right"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Category 2: Approved Stores & Franchises (Dynamic) -->
+        <div class="sa-folders-section">
+            <div class="sa-folder-category-header">
+                <h4 class="sa-folder-category-title">
+                    <i class="fas fa-store text-danger"></i> Approved Stores & Franchises
+                </h4>
+                <span class="sa-folder-category-badge"><?php echo count($approved_stores); ?> Approved Stores</span>
+            </div>
+            <p class="text-muted small mb-3">
+                Select any store folder to view its registered store owner, employees, riders, and assigned department roles. Newly approved shops automatically generate folders here.
+            </p>
+
+            <?php if (empty($approved_stores)): ?>
                 <div class="user-cards-empty">
-                    <i class="fas fa-users-slash fa-3x mb-3 text-muted" style="opacity: 0.5;"></i>
-                    <h5 class="fw-bold">No users found</h5>
-                    <p class="text-muted mb-0">No registered users matched the selected filter criteria.</p>
+                    <i class="fas fa-store-slash fa-3x mb-3 text-muted" style="opacity: 0.5;"></i>
+                    <h5 class="fw-bold">No approved stores yet</h5>
+                    <p class="text-muted mb-0">Approve business applications below to automatically create store folders.</p>
                 </div>
             <?php else: ?>
-                <?php foreach ($users as $user): ?>
-                    <?php
-                        $user_id = (int)$user['id'];
-                        $full_name = trim((string)($user['full_name'] ?? 'Unknown User'));
-                        $full_name_safe = htmlspecialchars($full_name !== '' ? $full_name : 'Unknown User');
-                        $email_clean = htmlspecialchars((string)($user['email'] ?? ''));
-                        $phone_clean = htmlspecialchars((string)($user['phone'] ?? ''));
-                        $user_type = ucfirst((string)($user['user_type'] ?? 'user'));
-                        $account_type = ucfirst((string)($user['account_type'] ?? 'individual'));
-                        $business_name = trim((string)($user['business_name'] ?? ''));
-                        $role_name = !empty($user['role_name']) ? (string)$user['role_name'] : '';
-                        $is_active = (int)($user['is_active'] ?? 0) === 1;
+                <div class="sa-folder-grid">
+                    <?php foreach ($approved_stores as $s_owner_id => $store): ?>
+                        <?php
+                            $fkey = $store['folder_key'];
+                            $cat = $folder_catalog[$fkey] ?? null;
+                            $total_members = $cat ? $cat['total_count'] : 0;
+                            $active_members = $cat ? $cat['active_count'] : 0;
+                            $owner_count = $cat ? $cat['owner_count'] : 1;
+                            $emp_count = $cat ? $cat['employee_count'] : 0;
+                            $store_city = !empty($store['city']) ? $store['city'] : 'Registered Branch';
+                        ?>
+                        <div class="sa-folder-card" onclick="openFolder('<?php echo htmlspecialchars($fkey); ?>')" data-folder-key="<?php echo htmlspecialchars($fkey); ?>">
+                            <div class="sa-folder-top">
+                                <div class="sa-folder-icon-box folder-store">
+                                    <i class="fas fa-store"></i>
+                                </div>
+                                <span class="sa-folder-count-pill">
+                                    <?php echo $total_members; ?> <?php echo $total_members === 1 ? 'Member' : 'Members'; ?>
+                                </span>
+                            </div>
+                            <h4 class="sa-folder-title" title="<?php echo htmlspecialchars($store['store_name']); ?>">
+                                <?php echo htmlspecialchars($store['store_name']); ?>
+                            </h4>
+                            <p class="sa-folder-desc">
+                                Authorized franchise store location and branch team.
+                            </p>
+                            <div class="sa-folder-meta-list">
+                                <div class="sa-folder-meta-item" title="Store Owner: <?php echo htmlspecialchars($store['owner_name']); ?>">
+                                    <i class="fas fa-user-tie"></i>
+                                    <span>Owner: <strong><?php echo htmlspecialchars($store['owner_name']); ?></strong></span>
+                                </div>
+                                <div class="sa-folder-meta-item" title="Location: <?php echo htmlspecialchars($store_city); ?>">
+                                    <i class="fas fa-map-marker-alt"></i>
+                                    <span><?php echo htmlspecialchars($store_city); ?></span>
+                                </div>
+                                <div class="sa-folder-meta-item">
+                                    <i class="fas fa-users-cog"></i>
+                                    <span><?php echo $owner_count; ?> Owner · <?php echo $emp_count; ?> <?php echo $emp_count === 1 ? 'Staff Member' : 'Staff Members'; ?></span>
+                                </div>
+                            </div>
+                            <div class="sa-folder-action-btn">
+                                <span>Open Store Folder</span>
+                                <i class="fas fa-arrow-right"></i>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
 
-                        // Avatar photo or initials gradient
-                        $photo_path = '';
-                        $has_real_photo = false;
-                        if (!empty($user['profile_image'])) {
-                            $raw_img = trim((string)$user['profile_image']);
-                            if (preg_match('/^https?:\/\//i', $raw_img)) {
-                                $photo_path = $raw_img;
-                                $has_real_photo = true;
+    <!-- ACTIVE FOLDER VIEW (Shown when a folder is selected or via URL) -->
+    <div id="saActiveFolderView" style="<?php echo $is_folder_active ? 'display: block;' : 'display: none;'; ?>">
+        <?php
+            $current_cat = $folder_catalog[$active_folder] ?? null;
+            $active_title = $current_cat['title'] ?? ($active_folder === 'all_users' ? 'All Platform Users' : 'Folder Directory');
+            $active_icon = $current_cat['icon'] ?? 'fas fa-folder';
+            $active_icon_class = $current_cat['icon_class'] ?? 'folder-customers';
+            $active_total = $current_cat['total_count'] ?? count($users);
+            $active_active = $current_cat['active_count'] ?? $active_users;
+        ?>
+        <!-- Active Folder Header Banner & Navigation -->
+        <div class="sa-active-folder-header">
+            <div class="sa-folder-nav-bar">
+                <div class="d-flex align-items-center gap-3">
+                    <button type="button" class="sa-back-folders-btn" onclick="showAllFolders()">
+                        <i class="fas fa-arrow-left"></i> Back to All Folders
+                    </button>
+                    <div class="sa-folder-breadcrumb">
+                        <a href="javascript:void(0)" onclick="showAllFolders()">Directories</a>
+                        <i class="fas fa-chevron-right" style="font-size: 10px;"></i>
+                        <span id="activeFolderBreadcrumbName" class="fw-bold text-dark">
+                            <?php echo htmlspecialchars($active_title); ?>
+                        </span>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <div class="view-mode-toggle" role="group" aria-label="View toggle">
+                        <button type="button" class="view-mode-btn active" id="saViewModeCards" onclick="switchSaUserView('cards')" title="Card Grid View">
+                            <i class="fas fa-th-large"></i>
+                        </button>
+                        <button type="button" class="view-mode-btn" id="saViewModeTable" onclick="switchSaUserView('table')" title="Table Spreadsheet View">
+                            <i class="fas fa-list"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sa-folder-banner-main">
+                <div class="sa-folder-banner-info">
+                    <div class="sa-folder-icon-box <?php echo htmlspecialchars($active_icon_class); ?>" id="activeFolderIconBox" style="width: 52px; height: 52px; font-size: 24px;">
+                        <i id="activeFolderIcon" class="<?php echo htmlspecialchars($active_icon); ?>"></i>
+                    </div>
+                    <div>
+                        <h3 id="activeFolderTitle" class="sa-folder-banner-title">
+                            <?php echo htmlspecialchars($active_title); ?>
+                        </h3>
+                        <p id="activeFolderMeta" class="sa-folder-banner-meta">
+                            <?php if ($current_cat && $current_cat['type'] === 'store'): ?>
+                                <span><i class="fas fa-user-tie me-1"></i> Owner: <strong><?php echo htmlspecialchars($current_cat['owner_name'] ?? 'Store Owner'); ?></strong></span>
+                                <?php if (!empty($current_cat['city'])): ?>
+                                    <span><i class="fas fa-map-marker-alt me-1"></i> <?php echo htmlspecialchars($current_cat['city']); ?></span>
+                                <?php endif; ?>
+                                <span><i class="fas fa-users-cog me-1"></i> <?php echo (int)($current_cat['owner_count'] ?? 1); ?> Owner, <?php echo (int)($current_cat['employee_count'] ?? 0); ?> Staff</span>
+                            <?php elseif ($active_folder === 'customers'): ?>
+                                <span><i class="fas fa-shopping-bag me-1"></i> Individual retail customer accounts</span>
+                            <?php elseif ($active_folder === 'platform_admins'): ?>
+                                <span><i class="fas fa-user-shield me-1"></i> Platform administrators and system personnel</span>
+                            <?php else: ?>
+                                <span><i class="fas fa-users-viewfinder me-1"></i> All registered platform accounts</span>
+                            <?php endif; ?>
+                        </p>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center gap-2 flex-wrap" id="activeFolderBadges">
+                    <span class="sa-folder-badge-stat">
+                        <i class="fas fa-users text-primary me-1"></i> <strong id="activeFolderMemberCount"><?php echo $active_total; ?></strong> Members
+                    </span>
+                    <span class="sa-folder-badge-stat">
+                        <i class="fas fa-circle-check text-success me-1"></i> <strong id="activeFolderActiveCount"><?php echo $active_active; ?></strong> Active
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Live Quick Filter / Search Bar inside Active Folder -->
+        <div class="d-flex align-items-center justify-content-between mb-3 gap-2 flex-wrap">
+            <div style="flex-grow: 1; max-width: 460px; position: relative;">
+                <input type="text" id="saFolderLiveSearch" class="form-control" placeholder="Quick search members by name, email, role, or ID..." style="padding-left: 36px; border-radius: 8px;">
+                <i class="fas fa-search position-absolute text-muted" style="left: 12px; top: 50%; transform: translateY(-50%); font-size: 13px;"></i>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="text-muted small" id="saVisibleUserCount">Showing all <?php echo $active_total; ?> members</span>
+            </div>
+        </div>
+
+        <?php if (!$has_users): ?>
+            <div class="note-box">`users` table is unavailable in this environment.</div>
+        <?php else: ?>
+            <!-- Modern Card Grid View (Maintained Exact Card Design) -->
+            <div class="user-card-grid" id="saUsersCardGrid">
+                <?php if (empty($users)): ?>
+                    <div class="user-cards-empty">
+                        <i class="fas fa-users-slash fa-3x mb-3 text-muted" style="opacity: 0.5;"></i>
+                        <h5 class="fw-bold">No users found</h5>
+                        <p class="text-muted mb-0">No registered users matched the selected filter criteria.</p>
+                    </div>
+                <?php else: ?>
+                    <?php foreach ($users as $user): ?>
+                        <?php
+                            $user_id = (int)$user['id'];
+                            $full_name = trim((string)($user['full_name'] ?? 'Unknown User'));
+                            $full_name_safe = htmlspecialchars($full_name !== '' ? $full_name : 'Unknown User');
+                            $email_clean = htmlspecialchars((string)($user['email'] ?? ''));
+                            $phone_clean = htmlspecialchars((string)($user['phone'] ?? ''));
+                            $user_type = ucfirst((string)($user['user_type'] ?? 'user'));
+                            $account_type = ucfirst((string)($user['account_type'] ?? 'individual'));
+                            $business_name = trim((string)($user['business_name'] ?? ''));
+                            $role_name = !empty($user['role_name']) ? (string)$user['role_name'] : '';
+                            $is_active = (int)($user['is_active'] ?? 0) === 1;
+                            $folder_key = $user['folder_key'] ?? 'customers';
+                            $is_store_owner = !empty($user['is_store_owner']);
+                            $assigned_store = $user['assigned_store_name'] ?? '';
+
+                            // Determine role title display
+                            $display_role = '';
+                            if ($is_store_owner) {
+                                $display_role = 'Store Owner';
+                            } elseif ($role_name !== '') {
+                                $display_role = $role_name;
+                            } elseif ($assigned_store !== '') {
+                                $display_role = 'Store Staff';
+                            } elseif ($folder_key === 'customers') {
+                                $display_role = 'Customer';
+                            } elseif ($folder_key === 'platform_admins') {
+                                $display_role = 'Platform Administrator';
                             } else {
-                                $clean_img = ltrim($raw_img, '/');
-                                if (file_exists(dirname(__DIR__) . '/' . $clean_img)) {
-                                    $photo_path = '../' . $clean_img;
+                                $display_role = ucfirst((string)($user['user_type'] ?? 'User'));
+                            }
+
+                            // Avatar photo or initials gradient
+                            $photo_path = '';
+                            $has_real_photo = false;
+                            if (!empty($user['profile_image'])) {
+                                $raw_img = trim((string)$user['profile_image']);
+                                if (preg_match('/^https?:\/\//i', $raw_img)) {
+                                    $photo_path = $raw_img;
                                     $has_real_photo = true;
+                                } else {
+                                    $clean_img = ltrim($raw_img, '/');
+                                    if (file_exists(dirname(__DIR__) . '/' . $clean_img)) {
+                                        $photo_path = '../' . $clean_img;
+                                        $has_real_photo = true;
+                                    }
                                 }
                             }
-                        }
 
-                        $avatar_gradient = saGetUserAvatarGradient($full_name);
-                        $name_parts = preg_split('/\s+/', $full_name);
-                        $initials = '';
-                        if (!empty($name_parts[0])) {
-                            $initials .= mb_strtoupper(mb_substr($name_parts[0], 0, 1));
-                        }
-                        if (count($name_parts) > 1 && !empty($name_parts[count($name_parts) - 1])) {
-                            $initials .= mb_strtoupper(mb_substr($name_parts[count($name_parts) - 1], 0, 1));
-                        }
-                        if ($initials === '') {
-                            $initials = 'U';
-                        }
+                            $avatar_gradient = saGetUserAvatarGradient($full_name);
+                            $name_parts = preg_split('/\s+/', $full_name);
+                            $initials = '';
+                            if (!empty($name_parts[0])) {
+                                $initials .= mb_strtoupper(mb_substr($name_parts[0], 0, 1));
+                            }
+                            if (count($name_parts) > 1 && !empty($name_parts[count($name_parts) - 1])) {
+                                $initials .= mb_strtoupper(mb_substr($name_parts[count($name_parts) - 1], 0, 1));
+                            }
+                            if ($initials === '') {
+                                $initials = 'U';
+                            }
 
-                        // Status toggle SweetAlert confirmation data
-                        $next_is_active = !$is_active;
-                        $status_confirm_title = $next_is_active ? 'Activate User Account?' : 'Deactivate User Account?';
-                        $status_confirm_text = $next_is_active
-                            ? 'This user will regain access to platform modules.'
-                            : 'This user will be blocked from logging in until reactivated.';
-                        $status_confirm_button = $next_is_active ? 'Yes, Activate' : 'Yes, Deactivate';
-                        $status_confirm_color = $next_is_active ? '#166534' : '#b3261e';
-                    ?>
-                    <div class="user-card" id="userCard_<?php echo $user_id; ?>">
-                        <!-- Top Header: Status pill & ID on left, 3-dots on right (NodoHR style) -->
-                        <div class="user-card-header">
-                            <div class="user-card-header-left">
-                                <span class="user-status-pill <?php echo $is_active ? 'active' : 'inactive'; ?>" id="cardStatusPill_<?php echo $user_id; ?>">
-                                    <?php echo $is_active ? 'Active' : 'Inactive'; ?>
-                                </span>
-                                <span class="user-id-tag">#<?php echo $user_id; ?></span>
-                            </div>
-                            <div class="dropdown">
-                                <button type="button" class="user-more-btn" data-bs-toggle="dropdown" aria-expanded="false" title="More Actions">
-                                    <i class="fas fa-ellipsis-h"></i>
-                                </button>
-                                <ul class="dropdown-menu dropdown-menu-end shadow-sm">
-                                    <?php if ($has_roles): ?>
+                            // Status toggle SweetAlert confirmation data
+                            $next_is_active = !$is_active;
+                            $status_confirm_title = $next_is_active ? 'Activate User Account?' : 'Deactivate User Account?';
+                            $status_confirm_text = $next_is_active
+                                ? 'This user will regain access to platform modules.'
+                                : 'This user will be blocked from logging in until reactivated.';
+                            $status_confirm_button = $next_is_active ? 'Yes, Activate' : 'Yes, Deactivate';
+                            $status_confirm_color = $next_is_active ? '#166534' : '#b3261e';
+
+                            // Initial display based on active_folder
+                            $initial_card_style = '';
+                            if ($is_folder_active && $active_folder !== 'all_users' && $folder_key !== $active_folder) {
+                                $initial_card_style = 'display: none;';
+                            }
+                        ?>
+                        <div class="user-card" id="userCard_<?php echo $user_id; ?>"
+                             data-folder="<?php echo htmlspecialchars($folder_key); ?>"
+                             data-user-name="<?php echo strtolower(htmlspecialchars($full_name_safe)); ?>"
+                             data-user-email="<?php echo strtolower(htmlspecialchars($email_clean)); ?>"
+                             data-user-role="<?php echo strtolower(htmlspecialchars($role_name)); ?>"
+                             data-user-id="<?php echo $user_id; ?>"
+                             data-is-active="<?php echo $is_active ? '1' : '0'; ?>"
+                             style="<?php echo $initial_card_style; ?>">
+                            <!-- Top Header: Status pill & ID on left, 3-dots on right (NodoHR style) -->
+                            <div class="user-card-header">
+                                <div class="user-card-header-left">
+                                    <span class="user-status-pill <?php echo $is_active ? 'active' : 'inactive'; ?>" id="cardStatusPill_<?php echo $user_id; ?>">
+                                        <?php echo $is_active ? 'Active' : 'Inactive'; ?>
+                                    </span>
+                                    <span class="user-id-tag">#<?php echo $user_id; ?></span>
+                                </div>
+                                <div class="dropdown">
+                                    <button type="button" class="user-more-btn" data-bs-toggle="dropdown" aria-expanded="false" title="More Actions">
+                                        <i class="fas fa-ellipsis-h"></i>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                                        <?php if ($has_roles): ?>
+                                            <li>
+                                                <a class="dropdown-item py-2 text-primary" href="javascript:void(0)" onclick="openAssignRoleModal(<?php echo $user_id; ?>, <?php echo htmlspecialchars(json_encode($full_name), ENT_QUOTES); ?>, <?php echo (int)($user['role_id'] ?? 0); ?>)">
+                                                    <i class="fas fa-user-shield me-2"></i> Reassign Role
+                                                </a>
+                                            </li>
+                                            <li><hr class="dropdown-divider my-1"></li>
+                                        <?php endif; ?>
                                         <li>
-                                            <a class="dropdown-item py-2 text-primary" href="javascript:void(0)" onclick="openAssignRoleModal(<?php echo $user_id; ?>, <?php echo htmlspecialchars(json_encode($full_name), ENT_QUOTES); ?>, <?php echo (int)($user['role_id'] ?? 0); ?>)">
-                                                <i class="fas fa-user-shield me-2"></i> Reassign Role
-                                            </a>
+                                            <form method="POST" style="margin: 0;">
+                                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+                                                <input type="hidden" name="action" value="toggle_user_status">
+                                                <input type="hidden" name="user_id" value="<?php echo $user_id; ?>">
+                                                <input type="hidden" name="next_status" value="<?php echo $is_active ? 0 : 1; ?>">
+                                                <input type="hidden" name="return_folder" class="sa-current-folder-input" value="<?php echo htmlspecialchars($active_folder); ?>">
+                                                <button type="submit"
+                                                        class="dropdown-item py-2 <?php echo $is_active ? 'text-danger' : 'text-success'; ?>"
+                                                        data-sa-confirm="1"
+                                                        data-sa-confirm-title="<?php echo htmlspecialchars($status_confirm_title, ENT_QUOTES, 'UTF-8'); ?>"
+                                                        data-sa-confirm-text="<?php echo htmlspecialchars($status_confirm_text, ENT_QUOTES, 'UTF-8'); ?>"
+                                                        data-sa-confirm-confirm-text="<?php echo htmlspecialchars($status_confirm_button, ENT_QUOTES, 'UTF-8'); ?>"
+                                                        data-sa-confirm-confirm-color="<?php echo htmlspecialchars($status_confirm_color, ENT_QUOTES, 'UTF-8'); ?>">
+                                                    <i class="fas <?php echo $is_active ? 'fa-user-slash' : 'fa-user-check'; ?> me-2"></i>
+                                                    <?php echo $is_active ? 'Deactivate Account' : 'Activate Account'; ?>
+                                                </button>
+                                            </form>
                                         </li>
-                                        <li><hr class="dropdown-divider my-1"></li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <!-- Centered Squircle Avatar with optional badge tag below (NodoHR style) -->
+                            <div class="user-avatar-section">
+                                <div class="user-avatar-circle" style="<?php echo !$has_real_photo ? 'background: ' . $avatar_gradient . ';' : ''; ?>">
+                                    <?php if ($has_real_photo): ?>
+                                        <img src="<?php echo htmlspecialchars($photo_path); ?>" alt="<?php echo $full_name_safe; ?>" class="user-avatar-img">
+                                    <?php else: ?>
+                                        <span class="user-avatar-initials"><?php echo htmlspecialchars($initials); ?></span>
                                     <?php endif; ?>
-                                    <li>
-                                        <form method="POST" style="margin: 0;">
+                                </div>
+                                <?php if ($is_store_owner): ?>
+                                    <span class="user-new-hire-tag" title="Store Owner: <?php echo htmlspecialchars($assigned_store); ?>" style="background: #b3261e;">
+                                        <i class="fas fa-crown"></i> Store Owner
+                                    </span>
+                                <?php elseif ($assigned_store !== ''): ?>
+                                    <span class="user-new-hire-tag" title="Store Staff: <?php echo htmlspecialchars($assigned_store); ?>" style="background: #175cd3;">
+                                        <i class="fas fa-id-badge"></i> Staff
+                                    </span>
+                                <?php elseif ($business_name !== ''): ?>
+                                    <span class="user-new-hire-tag" title="<?php echo htmlspecialchars($business_name); ?>">
+                                        <i class="fas fa-store"></i> <?php echo htmlspecialchars($business_name); ?>
+                                    </span>
+                                <?php elseif ($verification !== 'unverified'): ?>
+                                    <span class="user-new-hire-tag">
+                                        <i class="fas fa-shield-alt"></i> <?php echo ucfirst($verification); ?>
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+
+                            <!-- Full Name & Blue Role Title -->
+                            <h3 class="user-card-name" title="<?php echo $full_name_safe; ?>">
+                                <?php echo $full_name_safe; ?>
+                            </h3>
+                            <div class="user-card-role" title="<?php echo htmlspecialchars($display_role); ?>">
+                                <?php echo htmlspecialchars($display_role); ?>
+                            </div>
+
+                            <!-- 2-Column Metadata Row (NodoHR flat divider layout) -->
+                            <div class="user-meta-container">
+                                <div class="user-meta-col">
+                                    <span class="user-meta-label">Account Type</span>
+                                    <span class="user-meta-val" title="<?php echo $account_type; ?>">
+                                        <?php echo $account_type; ?>
+                                    </span>
+                                </div>
+                                <div class="user-meta-col" style="text-align: right;">
+                                    <span class="user-meta-label">Joined Date</span>
+                                    <span class="user-meta-val"><?php echo htmlspecialchars(saFormatDateTime($user['created_at'] ?? null, 'd M Y', 'N/A')); ?></span>
+                                </div>
+                            </div>
+
+                            <!-- Contact Info Rows -->
+                            <div class="user-contact-list">
+                                <div class="user-contact-item" title="<?php echo $email_clean; ?>">
+                                    <i class="far fa-envelope"></i>
+                                    <span><?php echo $email_clean !== '' ? $email_clean : 'No email'; ?></span>
+                                </div>
+                                <div class="user-contact-item" title="<?php echo $phone_clean; ?>">
+                                    <i class="fas fa-phone-alt"></i>
+                                    <span><?php echo $phone_clean !== '' ? $phone_clean : 'No phone'; ?></span>
+                                </div>
+                            </div>
+
+                            <!-- User Account Role Strip -->
+                            <div class="user-account-strip">
+                                <?php if ($role_name !== ''): ?>
+                                    <span class="user-role-tag linked" title="Assigned Role: <?php echo htmlspecialchars($role_name); ?> (Click to reassign)" onclick="openAssignRoleModal(<?php echo $user_id; ?>, <?php echo htmlspecialchars(json_encode($full_name), ENT_QUOTES); ?>, <?php echo (int)($user['role_id'] ?? 0); ?>)">
+                                        <i class="fas fa-shield-alt"></i> Role: <?php echo htmlspecialchars($role_name); ?>
+                                    </span>
+                                <?php else: ?>
+                                    <span class="user-role-tag unlinked" title="Click to assign system role" onclick="openAssignRoleModal(<?php echo $user_id; ?>, <?php echo htmlspecialchars(json_encode($full_name), ENT_QUOTES); ?>, <?php echo (int)($user['role_id'] ?? 0); ?>)">
+                                        <i class="fas fa-plus-circle"></i> Assign Role
+                                    </span>
+                                <?php endif; ?>
+
+                                <form method="POST" style="display:inline; margin: 0;">
+                                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+                                    <input type="hidden" name="action" value="toggle_user_status">
+                                    <input type="hidden" name="user_id" value="<?php echo $user_id; ?>">
+                                    <input type="hidden" name="next_status" value="<?php echo $is_active ? 0 : 1; ?>">
+                                    <input type="hidden" name="return_folder" class="sa-current-folder-input" value="<?php echo htmlspecialchars($active_folder); ?>">
+                                    <button type="submit" class="btn btn-sm <?php echo $is_active ? 'btn-outline-danger' : 'btn-outline-success'; ?>" style="font-size: 11px; padding: 2px 8px; border-radius: 6px; font-weight: 600;" data-sa-confirm="1" data-sa-confirm-title="<?php echo htmlspecialchars($status_confirm_title, ENT_QUOTES, 'UTF-8'); ?>" data-sa-confirm-text="<?php echo htmlspecialchars($status_confirm_text, ENT_QUOTES, 'UTF-8'); ?>" data-sa-confirm-confirm-text="<?php echo htmlspecialchars($status_confirm_button, ENT_QUOTES, 'UTF-8'); ?>" data-sa-confirm-confirm-color="<?php echo htmlspecialchars($status_confirm_color, ENT_QUOTES, 'UTF-8'); ?>">
+                                        <?php echo $is_active ? 'Deactivate' : 'Activate'; ?>
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+
+            <!-- Empty Notice for Active Folder / Search Filter -->
+            <div class="user-cards-empty d-none" id="saNoFolderUsersNotice">
+                <i class="fas fa-users-slash fa-3x mb-3 text-muted" style="opacity: 0.5;"></i>
+                <h5 class="fw-bold">No members found</h5>
+                <p class="text-muted mb-0">No users or employees matched this folder or search query.</p>
+            </div>
+
+            <!-- Table View (Preserved as alternative spreadsheet view) -->
+            <div class="table-wrap d-none" id="saUsersTableView">
+                <table class="module-table">
+                    <thead>
+                        <tr>
+                            <th>User</th>
+                            <th>Folder / Store</th>
+                            <th>Role Management</th>
+                            <th>Verification</th>
+                            <th>Status</th>
+                            <th>Last Login</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($users)): ?>
+                            <tr><td colspan="7" class="text-center text-muted">No users found for current filters.</td></tr>
+                        <?php else: ?>
+                            <?php foreach ($users as $user): ?>
+                                <?php
+                                    $user_id = (int)$user['id'];
+                                    $verification = strtolower(trim((string)($user['verification_status'] ?? '')));
+                                    if ($verification === '') {
+                                        $verification = 'unverified';
+                                    }
+                                    $folder_key = $user['folder_key'] ?? 'customers';
+                                    $is_store_owner = !empty($user['is_store_owner']);
+                                    $assigned_store = $user['assigned_store_name'] ?? '';
+                                    $folder_name_title = $folder_catalog[$folder_key]['title'] ?? 'Folder';
+
+                                    $initial_row_style = '';
+                                    if ($is_folder_active && $active_folder !== 'all_users' && $folder_key !== $active_folder) {
+                                        $initial_row_style = 'display: none;';
+                                    }
+                                ?>
+                                <tr data-folder="<?php echo htmlspecialchars($folder_key); ?>"
+                                    data-user-name="<?php echo strtolower(htmlspecialchars((string)($user['full_name'] ?? ''))); ?>"
+                                    data-user-email="<?php echo strtolower(htmlspecialchars((string)($user['email'] ?? ''))); ?>"
+                                    data-user-role="<?php echo strtolower(htmlspecialchars((string)($user['role_name'] ?? ''))); ?>"
+                                    data-user-id="<?php echo $user_id; ?>"
+                                    data-is-active="<?php echo ((int)($user['is_active'] ?? 0) === 1) ? '1' : '0'; ?>"
+                                    style="<?php echo $initial_row_style; ?>">
+                                    <td>
+                                        <strong><?php echo htmlspecialchars((string)($user['full_name'] ?? 'Unknown')); ?></strong><br>
+                                        <span class="compact-text"><?php echo htmlspecialchars((string)($user['email'] ?? '')); ?></span><br>
+                                        <span class="compact-text">
+                                            #<?php echo $user_id; ?> · <?php echo ucfirst((string)($user['user_type'] ?? 'user')); ?> /
+                                            <?php echo ucfirst((string)($user['account_type'] ?? 'individual')); ?>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-light text-dark border">
+                                            <i class="fas fa-folder me-1 text-muted"></i><?php echo htmlspecialchars($folder_name_title); ?>
+                                        </span>
+                                        <?php if ($is_store_owner): ?>
+                                            <span class="badge bg-danger ms-1">Owner</span>
+                                        <?php elseif ($assigned_store !== ''): ?>
+                                            <span class="badge bg-primary ms-1">Staff</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <?php if ($has_roles): ?>
+                                            <form method="POST" class="module-inline-actions">
+                                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+                                                <input type="hidden" name="action" value="update_user_role">
+                                                <input type="hidden" name="user_id" value="<?php echo $user_id; ?>">
+                                                <input type="hidden" name="return_folder" class="sa-current-folder-input" value="<?php echo htmlspecialchars($active_folder); ?>">
+                                                <select name="role_id" class="form-select form-select-sm" style="min-width: 160px;">
+                                                    <option value="">No Role</option>
+                                                    <?php foreach ($roles as $role): ?>
+                                                        <option value="<?php echo (int)$role['id']; ?>" <?php echo ((int)$user['role_id'] === (int)$role['id']) ? 'selected' : ''; ?>>
+                                                            <?php echo htmlspecialchars((string)$role['name']); ?>
+                                                        </option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                                <button type="submit" class="btn btn-sm btn-outline-primary">Save</button>
+                                            </form>
+                                        <?php else: ?>
+                                            <span class="compact-text">Roles not available.</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <span class="status-chip <?php echo saUserBizChipClass($verification); ?>">
+                                            <?php echo htmlspecialchars(ucfirst($verification)); ?>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <?php if ((int)($user['is_active'] ?? 0) === 1): ?>
+                                            <span class="status-chip chip-success">Active</span>
+                                        <?php else: ?>
+                                            <span class="status-chip chip-danger">Inactive</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td><?php echo htmlspecialchars(saFormatDateTime($user['last_login'] ?? null, 'M d, Y h:i A', 'Never')); ?></td>
+                                    <td>
+                                        <?php
+                                            $next_is_active = ((int)$user['is_active'] !== 1);
+                                            $status_confirm_title = $next_is_active ? 'Activate User Account?' : 'Deactivate User Account?';
+                                            $status_confirm_text = $next_is_active
+                                                ? 'This user will regain access to platform modules.'
+                                                : 'This user will be blocked from logging in until reactivated.';
+                                            $status_confirm_button = $next_is_active ? 'Yes, Activate' : 'Yes, Deactivate';
+                                            $status_confirm_color = $next_is_active ? '#166534' : '#b3261e';
+                                        ?>
+                                        <form method="POST" class="module-inline-actions">
                                             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
                                             <input type="hidden" name="action" value="toggle_user_status">
                                             <input type="hidden" name="user_id" value="<?php echo $user_id; ?>">
-                                            <input type="hidden" name="next_status" value="<?php echo $is_active ? 0 : 1; ?>">
+                                            <input type="hidden" name="next_status" value="<?php echo ((int)$user['is_active'] === 1) ? 0 : 1; ?>">
+                                            <input type="hidden" name="return_folder" class="sa-current-folder-input" value="<?php echo htmlspecialchars($active_folder); ?>">
                                             <button type="submit"
-                                                    class="dropdown-item py-2 <?php echo $is_active ? 'text-danger' : 'text-success'; ?>"
+                                                    class="btn btn-sm <?php echo ((int)$user['is_active'] === 1) ? 'btn-outline-danger' : 'btn-outline-success'; ?>"
                                                     data-sa-confirm="1"
                                                     data-sa-confirm-title="<?php echo htmlspecialchars($status_confirm_title, ENT_QUOTES, 'UTF-8'); ?>"
                                                     data-sa-confirm-text="<?php echo htmlspecialchars($status_confirm_text, ENT_QUOTES, 'UTF-8'); ?>"
                                                     data-sa-confirm-confirm-text="<?php echo htmlspecialchars($status_confirm_button, ENT_QUOTES, 'UTF-8'); ?>"
                                                     data-sa-confirm-confirm-color="<?php echo htmlspecialchars($status_confirm_color, ENT_QUOTES, 'UTF-8'); ?>">
-                                                <i class="fas <?php echo $is_active ? 'fa-user-slash' : 'fa-user-check'; ?> me-2"></i>
-                                                <?php echo $is_active ? 'Deactivate Account' : 'Activate Account'; ?>
+                                                <?php echo ((int)$user['is_active'] === 1) ? 'Deactivate' : 'Activate'; ?>
                                             </button>
                                         </form>
-                                    </li>
-                                </ul>
-                            </div>
-                        </div>
-
-                        <!-- Centered Squircle Avatar with optional badge tag below (NodoHR style) -->
-                        <div class="user-avatar-section">
-                            <div class="user-avatar-circle" style="<?php echo !$has_real_photo ? 'background: ' . $avatar_gradient . ';' : ''; ?>">
-                                <?php if ($has_real_photo): ?>
-                                    <img src="<?php echo htmlspecialchars($photo_path); ?>" alt="<?php echo $full_name_safe; ?>" class="user-avatar-img">
-                                <?php else: ?>
-                                    <span class="user-avatar-initials"><?php echo htmlspecialchars($initials); ?></span>
-                                <?php endif; ?>
-                            </div>
-                            <?php if ($business_name !== ''): ?>
-                                <span class="user-new-hire-tag" title="<?php echo htmlspecialchars($business_name); ?>">
-                                    <i class="fas fa-store"></i> <?php echo htmlspecialchars($business_name); ?>
-                                </span>
-                            <?php elseif ($verification !== 'unverified'): ?>
-                                <span class="user-new-hire-tag">
-                                    <i class="fas fa-shield-alt"></i> <?php echo ucfirst($verification); ?>
-                                </span>
-                            <?php endif; ?>
-                        </div>
-
-                        <!-- Full Name & Blue Role Title -->
-                        <h3 class="user-card-name" title="<?php echo $full_name_safe; ?>">
-                            <?php echo $full_name_safe; ?>
-                        </h3>
-                        <div class="user-card-role" title="<?php echo htmlspecialchars($role_name !== '' ? $role_name : $user_type); ?>">
-                            <?php echo htmlspecialchars($role_name !== '' ? $role_name : $user_type); ?>
-                        </div>
-
-                        <!-- 2-Column Metadata Row (NodoHR flat divider layout) -->
-                        <div class="user-meta-container">
-                            <div class="user-meta-col">
-                                <span class="user-meta-label">Account Type</span>
-                                <span class="user-meta-val" title="<?php echo $account_type; ?>">
-                                    <?php echo $account_type; ?>
-                                </span>
-                            </div>
-                            <div class="user-meta-col" style="text-align: right;">
-                                <span class="user-meta-label">Joined Date</span>
-                                <span class="user-meta-val"><?php echo htmlspecialchars(saFormatDateTime($user['created_at'] ?? null, 'd M Y', 'N/A')); ?></span>
-                            </div>
-                        </div>
-
-                        <!-- Contact Info Rows -->
-                        <div class="user-contact-list">
-                            <div class="user-contact-item" title="<?php echo $email_clean; ?>">
-                                <i class="far fa-envelope"></i>
-                                <span><?php echo $email_clean !== '' ? $email_clean : 'No email'; ?></span>
-                            </div>
-                            <div class="user-contact-item" title="<?php echo $phone_clean; ?>">
-                                <i class="fas fa-phone-alt"></i>
-                                <span><?php echo $phone_clean !== '' ? $phone_clean : 'No phone'; ?></span>
-                            </div>
-                        </div>
-
-                        <!-- User Account Role Strip -->
-                        <div class="user-account-strip">
-                            <?php if ($role_name !== ''): ?>
-                                <span class="user-role-tag linked" title="Assigned Role: <?php echo htmlspecialchars($role_name); ?> (Click to reassign)" onclick="openAssignRoleModal(<?php echo $user_id; ?>, <?php echo htmlspecialchars(json_encode($full_name), ENT_QUOTES); ?>, <?php echo (int)($user['role_id'] ?? 0); ?>)">
-                                    <i class="fas fa-shield-alt"></i> Role: <?php echo htmlspecialchars($role_name); ?>
-                                </span>
-                            <?php else: ?>
-                                <span class="user-role-tag unlinked" title="Click to assign system role" onclick="openAssignRoleModal(<?php echo $user_id; ?>, <?php echo htmlspecialchars(json_encode($full_name), ENT_QUOTES); ?>, <?php echo (int)($user['role_id'] ?? 0); ?>)">
-                                    <i class="fas fa-plus-circle"></i> Assign Role
-                                </span>
-                            <?php endif; ?>
-
-                            <form method="POST" style="display:inline; margin: 0;">
-                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
-                                <input type="hidden" name="action" value="toggle_user_status">
-                                <input type="hidden" name="user_id" value="<?php echo $user_id; ?>">
-                                <input type="hidden" name="next_status" value="<?php echo $is_active ? 0 : 1; ?>">
-                                <button type="submit" class="btn btn-sm <?php echo $is_active ? 'btn-outline-danger' : 'btn-outline-success'; ?>" style="font-size: 11px; padding: 2px 8px; border-radius: 6px; font-weight: 600;" data-sa-confirm="1" data-sa-confirm-title="<?php echo htmlspecialchars($status_confirm_title, ENT_QUOTES, 'UTF-8'); ?>" data-sa-confirm-text="<?php echo htmlspecialchars($status_confirm_text, ENT_QUOTES, 'UTF-8'); ?>" data-sa-confirm-confirm-text="<?php echo htmlspecialchars($status_confirm_button, ENT_QUOTES, 'UTF-8'); ?>" data-sa-confirm-confirm-color="<?php echo htmlspecialchars($status_confirm_color, ENT_QUOTES, 'UTF-8'); ?>">
-                                    <?php echo $is_active ? 'Deactivate' : 'Activate'; ?>
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-            <?php endif; ?>
-        </div>
-
-        <!-- Table View (Preserved as alternative spreadsheet view) -->
-        <div class="table-wrap d-none" id="saUsersTableView">
-            <table class="module-table">
-                <thead>
-                    <tr>
-                        <th>User</th>
-                        <th>Role Management</th>
-                        <th>Verification</th>
-                        <th>Status</th>
-                        <th>Last Login</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if (empty($users)): ?>
-                        <tr><td colspan="6" class="text-center text-muted">No users found for current filters.</td></tr>
-                    <?php else: ?>
-                        <?php foreach ($users as $user): ?>
-                            <?php
-                                $verification = strtolower(trim((string)($user['verification_status'] ?? '')));
-                                if ($verification === '') {
-                                    $verification = 'unverified';
-                                }
-                            ?>
-                            <tr>
-                                <td>
-                                    <strong><?php echo htmlspecialchars((string)($user['full_name'] ?? 'Unknown')); ?></strong><br>
-                                    <span class="compact-text"><?php echo htmlspecialchars((string)($user['email'] ?? '')); ?></span><br>
-                                    <span class="compact-text">
-                                        <?php echo ucfirst((string)($user['user_type'] ?? 'user')); ?> /
-                                        <?php echo ucfirst((string)($user['account_type'] ?? 'individual')); ?>
-                                        <?php if (trim((string)($user['business_name'] ?? '')) !== ''): ?>
-                                            · <?php echo htmlspecialchars((string)$user['business_name']); ?>
-                                        <?php endif; ?>
-                                    </span>
-                                </td>
-                                <td>
-                                    <?php if ($has_roles): ?>
-                                        <form method="POST" class="module-inline-actions">
-                                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
-                                            <input type="hidden" name="action" value="update_user_role">
-                                            <input type="hidden" name="user_id" value="<?php echo (int)$user['id']; ?>">
-                                            <select name="role_id" class="form-select form-select-sm" style="min-width: 160px;">
-                                                <option value="">No Role</option>
-                                                <?php foreach ($roles as $role): ?>
-                                                    <option value="<?php echo (int)$role['id']; ?>" <?php echo ((int)$user['role_id'] === (int)$role['id']) ? 'selected' : ''; ?>>
-                                                        <?php echo htmlspecialchars((string)$role['name']); ?>
-                                                    </option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                            <button type="submit" class="btn btn-sm btn-outline-primary">Save</button>
-                                        </form>
-                                    <?php else: ?>
-                                        <span class="compact-text">Roles not available.</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <span class="status-chip <?php echo saUserBizChipClass($verification); ?>">
-                                        <?php echo htmlspecialchars(ucfirst($verification)); ?>
-                                    </span>
-                                </td>
-                                <td>
-                                    <?php if ((int)($user['is_active'] ?? 0) === 1): ?>
-                                        <span class="status-chip chip-success">Active</span>
-                                    <?php else: ?>
-                                        <span class="status-chip chip-danger">Inactive</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td><?php echo htmlspecialchars(saFormatDateTime($user['last_login'] ?? null, 'M d, Y h:i A', 'Never')); ?></td>
-                                <td>
-                                    <?php
-                                        $next_is_active = ((int)$user['is_active'] !== 1);
-                                        $status_confirm_title = $next_is_active ? 'Activate User Account?' : 'Deactivate User Account?';
-                                        $status_confirm_text = $next_is_active
-                                            ? 'This user will regain access to platform modules.'
-                                            : 'This user will be blocked from logging in until reactivated.';
-                                        $status_confirm_button = $next_is_active ? 'Yes, Activate' : 'Yes, Deactivate';
-                                        $status_confirm_color = $next_is_active ? '#166534' : '#b3261e';
-                                    ?>
-                                    <form method="POST" class="module-inline-actions">
-                                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
-                                        <input type="hidden" name="action" value="toggle_user_status">
-                                        <input type="hidden" name="user_id" value="<?php echo (int)$user['id']; ?>">
-                                        <input type="hidden" name="next_status" value="<?php echo ((int)$user['is_active'] === 1) ? 0 : 1; ?>">
-                                        <button type="submit"
-                                                class="btn btn-sm <?php echo ((int)$user['is_active'] === 1) ? 'btn-outline-danger' : 'btn-outline-success'; ?>"
-                                                data-sa-confirm="1"
-                                                data-sa-confirm-title="<?php echo htmlspecialchars($status_confirm_title, ENT_QUOTES, 'UTF-8'); ?>"
-                                                data-sa-confirm-text="<?php echo htmlspecialchars($status_confirm_text, ENT_QUOTES, 'UTF-8'); ?>"
-                                                data-sa-confirm-confirm-text="<?php echo htmlspecialchars($status_confirm_button, ENT_QUOTES, 'UTF-8'); ?>"
-                                                data-sa-confirm-confirm-color="<?php echo htmlspecialchars($status_confirm_color, ENT_QUOTES, 'UTF-8'); ?>">
-                                            <?php echo ((int)$user['is_active'] === 1) ? 'Deactivate' : 'Activate'; ?>
-                                        </button>
-                                    </form>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </tbody>
-            </table>
-        </div>
-    <?php endif; ?>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
+    </div>
 </div>
 
 <div class="module-section">
@@ -1169,6 +2102,7 @@ body.dark-mode .user-role-tag.unlinked {
                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
                     <input type="hidden" name="action" value="update_user_role">
                     <input type="hidden" name="user_id" id="modal_assign_user_id">
+                    <input type="hidden" name="return_folder" id="modal_assign_return_folder" value="<?php echo htmlspecialchars($active_folder); ?>">
                     
                     <div class="mb-3">
                         <label class="form-label" style="font-size: 12px; font-weight: 600; color: var(--sa-muted);">User Account</label>
@@ -1197,9 +2131,16 @@ body.dark-mode .user-role-tag.unlinked {
 </div>
 
 <script>
+const saFolderCatalog = <?php echo json_encode($folder_catalog, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
+let currentFolderKey = <?php echo json_encode($active_folder); ?> || '';
+
 function openAssignRoleModal(userId, userName, currentRoleId) {
     document.getElementById('modal_assign_user_id').value = userId;
     document.getElementById('modal_assign_user_name').value = userName;
+    const returnFolderInput = document.getElementById('modal_assign_return_folder');
+    if (returnFolderInput) {
+        returnFolderInput.value = currentFolderKey || '';
+    }
     const roleSelect = document.getElementById('modal_assign_role_id');
     if (roleSelect) {
         roleSelect.value = currentRoleId || '';
@@ -1208,6 +2149,170 @@ function openAssignRoleModal(userId, userName, currentRoleId) {
     if (modalEl) {
         const modal = new bootstrap.Modal(modalEl);
         modal.show();
+    }
+}
+
+function openFolder(folderKey, updateUrl = true) {
+    currentFolderKey = folderKey;
+    const foldersView = document.getElementById('saFoldersView');
+    const activeView = document.getElementById('saActiveFolderView');
+    const breadcrumbName = document.getElementById('activeFolderBreadcrumbName');
+    const folderTitle = document.getElementById('activeFolderTitle');
+    const folderMeta = document.getElementById('activeFolderMeta');
+    const iconEl = document.getElementById('activeFolderIcon');
+    const iconBox = document.getElementById('activeFolderIconBox');
+    const liveSearchInput = document.getElementById('saFolderLiveSearch');
+
+    if (!foldersView || !activeView) return;
+
+    if (liveSearchInput) {
+        liveSearchInput.value = '';
+    }
+
+    if (folderKey === 'all_users') {
+        if (breadcrumbName) breadcrumbName.textContent = 'All Platform Users';
+        if (folderTitle) folderTitle.textContent = 'All Platform Users';
+        if (folderMeta) folderMeta.innerHTML = '<span><i class="fas fa-users-viewfinder me-1"></i> Flat unfiltered directory across all registered users and staff</span>';
+        if (iconEl) iconEl.className = 'fas fa-users-viewfinder';
+        if (iconBox) iconBox.className = 'sa-folder-icon-box folder-customers';
+    } else {
+        const cat = saFolderCatalog[folderKey];
+        if (cat) {
+            if (breadcrumbName) breadcrumbName.textContent = cat.title;
+            if (folderTitle) folderTitle.textContent = cat.title;
+            
+            let metaHtml = '';
+            if (cat.type === 'store') {
+                metaHtml = '<span><i class="fas fa-user-tie me-1"></i> Owner: <strong>' + (cat.owner_name || 'Store Owner') + '</strong></span>';
+                if (cat.city) {
+                    metaHtml += '<span><i class="fas fa-map-marker-alt me-1"></i> ' + cat.city + '</span>';
+                }
+                metaHtml += '<span><i class="fas fa-users-cog me-1"></i> ' + (cat.owner_count || 1) + ' Owner, ' + (cat.employee_count || 0) + ' Staff</span>';
+            } else if (cat.key === 'customers') {
+                metaHtml = '<span><i class="fas fa-shopping-bag me-1"></i> Registered customer accounts</span>';
+            } else if (cat.key === 'platform_admins') {
+                metaHtml = '<span><i class="fas fa-user-shield me-1"></i> Platform administrators and system personnel</span>';
+            }
+            if (folderMeta) folderMeta.innerHTML = metaHtml;
+
+            if (iconEl) {
+                iconEl.className = cat.icon || 'fas fa-folder';
+            }
+            if (iconBox) {
+                iconBox.className = 'sa-folder-icon-box ' + (cat.icon_class || 'folder-customers');
+            }
+        }
+    }
+
+    // Toggle container views
+    foldersView.style.display = 'none';
+    activeView.style.display = 'block';
+
+    // Filter user elements
+    filterUserElements(folderKey, '');
+
+    // Keep hidden inputs in sync for POST redirects
+    document.querySelectorAll('.sa-current-folder-input').forEach(input => {
+        input.value = folderKey;
+    });
+    const modalFolderInput = document.getElementById('modal_assign_return_folder');
+    if (modalFolderInput) {
+        modalFolderInput.value = folderKey;
+    }
+
+    // Push URL state without reloading
+    if (updateUrl) {
+        const newUrl = (folderKey && folderKey !== 'all_folders')
+            ? ('?folder=' + encodeURIComponent(folderKey))
+            : window.location.pathname;
+        history.pushState({ folder: folderKey }, '', newUrl);
+    }
+}
+
+function showAllFolders(updateUrl = true) {
+    currentFolderKey = '';
+    const foldersView = document.getElementById('saFoldersView');
+    const activeView = document.getElementById('saActiveFolderView');
+
+    if (foldersView) foldersView.style.display = 'block';
+    if (activeView) activeView.style.display = 'none';
+
+    document.querySelectorAll('.sa-current-folder-input').forEach(input => {
+        input.value = '';
+    });
+    const modalFolderInput = document.getElementById('modal_assign_return_folder');
+    if (modalFolderInput) {
+        modalFolderInput.value = '';
+    }
+
+    if (updateUrl) {
+        history.pushState({}, '', window.location.pathname);
+    }
+}
+
+function filterUserElements(folderKey, searchQuery) {
+    const query = (searchQuery || '').toLowerCase().trim();
+    const cards = document.querySelectorAll('#saUsersCardGrid .user-card');
+    const rows = document.querySelectorAll('#saUsersTableView tbody tr[data-folder]');
+    const emptyNotice = document.getElementById('saNoFolderUsersNotice');
+    const visibleCountEl = document.getElementById('saVisibleUserCount');
+    const memberCountEl = document.getElementById('activeFolderMemberCount');
+    const activeCountEl = document.getElementById('activeFolderActiveCount');
+
+    let visibleCount = 0;
+    let activeCount = 0;
+
+    cards.forEach(card => {
+        const cardFolder = card.dataset.folder || '';
+        const name = card.dataset.userName || '';
+        const email = card.dataset.userEmail || '';
+        const role = card.dataset.userRole || '';
+        const id = card.dataset.userId || '';
+        const isActive = card.dataset.isActive === '1';
+
+        const matchesFolder = (folderKey === 'all_users' || cardFolder === folderKey);
+        const matchesQuery = !query || name.includes(query) || email.includes(query) || role.includes(query) || id.includes(query);
+
+        if (matchesFolder && matchesQuery) {
+            card.style.display = '';
+            visibleCount++;
+            if (isActive) activeCount++;
+        } else {
+            card.style.display = 'none';
+        }
+    });
+
+    rows.forEach(row => {
+        const rowFolder = row.dataset.folder || '';
+        const name = row.dataset.userName || '';
+        const email = row.dataset.userEmail || '';
+        const role = row.dataset.userRole || '';
+        const id = row.dataset.userId || '';
+
+        const matchesFolder = (folderKey === 'all_users' || rowFolder === folderKey);
+        const matchesQuery = !query || name.includes(query) || email.includes(query) || role.includes(query) || id.includes(query);
+
+        if (matchesFolder && matchesQuery) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+
+    if (memberCountEl) memberCountEl.textContent = visibleCount;
+    if (activeCountEl) activeCountEl.textContent = activeCount;
+    if (visibleCountEl) {
+        visibleCountEl.textContent = query
+            ? ('Found ' + visibleCount + ' matching member' + (visibleCount === 1 ? '' : 's'))
+            : ('Showing all ' + visibleCount + ' member' + (visibleCount === 1 ? '' : 's'));
+    }
+
+    if (emptyNotice) {
+        if (visibleCount === 0) {
+            emptyNotice.classList.remove('d-none');
+        } else {
+            emptyNotice.classList.add('d-none');
+        }
     }
 }
 
@@ -1240,6 +2345,31 @@ document.addEventListener('DOMContentLoaded', function() {
         switchSaUserView('table');
     } else {
         switchSaUserView('cards');
+    }
+
+    const liveSearchInput = document.getElementById('saFolderLiveSearch');
+    if (liveSearchInput) {
+        liveSearchInput.addEventListener('input', function(e) {
+            filterUserElements(currentFolderKey, e.target.value);
+        });
+    }
+
+    // Check URL parameter for initial folder
+    const urlParams = new URLSearchParams(window.location.search);
+    const initialFolder = urlParams.get('folder');
+    if (initialFolder && (saFolderCatalog[initialFolder] || initialFolder === 'all_users')) {
+        openFolder(initialFolder, false);
+    }
+});
+
+// Handle browser Back / Forward buttons
+window.addEventListener('popstate', function(e) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const folderParam = urlParams.get('folder');
+    if (folderParam && (saFolderCatalog[folderParam] || folderParam === 'all_users')) {
+        openFolder(folderParam, false);
+    } else {
+        showAllFolders(false);
     }
 });
 </script>
