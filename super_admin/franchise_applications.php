@@ -469,15 +469,250 @@ saRenderModuleHeader('Business Applications', 'Business Applications', $admin_in
     </div>
 </div>
 
+<style>
+.franchise-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+@media (min-width: 1400px) {
+    .franchise-cards-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+@media (min-width: 1750px) {
+    .franchise-cards-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+.franchise-card {
+    background: #ffffff;
+    border: 1px solid #eaecf0;
+    border-radius: 14px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.15s ease;
+    cursor: pointer;
+    position: relative;
+}
+.franchise-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 24px -4px rgba(16, 24, 40, 0.08);
+    border-color: #d0d5dd;
+}
+body.dark-mode .franchise-card {
+    background: #181d26 !important;
+    border-color: #27303f !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+body.dark-mode .franchise-card:hover {
+    border-color: #3b4758 !important;
+    box-shadow: 0 12px 24px -4px rgba(0, 0, 0, 0.4);
+}
+.franchise-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.franchise-card-app-no {
+    font-size: 11.5px;
+    font-weight: 700;
+    font-family: monospace, -apple-system, BlinkMacSystemFont, sans-serif;
+    color: #475467;
+    background: #f8f9fa;
+    padding: 3px 8px;
+    border-radius: 6px;
+    border: 1px solid #eaecf0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+body.dark-mode .franchise-card-app-no {
+    background: #1f2937;
+    color: #94a3b8;
+    border-color: #374151;
+}
+.franchise-card-body {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+.franchise-card-avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    background: #fff1f0;
+    border: 1px solid #fee4e2;
+    color: #b3261e;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+body.dark-mode .franchise-card-avatar {
+    background: #2a1515;
+    border-color: #4c1d1d;
+    color: #f87171;
+}
+.franchise-card-details {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+.franchise-card-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #101828;
+    margin: 0 0 4px 0;
+    line-height: 1.35;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+body.dark-mode .franchise-card-title {
+    color: #f8fafc;
+}
+.franchise-card-contact {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 12px;
+    color: #475467;
+}
+body.dark-mode .franchise-card-contact {
+    color: #94a3b8;
+}
+.franchise-card-contact-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.franchise-card-contact-row i {
+    font-size: 11px;
+    color: #667085;
+    width: 13px;
+    text-align: center;
+    flex-shrink: 0;
+}
+.franchise-card-meta-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    background: #f8f9fa;
+    border: 1px solid #eaecf0;
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+}
+body.dark-mode .franchise-card-meta-grid {
+    background: #1f2937;
+    border-color: #374151;
+}
+.franchise-meta-item {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+.franchise-meta-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: #667085;
+    margin-bottom: 2px;
+}
+body.dark-mode .franchise-meta-label {
+    color: #94a3b8;
+}
+.franchise-meta-value {
+    font-size: 13px;
+    font-weight: 700;
+    color: #101828;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+body.dark-mode .franchise-meta-value {
+    color: #f8fafc;
+}
+.franchise-card-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 10px;
+    border-top: 1px solid #eaecf0;
+    gap: 8px;
+}
+body.dark-mode .franchise-card-foot {
+    border-top-color: #27303f;
+}
+.franchise-card-hint {
+    font-size: 11.5px;
+    color: #667085;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+body.dark-mode .franchise-card-hint {
+    color: #94a3b8;
+}
+.franchise-card-cta {
+    font-size: 12px;
+    font-weight: 600;
+    color: #b3261e;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: gap 0.15s ease;
+}
+.franchise-card:hover .franchise-card-cta {
+    gap: 9px;
+}
+.franchise-cards-empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 48px 20px;
+    background: #ffffff;
+    border: 1px dashed #d0d5dd;
+    border-radius: 12px;
+    color: #667085;
+}
+body.dark-mode .franchise-cards-empty {
+    background: #181d26;
+    border-color: #374151;
+    color: #94a3b8;
+}
+</style>
+
 <div class="module-section">
     <div class="module-section-header">
         <div>
             <h3>Franchise Applications</h3>
             <p class="module-subtext">Open each application to inspect documents and approve or reject requests.</p>
         </div>
+        <div class="d-flex align-items-center gap-2">
+            <div class="view-mode-toggle" role="group" aria-label="View toggle">
+                <button type="button" class="view-mode-btn active" id="saAppsViewCards" onclick="switchAppsView('cards')" title="Card Grid View">
+                    <i class="fas fa-th-large"></i>
+                </button>
+                <button type="button" class="view-mode-btn" id="saAppsViewTable" onclick="switchAppsView('table')" title="Table Spreadsheet View">
+                    <i class="fas fa-list"></i>
+                </button>
+            </div>
+        </div>
     </div>
 
-    <form method="GET" class="module-form-grid" style="margin-bottom: 12px;">
+    <form method="GET" class="module-form-grid" style="margin-bottom: 16px;">
         <input type="text" name="search" class="form-control" placeholder="Search applications..." value="<?php echo htmlspecialchars($search); ?>">
         <select name="status" class="form-select">
             <option value="" <?php echo $status_filter === '' ? 'selected' : ''; ?>>All Status</option>
@@ -492,7 +727,81 @@ saRenderModuleHeader('Business Applications', 'Business Applications', $admin_in
     <?php if (!$has_apps): ?>
         <div class="note-box">`franchise_applications` table is unavailable in this environment.</div>
     <?php else: ?>
-        <div class="table-wrap">
+        <!-- Card Grid View (Compact & Clean) -->
+        <div class="franchise-cards-grid" id="saAppsCardsGrid">
+            <?php if (empty($apps)): ?>
+                <div class="franchise-cards-empty">
+                    <i class="fas fa-store-slash fa-2x mb-2 text-muted"></i>
+                    <p class="mb-0">No franchise applications found matching your criteria.</p>
+                </div>
+            <?php else: ?>
+                <?php foreach ($apps as $app): ?>
+                    <?php
+                        $app_id = (int)($app['id'] ?? 0);
+                        $status = strtolower(trim((string)($app['status'] ?? 'pending')));
+                        $app_num = (string)($app['application_number'] ?? 'FR-' . $app_id);
+                        $biz_name = (string)($app['business_name'] ?? 'Untitled Store');
+                        $contact_person = (string)($app['contact_person'] ?? 'Unknown Applicant');
+                        $contact_email = (string)($app['contact_email'] ?? '');
+                        $investment = (float)($app['capital_investment'] ?? 0);
+                        $created_date = saFormatDateTime($app['created_at'] ?? null, 'M d, Y');
+                        $status_class = saApplicationStatusChipClass($status);
+                        $status_label = ucfirst($status);
+                        if ($status === 'incomplete') {
+                            $status_label = 'Incomplete';
+                        }
+                    ?>
+                    <div class="franchise-card" onclick="loadApplicationDetails(<?php echo $app_id; ?>)" data-bs-toggle="modal" data-bs-target="#appModal" title="Click to inspect application #<?php echo htmlspecialchars($app_num); ?>">
+                        <div class="franchise-card-head">
+                            <span class="franchise-card-app-no"><?php echo htmlspecialchars($app_num); ?></span>
+                            <span class="status-chip <?php echo $status_class; ?>">
+                                <?php echo htmlspecialchars($status_label); ?>
+                            </span>
+                        </div>
+
+                        <div class="franchise-card-body">
+                            <div class="franchise-card-avatar">
+                                <i class="fas fa-store"></i>
+                            </div>
+                            <div class="franchise-card-details">
+                                <h4 class="franchise-card-title" title="<?php echo htmlspecialchars($biz_name); ?>">
+                                    <?php echo htmlspecialchars($biz_name); ?>
+                                </h4>
+                                <div class="franchise-card-contact">
+                                    <span class="franchise-card-contact-row" title="<?php echo htmlspecialchars($contact_person); ?>">
+                                        <i class="fas fa-user"></i> <?php echo htmlspecialchars($contact_person); ?>
+                                    </span>
+                                    <?php if ($contact_email !== ''): ?>
+                                        <span class="franchise-card-contact-row" title="<?php echo htmlspecialchars($contact_email); ?>">
+                                            <i class="fas fa-envelope"></i> <?php echo htmlspecialchars($contact_email); ?>
+                                        </span>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="franchise-card-meta-grid">
+                            <div class="franchise-meta-item">
+                                <span class="franchise-meta-label">Capital</span>
+                                <span class="franchise-meta-value"><?php echo htmlspecialchars(saFormatCurrency($investment)); ?></span>
+                            </div>
+                            <div class="franchise-meta-item">
+                                <span class="franchise-meta-label">Applied</span>
+                                <span class="franchise-meta-value"><?php echo htmlspecialchars($created_date); ?></span>
+                            </div>
+                        </div>
+
+                        <div class="franchise-card-foot">
+                            <span class="franchise-card-hint"><i class="fas fa-file-invoice"></i> Legal Docs</span>
+                            <span class="franchise-card-cta">Review Application <i class="fas fa-arrow-right"></i></span>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
+
+        <!-- Table Spreadsheet View (Alternate) -->
+        <div class="table-wrap d-none" id="saAppsTableView">
             <table class="module-table">
                 <thead>
                     <tr>
@@ -798,6 +1107,28 @@ $extra_scripts = <<<'HTML'
             }
         });
     }
+
+    function switchAppsView(mode) {
+        if (mode === 'table') {
+            $('#saAppsCardsGrid').addClass('d-none');
+            $('#saAppsTableView').removeClass('d-none');
+            $('#saAppsViewCards').removeClass('active');
+            $('#saAppsViewTable').addClass('active');
+            try { localStorage.setItem('sa_apps_view_mode', 'table'); } catch(e){}
+        } else {
+            $('#saAppsCardsGrid').removeClass('d-none');
+            $('#saAppsTableView').addClass('d-none');
+            $('#saAppsViewCards').addClass('active');
+            $('#saAppsViewTable').removeClass('active');
+            try { localStorage.setItem('sa_apps_view_mode', 'cards'); } catch(e){}
+        }
+    }
+
+    $(function() {
+        var saved = 'cards';
+        try { saved = localStorage.getItem('sa_apps_view_mode') || 'cards'; } catch(e){}
+        switchAppsView(saved);
+    });
 </script>
 HTML;
 
