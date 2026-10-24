@@ -3018,7 +3018,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const emailInput = document.getElementById('loginEmail');
             const passInput = document.getElementById('loginPassword');
 
-            if (!emailInput || !emailInput.value.trim()) {
+            const emailVal = emailInput ? emailInput.value.trim() : '';
+            if (!emailVal) {
                 if (window.showPopupAlert) {
                     showPopupAlert('Please enter your email address.', 'alert');
                 } else if (typeof Toast !== 'undefined') {
@@ -3027,6 +3028,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (emailInput) emailInput.focus();
                 return;
             }
+
+            if (!isValidEmail(emailVal)) {
+                if (window.showPopupAlert) {
+                    showPopupAlert('Please enter a valid email address.', 'alert');
+                } else if (typeof Toast !== 'undefined') {
+                    Toast.fire({ icon: 'warning', title: 'Please enter a valid email address' });
+                }
+                if (emailInput) emailInput.focus();
+                return;
+            }
+
             if (!passInput || !passInput.value) {
                 if (window.showPopupAlert) {
                     showPopupAlert('Please enter your password.', 'alert');
