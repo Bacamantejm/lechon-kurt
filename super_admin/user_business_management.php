@@ -317,6 +317,33 @@ if (saTableExists($conn, 'store_locations')) {
     }
 }
 
+// Load partner subscription profiles for store directories
+$store_subscriptions = [];
+if (saTableExists($conn, 'partner_plan_subscriptions')) {
+    $subs_q = saQueryRows(
+        $conn,
+        "SELECT s.partner_user_id, s.subscription_status, s.billing_cycle, s.started_at, s.renews_at, s.cancelled_at, s.cancellation_effective_date, s.switched_at,
+                p.plan_name, p.plan_code,
+                CASE WHEN s.billing_cycle = 'annual' THEN p.annual_price ELSE p.monthly_price END AS plan_price,
+                prev_p.plan_name AS previous_plan_name,
+                COALESCE((
+                    SELECT SUM(inv.total_amount) 
+                    FROM partner_billing_invoices inv 
+                    WHERE inv.partner_user_id = s.partner_user_id AND inv.invoice_status = 'paid'
+                ), 0) AS total_paid_to_date
+         FROM partner_plan_subscriptions s
+         LEFT JOIN platform_subscription_plans p ON p.id = s.plan_id
+         LEFT JOIN platform_subscription_plans prev_p ON prev_p.id = s.previous_plan_id
+         ORDER BY s.id DESC"
+    );
+    foreach ($subs_q as $sub_item) {
+        $p_uid = (int)$sub_item['partner_user_id'];
+        if ($p_uid > 0 && !isset($store_subscriptions[$p_uid])) {
+            $store_subscriptions[$p_uid] = $sub_item;
+        }
+    }
+}
+
 // Map employees and staff to their respective stores
 $user_to_store_map = [];
 
@@ -484,6 +511,7 @@ $folder_catalog = [
 
 foreach ($approved_stores as $s_owner_id => $store) {
     $fkey = $store['folder_key'];
+    $sub_item = $store_subscriptions[$s_owner_id] ?? null;
     $folder_catalog[$fkey] = [
         'key' => $fkey,
         'type' => 'store',
@@ -494,6 +522,7 @@ foreach ($approved_stores as $s_owner_id => $store) {
         'icon_class' => 'folder-store',
         'owner_name' => $store['owner_name'],
         'city' => $store['city'],
+        'subscription' => $sub_item,
         'total_count' => 0,
         'active_count' => 0,
         'owner_count' => 0,
@@ -1435,6 +1464,7 @@ body.dark-mode .sa-view-all-pill {
                                 $owner_count = $cat ? $cat['owner_count'] : 1;
                                 $emp_count = $cat ? $cat['employee_count'] : 0;
                                 $store_city = !empty($store['city']) ? $store['city'] : '';
+                                $sub_info = $cat['subscription'] ?? ($store_subscriptions[$s_owner_id] ?? null);
                             ?>
                             <div class="sa-folder-card" onclick="openFolder('<?php echo htmlspecialchars($fkey); ?>')" data-folder-key="<?php echo htmlspecialchars($fkey); ?>" title="<?php echo htmlspecialchars($store['store_name']); ?>">
                                 <div class="sa-folder-card-main">
@@ -1449,6 +1479,23 @@ body.dark-mode .sa-view-all-pill {
                                                 <span class="ms-1">· <?php echo htmlspecialchars($store_city); ?></span>
                                             <?php endif; ?>
                                         </div>
+                                        <?php if (!empty($sub_info)): ?>
+                                            <div style="margin-top: 5px; font-size: 0.72rem; display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+                                                <span style="background: #ecfdf3; color: #027a48; border: 1px solid #abefc6; border-radius: 4px; padding: 1px 5px; font-weight: 700;">
+                                                    <i class="fas fa-crown"></i> <?php echo htmlspecialchars($sub_info['plan_name'] ?? 'Plan'); ?>
+                                                </span>
+                                                <span style="color: #475467; font-weight: 600;">PHP <?php echo number_format((float)($sub_info['total_paid_to_date'] ?? 0), 2); ?></span>
+                                                <?php if (!empty($sub_info['cancelled_at']) || strtolower($sub_info['subscription_status'] ?? '') === 'cancelled'): ?>
+                                                    <span style="background: #fff1f0; color: #b3261e; border: 1px solid #fee4e2; border-radius: 4px; padding: 1px 5px; font-weight: 600;">
+                                                        <i class="fas fa-ban"></i> Cancelled
+                                                    </span>
+                                                <?php elseif (!empty($sub_info['switched_at']) && !empty($sub_info['previous_plan_name'])): ?>
+                                                    <span style="background: #eff8ff; color: #175cd3; border: 1px solid #b2ddff; border-radius: 4px; padding: 1px 5px; font-weight: 600;">
+                                                        <i class="fas fa-exchange-alt"></i> Switched
+                                                    </span>
+                                                <?php endif; ?>
+                                            </div>
+                                        <?php endif; ?>
                                     </div>
                                 </div>
                                 <div class="sa-folder-side-info">
@@ -1526,6 +1573,41 @@ body.dark-mode .sa-view-all-pill {
                                 <span><i class="fas fa-users-viewfinder me-1"></i> All registered platform accounts</span>
                             <?php endif; ?>
                         </p>
+                        <!-- Dynamic Store Subscription Info Strip in Banner -->
+                        <div id="activeFolderSubscriptionStrip" style="<?php echo ($current_cat && !empty($current_cat['subscription'])) ? 'display: flex;' : 'display: none;'; ?> align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 6px; font-size: 0.78rem;">
+                            <?php if ($current_cat && !empty($current_cat['subscription'])): ?>
+                                <?php 
+                                    $cSub = $current_cat['subscription'];
+                                    $cPlanName = $cSub['plan_name'] ?? 'Partner Plan';
+                                    $cCycle = ucfirst((string)($cSub['billing_cycle'] ?? 'monthly'));
+                                    $cPaid = (float)($cSub['total_paid_to_date'] ?? 0);
+                                    $cStatus = strtolower(trim((string)($cSub['subscription_status'] ?? 'active')));
+                                    $cCancelled = !empty($cSub['cancelled_at']) || $cStatus === 'cancelled';
+                                    $cSwitched = !empty($cSub['switched_at']) && !empty($cSub['previous_plan_name']);
+                                ?>
+                                <span style="background: #ecfdf3; color: #027a48; border: 1px solid #abefc6; border-radius: 6px; padding: 2px 8px; font-weight: 700;">
+                                    <i class="fas fa-crown"></i> <?php echo htmlspecialchars($cPlanName); ?> (<?php echo htmlspecialchars($cCycle); ?>)
+                                </span>
+                                <span style="background: #f8fafc; border: 1px solid #eaecf0; border-radius: 6px; padding: 2px 8px; color: #101828; font-weight: 600;">
+                                    Revenue Received: <strong style="color: #027a48;">PHP <?php echo number_format($cPaid, 2); ?></strong>
+                                </span>
+                                <?php if ($cCancelled): ?>
+                                    <span style="background: #fff1f0; color: #b3261e; border: 1px solid #fee4e2; border-radius: 6px; padding: 2px 8px; font-weight: 600;">
+                                        <i class="fas fa-ban"></i> Cancelled on <?php echo !empty($cSub['cancelled_at']) ? date('M d, Y', strtotime($cSub['cancelled_at'])) : 'Recorded'; ?>
+                                        <?php if (!empty($cSub['cancellation_effective_date'])): ?>
+                                            (Access until <?php echo date('M d, Y', strtotime($cSub['cancellation_effective_date'])); ?>)
+                                        <?php endif; ?>
+                                    </span>
+                                <?php elseif ($cSwitched): ?>
+                                    <span style="background: #eff8ff; color: #175cd3; border: 1px solid #b2ddff; border-radius: 6px; padding: 2px 8px; font-weight: 600;">
+                                        <i class="fas fa-exchange-alt"></i> Switched from <?php echo htmlspecialchars($cSub['previous_plan_name']); ?> on <?php echo date('M d, Y', strtotime($cSub['switched_at'])); ?>
+                                    </span>
+                                <?php endif; ?>
+                                <a href="platform_monetization.php" class="btn btn-sm btn-outline-danger" style="padding: 1px 8px; font-size: 0.72rem; border-radius: 6px; text-decoration: none;">
+                                    <i class="fas fa-file-invoice"></i> Monetization
+                                </a>
+                            <?php endif; ?>
+                        </div>
                     </div>
                 </div>
                 <div class="d-flex align-items-center gap-2 flex-wrap" id="activeFolderBadges">
@@ -1701,8 +1783,9 @@ body.dark-mode .sa-view-all-pill {
                                     <?php endif; ?>
                                 </div>
                                 <?php if ($is_store_owner): ?>
-                                    <span class="user-new-hire-tag" title="Store Owner: <?php echo htmlspecialchars($assigned_store); ?>" style="background: #b3261e;">
-                                        <i class="fas fa-crown"></i> Store Owner
+                                    <?php $oSub = $store_subscriptions[$user_id] ?? null; ?>
+                                    <span class="user-new-hire-tag" title="Store Owner: <?php echo htmlspecialchars($assigned_store); ?><?php echo !empty($oSub['plan_name']) ? ' · ' . htmlspecialchars($oSub['plan_name']) : ''; ?>" style="background: #b3261e;">
+                                        <i class="fas fa-crown"></i> <?php echo !empty($oSub['plan_name']) ? htmlspecialchars($oSub['plan_name']) . ' Owner' : 'Store Owner'; ?>
                                     </span>
                                 <?php elseif ($assigned_store !== ''): ?>
                                     <span class="user-new-hire-tag" title="Store Staff: <?php echo htmlspecialchars($assigned_store); ?>" style="background: #175cd3;">
@@ -1843,7 +1926,13 @@ body.dark-mode .sa-view-all-pill {
                                             <i class="fas fa-folder me-1 text-muted"></i><?php echo htmlspecialchars($folder_name_title); ?>
                                         </span>
                                         <?php if ($is_store_owner): ?>
+                                            <?php $oSubRow = $store_subscriptions[$user_id] ?? null; ?>
                                             <span class="badge bg-danger ms-1">Owner</span>
+                                            <?php if (!empty($oSubRow['plan_name'])): ?>
+                                                <span class="badge bg-success ms-1" title="Plan: <?php echo htmlspecialchars($oSubRow['plan_name']); ?> · Total Paid: PHP <?php echo number_format((float)($oSubRow['total_paid_to_date'] ?? 0), 2); ?>">
+                                                    <i class="fas fa-crown"></i> <?php echo htmlspecialchars($oSubRow['plan_name']); ?>
+                                                </span>
+                                            <?php endif; ?>
                                         <?php elseif ($assigned_store !== ''): ?>
                                             <span class="badge bg-primary ms-1">Staff</span>
                                         <?php endif; ?>
@@ -2086,6 +2175,12 @@ body.dark-mode .sa-view-all-pill {
 const saFolderCatalog = <?php echo json_encode($folder_catalog, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>;
 let currentFolderKey = <?php echo json_encode($active_folder); ?> || '';
 
+function saEscapeHtml(str) {
+    if (!str) return '';
+    const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+    return String(str).replace(/[&<>"']/g, function(m) { return map[m]; });
+}
+
 function openAssignRoleModal(userId, userName, currentRoleId) {
     document.getElementById('modal_assign_user_id').value = userId;
     document.getElementById('modal_assign_user_name').value = userName;
@@ -2111,6 +2206,7 @@ function openFolder(folderKey, updateUrl = true) {
     const breadcrumbName = document.getElementById('activeFolderBreadcrumbName');
     const folderTitle = document.getElementById('activeFolderTitle');
     const folderMeta = document.getElementById('activeFolderMeta');
+    const subStrip = document.getElementById('activeFolderSubscriptionStrip');
     const iconEl = document.getElementById('activeFolderIcon');
     const iconBox = document.getElementById('activeFolderIconBox');
     const liveSearchInput = document.getElementById('saFolderLiveSearch');
@@ -2131,6 +2227,7 @@ function openFolder(folderKey, updateUrl = true) {
         if (folderMeta) folderMeta.innerHTML = '<span><i class="fas fa-users-viewfinder me-1"></i> Flat unfiltered directory across all registered users and staff</span>';
         if (iconEl) iconEl.className = 'fas fa-users-viewfinder';
         if (iconBox) iconBox.className = 'sa-folder-icon-box folder-customers';
+        if (subStrip) { subStrip.style.display = 'none'; subStrip.innerHTML = ''; }
     } else {
         const cat = saFolderCatalog[folderKey];
         if (cat) {
@@ -2139,15 +2236,62 @@ function openFolder(folderKey, updateUrl = true) {
             
             let metaHtml = '';
             if (cat.type === 'store') {
-                metaHtml = '<span><i class="fas fa-user-tie me-1"></i> Owner: <strong>' + (cat.owner_name || 'Store Owner') + '</strong></span>';
+                metaHtml = '<span><i class="fas fa-user-tie me-1"></i> Owner: <strong>' + saEscapeHtml(cat.owner_name || 'Store Owner') + '</strong></span>';
                 if (cat.city) {
-                    metaHtml += '<span><i class="fas fa-map-marker-alt me-1"></i> ' + cat.city + '</span>';
+                    metaHtml += '<span><i class="fas fa-map-marker-alt me-1"></i> ' + saEscapeHtml(cat.city) + '</span>';
                 }
                 metaHtml += '<span><i class="fas fa-users-cog me-1"></i> ' + (cat.owner_count || 1) + ' Owner, ' + (cat.employee_count || 0) + ' Staff</span>';
-            } else if (cat.key === 'customers') {
-                metaHtml = '<span><i class="fas fa-shopping-bag me-1"></i> Registered customer accounts</span>';
-            } else if (cat.key === 'platform_admins') {
-                metaHtml = '<span><i class="fas fa-user-shield me-1"></i> Platform administrators and system personnel</span>';
+
+                if (subStrip) {
+                    if (cat.subscription) {
+                        const sub = cat.subscription;
+                        const planName = sub.plan_name || 'Partner Plan';
+                        const cycle = (sub.billing_cycle || 'monthly').charAt(0).toUpperCase() + (sub.billing_cycle || 'monthly').slice(1);
+                        const paid = parseFloat(sub.total_paid_to_date || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                        const isCancelled = Boolean(sub.cancelled_at) || (sub.subscription_status === 'cancelled');
+                        const isSwitched = Boolean(sub.switched_at && sub.previous_plan_name);
+
+                        let stripHtml = '<span style="background: #ecfdf3; color: #027a48; border: 1px solid #abefc6; border-radius: 6px; padding: 2px 8px; font-weight: 700;">' +
+                            '<i class="fas fa-crown"></i> ' + saEscapeHtml(planName) + ' (' + saEscapeHtml(cycle) + ')' +
+                            '</span>' +
+                            '<span style="background: #f8fafc; border: 1px solid #eaecf0; border-radius: 6px; padding: 2px 8px; color: #101828; font-weight: 600;">' +
+                            'Revenue Received: <strong style="color: #027a48;">PHP ' + paid + '</strong>' +
+                            '</span>';
+
+                        if (isCancelled) {
+                            const cancelDate = sub.cancelled_at ? new Date(sub.cancelled_at.replace(/-/g, '/')).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recorded';
+                            const effectiveDate = sub.cancellation_effective_date ? new Date(sub.cancellation_effective_date.replace(/-/g, '/')).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+                            stripHtml += '<span style="background: #fff1f0; color: #b3261e; border: 1px solid #fee4e2; border-radius: 6px; padding: 2px 8px; font-weight: 600;">' +
+                                '<i class="fas fa-ban"></i> Cancelled on ' + cancelDate + (effectiveDate ? ' (Access until ' + effectiveDate + ')' : '') +
+                                '</span>';
+                        } else if (isSwitched) {
+                            const switchDate = sub.switched_at ? new Date(sub.switched_at.replace(/-/g, '/')).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+                            stripHtml += '<span style="background: #eff8ff; color: #175cd3; border: 1px solid #b2ddff; border-radius: 6px; padding: 2px 8px; font-weight: 600;">' +
+                                '<i class="fas fa-exchange-alt"></i> Switched from ' + saEscapeHtml(sub.previous_plan_name) + ' on ' + switchDate +
+                                '</span>';
+                        }
+
+                        stripHtml += '<a href="platform_monetization.php" class="btn btn-sm btn-outline-danger" style="padding: 1px 8px; font-size: 0.72rem; border-radius: 6px; text-decoration: none;">' +
+                            '<i class="fas fa-file-invoice"></i> Monetization' +
+                            '</a>';
+
+                        subStrip.innerHTML = stripHtml;
+                        subStrip.style.display = 'flex';
+                    } else {
+                        subStrip.style.display = 'none';
+                        subStrip.innerHTML = '';
+                    }
+                }
+            } else {
+                if (cat.key === 'customers') {
+                    metaHtml = '<span><i class="fas fa-shopping-bag me-1"></i> Registered customer accounts</span>';
+                } else if (cat.key === 'platform_admins') {
+                    metaHtml = '<span><i class="fas fa-user-shield me-1"></i> Platform administrators and system personnel</span>';
+                }
+                if (subStrip) {
+                    subStrip.style.display = 'none';
+                    subStrip.innerHTML = '';
+                }
             }
             if (folderMeta) folderMeta.innerHTML = metaHtml;
 
@@ -2195,12 +2339,17 @@ function showAllFolders(updateUrl = true) {
     currentFolderKey = '';
     const foldersView = document.getElementById('saFoldersView');
     const activeView = document.getElementById('saActiveFolderView');
+    const subStrip = document.getElementById('activeFolderSubscriptionStrip');
 
     const section = (foldersView ? foldersView.closest('.module-section') : null) || (activeView ? activeView.closest('.module-section') : null);
     const targetScrollY = section ? (section.getBoundingClientRect().top + window.pageYOffset - 16) : window.pageYOffset;
 
     if (foldersView) foldersView.style.display = 'block';
     if (activeView) activeView.style.display = 'none';
+    if (subStrip) {
+        subStrip.style.display = 'none';
+        subStrip.innerHTML = '';
+    }
 
     document.querySelectorAll('.sa-current-folder-input').forEach(input => {
         input.value = '';
