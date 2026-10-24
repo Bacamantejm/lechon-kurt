@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 require_once __DIR__ . '/module_common.php';
 
 $current_user_id = $current_admin_id;
@@ -587,6 +587,11 @@ if ($has_subscriptions) {
             s.started_at,
             s.renews_at,
             s.ended_at,
+            s.cancelled_at,
+            s.cancellation_effective_date,
+            s.previous_plan_id,
+            s.switched_at,
+            prev_p.plan_name AS previous_plan_name,
             CASE 
                 WHEN s.billing_cycle = 'annual' THEN p.annual_price 
                 ELSE p.monthly_price 
@@ -604,6 +609,7 @@ if ($has_subscriptions) {
             ), NULL) AS last_payment_date
          FROM partner_plan_subscriptions s
          LEFT JOIN platform_subscription_plans p ON p.id = s.plan_id
+         LEFT JOIN platform_subscription_plans prev_p ON prev_p.id = s.previous_plan_id
          LEFT JOIN users u ON u.id = s.partner_user_id
          LEFT JOIN franchise_applications fa ON fa.user_id = s.partner_user_id
          ORDER BY 
@@ -2931,7 +2937,10 @@ if ($dashboard_flash_payload === false) {
                             <h3><i class="fas fa-crown" style="color: #b3261e; margin-right: 6px;"></i> Partner Plan Subscriptions &amp; Revenue</h3>
                             <p>Real-time oversight of partner shops subscribed to Lechon Delights platform plans, amounts paid, and renewal schedules.</p>
                         </div>
-                        <div style="display: flex; gap: 10px; align-items: center;">
+                        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                            <a href="../super_admin/platform_monetization.php#subscription_events" class="owner-link" style="background: #ffffff; border: 1px solid #d0d5dd; color: #344054;">
+                                <i class="fas fa-history"></i> Switch &amp; Cancellation Log
+                            </a>
                             <a href="../super_admin/platform_monetization.php" class="owner-link">
                                 <i class="fas fa-sack-dollar"></i> Monetization Controls
                             </a>
@@ -2979,6 +2988,21 @@ if ($dashboard_flash_payload === false) {
                                             <td style="padding: 12px 14px;">
                                                 <span style="font-weight: 800; color: #b3261e;"><?php echo htmlspecialchars($planName); ?></span>
                                                 <div style="font-size: 0.76rem; color: #64748b;"><?php echo htmlspecialchars($cycleLabel); ?> Billing</div>
+                                                <?php if (!empty($sub['switched_at']) && !empty($sub['previous_plan_name'])): ?>
+                                                    <div style="margin-top: 4px;">
+                                                        <span style="display: inline-block; font-size: 0.72rem; background: #eff8ff; color: #175cd3; border: 1px solid #b2ddff; border-radius: 4px; padding: 2px 6px; font-weight: 600;">
+                                                            <i class="fas fa-exchange-alt"></i> Switched from <?php echo htmlspecialchars($sub['previous_plan_name']); ?>
+                                                            <span style="color: #667085; font-weight: 400;">(<?php echo date('M d, Y', strtotime($sub['switched_at'])); ?>)</span>
+                                                        </span>
+                                                    </div>
+                                                <?php endif; ?>
+                                                <?php if (!empty($sub['cancelled_at']) || $subStatus === 'cancelled'): ?>
+                                                    <div style="margin-top: 4px;">
+                                                        <span style="display: inline-block; font-size: 0.72rem; background: #fff1f0; color: #b3261e; border: 1px solid #fee4e2; border-radius: 4px; padding: 2px 6px; font-weight: 600;">
+                                                            <i class="fas fa-ban"></i> Cancelled on <?php echo !empty($sub['cancelled_at']) ? date('M d, Y', strtotime($sub['cancelled_at'])) : 'Recorded'; ?>
+                                                        </span>
+                                                    </div>
+                                                <?php endif; ?>
                                             </td>
                                             <td style="padding: 12px 14px; font-weight: 700; color: #101828;">
                                                 PHP <?php echo number_format($planPrice, 2); ?>
@@ -2999,16 +3023,26 @@ if ($dashboard_flash_payload === false) {
                                                 <?php echo htmlspecialchars($startedFormatted); ?>
                                             </td>
                                             <td style="padding: 12px 14px;">
-                                                <strong style="color: #b3261e;"><?php echo htmlspecialchars($renewsFormatted); ?></strong>
-                                                <?php if ($daysLeft !== null && $daysLeft >= 0): ?>
-                                                    <div style="font-size: 0.74rem; color: #027a48; font-weight: 600;"><i class="fas fa-clock"></i> <?php echo $daysLeft; ?> days remaining</div>
-                                                <?php elseif ($daysLeft !== null && $daysLeft < 0): ?>
-                                                    <div style="font-size: 0.74rem; color: #b3261e; font-weight: 600;"><i class="fas fa-exclamation-triangle"></i> Ended</div>
+                                                <?php if ($subStatus === 'cancelled' || !empty($sub['cancelled_at'])): ?>
+                                                    <strong style="color: #b3261e;">Access until <?php echo htmlspecialchars($renewsFormatted); ?></strong>
+                                                    <div style="font-size: 0.74rem; color: #64748b; font-weight: 600;">
+                                                        <i class="fas fa-calendar-times"></i> Terminating after current cycle
+                                                    </div>
+                                                <?php else: ?>
+                                                    <strong style="color: #b3261e;"><?php echo htmlspecialchars($renewsFormatted); ?></strong>
+                                                    <?php if ($daysLeft !== null && $daysLeft >= 0): ?>
+                                                        <div style="font-size: 0.74rem; color: #027a48; font-weight: 600;"><i class="fas fa-clock"></i> <?php echo $daysLeft; ?> days remaining</div>
+                                                    <?php elseif ($daysLeft !== null && $daysLeft < 0): ?>
+                                                        <div style="font-size: 0.74rem; color: #b3261e; font-weight: 600;"><i class="fas fa-exclamation-triangle"></i> Ended</div>
+                                                    <?php endif; ?>
                                                 <?php endif; ?>
                                             </td>
-                                            <td style="padding: 12px 14px; text-align: right;">
+                                            <td style="padding: 12px 14px; text-align: right; white-space: nowrap;">
                                                 <a href="../super_admin/platform_monetization.php" class="btn btn-sm btn-outline-primary" style="padding: 4px 10px; font-size: 0.78rem; border-radius: 8px;">
                                                     <i class="fas fa-file-invoice"></i> Invoices
+                                                </a>
+                                                <a href="../super_admin/platform_monetization.php#subscription_events" class="btn btn-sm btn-outline-secondary" style="padding: 4px 8px; font-size: 0.78rem; border-radius: 8px; margin-left: 4px;" title="View Switch &amp; Cancellation Events">
+                                                    <i class="fas fa-history"></i>
                                                 </a>
                                             </td>
                                         </tr>

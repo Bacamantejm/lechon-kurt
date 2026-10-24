@@ -101,6 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $dashboard = $monetizationService->getDashboardData();
 $plans = $dashboard['plans'] ?? [];
 $subscriptions = $dashboard['subscriptions'] ?? [];
+$subscriptionEvents = $dashboard['subscription_events'] ?? $monetizationService->getSubscriptionEvents(null, 150);
 $invoices = $dashboard['invoices'] ?? [];
 $feeRules = $dashboard['fee_rules'] ?? [];
 $partnerRows = $dashboard['partner_rows'] ?? [];
@@ -145,13 +146,16 @@ saRenderModuleHeader('Platform Monetization', 'Platform Monetization & Revenue',
     <div class="metrics-grid">
         <div class="metric-card"><span class="metric-label">Approved Partners</span><div class="metric-value"><?php echo number_format((int)($metrics['approved_partners'] ?? 0)); ?></div></div>
         <div class="metric-card"><span class="metric-label">Active Subscribers</span><div class="metric-value"><?php echo number_format((int)($metrics['active_subscribers'] ?? 0)); ?></div></div>
+        <div class="metric-card"><span class="metric-label">Total Subscriptions Collected</span><div class="metric-value" style="color: #027a48;"><?php echo saFormatCurrency($metrics['total_subscription_collected'] ?? 0); ?></div></div>
+        <div class="metric-card"><span class="metric-label">Plan Switches Logged</span><div class="metric-value" style="color: #175cd3;"><?php echo number_format((int)($metrics['total_plan_switches'] ?? 0)); ?></div></div>
+        <div class="metric-card"><span class="metric-label">Cancellations Logged</span><div class="metric-value" style="color: #b3261e;"><?php echo number_format((int)($metrics['total_cancellations'] ?? 0)); ?></div></div>
         <div class="metric-card"><span class="metric-label">Unassigned Partners</span><div class="metric-value"><?php echo number_format((int)($metrics['unassigned_partners'] ?? 0)); ?></div></div>
         <div class="metric-card"><span class="metric-label">Projected MRR</span><div class="metric-value"><?php echo saFormatCurrency($metrics['mrr'] ?? 0); ?></div></div>
         <div class="metric-card"><span class="metric-label">Projected ARR</span><div class="metric-value"><?php echo saFormatCurrency($metrics['arr'] ?? 0); ?></div></div>
         <div class="metric-card"><span class="metric-label">Order Fee Revenue This Month</span><div class="metric-value"><?php echo saFormatCurrency($metrics['estimated_order_fee_month'] ?? 0); ?></div></div>
         <div class="metric-card"><span class="metric-label">Projected Platform Revenue</span><div class="metric-value"><?php echo saFormatCurrency($metrics['projected_platform_revenue_month'] ?? 0); ?></div></div>
         <div class="metric-card"><span class="metric-label">Avg Revenue per Partner</span><div class="metric-value"><?php echo saFormatCurrency($metrics['average_platform_revenue_per_partner'] ?? 0); ?></div></div>
-        <div class="metric-card"><span class="metric-label">Collected Revenue</span><div class="metric-value"><?php echo saFormatCurrency($metrics['actual_collected_revenue'] ?? 0); ?></div></div>
+        <div class="metric-card"><span class="metric-label">Actual Collected Total</span><div class="metric-value"><?php echo saFormatCurrency($metrics['actual_collected_revenue'] ?? 0); ?></div></div>
         <div class="metric-card"><span class="metric-label">Outstanding Invoices</span><div class="metric-value"><?php echo saFormatCurrency($metrics['outstanding_invoice_total'] ?? 0); ?></div></div>
         <div class="metric-card"><span class="metric-label">Overdue Invoices</span><div class="metric-value"><?php echo saFormatCurrency($metrics['overdue_invoice_total'] ?? 0); ?></div></div>
     </div>
@@ -490,90 +494,307 @@ saRenderModuleHeader('Platform Monetization', 'Platform Monetization & Revenue',
     </div>
 </div>
 
-<div class="row g-3">
-    <div class="col-12 col-xl-6">
-        <div class="module-section" style="height: 100%;">
-            <div class="module-section-header">
-                <div>
-                    <h3>Active Subscriptions</h3>
-                    <p class="module-subtext">Current partner plan assignments and renewal timing.</p>
-                </div>
-            </div>
-            <div class="table-wrap">
-                <table class="module-table">
-                    <thead><tr><th>Partner Store</th><th>Plan Subscribed</th><th>Plan Rate</th><th>Total Paid</th><th>Status</th><th>Renews</th></tr></thead>
-                    <tbody>
-                    <?php if (empty($subscriptions)): ?>
-                        <tr><td colspan="6" class="text-center text-muted">No subscription assignments yet.</td></tr>
-                    <?php else: foreach ($subscriptions as $subscription): ?>
-                        <?php
-                            $subStatus = strtolower(trim((string)($subscription['subscription_status'] ?? 'active')));
-                            $subChipClass = in_array($subStatus, ['active', 'trial'], true) ? 'chip-success' : (in_array($subStatus, ['past_due', 'paused'], true) ? 'chip-warning' : 'chip-danger');
-                            $planPrice = (float)($subscription['plan_price'] ?? 0);
-                            $totalPaid = (float)($subscription['total_paid_to_date'] ?? 0);
-                        ?>
-                        <tr>
-                            <td>
-                                <strong><?php echo htmlspecialchars((string)$subscription['business_name']); ?></strong>
-                                <?php if (!empty($subscription['owner_name'])): ?>
-                                    <br><span class="compact-text"><?php echo htmlspecialchars((string)$subscription['owner_name']); ?> &bull; <?php echo htmlspecialchars((string)$subscription['email']); ?></span>
-                                <?php else: ?>
-                                    <br><span class="compact-text"><?php echo htmlspecialchars((string)$subscription['email']); ?></span>
-                                <?php endif; ?>
-                            </td>
-                            <td>
-                                <strong style="color: #b3261e;"><?php echo htmlspecialchars((string)$subscription['plan_name']); ?></strong>
-                                <br><span class="compact-text"><?php echo htmlspecialchars(ucfirst((string)$subscription['billing_cycle'])); ?></span>
-                            </td>
-                            <td>
-                                <?php if (($subscription['price_override'] ?? null) !== null): ?>
-                                    <strong><?php echo saFormatCurrency($subscription['price_override']); ?></strong> <span class="badge bg-warning text-dark" style="font-size: 0.65rem;">Override</span>
-                                <?php else: ?>
-                                    <strong><?php echo saFormatCurrency($planPrice); ?></strong>
-                                <?php endif; ?>
-                                <br><span class="compact-text"><?php echo strtolower((string)$subscription['billing_cycle']) === 'annual' ? 'per year' : 'per month'; ?></span>
-                            </td>
-                            <td>
-                                <strong style="color: #027a48;"><?php echo saFormatCurrency($totalPaid); ?></strong>
-                                <?php if (!empty($subscription['last_payment_date'])): ?>
-                                    <br><span class="compact-text">Paid <?php echo date('M d', strtotime($subscription['last_payment_date'])); ?></span>
-                                <?php endif; ?>
-                            </td>
-                            <td><span class="status-chip <?php echo $subChipClass; ?>"><?php echo htmlspecialchars(ucfirst(str_replace('_', ' ', (string)$subscription['subscription_status']))); ?></span></td>
-                            <td><?php echo htmlspecialchars(saFormatDateTime($subscription['renews_at'] ?? null, 'M d, Y', '-')); ?></td>
-                        </tr>
-                    <?php endforeach; endif; ?>
-                    </tbody>
-                </table>
+<!-- Subscribers & Subscription Plans Directory -->
+<div class="module-section" id="active_subscriptions_section">
+    <div class="module-section-header">
+        <div>
+            <h3><i class="fas fa-crown text-danger me-2"></i>Subscribers &amp; Subscription Plans Directory</h3>
+            <p class="module-subtext">View all shop subscribers, active plans, total revenue received, renewal dates, plan switches, and cancellations.</p>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-light text-dark border px-3 py-2" style="font-size: 0.85rem;">
+                <i class="fas fa-users text-primary me-1"></i> <strong><?php echo count($subscriptions); ?></strong> Total Records
+            </span>
+            <a href="#subscription_events" class="btn btn-sm btn-outline-primary">
+                <i class="fas fa-clock-rotate-left me-1"></i> View Event Log
+            </a>
+        </div>
+    </div>
+    <div class="table-wrap">
+        <table class="module-table">
+            <thead>
+                <tr>
+                    <th>Subscriber &amp; Shop</th>
+                    <th>Plan Subscribed</th>
+                    <th>Plan Rate</th>
+                    <th>Revenue Received</th>
+                    <th>Plan Lifecycle / Switch</th>
+                    <th>Status &amp; Cancellation</th>
+                    <th>Next Renewal / Expiry</th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php if (empty($subscriptions)): ?>
+                <tr><td colspan="7" class="text-center text-muted py-4">No shop subscriptions registered yet.</td></tr>
+            <?php else: foreach ($subscriptions as $subscription): ?>
+                <?php
+                    $subStatus = strtolower(trim((string)($subscription['subscription_status'] ?? 'active')));
+                    $isCancelled = ($subStatus === 'cancelled' || $subStatus === 'canceled');
+                    $subChipClass = in_array($subStatus, ['active', 'trial'], true) ? 'chip-success' : (in_array($subStatus, ['past_due', 'paused'], true) ? 'chip-warning' : 'chip-danger');
+                    $planPrice = (float)($subscription['plan_price'] ?? 0);
+                    $totalPaid = (float)($subscription['total_paid_to_date'] ?? 0);
+                    $lastPaidAmount = (float)($subscription['last_payment_amount'] ?? 0);
+                    $hasPreviousPlan = !empty($subscription['previous_plan_name']) && $subscription['previous_plan_name'] !== $subscription['plan_name'];
+                    $renewsRaw = (string)($subscription['renews_at'] ?? '');
+                    $daysLeft = !empty($renewsRaw) ? (int)ceil((strtotime($renewsRaw) - time()) / 86400) : null;
+                ?>
+                <tr>
+                    <td>
+                        <strong style="font-size: 0.95rem; color: #101828;"><?php echo htmlspecialchars((string)$subscription['business_name']); ?></strong>
+                        <div class="compact-text" style="margin-top: 3px;">
+                            <?php if (!empty($subscription['owner_name'])): ?>
+                                <span><i class="fas fa-user-tie text-muted me-1"></i><?php echo htmlspecialchars((string)$subscription['owner_name']); ?></span><br>
+                            <?php endif; ?>
+                            <span><i class="fas fa-envelope text-muted me-1"></i><?php echo htmlspecialchars((string)$subscription['email']); ?></span>
+                            <?php if (!empty($subscription['phone'])): ?>
+                                <span class="ms-2"><i class="fas fa-phone text-muted me-1"></i><?php echo htmlspecialchars((string)$subscription['phone']); ?></span>
+                            <?php endif; ?>
+                        </div>
+                    </td>
+                    <td>
+                        <strong style="color: #b3261e; font-size: 0.96rem;"><?php echo htmlspecialchars((string)$subscription['plan_name']); ?> Plan</strong>
+                        <div class="compact-text" style="font-weight: 600; text-transform: uppercase;">
+                            <i class="fas fa-arrows-spin me-1 text-muted"></i><?php echo htmlspecialchars(ucfirst((string)$subscription['billing_cycle'])); ?> Cycle
+                        </div>
+                    </td>
+                    <td>
+                        <?php if (($subscription['price_override'] ?? null) !== null): ?>
+                            <strong style="color: #101828;"><?php echo saFormatCurrency($subscription['price_override']); ?></strong>
+                            <span class="badge bg-warning text-dark" style="font-size: 0.65rem;">Custom Override</span>
+                        <?php else: ?>
+                            <strong style="color: #101828;"><?php echo saFormatCurrency($planPrice); ?></strong>
+                        <?php endif; ?>
+                        <div class="compact-text"><?php echo strtolower((string)$subscription['billing_cycle']) === 'annual' ? 'per year' : 'per month'; ?></div>
+                    </td>
+                    <td>
+                        <strong style="color: #027a48; font-size: 1.05rem;"><?php echo saFormatCurrency($totalPaid); ?></strong>
+                        <?php if (!empty($subscription['last_payment_date'])): ?>
+                            <div class="compact-text">
+                                Last: <?php echo saFormatCurrency($lastPaidAmount > 0 ? $lastPaidAmount : $planPrice); ?><br>
+                                on <?php echo date('M d, Y', strtotime($subscription['last_payment_date'])); ?>
+                            </div>
+                        <?php else: ?>
+                            <div class="compact-text text-muted">No online payments yet</div>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php if ($hasPreviousPlan): ?>
+                            <div style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 6px; background: #eff8ff; color: #175cd3; border: 1px solid #b2ddff; font-size: 0.76rem; font-weight: 700;">
+                                <i class="fas fa-arrows-rotate"></i> Switched from <?php echo htmlspecialchars((string)$subscription['previous_plan_name']); ?>
+                            </div>
+                            <?php if (!empty($subscription['switched_at'])): ?>
+                                <div class="compact-text" style="margin-top: 2px;">
+                                    on <?php echo date('M d, Y', strtotime((string)$subscription['switched_at'])); ?>
+                                </div>
+                            <?php endif; ?>
+                        <?php elseif (!empty($subscription['started_at'])): ?>
+                            <span class="compact-text">
+                                <i class="fas fa-calendar-check text-muted me-1"></i>Joined: <?php echo date('M d, Y', strtotime((string)$subscription['started_at'])); ?>
+                            </span>
+                        <?php else: ?>
+                            <span class="compact-text text-muted">-</span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <span class="status-chip <?php echo $subChipClass; ?>">
+                            <?php echo htmlspecialchars(ucfirst(str_replace('_', ' ', (string)$subscription['subscription_status']))); ?>
+                        </span>
+                        <?php if ($isCancelled): ?>
+                            <div style="color: #b3261e; font-size: 11px; font-weight: 700; margin-top: 4px;">
+                                <i class="fas fa-ban me-1"></i> Cancelled: <?php echo !empty($subscription['cancelled_at']) ? date('M d, Y h:i A', strtotime((string)$subscription['cancelled_at'])) : date('M d, Y', strtotime((string)$subscription['updated_at'])); ?>
+                            </div>
+                            <div class="compact-text" style="color: #667085;">
+                                Access retained until <?php echo saFormatDateTime($subscription['cancellation_effective_date'] ?: $subscription['renews_at'], 'M d, Y', '-'); ?>
+                            </div>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <strong style="color: <?php echo $isCancelled ? '#667085' : '#b3261e'; ?>;">
+                            <?php echo htmlspecialchars(saFormatDateTime($subscription['renews_at'] ?? null, 'M d, Y', '-')); ?>
+                        </strong>
+                        <?php if ($daysLeft !== null && $daysLeft >= 0): ?>
+                            <div class="compact-text" style="color: <?php echo $isCancelled ? '#b54708' : '#027a48'; ?>; font-weight: 600;">
+                                <i class="fas fa-clock me-1"></i> <?php echo $daysLeft; ?> days left
+                            </div>
+                        <?php elseif ($daysLeft !== null && $daysLeft < 0): ?>
+                            <div class="compact-text text-danger font-weight-bold">
+                                <i class="fas fa-circle-exclamation me-1"></i> Cycle Ended
+                            </div>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+            <?php endforeach; endif; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Subscription Lifecycle & Event History (Audit Trail) -->
+<div class="module-section" id="subscription_events">
+    <div class="module-section-header">
+        <div>
+            <h3><i class="fas fa-clock-rotate-left text-danger me-2"></i>Subscription Lifecycle &amp; Event History</h3>
+            <p class="module-subtext">Audit trail tracking when shop owners subscribe, how much they get/pay, when they switch plans (and which plan), and when they cancel.</p>
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <input type="text" id="saEventSearchInput" class="form-control form-control-sm" placeholder="Quick search events..." style="width: 220px; border-radius: 8px;">
+            <div class="btn-group btn-group-sm" role="group" id="saEventFilterGroup">
+                <button type="button" class="btn btn-outline-secondary active" onclick="filterSubscriptionEvents('all', this)">All (<?php echo count($subscriptionEvents); ?>)</button>
+                <button type="button" class="btn btn-outline-secondary" onclick="filterSubscriptionEvents('switched_plan', this)">Switched Plan</button>
+                <button type="button" class="btn btn-outline-secondary" onclick="filterSubscriptionEvents('subscribed', this)">Subscribed</button>
+                <button type="button" class="btn btn-outline-secondary" onclick="filterSubscriptionEvents('cancelled', this)">Cancelled</button>
+                <button type="button" class="btn btn-outline-secondary" onclick="filterSubscriptionEvents('renewed', this)">Renewed</button>
             </div>
         </div>
     </div>
-    <div class="col-12 col-xl-6">
-        <div class="module-section" style="height: 100%;">
-            <div class="module-section-header">
-                <div>
-                    <h3>Active Fee Rules</h3>
-                    <p class="module-subtext">Global and custom partner take-rate settings currently affecting revenue calculations.</p>
-                </div>
-            </div>
-            <div class="table-wrap">
-                <table class="module-table">
-                    <thead><tr><th>Scope</th><th>Partner</th><th>Rate</th><th>Effective</th></tr></thead>
-                    <tbody>
-                    <?php if (empty($feeRules)): ?>
-                        <tr><td colspan="4" class="text-center text-muted">No platform fee rules configured.</td></tr>
-                    <?php else: foreach ($feeRules as $rule): ?>
-                        <tr>
-                            <td><?php echo htmlspecialchars(ucfirst((string)$rule['rule_scope'])); ?></td>
-                            <td><?php echo htmlspecialchars((string)$rule['business_name']); ?></td>
-                            <td><?php echo htmlspecialchars(number_format((float)($rule['fee_percent'] ?? 0), 2) . '% + ' . number_format((float)($rule['fee_flat_per_order'] ?? 0), 2)); ?></td>
-                            <td><?php echo htmlspecialchars(saFormatDateTime($rule['effective_from'] ?? null, 'M d, Y', '-')); ?><br><span class="compact-text"><?php echo htmlspecialchars(saFormatDateTime($rule['effective_to'] ?? null, 'M d, Y', 'Open-ended')); ?></span></td>
-                        </tr>
-                    <?php endforeach; endif; ?>
-                    </tbody>
-                </table>
-            </div>
+    <div class="table-wrap">
+        <table class="module-table" id="saSubscriptionEventsTable">
+            <thead>
+                <tr>
+                    <th>Date &amp; Time</th>
+                    <th>Event Type</th>
+                    <th>Subscriber &amp; Store</th>
+                    <th>Plan Change / Details</th>
+                    <th>Revenue Received</th>
+                    <th>Payment Reference</th>
+                    <th>Lifecycle Details &amp; Notes</th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php if (empty($subscriptionEvents)): ?>
+                <tr><td colspan="7" class="text-center text-muted py-4">No subscription lifecycle events recorded yet.</td></tr>
+            <?php else: foreach ($subscriptionEvents as $evt): ?>
+                <?php
+                    $evtType = (string)($evt['event_type'] ?? 'subscribed');
+                    $evtChip = 'chip-success';
+                    $evtIcon = 'fas fa-check-circle';
+                    $evtLabel = 'Subscribed';
+
+                    if ($evtType === 'switched_plan') {
+                        $evtChip = 'chip-info';
+                        $evtIcon = 'fas fa-arrows-rotate';
+                        $evtLabel = 'Plan Switched';
+                    } elseif ($evtType === 'cancelled') {
+                        $evtChip = 'chip-danger';
+                        $evtIcon = 'fas fa-ban';
+                        $evtLabel = 'Cancelled';
+                    } elseif ($evtType === 'renewed') {
+                        $evtChip = 'chip-info';
+                        $evtIcon = 'fas fa-rotate';
+                        $evtLabel = 'Renewed';
+                    } elseif ($evtType === 'trial_started') {
+                        $evtChip = 'chip-muted';
+                        $evtIcon = 'fas fa-clock';
+                        $evtLabel = 'Trial Started';
+                    }
+
+                    $evtAmount = (float)($evt['amount'] ?? 0);
+                    $hasFromPlan = !empty($evt['from_plan_name']);
+                    $hasToPlan = !empty($evt['to_plan_name']);
+                ?>
+                <tr class="sa-event-row" data-event-type="<?php echo htmlspecialchars($evtType); ?>">
+                    <td style="white-space: nowrap;">
+                        <strong><?php echo date('M d, Y', strtotime((string)$evt['created_at'])); ?></strong><br>
+                        <span class="compact-text"><?php echo date('h:i A', strtotime((string)$evt['created_at'])); ?></span>
+                    </td>
+                    <td>
+                        <span class="status-chip <?php echo $evtChip; ?>">
+                            <i class="<?php echo $evtIcon; ?> me-1"></i><?php echo htmlspecialchars($evtLabel); ?>
+                        </span>
+                    </td>
+                    <td>
+                        <strong style="color: #101828;"><?php echo htmlspecialchars((string)($evt['business_name'] ?? 'Partner Shop')); ?></strong>
+                        <div class="compact-text">
+                            <?php if (!empty($evt['owner_name'])): ?>
+                                <span><i class="fas fa-user-tie text-muted me-1"></i><?php echo htmlspecialchars((string)$evt['owner_name']); ?></span> &bull; 
+                            <?php endif; ?>
+                            <span><?php echo htmlspecialchars((string)($evt['email'] ?? '')); ?></span>
+                        </div>
+                    </td>
+                    <td>
+                        <?php if ($evtType === 'switched_plan'): ?>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge bg-light text-dark border">
+                                    <?php echo htmlspecialchars((string)($evt['from_plan_name'] ?: 'Previous Plan')); ?>
+                                    <?php if (!empty($evt['from_plan_monthly_price'])): ?>
+                                        <small class="text-muted">(₱<?php echo number_format((float)$evt['from_plan_monthly_price'], 0); ?>)</small>
+                                    <?php endif; ?>
+                                </span>
+                                <i class="fas fa-arrow-right text-danger" style="font-size: 11px;"></i>
+                                <span class="badge bg-danger text-white">
+                                    <?php echo htmlspecialchars((string)($evt['to_plan_name'] ?: 'New Plan')); ?>
+                                    <?php if (!empty($evt['to_plan_monthly_price'])): ?>
+                                        <small>(₱<?php echo number_format((float)$evt['to_plan_monthly_price'], 0); ?>)</small>
+                                    <?php endif; ?>
+                                </span>
+                            </div>
+                        <?php elseif ($evtType === 'cancelled'): ?>
+                            <span class="badge bg-danger text-white">
+                                <?php echo htmlspecialchars((string)($evt['from_plan_name'] ?: 'Plan')); ?>
+                            </span>
+                            <span class="compact-text text-danger ms-1">Terminated</span>
+                        <?php else: ?>
+                            <strong style="color: #b3261e; font-size: 0.95rem;">
+                                <?php echo htmlspecialchars((string)($evt['to_plan_name'] ?: ($evt['from_plan_name'] ?: 'Subscription Plan'))); ?>
+                            </strong>
+                            <span class="compact-text">(<?php echo htmlspecialchars(ucfirst((string)($evt['billing_cycle'] ?? 'monthly'))); ?>)</span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php if ($evtAmount > 0): ?>
+                            <strong style="color: #027a48; font-size: 1.05rem;">+ <?php echo saFormatCurrency($evtAmount); ?></strong>
+                            <div class="compact-text text-muted"><?php echo htmlspecialchars(strtoupper((string)($evt['payment_method'] ?? 'Online'))); ?></div>
+                        <?php else: ?>
+                            <span class="compact-text text-muted">₱0.00</span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php if (!empty($evt['invoice_number'])): ?>
+                            <span class="badge bg-light text-dark border"><?php echo htmlspecialchars((string)$evt['invoice_number']); ?></span>
+                        <?php endif; ?>
+                        <?php if (!empty($evt['transaction_reference'])): ?>
+                            <div class="compact-text" style="font-family: monospace;"><?php echo htmlspecialchars(substr((string)$evt['transaction_reference'], 0, 18) . '...'); ?></div>
+                        <?php endif; ?>
+                        <?php if (empty($evt['invoice_number']) && empty($evt['transaction_reference'])): ?>
+                            <span class="compact-text text-muted">-</span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <span class="compact-text" style="color: #344054;">
+                            <?php echo htmlspecialchars((string)($evt['notes'] ?? '-')); ?>
+                        </span>
+                    </td>
+                </tr>
+            <?php endforeach; endif; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Active Fee Rules Section -->
+<div class="module-section">
+    <div class="module-section-header">
+        <div>
+            <h3><i class="fas fa-percent text-primary me-2"></i>Active Marketplace Fee Rules</h3>
+            <p class="module-subtext">Global and custom partner take-rate settings currently affecting marketplace revenue calculations.</p>
         </div>
+    </div>
+    <div class="table-wrap">
+        <table class="module-table">
+            <thead><tr><th>Scope</th><th>Partner Business</th><th>Fee Rate</th><th>Effective Period</th></tr></thead>
+            <tbody>
+            <?php if (empty($feeRules)): ?>
+                <tr><td colspan="4" class="text-center text-muted py-3">No platform fee rules configured.</td></tr>
+            <?php else: foreach ($feeRules as $rule): ?>
+                <tr>
+                    <td><span class="status-chip <?php echo ($rule['rule_scope'] ?? '') === 'global' ? 'chip-info' : 'chip-success'; ?>"><?php echo htmlspecialchars(ucfirst((string)$rule['rule_scope'])); ?></span></td>
+                    <td><strong><?php echo htmlspecialchars((string)$rule['business_name']); ?></strong></td>
+                    <td><strong><?php echo htmlspecialchars(number_format((float)($rule['fee_percent'] ?? 0), 2) . '% + ' . number_format((float)($rule['fee_flat_per_order'] ?? 0), 2)); ?></strong></td>
+                    <td><?php echo htmlspecialchars(saFormatDateTime($rule['effective_from'] ?? null, 'M d, Y', '-')); ?><br><span class="compact-text"><?php echo htmlspecialchars(saFormatDateTime($rule['effective_to'] ?? null, 'M d, Y', 'Open-ended')); ?></span></td>
+                </tr>
+            <?php endforeach; endif; ?>
+            </tbody>
+        </table>
     </div>
 </div>
 
@@ -761,6 +982,32 @@ if (monetizationMixChart) {
         }
     });
 }
+
+function filterSubscriptionEvents(type, btn) {
+    if (btn) {
+        document.querySelectorAll('#saEventFilterGroup button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    }
+    const query = (document.getElementById('saEventSearchInput')?.value || '').toLowerCase().trim();
+    applyEventTableFilter(type, query);
+}
+
+function applyEventTableFilter(type, query) {
+    const rows = document.querySelectorAll('#saSubscriptionEventsTable .sa-event-row');
+    rows.forEach(row => {
+        const rowType = row.getAttribute('data-event-type') || '';
+        const rowText = row.innerText.toLowerCase();
+        const matchesType = (type === 'all' || rowType === type);
+        const matchesQuery = (query === '' || rowText.includes(query));
+        row.style.display = (matchesType && matchesQuery) ? '' : 'none';
+    });
+}
+
+document.getElementById('saEventSearchInput')?.addEventListener('input', function() {
+    const activeBtn = document.querySelector('#saEventFilterGroup button.active');
+    const currentType = activeBtn ? (activeBtn.getAttribute('onclick')?.match(/'([^']+)'/)?.[1] || 'all') : 'all';
+    applyEventTableFilter(currentType, this.value.toLowerCase().trim());
+});
 JS;
 $extra_scripts .= '</script>';
 

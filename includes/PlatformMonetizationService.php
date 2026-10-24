@@ -164,11 +164,46 @@ class PlatformMonetizationService
                 updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 KEY idx_partner_subscription_requests_partner (partner_user_id, request_status, created_at),
                 KEY idx_partner_subscription_requests_plan (requested_plan_id, request_status)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+            "CREATE TABLE IF NOT EXISTS partner_subscription_events (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                subscription_id INT NULL,
+                partner_user_id INT NOT NULL,
+                event_type ENUM('subscribed', 'switched_plan', 'cancelled', 'renewed', 'trial_started', 'status_changed') NOT NULL,
+                from_plan_id INT NULL,
+                to_plan_id INT NULL,
+                billing_cycle ENUM('monthly', 'annual') NOT NULL DEFAULT 'monthly',
+                amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                invoice_id INT NULL,
+                payment_method VARCHAR(50) NULL,
+                transaction_reference VARCHAR(120) NULL,
+                notes TEXT NULL,
+                actor_user_id INT NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                KEY idx_pse_partner (partner_user_id, created_at),
+                KEY idx_pse_event_type (event_type),
+                KEY idx_pse_subscription (subscription_id),
+                KEY idx_pse_created (created_at)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
         ];
 
         foreach ($queries as $query) {
             $this->conn->query($query);
+        }
+
+        if ($this->tableExists('partner_plan_subscriptions')) {
+            if (!$this->columnExists('partner_plan_subscriptions', 'cancelled_at')) {
+                $this->conn->query("ALTER TABLE `partner_plan_subscriptions` ADD COLUMN `cancelled_at` DATETIME NULL AFTER `ended_at`");
+            }
+            if (!$this->columnExists('partner_plan_subscriptions', 'cancellation_effective_date')) {
+                $this->conn->query("ALTER TABLE `partner_plan_subscriptions` ADD COLUMN `cancellation_effective_date` DATE NULL AFTER `cancelled_at`");
+            }
+            if (!$this->columnExists('partner_plan_subscriptions', 'previous_plan_id')) {
+                $this->conn->query("ALTER TABLE `partner_plan_subscriptions` ADD COLUMN `previous_plan_id` INT NULL AFTER `plan_id`");
+            }
+            if (!$this->columnExists('partner_plan_subscriptions', 'switched_at')) {
+                $this->conn->query("ALTER TABLE `partner_plan_subscriptions` ADD COLUMN `switched_at` DATETIME NULL AFTER `previous_plan_id`");
+            }
         }
     }
 
@@ -389,39 +424,110 @@ class PlatformMonetizationService
         $renews_at = $this->normalizeDate($renews_at) ?: date('Y-m-d', strtotime($billing_cycle === 'annual' ? '+1 year' : '+1 month'));
 
         $existing = $this->fetchOne(
-            "SELECT id FROM partner_plan_subscriptions WHERE partner_user_id = ? LIMIT 1",
+            "SELECT id, plan_id, subscription_status, billing_cycle, renews_at FROM partner_plan_subscriptions WHERE partner_user_id = ? LIMIT 1",
             [$partner_user_id],
             'i'
         );
 
         if ($existing) {
             $subscription_id = (int)$existing['id'];
+            $old_plan_id = (int)$existing['plan_id'];
+            $old_status = (string)($existing['subscription_status'] ?? '');
+            $is_switch = ($old_plan_id !== $plan_id);
+
             $stmt = $this->conn->prepare(
                 "UPDATE partner_plan_subscriptions
-                 SET plan_id = ?, billing_cycle = ?, subscription_status = ?, price_override = ?,
-                     started_at = ?, renews_at = ?, notes = ?, ended_at = CASE WHEN ? = 'cancelled' THEN renews_at ELSE NULL END,
-                     updated_by = ?, updated_at = NOW()
+                 SET plan_id = ?,
+                     billing_cycle = ?,
+                     subscription_status = ?,
+                     price_override = ?,
+                     previous_plan_id = CASE WHEN ? = 1 THEN ? ELSE previous_plan_id END,
+                     switched_at = CASE WHEN ? = 1 THEN NOW() ELSE switched_at END,
+                     started_at = ?,
+                     renews_at = ?,
+                     notes = ?,
+                     ended_at = CASE WHEN ? = 'cancelled' THEN renews_at ELSE NULL END,
+                     cancelled_at = CASE WHEN ? = 'cancelled' THEN NOW() ELSE cancelled_at END,
+                     cancellation_effective_date = CASE WHEN ? = 'cancelled' THEN renews_at ELSE cancellation_effective_date END,
+                     updated_by = ?,
+                     updated_at = NOW()
                  WHERE id = ?
                  LIMIT 1"
             );
             if (!$stmt) {
                 return false;
             }
+            $is_switch_int = $is_switch ? 1 : 0;
             $stmt->bind_param(
-                'issdsssisi',
+                'issdiissssssii',
                 $plan_id,
                 $billing_cycle,
                 $subscription_status,
                 $price_override_value,
+                $is_switch_int,
+                $old_plan_id,
+                $is_switch_int,
                 $started_at,
                 $renews_at,
                 $notes,
+                $subscription_status,
+                $subscription_status,
                 $subscription_status,
                 $actor_user_id,
                 $subscription_id
             );
             $ok = $stmt->execute();
             $stmt->close();
+
+            if ($ok) {
+                if ($is_switch) {
+                    $this->recordSubscriptionEvent(
+                        $partner_user_id,
+                        'switched_plan',
+                        $old_plan_id,
+                        $plan_id,
+                        $billing_cycle,
+                        0.00,
+                        null,
+                        'manual',
+                        null,
+                        'Plan switched by administrator.',
+                        $actor_user_id,
+                        $subscription_id
+                    );
+                } elseif ($old_status !== 'cancelled' && $subscription_status === 'cancelled') {
+                    $this->recordSubscriptionEvent(
+                        $partner_user_id,
+                        'cancelled',
+                        $plan_id,
+                        null,
+                        $billing_cycle,
+                        0.00,
+                        null,
+                        'manual',
+                        null,
+                        'Subscription cancelled by administrator.',
+                        $actor_user_id,
+                        $subscription_id
+                    );
+                } elseif ($old_status !== 'active' && $subscription_status === 'active') {
+                    $this->recordSubscriptionEvent(
+                        $partner_user_id,
+                        'subscribed',
+                        null,
+                        $plan_id,
+                        $billing_cycle,
+                        0.00,
+                        null,
+                        'manual',
+                        null,
+                        'Subscription activated by administrator.',
+                        $actor_user_id,
+                        $subscription_id
+                    );
+                }
+            }
+
             return $ok;
         }
 
@@ -447,8 +553,142 @@ class PlatformMonetizationService
             $actor_user_id
         );
         $ok = $stmt->execute();
+        $new_sub_id = $ok ? (int)$this->conn->insert_id : 0;
+        $stmt->close();
+
+        if ($ok && $new_sub_id > 0) {
+            $this->recordSubscriptionEvent(
+                $partner_user_id,
+                'subscribed',
+                null,
+                $plan_id,
+                $billing_cycle,
+                0.00,
+                null,
+                'manual',
+                null,
+                'Initial subscription assigned by administrator.',
+                $actor_user_id,
+                $new_sub_id
+            );
+        }
+
+        return $ok;
+    }
+
+    public function recordSubscriptionEvent(
+        int $partner_user_id,
+        string $event_type,
+        ?int $from_plan_id = null,
+        ?int $to_plan_id = null,
+        string $billing_cycle = 'monthly',
+        float $amount = 0.00,
+        ?int $invoice_id = null,
+        ?string $payment_method = null,
+        ?string $transaction_reference = null,
+        ?string $notes = null,
+        int $actor_user_id = 0,
+        ?int $subscription_id = null
+    ): bool {
+        if ($partner_user_id <= 0 || !$this->tableExists('partner_subscription_events')) {
+            return false;
+        }
+
+        $event_type = $this->enumValue($event_type, ['subscribed', 'switched_plan', 'cancelled', 'renewed', 'trial_started', 'status_changed'], 'subscribed');
+        $billing_cycle = $this->enumValue($billing_cycle, ['monthly', 'annual'], 'monthly');
+
+        if ($subscription_id === null || $subscription_id <= 0) {
+            $sub = $this->fetchOne("SELECT id FROM partner_plan_subscriptions WHERE partner_user_id = ? LIMIT 1", [$partner_user_id], 'i');
+            if ($sub) {
+                $subscription_id = (int)$sub['id'];
+            }
+        }
+
+        $stmt = $this->conn->prepare(
+            "INSERT INTO partner_subscription_events
+             (subscription_id, partner_user_id, event_type, from_plan_id, to_plan_id, billing_cycle, amount, invoice_id, payment_method, transaction_reference, notes, actor_user_id, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())"
+        );
+        if (!$stmt) {
+            return false;
+        }
+
+        $stmt->bind_param(
+            'iisiisdisssi',
+            $subscription_id,
+            $partner_user_id,
+            $event_type,
+            $from_plan_id,
+            $to_plan_id,
+            $billing_cycle,
+            $amount,
+            $invoice_id,
+            $payment_method,
+            $transaction_reference,
+            $notes,
+            $actor_user_id
+        );
+        $ok = $stmt->execute();
         $stmt->close();
         return $ok;
+    }
+
+    public function getSubscriptionEvents(?int $partner_user_id = null, int $limit = 100, ?string $event_type = null): array
+    {
+        if (!$this->tableExists('partner_subscription_events')) {
+            return [];
+        }
+
+        $where = [];
+        $params = [];
+        $types = '';
+
+        if ($partner_user_id !== null && $partner_user_id > 0) {
+            $where[] = "e.partner_user_id = ?";
+            $params[] = $partner_user_id;
+            $types .= 'i';
+        }
+
+        if ($event_type !== null && trim($event_type) !== '' && $event_type !== 'all') {
+            $where[] = "e.event_type = ?";
+            $params[] = trim($event_type);
+            $types .= 's';
+        }
+
+        $whereSql = !empty($where) ? 'WHERE ' . implode(' AND ', $where) : '';
+        $limit = max(1, min(500, $limit));
+
+        $hasStores = $this->tableExists('store_locations') && $this->columnExists('store_locations', 'owner_user_id');
+        $hasFranchise = $this->tableExists('franchise_applications');
+        $storeExpr = $hasStores ? "(SELECT sl.store_name FROM store_locations sl WHERE sl.owner_user_id = u.id LIMIT 1)" : "NULL";
+        $faExpr = $hasFranchise ? "(SELECT fa.business_name FROM franchise_applications fa WHERE fa.user_id = u.id AND fa.status = 'approved' ORDER BY fa.id DESC LIMIT 1)" : "NULL";
+
+        $sql = "SELECT e.*,
+                       COALESCE({$storeExpr}, {$faExpr}, u.business_name, u.full_name, 'Partner Shop') AS business_name,
+                       u.full_name AS owner_name,
+                       u.email,
+                       u.phone,
+                       p_from.plan_name AS from_plan_name,
+                       p_from.plan_code AS from_plan_code,
+                       p_from.monthly_price AS from_plan_monthly_price,
+                       p_to.plan_name AS to_plan_name,
+                       p_to.plan_code AS to_plan_code,
+                       p_to.monthly_price AS to_plan_monthly_price,
+                       inv.invoice_number
+                FROM partner_subscription_events e
+                LEFT JOIN users u ON u.id = e.partner_user_id
+                LEFT JOIN platform_subscription_plans p_from ON p_from.id = e.from_plan_id
+                LEFT JOIN platform_subscription_plans p_to ON p_to.id = e.to_plan_id
+                LEFT JOIN partner_billing_invoices inv ON inv.id = e.invoice_id
+                {$whereSql}
+                ORDER BY e.created_at DESC, e.id DESC
+                LIMIT {$limit}";
+
+        if (!empty($params)) {
+            return $this->fetchAll($sql, $params, $types);
+        }
+
+        return $this->rowsIfTable('partner_subscription_events', $sql);
     }
 
     public function cancelActiveSubscription(int $partner_user_id, int $actor_user_id = 0): array
@@ -482,6 +722,8 @@ class PlatformMonetizationService
             "UPDATE partner_plan_subscriptions
              SET subscription_status = 'cancelled',
                  ended_at = ?,
+                 cancelled_at = NOW(),
+                 cancellation_effective_date = ?,
                  notes = ?,
                  updated_by = ?,
                  updated_at = NOW()
@@ -492,13 +734,29 @@ class PlatformMonetizationService
             return ['success' => false, 'message' => 'Unable to process subscription cancellation.'];
         }
 
-        $stmt->bind_param('ssii', $renews_at, $notes, $actor_user_id, $subscription_id);
+        $stmt->bind_param('sssii', $renews_at, $renews_at, $notes, $actor_user_id, $subscription_id);
         $ok = $stmt->execute();
         $stmt->close();
 
         if (!$ok) {
             return ['success' => false, 'message' => 'Failed to update subscription cancellation status.'];
         }
+
+        $cNote = "Subscription cancelled. Full active access retained until {$renews_formatted}. Non-refundable.";
+        $this->recordSubscriptionEvent(
+            $partner_user_id,
+            'cancelled',
+            (int)($existing['plan_id'] ?? 0),
+            null,
+            (string)($existing['billing_cycle'] ?? 'monthly'),
+            0.00,
+            null,
+            null,
+            null,
+            $cNote,
+            $actor_user_id,
+            $subscription_id
+        );
 
         return [
             'success' => true,
@@ -683,10 +941,15 @@ class PlatformMonetizationService
 
     public function getSubscriptions(): array
     {
+        $hasStores = $this->tableExists('store_locations') && $this->columnExists('store_locations', 'owner_user_id');
+        $storeExpr = $hasStores ? "(SELECT sl.store_name FROM store_locations sl WHERE sl.owner_user_id = u.id LIMIT 1)" : "NULL";
+
         return $this->rowsIfTable(
             'partner_plan_subscriptions',
             "SELECT s.*, p.plan_name, p.plan_code, p.monthly_price, p.annual_price,
-                    COALESCE(fa.business_name, u.business_name, u.full_name) AS business_name,
+                    prev_p.plan_name AS previous_plan_name,
+                    prev_p.monthly_price AS previous_plan_monthly_price,
+                    COALESCE({$storeExpr}, fa.business_name, u.business_name, u.full_name) AS business_name,
                     u.full_name AS owner_name,
                     u.email,
                     u.phone,
@@ -704,9 +967,16 @@ class PlatformMonetizationService
                         FROM partner_billing_invoices inv 
                         WHERE inv.partner_user_id = s.partner_user_id AND inv.invoice_status = 'paid' 
                         ORDER BY inv.id DESC LIMIT 1
-                    ), NULL) AS last_payment_date
+                    ), NULL) AS last_payment_date,
+                    COALESCE((
+                        SELECT inv.total_amount 
+                        FROM partner_billing_invoices inv 
+                        WHERE inv.partner_user_id = s.partner_user_id AND inv.invoice_status = 'paid' 
+                        ORDER BY inv.id DESC LIMIT 1
+                    ), 0) AS last_payment_amount
              FROM partner_plan_subscriptions s
              INNER JOIN platform_subscription_plans p ON p.id = s.plan_id
+             LEFT JOIN platform_subscription_plans prev_p ON prev_p.id = s.previous_plan_id
              INNER JOIN users u ON u.id = s.partner_user_id
              LEFT JOIN franchise_applications fa ON fa.user_id = s.partner_user_id AND fa.status = 'approved'
              ORDER BY FIELD(s.subscription_status, 'active','trial','past_due','paused','cancelled'), business_name ASC"
@@ -1501,15 +1771,34 @@ class PlatformMonetizationService
 
         $invoice_number = 'SUB-' . date('Ymd') . '-' . strtoupper(substr(md5((string)$partner_user_id . '|' . (string)$plan_id . '|' . microtime(true)), 0, 6));
         $dueAt = date('Y-m-d 23:59:59', strtotime('+3 days'));
+        $existingSub = $this->fetchOne(
+            "SELECT id, plan_id, subscription_status, billing_cycle FROM partner_plan_subscriptions WHERE partner_user_id = ? LIMIT 1",
+            [$partner_user_id],
+            'i'
+        );
+        $isPlanSwitch = false;
+        $fromPlanId = null;
+        if ($existingSub && !empty($existingSub['plan_id'])) {
+            $currentSubPlanId = (int)$existingSub['plan_id'];
+            if ($currentSubPlanId !== $plan_id) {
+                $isPlanSwitch = true;
+                $fromPlanId = $currentSubPlanId;
+            }
+        }
+
         $planName = (string)($plan['plan_name'] ?? 'Plan');
         $lineItems = [
             [
-                'label' => $planName . ' Subscription (' . ucfirst($billing_cycle) . ')',
-                'amount' => round($amount, 2)
+                'label' => $planName . ' Subscription (' . ucfirst($billing_cycle) . ')' . ($isPlanSwitch ? ' [Plan Switch]' : ''),
+                'amount' => round($amount, 2),
+                'target_plan_id' => $plan_id,
+                'from_plan_id' => $fromPlanId,
+                'is_switch' => $isPlanSwitch,
+                'billing_cycle' => $billing_cycle
             ]
         ];
         $line_items_json = json_encode($lineItems);
-        $notes = 'Instant subscription checkout: ' . $planName . ' (' . ucfirst($billing_cycle) . '). Non-refundable; 1-month continued access upon cancellation.';
+        $notes = ($isPlanSwitch ? 'Plan switch checkout: ' : 'Instant subscription checkout: ') . $planName . ' (' . ucfirst($billing_cycle) . '). Non-refundable; 1-month continued access upon cancellation.';
 
         $stmt = $this->conn->prepare(
             "INSERT INTO partner_billing_invoices
@@ -1544,16 +1833,7 @@ class PlatformMonetizationService
             return ['success' => false, 'message' => 'Failed to record subscription invoice.'];
         }
 
-        // Stash or update current subscription target plan in pending payment state
-        $existingSub = $this->fetchOne(
-            "SELECT id FROM partner_plan_subscriptions WHERE partner_user_id = ? LIMIT 1",
-            [$partner_user_id],
-            'i'
-        );
-        if ($existingSub) {
-            $subId = (int)$existingSub['id'];
-            $this->conn->query("UPDATE partner_plan_subscriptions SET plan_id = {$plan_id}, billing_cycle = '{$billing_cycle}', updated_at = NOW() WHERE id = {$subId}");
-        } else {
+        if (!$existingSub) {
             $this->conn->query("INSERT INTO partner_plan_subscriptions (partner_user_id, plan_id, billing_cycle, subscription_status, started_at, renews_at, created_by, updated_by, created_at, updated_at) VALUES ({$partner_user_id}, {$plan_id}, '{$billing_cycle}', 'trial', CURDATE(), '{$periodEnd}', {$actor_user_id}, {$actor_user_id}, NOW(), NOW())");
         }
 
@@ -1718,33 +1998,121 @@ class PlatformMonetizationService
             [$partner_user_id],
             'i'
         );
-        if (!$sub) {
-            return;
+
+        $targetPlanId = null;
+        $fromPlanId = null;
+        $isSwitch = false;
+        $billingCycle = null;
+
+        if (!empty($invoice['line_items_json'])) {
+            $items = json_decode((string)$invoice['line_items_json'], true);
+            if (is_array($items) && !empty($items[0])) {
+                $targetPlanId = isset($items[0]['target_plan_id']) ? (int)$items[0]['target_plan_id'] : null;
+                $fromPlanId = isset($items[0]['from_plan_id']) ? (int)$items[0]['from_plan_id'] : null;
+                $isSwitch = !empty($items[0]['is_switch']);
+                $billingCycle = !empty($items[0]['billing_cycle']) ? (string)$items[0]['billing_cycle'] : null;
+            }
         }
 
-        $billingCycle = (string)($sub['billing_cycle'] ?? 'monthly');
+        if ($targetPlanId === null || $targetPlanId <= 0) {
+            if ($sub) {
+                $targetPlanId = (int)$sub['plan_id'];
+            }
+        }
+
+        $amount = (float)($invoice['total_amount'] ?? 0);
+        $channel = (string)($invoice['payment_channel'] ?? 'online');
+        $reference = (string)($invoice['payment_reference'] ?? $invoice['invoice_number']);
+
+        if (!$billingCycle) {
+            $billingCycle = (string)($sub['billing_cycle'] ?? 'monthly');
+        }
         $interval = ($billingCycle === 'annual') ? '+1 year' : '+1 month';
         $currentRenewsAt = (string)($sub['renews_at'] ?? '');
         $newRenewsAt = (!empty($currentRenewsAt) && strtotime($currentRenewsAt) > time())
             ? date('Y-m-d', strtotime($currentRenewsAt . ' ' . $interval))
             : date('Y-m-d', strtotime($interval));
 
-        $stmt = $this->conn->prepare(
-            "UPDATE partner_plan_subscriptions
-             SET subscription_status = 'active',
-                 renews_at = ?,
-                 ended_at = NULL,
-                 updated_by = ?,
-                 updated_at = NOW()
-             WHERE id = ?
-             LIMIT 1"
-        );
-        if ($stmt) {
-            $subId = (int)$sub['id'];
-            $stmt->bind_param('sii', $newRenewsAt, $actor_user_id, $subId);
-            $stmt->execute();
-            $stmt->close();
+        $eventType = 'subscribed';
+        $prevPlanId = null;
+        $switchedAt = null;
+
+        if ($sub) {
+            $oldPlanId = (int)$sub['plan_id'];
+            if ($targetPlanId && $oldPlanId !== $targetPlanId) {
+                $eventType = 'switched_plan';
+                $isSwitch = true;
+                $prevPlanId = $oldPlanId;
+                $switchedAt = date('Y-m-d H:i:s');
+            } elseif ($sub['subscription_status'] === 'active') {
+                $eventType = 'renewed';
+            }
         }
+
+        $subId = 0;
+        if ($sub) {
+            $subId = (int)$sub['id'];
+            $newPlanId = $targetPlanId ?: (int)$sub['plan_id'];
+
+            $stmt = $this->conn->prepare(
+                "UPDATE partner_plan_subscriptions
+                 SET plan_id = ?,
+                     billing_cycle = ?,
+                     subscription_status = 'active',
+                     previous_plan_id = CASE WHEN ? IS NOT NULL THEN ? ELSE previous_plan_id END,
+                     switched_at = CASE WHEN ? IS NOT NULL THEN ? ELSE switched_at END,
+                     renews_at = ?,
+                     ended_at = NULL,
+                     cancelled_at = NULL,
+                     cancellation_effective_date = NULL,
+                     updated_by = ?,
+                     updated_at = NOW()
+                 WHERE id = ?
+                 LIMIT 1"
+            );
+            if ($stmt) {
+                $stmt->bind_param('isissssii', $newPlanId, $billingCycle, $prevPlanId, $prevPlanId, $switchedAt, $switchedAt, $newRenewsAt, $actor_user_id, $subId);
+                $stmt->execute();
+                $stmt->close();
+            }
+        } else {
+            $newPlanId = $targetPlanId ?: 1;
+            $this->conn->query(
+                "INSERT INTO partner_plan_subscriptions 
+                 (partner_user_id, plan_id, billing_cycle, subscription_status, started_at, renews_at, created_by, updated_by, created_at, updated_at) 
+                 VALUES ({$partner_user_id}, {$newPlanId}, '{$billingCycle}', 'active', CURDATE(), '{$newRenewsAt}', {$actor_user_id}, {$actor_user_id}, NOW(), NOW())"
+            );
+            $subId = (int)$this->conn->insert_id;
+        }
+
+        $targetPlan = $targetPlanId ? $this->fetchOne("SELECT plan_name FROM platform_subscription_plans WHERE id = ? LIMIT 1", [$targetPlanId], 'i') : null;
+        $targetPlanName = (string)($targetPlan['plan_name'] ?? 'Plan');
+
+        $note = '';
+        if ($eventType === 'switched_plan') {
+            $fromPlan = $prevPlanId ? $this->fetchOne("SELECT plan_name FROM platform_subscription_plans WHERE id = ? LIMIT 1", [$prevPlanId], 'i') : null;
+            $fromPlanName = (string)($fromPlan['plan_name'] ?? 'Plan');
+            $note = "Shop owner switched from {$fromPlanName} to {$targetPlanName} ({$billingCycle}). Paid ₱" . number_format($amount, 2);
+        } elseif ($eventType === 'renewed') {
+            $note = "Subscription renewed for {$targetPlanName} ({$billingCycle}). Paid ₱" . number_format($amount, 2);
+        } else {
+            $note = "New {$targetPlanName} subscription activated ({$billingCycle}). Paid ₱" . number_format($amount, 2);
+        }
+
+        $this->recordSubscriptionEvent(
+            $partner_user_id,
+            $eventType,
+            $prevPlanId,
+            $targetPlanId,
+            $billingCycle,
+            $amount,
+            $invoice_id,
+            $channel,
+            $reference,
+            $note,
+            $actor_user_id,
+            $subId
+        );
     }
 
     public function getDashboardData(): array
@@ -1831,6 +2199,26 @@ class PlatformMonetizationService
             }
         }
 
+        $totalSubCollected = 0.0;
+        $totalPlanSwitches = 0;
+        $totalCancellations = 0;
+        if ($this->tableExists('partner_subscription_events')) {
+            $evtStats = $this->fetchOne(
+                "SELECT 
+                    COALESCE(SUM(CASE WHEN event_type IN ('subscribed', 'switched_plan', 'renewed') THEN amount ELSE 0 END), 0) AS total_sub_collected,
+                    COUNT(CASE WHEN event_type = 'switched_plan' THEN 1 END) AS total_switches,
+                    COUNT(CASE WHEN event_type = 'cancelled' THEN 1 END) AS total_cancellations
+                 FROM partner_subscription_events",
+                [],
+                ''
+            );
+            if ($evtStats) {
+                $totalSubCollected = (float)($evtStats['total_sub_collected'] ?? 0);
+                $totalPlanSwitches = (int)($evtStats['total_switches'] ?? 0);
+                $totalCancellations = (int)($evtStats['total_cancellations'] ?? 0);
+            }
+        }
+
         return [
             'metrics' => [
                 'approved_partners' => count($partners),
@@ -1843,10 +2231,14 @@ class PlatformMonetizationService
                 'average_platform_revenue_per_partner' => count($partners) > 0 ? round(($mrr + $estimatedOrderFeeTotal) / count($partners), 2) : 0.0,
                 'actual_collected_revenue' => round($actualCollected, 2),
                 'outstanding_invoice_total' => round($outstandingInvoices, 2),
-                'overdue_invoice_total' => round($overdueInvoices, 2)
+                'overdue_invoice_total' => round($overdueInvoices, 2),
+                'total_subscription_collected' => round($totalSubCollected, 2),
+                'total_plan_switches' => $totalPlanSwitches,
+                'total_cancellations' => $totalCancellations
             ],
             'plans' => $plans,
             'subscriptions' => $subscriptions,
+            'subscription_events' => $this->getSubscriptionEvents(null, 150),
             'invoices' => $invoices,
             'fee_rules' => $this->getFeeRules(),
             'partner_rows' => $partnerRows,
