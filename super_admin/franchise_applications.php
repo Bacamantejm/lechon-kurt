@@ -598,13 +598,28 @@ saRenderModuleHeader('Business Applications', 'Business Applications', $admin_in
 <?php
 $extra_scripts = <<<'HTML'
 <script>
+    function cleanEnyeText(html) {
+        if (!html || typeof html !== 'string') return '';
+        return html
+            .replace(/\u00c3\u0192\u00c2\u00b1/g, 'ñ')
+            .replace(/\u00c3\u0192\u00c2\u2018/g, 'Ñ')
+            .replace(/\u00c3\u00b1/g, 'ñ')
+            .replace(/\u00c3\u0091/g, 'Ñ')
+            .replace(/\u251c\u2592/g, 'ñ')
+            .replace(/\u251c\u00e6/g, 'Ñ')
+            .replace(/\u0393\u00f6\u00a3\u0393\u00fb\u00c6/g, 'ñ')
+            .replace(/Dasmari(?:[^a-zA-Z0-9\s<>&]{1,6}|n)as/gi, 'Dasmariñas')
+            .replace(/Para(?:[^a-zA-Z0-9\s<>&]{1,6}|n)aque/gi, 'Parañaque')
+            .replace(/Las Pi(?:[^a-zA-Z0-9\s<>&]{1,6}|n)as/gi, 'Las Piñas');
+    }
+
     function loadApplicationDetails(appId) {
         $.ajax({
             url: '../super_admin/get_application_details.php',
             type: 'GET',
             data: { id: appId },
             success: function(response) {
-                $('#appDetails').html(response);
+                $('#appDetails').html(cleanEnyeText(response));
             },
             error: function() {
                 $('#appDetails').html('<div class="alert alert-danger">Unable to load application details.</div>');

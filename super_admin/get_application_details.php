@@ -201,7 +201,7 @@ if (saTableExists($conn, 'franchise_applications')) {
         </div>
         <div class="mb-2">
             <span class="text-muted small d-block">BUSINESS ADDRESS</span>
-            <p class="mb-0" style="color: #101828; font-size: 13.5px;"><?php echo nl2br(htmlspecialchars($app['business_address'])); ?></p>
+            <p class="mb-0" style="color: #101828; font-size: 13.5px;"><?php echo nl2br(htmlspecialchars(fixMojibakeUtf8($app['business_address'] ?? ''))); ?></p>
         </div>
         <?php
             $psgc_parts = array_filter([
@@ -217,7 +217,7 @@ if (saTableExists($conn, 'franchise_applications')) {
         <?php if ($psgc_location_line !== ''): ?>
             <div class="mb-2">
                 <span class="text-muted small d-block">PSGC REGION / LOCATION</span>
-                <strong style="color: #101828; font-size: 13.5px;"><?php echo htmlspecialchars($psgc_location_line); ?></strong>
+                <strong style="color: #101828; font-size: 13.5px;"><?php echo htmlspecialchars(fixMojibakeUtf8($psgc_location_line)); ?></strong>
             </div>
         <?php endif; ?>
         <div class="mb-2">

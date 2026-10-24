@@ -3490,6 +3490,24 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    function showAppToast(message, type = 'success', duration = 3000) {
+        const normType = type === 'warning' ? 'alert' : type;
+        if (typeof window.showPopupAlert === 'function') {
+            window.showPopupAlert(message, normType, duration);
+        } else if (typeof window.showToast === 'function') {
+            window.showToast(message, normType);
+        } else if (typeof Swal !== 'undefined' && typeof Swal.fire === 'function') {
+            Swal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: type,
+                title: message,
+                showConfirmButton: false,
+                timer: duration
+            });
+        }
+    }
+
     // Auto-Fill Profile Button Handler
     // Hero Quick Application Handler (Screenshot 1 & 2)
     const btnHeroQuickApply = document.getElementById('btnHeroQuickApply');
@@ -3502,7 +3520,16 @@ document.addEventListener('DOMContentLoaded', function() {
             const bizPhone = document.getElementById('hero_phone')?.value.trim() || '';
 
             if (!bizName) {
-                Swal.fire('Business Name Required', 'Please enter your business name.', 'warning');
+                if (typeof Swal !== 'undefined' && typeof Swal.fire === 'function') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Business Name Required',
+                        text: 'Please enter your business name.',
+                        confirmButtonColor: '#b3261e'
+                    });
+                } else {
+                    showAppToast('Please enter your business name.', 'warning', 3500);
+                }
                 return;
             }
 
@@ -3523,14 +3550,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 formElem.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
 
-            Swal.fire({
-                toast: true,
-                position: 'top-end',
-                icon: 'success',
-                title: 'Business info saved! Complete your location & document verification below.',
-                showConfirmButton: false,
-                timer: 3000
-            });
+            showAppToast('Business info saved! Complete your location & document verification below.', 'success', 3500);
         });
     }
 
@@ -3555,14 +3575,7 @@ document.addEventListener('DOMContentLoaded', function() {
             composeBusinessAddress();
             saveDraft();
 
-            Swal.fire({
-                toast: true,
-                position: 'top-end',
-                icon: 'success',
-                title: 'Profile data auto-filled!',
-                showConfirmButton: false,
-                timer: 2000
-            });
+            showAppToast('Profile data auto-filled!', 'success', 2500);
         });
     }
 

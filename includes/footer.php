@@ -1795,17 +1795,10 @@
     <!-- Global SweetAlert2 & Flash Notifications -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
-    .swal2-container {
-        background: transparent !important;
-        background-color: transparent !important;
-    }
-    .swal2-container.swal2-backdrop-show,
-    .swal2-container.swal2-no-backdrop {
-        background: transparent !important;
-        background-color: transparent !important;
-    }
     .swal2-container.swal2-top-end,
-    .swal2-container.swal2-top-right {
+    .swal2-container.swal2-top-right,
+    .swal2-container.swal2-bottom-end,
+    .swal2-container.swal2-bottom-right {
         top: 90px !important;
         right: 24px !important;
         left: auto !important;
@@ -1815,6 +1808,7 @@
         overflow: visible !important;
         pointer-events: none !important;
         background: transparent !important;
+        background-color: transparent !important;
     }
     .swal2-popup.swal2-toast {
         pointer-events: auto !important;
@@ -1841,11 +1835,16 @@
     }
     .swal2-popup.swal2-toast .swal2-icon {
         margin: 0 !important;
-        width: 24px !important;
-        height: 24px !important;
-        min-width: 24px !important;
-        border-color: #027a48 !important;
-        color: #027a48 !important;
+        font-size: 11px !important;
+        width: 2em !important;
+        height: 2em !important;
+        min-width: 2em !important;
+        flex-shrink: 0 !important;
+        box-sizing: content-box !important;
+    }
+    .swal2-popup.swal2-toast .swal2-icon .swal2-success-ring {
+        width: 2em !important;
+        height: 2em !important;
     }
     .swal2-popup.swal2-toast .swal2-timer-progress-bar {
         background: #b3261e !important;
