@@ -2697,7 +2697,7 @@ body.dark-mode .leaflet-container {
                         <p style="font-size:1rem; color:#666; margin:0;">Sign in to continue to your account.</p>
                     </div>
 
-                    <form method="POST" action="login.php" id="ajaxLoginForm" novalidate>
+                    <form method="POST" action="login.php" id="ajaxLoginForm" data-swal-validate="off" novalidate>
                         <input type="hidden" name="login" value="1">
                         <input type="hidden" name="ajax" value="true">
 
@@ -3019,12 +3019,20 @@ document.addEventListener('DOMContentLoaded', function() {
             const passInput = document.getElementById('loginPassword');
 
             if (!emailInput || !emailInput.value.trim()) {
-                Toast.fire({ icon: 'warning', title: 'Please enter your email address' });
+                if (window.showPopupAlert) {
+                    showPopupAlert('Please enter your email address.', 'alert');
+                } else if (typeof Toast !== 'undefined') {
+                    Toast.fire({ icon: 'warning', title: 'Please enter your email address' });
+                }
                 if (emailInput) emailInput.focus();
                 return;
             }
             if (!passInput || !passInput.value) {
-                Toast.fire({ icon: 'warning', title: 'Please enter your password' });
+                if (window.showPopupAlert) {
+                    showPopupAlert('Please enter your password.', 'alert');
+                } else if (typeof Toast !== 'undefined') {
+                    Toast.fire({ icon: 'warning', title: 'Please enter your password' });
+                }
                 if (passInput) passInput.focus();
                 return;
             }

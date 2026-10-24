@@ -476,12 +476,25 @@ body.dark-mode .custom-confirm-icon-wrap.info {
         if (normType === 'warning') normType = 'alert';
         if (normType === 'danger') normType = 'error';
 
+        // Dismiss any active SweetAlert modal or toast to prevent dual alerts
+        if (typeof Swal !== 'undefined' && typeof Swal.close === 'function') {
+            try { Swal.close(); } catch (e) {}
+        }
+
         let container = document.getElementById('uiversePopupContainer');
         if (!container) {
             container = document.createElement('div');
             container.id = 'uiversePopupContainer';
             container.className = 'popup-container-fixed';
             document.body.appendChild(container);
+        } else {
+            // Dismiss existing popups so only one active alert is visible at a time
+            const existingPopups = container.querySelectorAll('.popup');
+            existingPopups.forEach(function(el) {
+                if (el && el.parentNode) {
+                    el.parentNode.removeChild(el);
+                }
+            });
         }
 
         const popup = document.createElement('div');

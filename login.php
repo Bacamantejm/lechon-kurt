@@ -1230,7 +1230,7 @@ body.dark-mode .floating-pig {
                 <?php endif; ?>
 
                 <!-- Login Form -->
-                <form method="POST" action="" class="login-form" id="loginForm">
+                <form method="POST" action="" class="login-form" id="loginForm" data-swal-validate="off">
                     <div class="form-group">
                         <label for="email">Email Address</label>
                         <div class="input-with-icon">
@@ -1421,6 +1421,22 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (jsonData.success) {
                         // Login successful, use server-provided redirect URL
                         window.location.href = jsonData.redirect;
+                        return;
+                    } else if (jsonData.message) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Login Failed',
+                            text: jsonData.message,
+                            confirmButtonColor: '#b3261e'
+                        });
+                        if (btn) {
+                            btn.classList.remove('loading');
+                            btn.disabled = false;
+                            const span = btn.querySelector('span');
+                            if (span) {
+                                span.textContent = 'Sign In';
+                            }
+                        }
                         return;
                     }
                 } catch (e) {

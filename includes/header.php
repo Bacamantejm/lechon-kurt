@@ -2733,6 +2733,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (typeof form.checkValidity === 'function' && !form.checkValidity()) {
                 event.preventDefault();
                 event.stopPropagation();
+                event.stopImmediatePropagation();
                 const invalidField = form.querySelector(':invalid');
                 showFieldValidationError(invalidField);
             }
