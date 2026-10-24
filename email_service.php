@@ -1379,7 +1379,7 @@ class EmailService {
         }
     }
 
-    public function sendFranchiseStatusEmail($recipient_email, string $status, array $app_data, string $admin_notes = '', array $incomplete_documents = []): bool {
+    public function sendFranchiseStatusEmail($recipient_email, string $status, array $app_data, string $admin_notes = '', array $incomplete_documents = [], $deadline = null): bool {
         try {
             $this->resetMessage();
             $safe_email = trim((string)$recipient_email);
@@ -1391,6 +1391,7 @@ class EmailService {
             $app_number = htmlspecialchars($app_data['application_number'] ?? '');
             $business_name = htmlspecialchars($app_data['business_name'] ?? '');
             $notes_html = !empty($admin_notes) ? nl2br(htmlspecialchars($admin_notes)) : '';
+            $deadline_display = !empty($deadline) ? date('F j, Y', strtotime($deadline)) : '';
 
             $doc_type_names = [
                 'business_logo' => 'Store Business Logo',
@@ -1442,6 +1443,9 @@ class EmailService {
                 ";
             } elseif ($status === 'incomplete') {
                 $subject = "Action Required: Re-upload Specific Requirements for Franchise Application [{$app_number}]";
+                $deadline_banner = !empty($deadline_display)
+                    ? "<p style='margin:8px 0 0;font-weight:700;color:#b3261e;'><strong>Compliance Deadline:</strong> {$deadline_display}</p>"
+                    : '';
                 $content = "
                     <h2 style='color:#b54708;margin-top:0;'>Action Required: Document Revision Needed</h2>
                     <p>Dear <strong>{$applicant_name}</strong>,</p>
@@ -1450,6 +1454,7 @@ class EmailService {
                     <div style='background:#fffaeb;border:1px solid #fedf89;border-radius:12px;padding:16px;margin:20px 0;color:#b54708;'>
                         <p style='margin:0 0 8px;'><strong>Application Status:</strong> Incomplete Requirements / Re-upload Needed</p>
                         <p style='margin:0;'><strong>Application Number:</strong> {$app_number}</p>
+                        {$deadline_banner}
                     </div>
                 ";
 
@@ -1460,8 +1465,8 @@ class EmailService {
                             <ul style='margin:0;padding-left:20px;color:#344054;'>
                     ";
                     foreach ($incomplete_documents as $doc_key => $reason) {
-                        $doc_label = $doc_type_names[$doc_key] ?? ucfirst(str_replace('_', ' ', $doc_key));
-                        $reason_text = !empty($reason) ? htmlspecialchars($reason) : 'Document needs clear re-upload';
+                        $doc_label = is_array($reason) ? ($reason['label'] ?? ($doc_type_names[$doc_key] ?? ucfirst(str_replace('_', ' ', $doc_key)))) : ($doc_type_names[$doc_key] ?? ucfirst(str_replace('_', ' ', $doc_key)));
+                        $reason_text = is_array($reason) ? ($reason['reason'] ?? 'Document needs clear re-upload') : (!empty($reason) ? htmlspecialchars($reason) : 'Document needs clear re-upload');
                         $content .= "<li style='margin-bottom:8px;'><strong>{$doc_label}:</strong> <span style='color:#b54708;'>{$reason_text}</span></li>";
                     }
                     $content .= "

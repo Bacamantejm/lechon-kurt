@@ -1487,83 +1487,301 @@ if ($dashboard_flash_payload === false) {
 
         .super-owner-page {
             display: grid;
-            gap: 20px;
+            gap: 16px;
             padding-bottom: 140px;
         }
 
+        /* Compact Executive Header */
         .owner-hero {
             background: #ffffff;
             border: 1px solid #eaecf0;
-            border-radius: 16px;
-            padding: 24px 28px;
-            box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06);
+            border-radius: 12px;
+            padding: 16px 20px;
+            box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
             display: flex;
-            align-items: flex-start;
+            align-items: center;
             justify-content: space-between;
-            gap: 20px;
+            gap: 16px;
             flex-wrap: wrap;
+        }
+
+        .owner-hero-left {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            min-width: 240px;
         }
 
         .owner-badge {
             display: inline-flex;
             align-items: center;
-            gap: 7px;
-            padding: 5px 13px;
+            gap: 6px;
+            width: fit-content;
+            padding: 3px 9px;
             border-radius: 999px;
             background: #fff1f0;
             border: 1px solid #fee4e2;
             color: #b3261e;
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 10px;
+            letter-spacing: 0.04em;
         }
 
         .owner-hero h2 {
-            margin: 0 0 6px 0;
-            font-size: 1.3rem;
-            font-weight: 700;
+            margin: 0;
+            font-size: 1.18rem;
+            font-weight: 800;
             color: #101828;
+            letter-spacing: -0.01em;
         }
 
         .owner-hero p {
             margin: 0;
-            max-width: 560px;
-            color: #475467;
-            font-size: 0.875rem;
-            line-height: 1.5;
+            color: #64748b;
+            font-size: 0.8rem;
+            line-height: 1.4;
         }
 
         .owner-hero-meta {
             display: flex;
+            align-items: center;
+            gap: 8px;
             flex-wrap: wrap;
-            gap: 12px;
-            margin-top: 18px;
         }
 
         .owner-hero-meta span {
             display: inline-flex;
             align-items: center;
-            gap: 6px;
-            padding: 5px 12px;
-            border-radius: 999px;
-            background: #f8f9fa;
+            gap: 5px;
+            padding: 5px 10px;
+            border-radius: 8px;
+            background: #f8fafc;
             border: 1px solid #eaecf0;
-            font-size: 0.8rem;
+            font-size: 0.76rem;
             font-weight: 600;
             color: #475467;
         }
 
+        .owner-hero-meta span.owner-meta-highlight {
+            background: #fffaeb;
+            border-color: #fedf89;
+            color: #b54708;
+            font-weight: 700;
+        }
 
-        body.dark-mode .owner-hero {
+        .owner-hero-action-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 8px;
+            background: #b3261e;
+            color: #ffffff !important;
+            font-size: 0.78rem;
+            font-weight: 700;
+            text-decoration: none;
+            transition: background 0.15s ease, transform 0.15s ease;
+        }
+
+        .owner-hero-action-btn:hover {
+            background: #981b15;
+            transform: translateY(-1px);
+        }
+
+        /* 4 Primary Executive KPI Cards */
+        .owner-kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+        }
+
+        .owner-kpi-card {
+            background: #ffffff;
+            border: 1px solid #eaecf0;
+            border-radius: 12px;
+            padding: 14px 16px;
+            box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 8px;
+            transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+        }
+
+        .owner-kpi-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(16, 24, 40, 0.06);
+            border-color: #d0d5dd;
+        }
+
+        .owner-kpi-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .owner-kpi-label {
+            font-size: 0.74rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: #64748b;
+        }
+
+        .owner-kpi-icon {
+            width: 34px;
+            height: 34px;
+            border-radius: 9px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.95rem;
+            flex-shrink: 0;
+        }
+
+        .owner-kpi-icon.crimson { background: #fff1f0; color: #b3261e; }
+        .owner-kpi-icon.blue { background: #eff8ff; color: #175cd3; }
+        .owner-kpi-icon.emerald { background: #ecfdf3; color: #027a48; }
+        .owner-kpi-icon.neutral { background: #f8fafc; border: 1px solid #eaecf0; color: #475467; }
+
+        .owner-kpi-value {
+            font-size: 1.45rem;
+            font-weight: 800;
+            color: #101828;
+            line-height: 1.15;
+            letter-spacing: -0.02em;
+        }
+
+        .owner-kpi-sub {
+            font-size: 0.74rem;
+            color: #64748b;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .owner-kpi-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 6px;
+            border-radius: 5px;
+            font-size: 0.68rem;
+            font-weight: 700;
+        }
+
+        .owner-kpi-badge.success { background: #ecfdf3; color: #027a48; border: 1px solid #abefc6; }
+        .owner-kpi-badge.warning { background: #fffaeb; color: #b54708; border: 1px solid #fedf89; }
+        .owner-kpi-badge.info { background: #eff8ff; color: #175cd3; border: 1px solid #b2ddff; }
+        .owner-kpi-badge.neutral { background: #f8fafc; color: #475467; border: 1px solid #eaecf0; }
+        .owner-kpi-badge.healthy { background: #ecfdf3; color: #027a48; }
+
+        /* Secondary Metrics Strip */
+        .owner-submetrics-strip {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+            gap: 10px;
+        }
+
+        .owner-submetric-tile {
+            background: #ffffff;
+            border: 1px solid #eaecf0;
+            border-radius: 10px;
+            padding: 10px 12px;
+            box-shadow: 0 1px 2px rgba(16, 24, 40, 0.03);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: border-color 0.15s ease;
+        }
+
+        .owner-submetric-tile:hover {
+            border-color: #d0d5dd;
+        }
+
+        .owner-submetric-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background: #f8fafc;
+            border: 1px solid #eaecf0;
+            color: #475467;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+            flex-shrink: 0;
+        }
+
+        .owner-submetric-body {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .owner-submetric-label {
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .owner-submetric-val {
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: #101828;
+            line-height: 1.2;
+            letter-spacing: -0.01em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .owner-submetric-hint {
+            font-size: 0.68rem;
+            color: #94a3b8;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        body.dark-mode .owner-hero,
+        body.dark-mode .owner-kpi-card,
+        body.dark-mode .owner-submetric-tile {
             background: #1e293b !important;
             border-color: #334155 !important;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25) !important;
         }
-        body.dark-mode .owner-hero h2 { color: #f8fafc !important; }
-        body.dark-mode .owner-hero p { color: #cbd5e1 !important; }
-        body.dark-mode .owner-badge { background: #3b1f1d !important; border-color: #7f1d1d !important; color: #fca5a5 !important; }
-        body.dark-mode .owner-hero-meta span { background: #0f172a !important; border-color: #334155 !important; color: #94a3b8 !important; }
+        body.dark-mode .owner-hero h2,
+        body.dark-mode .owner-kpi-value,
+        body.dark-mode .owner-submetric-val {
+            color: #f8fafc !important;
+        }
+        body.dark-mode .owner-hero p,
+        body.dark-mode .owner-kpi-sub,
+        body.dark-mode .owner-submetric-hint {
+            color: #94a3b8 !important;
+        }
+        body.dark-mode .owner-hero-meta span,
+        body.dark-mode .owner-submetric-icon,
+        body.dark-mode .owner-kpi-icon.neutral {
+            background: #0f172a !important;
+            border-color: #334155 !important;
+            color: #94a3b8 !important;
+        }
+        body.dark-mode .owner-badge {
+            background: #3b1f1d !important;
+            border-color: #7f1d1d !important;
+            color: #fca5a5 !important;
+        }
 
         .owner-metric-grid,
         .owner-action-grid {
@@ -2546,46 +2764,151 @@ if ($dashboard_flash_payload === false) {
                     </div>
                 </div>
             </div>
-            <div class="admin-main super-owner-page">
                 <div class="owner-hero">
-                    <span class="owner-badge"><i class="fas fa-crown"></i> System Owner Control Center</span>
-                    <h2>Full oversight for your integrated platform</h2>
-                    <p>This dashboard is exclusive to your super admin account and keeps users, partner onboarding, system governance, and platform operations in one place.</p>
+                    <div class="owner-hero-left">
+                        <div class="owner-badge"><i class="fas fa-crown"></i> System Owner Control Center</div>
+                        <h2>Platform Overview &amp; Governance</h2>
+                        <p>Real-time telemetry, partner operations, subscription revenue, and platform compliance.</p>
+                    </div>
                     <div class="owner-hero-meta">
                         <span><i class="fas fa-store"></i> <?php echo number_format($approved_partners); ?> partners</span>
-                        <span><i class="fas fa-hourglass-half"></i> <?php echo number_format($pending_applications); ?> pending apps</span>
-                        <span><i class="fas fa-hand-holding-dollar"></i> PHP <?php echo number_format($partner_sales_this_month, 2); ?> partner sales in <?php echo htmlspecialchars($current_month_label); ?></span>
-                        <span><i class="fas fa-percent"></i> <?php echo number_format($platform_commission_percent, 2); ?>% commission rate</span>
+                        <?php if ($pending_applications > 0): ?>
+                            <span class="owner-meta-highlight"><i class="fas fa-hourglass-half"></i> <?php echo number_format($pending_applications); ?> pending</span>
+                        <?php else: ?>
+                            <span><i class="fas fa-check-circle"></i> 0 pending</span>
+                        <?php endif; ?>
+                        <span><i class="fas fa-percent"></i> <?php echo number_format($platform_commission_percent, 2); ?>% rate</span>
+                        <a href="../super_admin/platform_monetization.php" class="owner-hero-action-btn">
+                            <i class="fas fa-sack-dollar"></i> Monetization
+                        </a>
                     </div>
                 </div>
 
-                <div class="owner-metric-grid">
-                    <div class="owner-card"><strong><?php echo number_format($pending_applications); ?></strong><span>Pending business applications</span><small>Owner-only approval queue</small></div>
-                    <div class="owner-card"><strong><?php echo number_format($approved_partners); ?></strong><span>Approved partners</span><small>Active tenant businesses</small></div>
-                    <div class="owner-card"><strong><?php echo number_format($active_subscribers_count); ?></strong><span>Active Plan Subscribers</span><small>Paid partner subscription tiers</small></div>
-                    <div class="owner-card"><strong>PHP <?php echo number_format($total_subscription_revenue_collected, 2); ?></strong><span>Total Plan Revenue</span><small>Paid subscription invoices</small></div>
-                    <div class="owner-card"><strong><?php echo number_format($total_customers); ?></strong><span>Customer accounts</span><small>Platform-wide registered users</small></div>
-                    <div class="owner-card"><strong><?php echo number_format($total_admins); ?></strong><span>Admin accounts</span><small><?php echo number_format($total_employees); ?> employee records</small></div>
-                    <div class="owner-card"><strong><?php echo number_format($active_partner_warnings_total); ?></strong><span>Active partner warnings</span><small><?php echo number_format($partners_with_active_warnings); ?> partner stores flagged</small></div>
-                    <div class="owner-card"><strong><?php echo $avg_business_rating > 0 ? number_format($avg_business_rating, 2) : '0.00'; ?></strong><span>Average business rating</span><small>From store and delivery feedback</small></div>
-                    <div class="owner-card"><strong>PHP <?php echo number_format($partner_sales_this_month, 2); ?></strong><span>Partner sales this month</span><small>Gross revenue generated by approved businesses</small></div>
-                    <div class="owner-card"><strong>PHP <?php echo number_format($platform_commission_total, 2); ?></strong><span><?php echo $commission_metrics_are_actual ? 'Actual platform commission' : 'Estimated platform commission'; ?></span><small>Based on <?php echo number_format($platform_commission_percent, 2); ?>% commission rate</small></div>
-                    <div class="owner-card"><strong>PHP <?php echo number_format($partner_net_revenue_total, 2); ?></strong><span><?php echo $commission_metrics_are_actual ? 'Actual partner payout total' : 'Estimated partner net revenue'; ?></span><small>Gross sales less platform commission</small></div>
-                    <div class="owner-card"><strong>PHP <?php echo number_format($monthly_revenue, 2); ?></strong><span>Platform revenue this month</span><small>Net income PHP <?php echo number_format($net_income, 2); ?></small></div>
-                    <div class="owner-card"><strong><?php echo number_format($today_orders); ?></strong><span>Orders today</span><small><?php echo number_format($active_deliveries); ?> active deliveries</small></div>
-                </div>
-                <div class="owner-note">
-                    <?php if ($commission_metrics_are_actual): ?>
-                        Commission and partner payout figures are now coming from real `partner_settlements` records using the configured commission rules. No partner product list is shown in this owner dashboard.
-                    <?php else: ?>
-                        Commission and partner revenue figures are still estimated from approved partner order sales using a <?php echo number_format($platform_commission_percent, 2); ?>% commission rate. Run Tenant Scope Migration once to create and backfill real settlement records.
-                    <?php endif; ?>
-                </div>
-                <?php if (!$has_user_control_status): ?>
-                    <div class="owner-note">
-                        Partner suspension, ban, and restriction controls will appear here after you run <a href="tenant_scope_migration.php" class="owner-link">Tenant Scope Migration</a>.
+                <!-- 4 Primary Executive KPI Cards -->
+                <div class="owner-kpi-grid">
+                    <div class="owner-kpi-card">
+                        <div class="owner-kpi-top">
+                            <span class="owner-kpi-label">Plan Subscriptions</span>
+                            <span class="owner-kpi-icon crimson"><i class="fas fa-crown"></i></span>
+                        </div>
+                        <div class="owner-kpi-value">PHP <?php echo number_format($total_subscription_revenue_collected, 2); ?></div>
+                        <div class="owner-kpi-sub">
+                            <span>Total Plan Revenue</span>
+                            <span class="owner-kpi-badge success"><i class="fas fa-check"></i> <?php echo number_format($active_subscribers_count); ?> active tiers</span>
+                        </div>
                     </div>
-                <?php endif; ?>
+
+                    <div class="owner-kpi-card">
+                        <div class="owner-kpi-top">
+                            <span class="owner-kpi-label">Partner Network</span>
+                            <span class="owner-kpi-icon blue"><i class="fas fa-store"></i></span>
+                        </div>
+                        <div class="owner-kpi-value"><?php echo number_format($approved_partners); ?> Stores</div>
+                        <div class="owner-kpi-sub">
+                            <span>Approved businesses</span>
+                            <?php if ($pending_applications > 0): ?>
+                                <span class="owner-kpi-badge warning"><i class="fas fa-clock"></i> <?php echo number_format($pending_applications); ?> pending</span>
+                            <?php else: ?>
+                                <span class="owner-kpi-badge healthy">All clear</span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+
+                    <div class="owner-kpi-card">
+                        <div class="owner-kpi-top">
+                            <span class="owner-kpi-label"><?php echo $commission_metrics_are_actual ? 'Actual Commission' : 'Est. Commission'; ?></span>
+                            <span class="owner-kpi-icon emerald"><i class="fas fa-percent"></i></span>
+                        </div>
+                        <div class="owner-kpi-value">PHP <?php echo number_format($platform_commission_total, 2); ?></div>
+                        <div class="owner-kpi-sub">
+                            <span>From <?php echo htmlspecialchars($current_month_label); ?> sales</span>
+                            <span class="owner-kpi-badge neutral">PHP <?php echo number_format($partner_sales_this_month, 2); ?> gross</span>
+                        </div>
+                    </div>
+
+                    <div class="owner-kpi-card">
+                        <div class="owner-kpi-top">
+                            <span class="owner-kpi-label">Orders &amp; Dispatch</span>
+                            <span class="owner-kpi-icon neutral"><i class="fas fa-motorcycle"></i></span>
+                        </div>
+                        <div class="owner-kpi-value"><?php echo number_format($today_orders); ?> Today</div>
+                        <div class="owner-kpi-sub">
+                            <span>Today's order volume</span>
+                            <span class="owner-kpi-badge info"><i class="fas fa-location-arrow"></i> <?php echo number_format($active_deliveries); ?> active</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Secondary Compact Operational Metrics Strip -->
+                <div class="owner-submetrics-strip">
+                    <div class="owner-submetric-tile">
+                        <div class="owner-submetric-icon"><i class="fas fa-users"></i></div>
+                        <div class="owner-submetric-body">
+                            <span class="owner-submetric-label">Customers</span>
+                            <span class="owner-submetric-val"><?php echo number_format($total_customers); ?></span>
+                            <span class="owner-submetric-hint">Platform registered</span>
+                        </div>
+                    </div>
+
+                    <div class="owner-submetric-tile">
+                        <div class="owner-submetric-icon"><i class="fas fa-user-shield"></i></div>
+                        <div class="owner-submetric-body">
+                            <span class="owner-submetric-label">Staff Accounts</span>
+                            <span class="owner-submetric-val"><?php echo number_format($total_admins); ?> Admins</span>
+                            <span class="owner-submetric-hint"><?php echo number_format($total_employees); ?> employees</span>
+                        </div>
+                    </div>
+
+                    <div class="owner-submetric-tile">
+                        <div class="owner-submetric-icon"><i class="fas fa-chart-line"></i></div>
+                        <div class="owner-submetric-body">
+                            <span class="owner-submetric-label">Platform Revenue</span>
+                            <span class="owner-submetric-val">PHP <?php echo number_format($monthly_revenue, 2); ?></span>
+                            <span class="owner-submetric-hint">Net: PHP <?php echo number_format($net_income, 2); ?></span>
+                        </div>
+                    </div>
+
+                    <div class="owner-submetric-tile">
+                        <div class="owner-submetric-icon"><i class="fas fa-wallet"></i></div>
+                        <div class="owner-submetric-body">
+                            <span class="owner-submetric-label">Partner Payout</span>
+                            <span class="owner-submetric-val">PHP <?php echo number_format($partner_net_revenue_total, 2); ?></span>
+                            <span class="owner-submetric-hint"><?php echo $commission_metrics_are_actual ? 'Actual net payable' : 'Estimated net'; ?></span>
+                        </div>
+                    </div>
+
+                    <div class="owner-submetric-tile">
+                        <div class="owner-submetric-icon"><i class="fas fa-star" style="color: #f59e0b;"></i></div>
+                        <div class="owner-submetric-body">
+                            <span class="owner-submetric-label">Store Rating</span>
+                            <span class="owner-submetric-val"><?php echo $avg_business_rating > 0 ? number_format($avg_business_rating, 2) : '0.00'; ?> <small style="font-size:0.75rem; color:#64748b;">/ 5</small></span>
+                            <span class="owner-submetric-hint">Customer feedback</span>
+                        </div>
+                    </div>
+
+                    <div class="owner-submetric-tile">
+                        <div class="owner-submetric-icon"><i class="fas fa-triangle-exclamation"></i></div>
+                        <div class="owner-submetric-body">
+                            <span class="owner-submetric-label">Partner Warnings</span>
+                            <span class="owner-submetric-val"><?php echo number_format($active_partner_warnings_total); ?></span>
+                            <span class="owner-submetric-hint"><?php echo number_format($partners_with_active_warnings); ?> flagged stores</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="owner-note">
+                    <i class="fas fa-circle-info"></i>
+                    <div>
+                        <?php if ($commission_metrics_are_actual): ?>
+                            Commission and partner payout figures are aggregated from recorded <code>partner_settlements</code> using active rate policies.
+                        <?php else: ?>
+                            Commission figures are estimated at <?php echo number_format($platform_commission_percent, 2); ?>%. Run Tenant Scope Migration to backfill actual settlement ledgers.
+                        <?php endif; ?>
+                        <?php if (!$has_user_control_status): ?>
+                            Partner suspension, ban, and restriction controls will appear after running <a href="tenant_scope_migration.php" class="owner-link">Tenant Scope Migration</a>.
+                        <?php endif; ?>
+                    </div>
+                </div>
 
                 <div class="owner-section">
                     <div class="owner-section-head">

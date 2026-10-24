@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/module_common.php';
 
+header('Content-Type: text/html; charset=UTF-8');
+
 if (!isset($_GET['id']) || (int)$_GET['id'] <= 0) {
     http_response_code(400);
     echo '<div class="alert alert-danger">Invalid application reference.</div>';
@@ -33,6 +35,15 @@ if (!$app) {
     http_response_code(404);
     echo '<div class="alert alert-warning">Application not found.</div>';
     exit;
+}
+
+// Clean all string fields from mojibake / encoding errors (e.g. Dasmari├▒as -> Dasmariñas)
+if (function_exists('fixMojibakeUtf8')) {
+    foreach ($app as $k => $v) {
+        if (is_string($v)) {
+            $app[$k] = fixMojibakeUtf8($v);
+        }
+    }
 }
 
 // Get documents
@@ -362,6 +373,12 @@ if (saTableExists($conn, 'franchise_applications')) {
                     <textarea name="admin_notes" id="admin_notes" class="form-control" rows="3" placeholder="Explain why the application is rejected or incomplete..."><?php echo htmlspecialchars($app['admin_notes'] ?? ''); ?></textarea>
                     <div class="form-helper-text"><i class="fas fa-info-circle"></i> A reason is required for rejection or incomplete decisions. Mark at least one specific document for re-upload when choosing <strong>Mark Incomplete</strong>.</div>
                 </div>
+
+                <div class="form-group-modern mb-3" id="deadline_input_group">
+                    <label class="form-label-modern"><i class="fas fa-calendar-day"></i> Compliance / Resubmission Deadline</label>
+                    <input type="date" name="resubmission_deadline" id="resubmission_deadline" class="form-control" min="<?php echo date('Y-m-d'); ?>" value="<?php echo htmlspecialchars(!empty($app['resubmission_deadline']) ? date('Y-m-d', strtotime($app['resubmission_deadline'])) : date('Y-m-d', strtotime('+7 days'))); ?>">
+                    <div class="form-helper-text"><i class="fas fa-info-circle"></i> Set a deadline for the applicant to comply and re-upload the flagged requirements (reflected on their portal and notifications).</div>
+                </div>
                 
                 <div class="action-buttons d-flex gap-2 flex-wrap pt-2 border-top">
                     <button type="submit"
@@ -391,6 +408,11 @@ if (saTableExists($conn, 'franchise_applications')) {
                 <span class="form-opt-pill">Completed</span>
             </div>
             <p class="mb-1 text-dark"><?php echo nl2br(htmlspecialchars($app['admin_notes'] ?? 'No notes recorded')); ?></p>
+            <?php if (!empty($app['resubmission_deadline'])): ?>
+                <div class="alert alert-warning py-2 px-3 small my-2">
+                    <i class="fas fa-calendar-alt me-1"></i> Compliance Deadline: <strong><?php echo date('M d, Y', strtotime($app['resubmission_deadline'])); ?></strong>
+                </div>
+            <?php endif; ?>
             <small class="text-muted">
                 Reviewed by: <?php echo htmlspecialchars((string)($app['admin_id'] ?? 'N/A')); ?>
                 on <?php echo htmlspecialchars(saFormatDateTime($app['reviewed_at'] ?? null, 'M d, Y H:i', 'N/A')); ?>

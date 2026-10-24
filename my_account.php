@@ -190,6 +190,13 @@ function myAccountGetUserById(mysqli $conn, int $user_id): ?array {
     $result = mysqli_stmt_get_result($stmt);
     $user = $result ? mysqli_fetch_assoc($result) : null;
     mysqli_stmt_close($stmt);
+    if ($user && function_exists('fixMojibakeUtf8')) {
+        foreach ($user as $k => $v) {
+            if (is_string($v)) {
+                $user[$k] = fixMojibakeUtf8($v);
+            }
+        }
+    }
     return $user ?: null;
 }
 
@@ -499,6 +506,11 @@ if (myAccountTableExists($conn, 'franchise_applications')) {
     if ($fa_has_resubmit) {
         $fa_cols .= ', resubmitted_at';
     }
+    $fa_deadline_check = mysqli_query($conn, "SHOW COLUMNS FROM franchise_applications LIKE 'resubmission_deadline'");
+    $fa_has_deadline = $fa_deadline_check && mysqli_num_rows($fa_deadline_check) > 0;
+    if ($fa_has_deadline) {
+        $fa_cols .= ', resubmission_deadline';
+    }
 
     $fa_sql = "SELECT {$fa_cols} FROM franchise_applications WHERE user_id = ? ORDER BY created_at DESC LIMIT 1";
     $fa_stmt = mysqli_prepare($conn, $fa_sql);
@@ -508,6 +520,13 @@ if (myAccountTableExists($conn, 'franchise_applications')) {
         $fa_result = mysqli_stmt_get_result($fa_stmt);
         $franchise_app = $fa_result ? mysqli_fetch_assoc($fa_result) : null;
         mysqli_stmt_close($fa_stmt);
+        if ($franchise_app && function_exists('fixMojibakeUtf8')) {
+            foreach ($franchise_app as $k => $v) {
+                if (is_string($v)) {
+                    $franchise_app[$k] = fixMojibakeUtf8($v);
+                }
+            }
+        }
     }
 
     // Fetch associated uploaded documents if application exists
@@ -519,6 +538,13 @@ if (myAccountTableExists($conn, 'franchise_applications')) {
             mysqli_stmt_execute($fd_stmt);
             $fd_result = mysqli_stmt_get_result($fd_stmt);
             while ($fd_result && ($fd_row = mysqli_fetch_assoc($fd_result))) {
+                if (function_exists('fixMojibakeUtf8')) {
+                    foreach ($fd_row as $k => $v) {
+                        if (is_string($v)) {
+                            $fd_row[$k] = fixMojibakeUtf8($v);
+                        }
+                    }
+                }
                 $franchise_app_docs[] = $fd_row;
             }
             mysqli_stmt_close($fd_stmt);
@@ -1643,26 +1669,76 @@ body.dark-mode .mobile-segment-btn.active {
 
                         <?php if (!empty($franchise_app['admin_notes'])): ?>
                         <div style="margin-top:16px;">
-                            <label style="font-size:0.86rem;font-weight:700;color:#344054;display:block;margin-bottom:6px;">Admin Feedback / Notes</label>
-                            <div style="background:#f8f9fa;border:1px solid #eaecf0;border-radius:10px;padding:14px 16px;font-size:0.88rem;color:#475467;line-height:1.6;white-space:pre-wrap;"><?php echo htmlspecialchars($franchise_app['admin_notes']); ?></div>
+                            <label style="font-size:0.86rem;font-weight:700;color:<?php echo $fa_status === 'rejected' ? '#b3261e' : ($fa_status === 'incomplete' ? '#b54708' : '#344054'); ?>;display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+                                <i class="fas <?php echo $fa_status === 'rejected' ? 'fa-circle-xmark' : ($fa_status === 'incomplete' ? 'fa-triangle-exclamation' : 'fa-comment-dots'); ?>"></i>
+                                <?php echo $fa_status === 'rejected' ? 'Super Admin Rejection Reason & Feedback' : ($fa_status === 'incomplete' ? 'Super Admin Feedback & Revision Instructions' : 'Admin Feedback / Notes'); ?>
+                            </label>
+                            <div style="background:<?php echo $fa_status === 'rejected' ? '#fff1f0' : ($fa_status === 'incomplete' ? '#fffaeb' : '#f8f9fa'); ?>;border:1px solid <?php echo $fa_status === 'rejected' ? '#fee4e2' : ($fa_status === 'incomplete' ? '#fedf89' : '#eaecf0'); ?>;border-radius:10px;padding:14px 16px;font-size:0.88rem;color:<?php echo $fa_status === 'rejected' ? '#b3261e' : ($fa_status === 'incomplete' ? '#78350f' : '#475467'); ?>;line-height:1.6;white-space:pre-wrap;"><?php echo htmlspecialchars($franchise_app['admin_notes']); ?></div>
                         </div>
                         <?php endif; ?>
                     </div>
 
-                    <?php if ($fa_status === 'incomplete' && !empty($fa_incomplete_docs)): ?>
+                    <?php if ($fa_status === 'incomplete'): ?>
                     <!-- Incomplete Documents Breakdown -->
                     <div class="acc-panel-card">
                         <div class="acc-panel-head">
                             <div>
-                                <h3>Flagged Documents</h3>
-                                <p>The following documents need to be revised and re-uploaded.</p>
+                                <h3>Flagged Documents for Revision</h3>
+                                <p>Please re-upload only the flagged documents. Approved requirements have been retained.</p>
                             </div>
                         </div>
+
+                        <?php if (!empty($franchise_app['resubmission_deadline'])): ?>
+                        <?php
+                            $fa_dl_ts = strtotime((string)$franchise_app['resubmission_deadline']);
+                            $fa_now_ts = time();
+                            $fa_diff_days = ceil(($fa_dl_ts - $fa_now_ts) / 86400);
+                            $fa_is_past = $fa_dl_ts < $fa_now_ts;
+                        ?>
+                        <div style="background:#fffaeb;border:1px solid #fedf89;border-radius:12px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+                            <div style="display:flex;align-items:center;gap:10px;color:#b54708;font-size:0.9rem;font-weight:700;">
+                                <i class="fas fa-calendar-day" style="font-size:1.15rem;"></i>
+                                <span>Compliance Deadline: <strong style="color:#101828;"><?php echo date('F j, Y g:i A', $fa_dl_ts); ?></strong></span>
+                            </div>
+                            <span style="background:<?php echo $fa_is_past ? '#fff1f0' : '#ffffff'; ?>;color:<?php echo $fa_is_past ? '#b3261e' : '#b54708'; ?>;border:1px solid <?php echo $fa_is_past ? '#fee4e2' : '#fedf89'; ?>;font-size:0.8rem;font-weight:800;padding:4px 14px;border-radius:999px;">
+                                <?php echo $fa_is_past ? 'Past Deadline' : ($fa_diff_days <= 1 ? 'Due Today' : "{$fa_diff_days} days remaining"); ?>
+                            </span>
+                        </div>
+                        <?php endif; ?>
+
+                        <?php if (!empty($fa_incomplete_docs)): ?>
+                        <?php
+                        $fa_doc_name_map = [
+                            'business_logo' => 'Store Business Logo',
+                            'dti_doc' => 'DTI / SEC Certificate',
+                            'bir_doc' => 'BIR Registration (Form 2303)',
+                            'mayor_doc' => "Mayor's Permit",
+                            'barangay_clearance' => 'Barangay Clearance',
+                            'lease_or_title' => 'Lease Contract / Title',
+                            'occupancy_certificate' => 'Certificate of Occupancy',
+                            'fire_safety_certificate' => 'Fire Safety Certificate',
+                            'community_tax_certificate' => 'Community Tax Certificate (Cedula)',
+                            'sanitary_permit' => 'Sanitary Permit',
+                            'valid_id' => 'Valid ID of Owner',
+                            'address_proof' => 'Proof of Address',
+                            'bank_proof' => 'Bank Account Proof',
+                            'bir_form' => 'BIR Form 1901/1903',
+                            'sss_registration' => 'SSS Registration',
+                            'philhealth_registration' => 'PhilHealth Registration',
+                            'pagibig_registration' => 'Pag-IBIG Registration',
+                            'industry_permit' => 'Industry-Specific Permit'
+                        ];
+                        ?>
                         <div style="display:flex;flex-direction:column;gap:10px;">
                             <?php foreach ($fa_incomplete_docs as $doc_key => $doc_info): ?>
                             <?php
-                                $doc_label = is_array($doc_info) ? ($doc_info['label'] ?? $doc_key) : (string)$doc_info;
-                                $doc_reason = is_array($doc_info) ? ($doc_info['reason'] ?? 'Please re-upload this document.') : 'Please re-upload this document.';
+                                if (is_array($doc_info)) {
+                                    $doc_label = $doc_info['label'] ?? ($fa_doc_name_map[$doc_key] ?? ucwords(str_replace('_', ' ', $doc_key)));
+                                    $doc_reason = $doc_info['reason'] ?? 'Please re-upload this document.';
+                                } else {
+                                    $doc_label = $fa_doc_name_map[$doc_key] ?? ucwords(str_replace('_', ' ', $doc_key));
+                                    $doc_reason = !empty($doc_info) ? (string)$doc_info : 'Please re-upload this document.';
+                                }
                             ?>
                             <div style="background:#fffaeb;border:1px solid #fedf89;border-radius:10px;padding:12px 16px;display:flex;align-items:flex-start;gap:10px;">
                                 <i class="fas fa-triangle-exclamation" style="color:#b54708;margin-top:2px;flex-shrink:0;"></i>
@@ -1673,10 +1749,11 @@ body.dark-mode .mobile-segment-btn.active {
                             </div>
                             <?php endforeach; ?>
                         </div>
+                        <?php endif; ?>
 
                         <div style="margin-top:18px;">
                             <a href="franchise_application.php" class="acc-btn-primary" style="text-decoration:none;">
-                                <i class="fas fa-arrow-rotate-right"></i> Resubmit Flagged Documents
+                                <i class="fas fa-arrow-rotate-right"></i> Open Application & Re-upload Flagged Documents
                             </a>
                         </div>
                     </div>

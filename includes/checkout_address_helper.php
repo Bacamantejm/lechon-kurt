@@ -4,11 +4,17 @@
  * Manages user saved addresses, PSGC hierarchical normalization, and address deduplication.
  */
 
+require_once __DIR__ . '/security.php';
+
 if (!function_exists('caNormalizeAddressValue')) {
     function caNormalizeAddressValue($value, $max_length = 255) {
         $text = trim((string)$value);
         if ($text === '') {
             return '';
+        }
+
+        if (function_exists('fixMojibakeUtf8')) {
+            $text = fixMojibakeUtf8($text);
         }
 
         $text = preg_replace('/\s+/', ' ', $text);
@@ -110,6 +116,13 @@ if (!function_exists('caFetchUserSavedAddresses')) {
         $result = mysqli_stmt_get_result($stmt);
         if ($result) {
             while ($row = mysqli_fetch_assoc($result)) {
+                if (function_exists('fixMojibakeUtf8')) {
+                    foreach ($row as $k => $v) {
+                        if (is_string($v)) {
+                            $row[$k] = fixMojibakeUtf8($v);
+                        }
+                    }
+                }
                 $addresses[] = $row;
             }
             mysqli_free_result($result);

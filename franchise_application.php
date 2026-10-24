@@ -169,7 +169,8 @@ function getFranchiseWorkflowState($conn, $user_id) {
     }
 
     $has_inc_col = franchiseColumnExists($conn, 'franchise_applications', 'incomplete_documents');
-    $cols = "id, application_number, status, created_at, reviewed_at, admin_notes" . ($has_inc_col ? ", incomplete_documents" : "");
+    $has_deadline_col = franchiseColumnExists($conn, 'franchise_applications', 'resubmission_deadline');
+    $cols = "id, application_number, status, created_at, reviewed_at, admin_notes" . ($has_inc_col ? ", incomplete_documents" : "") . ($has_deadline_col ? ", resubmission_deadline" : "");
 
     $apps = [];
     $query = "SELECT {$cols}
@@ -223,6 +224,8 @@ function getFranchiseWorkflowState($conn, $user_id) {
         if (!is_array($state['incomplete_documents'])) {
             $state['incomplete_documents'] = [];
         }
+        $state['resubmission_deadline'] = $state['latest_application']['resubmission_deadline'] ?? null;
+        $state['admin_notes'] = $state['latest_application']['admin_notes'] ?? '';
         $state['message'] = 'Action Required: Your business application requires document revisions or additional requirements. Please re-upload the flagged document(s) below.';
         return $state;
     }
@@ -230,11 +233,13 @@ function getFranchiseWorkflowState($conn, $user_id) {
     if ($state['total_attempts'] >= 2) {
         $state['stage'] = 'max_attempts_reached';
         $state['can_submit'] = false;
+        $state['admin_notes'] = $state['latest_application']['admin_notes'] ?? '';
         $state['message'] = 'You have already used your two franchise application attempts. No additional reapplication is allowed.';
         return $state;
     }
 
     if ($latest_status === 'rejected') {
+        $state['admin_notes'] = $state['latest_application']['admin_notes'] ?? '';
         $reference_time = (string)($state['latest_application']['reviewed_at'] ?? $state['latest_application']['created_at'] ?? '');
         $cooldown_anchor = $reference_time !== '' ? strtotime($reference_time) : time();
         $next_eligible_timestamp = strtotime('+3 days', $cooldown_anchor);
@@ -266,6 +271,7 @@ $franchise_workflow = getFranchiseWorkflowState($conn, $user_id);
 $latest_application = $franchise_workflow['latest_application'];
 $has_pending_application = $franchise_workflow['stage'] === 'pending_review';
 $is_incomplete_resubmission = ($franchise_workflow['stage'] === 'incomplete_requirements' && !empty($latest_application['id']));
+$latest_status = strtolower(trim((string)($latest_application['status'] ?? '')));
 
 $existing_uploaded_docs = [];
 if (!empty($latest_application['id']) && tableExists($conn, 'franchise_documents')) {
@@ -668,6 +674,15 @@ function buildFranchiseApplicantPrefill($conn, $user_id, array $allowed_business
         $prefill['contact_email'] = trim((string)($_SESSION['email'] ?? ''));
     }
 
+    if (function_exists('fixMojibakeUtf8')) {
+        foreach ($prefill as &$p_val) {
+            if (is_string($p_val)) {
+                $p_val = fixMojibakeUtf8($p_val);
+            }
+        }
+        unset($p_val);
+    }
+
     return $prefill;
 }
 
@@ -867,23 +882,22 @@ $franchise_coords_columns_ready = tableExists($conn, 'franchise_applications')
     && franchiseColumnExists($conn, 'franchise_applications', 'longitude');
 
 function getFranchiseReviewerIds($conn) {
-    if (
-        !tableExists($conn, 'users')
-        || !tableExists($conn, 'roles')
-        || !franchiseColumnExists($conn, 'users', 'role_id')
-        || !franchiseColumnExists($conn, 'roles', 'name')
-    ) {
-        error_log('Franchise notification recipient lookup skipped: super admin role schema unavailable.');
+    if (!tableExists($conn, 'users')) {
+        error_log('Franchise notification recipient lookup skipped: users table unavailable.');
         return [];
     }
 
     $reviewer_ids = [];
+    $has_roles = tableExists($conn, 'roles');
     $query = "SELECT DISTINCT u.id
               FROM users u
-              INNER JOIN roles r ON u.role_id = r.id
+              " . ($has_roles ? "LEFT JOIN roles r ON u.role_id = r.id" : "") . "
               WHERE u.is_active = 1
-                AND r.is_active = 1
-                AND r.name = 'super_admin'";
+                AND (
+                    " . ($has_roles ? "(r.is_active = 1 AND r.name = 'super_admin') OR " : "") . "
+                    u.user_type = 'super_admin'
+                    OR u.role_id = 1
+                )";
     $result = mysqli_query($conn, $query);
     if ($result) {
         while ($row = mysqli_fetch_assoc($result)) {
@@ -913,16 +927,18 @@ function notifyAdminsOfFranchiseSubmission($conn, $application_id, $application_
         return;
     }
 
-    $title = ($action_type === 'resubmitted') ? "Franchise Application Revisions Submitted" : "New Franchise Application";
-    $message = ($action_type === 'resubmitted')
-        ? "{$business_name} resubmitted revised requirements for {$application_number} ({$contact_person})."
-        : "{$business_name} submitted application {$application_number} ({$contact_person}).";
+    $is_resubmission = ($action_type === 'resubmitted');
+    $title = $is_resubmission ? "Franchise Application Revisions Submitted" : "New Franchise Application";
+    $message = $is_resubmission
+        ? "{$business_name} ({$contact_person}) resubmitted requirements for application #{$application_number}. Action required: Review and verify updated documents."
+        : "{$business_name} ({$contact_person}) submitted application #{$application_number}. Action required: Review new application.";
+    $notif_type = $is_resubmission ? 'franchise_resubmitted' : 'franchise_submitted';
 
     foreach ($reviewer_ids as $reviewer_id) {
         $ok = createNotification(
             $conn,
             intval($reviewer_id),
-            'franchise_submitted',
+            $notif_type,
             $title,
             $message,
             intval($application_id),
@@ -971,6 +987,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
         'marketing_plan' => getFormInput('marketing_plan')
     ];
 
+    if (function_exists('fixMojibakeUtf8')) {
+        foreach ($form_data as $fdk => $fdv) {
+            if (is_string($fdv)) {
+                $form_data[$fdk] = fixMojibakeUtf8($fdv);
+            }
+        }
+    }
+
     $structured_business_address = buildFranchiseBusinessAddress(
         $form_data['business_address_street'],
         $form_data['psgc_barangay_name'],
@@ -979,13 +1003,24 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_POST['submit_application'])
         $form_data['psgc_region_name']
     );
 
+    if (function_exists('fixMojibakeUtf8')) {
+        $structured_business_address = fixMojibakeUtf8($structured_business_address);
+    }
+
     if ($form_data['psgc_manual_mode'] !== '1' && $structured_business_address !== '') {
         $form_data['business_address'] = $structured_business_address;
     } elseif ($form_data['business_address'] === '' && $structured_business_address !== '') {
         $form_data['business_address'] = $structured_business_address;
     }
 
+    if (function_exists('fixMojibakeUtf8')) {
+        $form_data['business_address'] = fixMojibakeUtf8($form_data['business_address']);
+    }
+
     $form_data['proposed_location'] = $form_data['business_address'] !== '' ? $form_data['business_address'] : 'To be confirmed during site validation';
+    if (function_exists('fixMojibakeUtf8')) {
+        $form_data['proposed_location'] = fixMojibakeUtf8($form_data['proposed_location']);
+    }
 
     $required_fields = [
         'business_name' => 'Business name',
@@ -1509,6 +1544,9 @@ function renderFranchiseDocumentCard($name, $label, $sublabel, $is_core_default_
     if ($is_flagged) {
         $card_class .= " required-highlight doc-flagged";
         $card_style = "border: 2px solid #b3261e; background: #fff8ef;";
+    } elseif ($is_incomplete_resubmission && !$is_flagged) {
+        $card_class .= " doc-retained doc-locked";
+        $card_style = "border: 1px solid #abefc6; background: #f6fef9; opacity: 0.9;";
     } elseif ($has_existing) {
         $card_class .= " doc-retained";
         $card_style = "border: 1px solid #abefc6; background: #f6fef9;";
@@ -1529,6 +1567,10 @@ function renderFranchiseDocumentCard($name, $label, $sublabel, $is_core_default_
                     <span class="badge" style="background:#fff1f0;color:#b3261e;border:1px solid #fee4e2;font-size:0.75rem;font-weight:700;padding:2px 8px;border-radius:4px;white-space:nowrap;">
                         <i class="fas fa-triangle-exclamation"></i> Re-upload Required
                     </span>
+                <?php elseif ($is_incomplete_resubmission && !$is_flagged): ?>
+                    <span class="badge" style="background:#ecfdf3;color:#027a48;border:1px solid #abefc6;font-size:0.75rem;font-weight:600;padding:2px 8px;border-radius:4px;white-space:nowrap;">
+                        <i class="fas fa-check-circle"></i> Retained & Verified
+                    </span>
                 <?php elseif ($has_existing): ?>
                     <span class="badge" style="background:#ecfdf3;color:#027a48;border:1px solid #abefc6;font-size:0.75rem;font-weight:600;padding:2px 8px;border-radius:4px;white-space:nowrap;">
                         <i class="fas fa-check-circle"></i> Retained & Verified
@@ -1537,9 +1579,13 @@ function renderFranchiseDocumentCard($name, $label, $sublabel, $is_core_default_
             </div>
 
             <?php if ($is_flagged): ?>
+                <?php
+                    $flag_info = $incomplete_docs[$name] ?? null;
+                    $reason_display = is_array($flag_info) ? ($flag_info['reason'] ?? 'Please provide a clearer or updated document.') : (!empty($flag_info) ? (string)$flag_info : 'Please provide a clearer or updated document.');
+                ?>
                 <div style="margin: 6px 0 10px 0; padding: 8px 12px; background: #fff1f0; border: 1px solid #fee4e2; border-radius: 6px; font-size: 0.83rem; color: #981b15;">
                     <div style="font-weight:700;margin-bottom:2px;"><i class="fas fa-circle-exclamation"></i> Admin Feedback:</div>
-                    <div><?php echo htmlspecialchars($incomplete_docs[$name]['reason'] ?? 'Please provide a clearer or updated document.'); ?></div>
+                    <div><?php echo htmlspecialchars($reason_display); ?></div>
                     <?php if ($has_existing): ?>
                         <div style="margin-top: 6px;">
                             <a href="<?php echo htmlspecialchars($existing['file_path']); ?>" target="_blank" style="color:#b3261e;text-decoration:underline;font-weight:600;font-size:0.8rem;"><i class="fas fa-eye"></i> View Current Uploaded File</a>
@@ -1553,12 +1599,20 @@ function renderFranchiseDocumentCard($name, $label, $sublabel, $is_core_default_
                 </div>
             <?php endif; ?>
 
-            <input type="file" name="<?php echo $name; ?>" id="<?php echo $name; ?>_input" accept="<?php echo $accept; ?>" <?php echo $is_required ? 'required' : ''; ?>>
-            <small style="color:<?php echo $has_existing && !$is_flagged ? '#475467' : '#7b6d64'; ?>; display:block; margin-top:4px;">
-                <?php echo $has_existing && !$is_flagged ? 'Optional: Select a new file only if you wish to replace your current verified document.' : htmlspecialchars($sublabel); ?>
-            </small>
+            <?php if ($is_incomplete_resubmission && !$is_flagged): ?>
+                <div style="padding: 7px 10px; background: #eefbf3; border: 1px solid #abefc6; border-radius: 6px; font-size: 0.8rem; color: #027a48; margin-top: 4px;">
+                    <i class="fas fa-lock"></i> <strong>Approved & Retained:</strong> No re-upload needed.
+                </div>
+                <!-- Input is disabled so only marked documents are submitted -->
+                <input type="file" name="<?php echo $name; ?>" id="<?php echo $name; ?>_input" disabled style="display:none;">
+            <?php else: ?>
+                <input type="file" name="<?php echo $name; ?>" id="<?php echo $name; ?>_input" accept="<?php echo $accept; ?>" <?php echo $is_required ? 'required' : ''; ?>>
+                <small style="color:<?php echo $has_existing && !$is_flagged ? '#475467' : '#7b6d64'; ?>; display:block; margin-top:4px;">
+                    <?php echo $has_existing && !$is_flagged ? 'Optional: Select a new file only if you wish to replace your current verified document.' : htmlspecialchars($sublabel); ?>
+                </small>
+            <?php endif; ?>
 
-            <?php if ($is_logo): ?>
+            <?php if ($is_logo && (!$is_incomplete_resubmission || $is_flagged)): ?>
                 <div id="logoPreviewContainer" style="margin-top:8px;display:none;text-align:center;">
                     <img id="logoPreviewImg" src="" alt="Store Logo Preview" style="max-height:80px;max-width:100%;border-radius:8px;border:1px solid #efddcd;box-shadow:0 4px 10px rgba(0,0,0,0.06);">
                 </div>
@@ -1611,6 +1665,45 @@ include 'includes/header.php';
                     <p class="workflow-summary"><?php echo htmlspecialchars((string)($franchise_workflow['message'] ?? '')); ?></p>
                 </div>
 
+                <?php if ($latest_status === 'rejected' && !empty($latest_application)): ?>
+                <!-- REJECTION REASON CARD -->
+                <div style="background: #ffffff; border: 1px solid #fee4e2; border-radius: 12px; padding: 20px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);">
+                    <div style="display: flex; align-items: flex-start; gap: 14px;">
+                        <div style="width: 42px; height: 42px; border-radius: 50%; background: #fff1f0; color: #b3261e; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0;">
+                            <i class="fas fa-circle-xmark"></i>
+                        </div>
+                        <div style="flex: 1;">
+                            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 4px;">
+                                <h3 style="margin: 0; font-size: 1.15rem; color: #101828; font-weight: 700;">Franchise Application Not Approved</h3>
+                                <span style="background: #fff1f0; color: #b3261e; border: 1px solid #fee4e2; font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 999px;">Application #<?php echo htmlspecialchars((string)$latest_application['application_number']); ?></span>
+                            </div>
+                            <p style="margin: 0 0 12px 0; color: #475467; font-size: 0.92rem; line-height: 1.5;">
+                                Your previous franchise application was reviewed by the Super Admin and was not approved.
+                            </p>
+                            <?php if (!empty($latest_application['admin_notes'])): ?>
+                            <div style="background: #f8f9fa; border: 1px solid #eaecf0; border-radius: 8px; padding: 12px 14px; margin-bottom: 12px;">
+                                <strong style="color: #344054; font-size: 0.85rem; display: block; margin-bottom: 4px;">
+                                    <i class="fas fa-comment-dots" style="color: #475467;"></i> Super Admin Reason for Rejection:
+                                </strong>
+                                <div style="font-size: 0.88rem; color: #101828; line-height: 1.5; white-space: pre-wrap;"><?php echo htmlspecialchars($latest_application['admin_notes']); ?></div>
+                            </div>
+                            <?php endif; ?>
+                            <?php if (!empty($franchise_workflow['next_eligible_at']) && time() < strtotime((string)$franchise_workflow['next_eligible_at'])): ?>
+                            <div style="background: #fffaeb; border: 1px solid #fedf89; border-radius: 8px; padding: 10px 14px; display: flex; align-items: center; gap: 8px; color: #b54708; font-size: 0.86rem;">
+                                <i class="fas fa-clock"></i>
+                                <span>Cooldown active: You will be eligible to submit your final retry on <strong><?php echo date('F j, Y \a\t g:i A', strtotime((string)$franchise_workflow['next_eligible_at'])); ?></strong>.</span>
+                            </div>
+                            <?php elseif ($franchise_workflow['stage'] === 'final_retry_available'): ?>
+                            <div style="background: #ecfdf3; border: 1px solid #abefc6; border-radius: 8px; padding: 10px 14px; display: flex; align-items: center; gap: 8px; color: #027a48; font-size: 0.86rem;">
+                                <i class="fas fa-check-circle"></i>
+                                <span>Cooldown complete: You may now submit your final (2nd of 2) franchise application.</span>
+                            </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+                <?php endif; ?>
+
                 <?php if ($is_incomplete_resubmission): ?>
                 <!-- INCOMPLETE REQUIREMENTS NOTICE BANNER -->
                 <div style="background: #ffffff; border: 1px solid #fee4e2; border-radius: 12px; padding: 20px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);">
@@ -1626,14 +1719,72 @@ include 'includes/header.php';
                             <p style="margin: 0 0 12px 0; color: #475467; font-size: 0.92rem; line-height: 1.5;">
                                 The Super Admin reviewed your application and flagged specific document(s) (e.g. blurry image or expired certification). <strong>You do not need to fill out all requirements again.</strong> Your saved business info and approved documents remain intact. Please re-upload only the flagged documents below.
                             </p>
+
+                            <?php 
+                                $deadline_val = $franchise_workflow['resubmission_deadline'] ?? ($latest_application['resubmission_deadline'] ?? null);
+                                $deadline_ts = !empty($deadline_val) ? strtotime($deadline_val) : null;
+                            ?>
+                            <?php if ($deadline_ts): ?>
+                                <?php 
+                                    $now_ts = time();
+                                    $diff_days = ceil(($deadline_ts - $now_ts) / 86400);
+                                    $is_past = $deadline_ts < $now_ts;
+                                ?>
+                                <div style="background: #fffaeb; border: 1px solid #fedf89; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                                    <div style="display: flex; align-items: center; gap: 8px; color: #b54708; font-size: 0.88rem; font-weight: 600;">
+                                        <i class="fas fa-calendar-day"></i>
+                                        <span>Compliance Deadline: <strong style="color: #101828;"><?php echo date('F j, Y g:i A', $deadline_ts); ?></strong></span>
+                                    </div>
+                                    <span style="background: <?php echo $is_past ? '#fff1f0' : '#ffffff'; ?>; color: <?php echo $is_past ? '#b3261e' : '#b54708'; ?>; border: 1px solid <?php echo $is_past ? '#fee4e2' : '#fedf89'; ?>; font-size: 0.78rem; font-weight: 700; padding: 2px 10px; border-radius: 999px;">
+                                        <?php echo $is_past ? 'Past Deadline' : ($diff_days <= 1 ? 'Due Today' : "{$diff_days} days remaining"); ?>
+                                    </span>
+                                </div>
+                            <?php endif; ?>
+
+                            <?php $incomplete_reason = trim((string)($latest_application['admin_notes'] ?? ($franchise_workflow['admin_notes'] ?? ''))); ?>
+                            <?php if ($incomplete_reason !== ''): ?>
+                            <div style="background: #f8f9fa; border: 1px solid #eaecf0; border-radius: 8px; padding: 12px 14px; margin-bottom: 12px;">
+                                <strong style="color: #344054; font-size: 0.85rem; display: block; margin-bottom: 4px;">
+                                    <i class="fas fa-comment-dots" style="color: #475467;"></i> Super Admin Feedback:
+                                </strong>
+                                <div style="font-size: 0.88rem; color: #101828; line-height: 1.5; white-space: pre-wrap;"><?php echo htmlspecialchars($incomplete_reason); ?></div>
+                            </div>
+                            <?php endif; ?>
+
                             <?php if (!empty($franchise_workflow['incomplete_documents'])): ?>
+                            <?php
+                            $inc_name_map = [
+                                'business_logo' => 'Store Business Logo',
+                                'dti_doc' => 'DTI / SEC Certificate',
+                                'bir_doc' => 'BIR Registration (Form 2303)',
+                                'mayor_doc' => "Mayor's Permit",
+                                'barangay_clearance' => 'Barangay Clearance',
+                                'lease_or_title' => 'Lease Contract / Title',
+                                'occupancy_certificate' => 'Certificate of Occupancy',
+                                'fire_safety_certificate' => 'Fire Safety Certificate',
+                                'community_tax_certificate' => 'Community Tax Certificate (Cedula)',
+                                'sanitary_permit' => 'Sanitary Permit',
+                                'valid_id' => 'Valid ID of Owner',
+                                'address_proof' => 'Proof of Address',
+                                'bank_proof' => 'Bank Account Proof',
+                                'bir_form' => 'BIR Form 1901/1903',
+                                'sss_registration' => 'SSS Registration',
+                                'philhealth_registration' => 'PhilHealth Registration',
+                                'pagibig_registration' => 'Pag-IBIG Registration',
+                                'industry_permit' => 'Industry-Specific Permit'
+                            ];
+                            ?>
                             <div style="background: #fff8ef; border: 1px solid #efddcd; border-radius: 8px; padding: 12px 16px;">
                                 <strong style="color: #981b15; font-size: 0.88rem; display: block; margin-bottom: 6px;"><i class="fas fa-list-check"></i> Documents Requiring Re-upload:</strong>
                                 <ul style="margin: 0; padding-left: 20px; font-size: 0.85rem; color: #344054;">
                                     <?php foreach ($franchise_workflow['incomplete_documents'] as $doc_k => $doc_info): ?>
+                                        <?php
+                                            $doc_label = is_array($doc_info) ? ($doc_info['label'] ?? ($inc_name_map[$doc_k] ?? ucwords(str_replace('_', ' ', $doc_k)))) : ($inc_name_map[$doc_k] ?? ucwords(str_replace('_', ' ', $doc_k)));
+                                            $doc_reason = is_array($doc_info) ? ($doc_info['reason'] ?? 'Document invalid or blurry.') : (!empty($doc_info) ? (string)$doc_info : 'Document invalid or blurry.');
+                                        ?>
                                         <li style="margin-bottom: 4px;">
-                                            <strong><?php echo htmlspecialchars($doc_info['label'] ?? $doc_k); ?>:</strong>
-                                            <span style="color: #b3261e; font-weight: 600;"><?php echo htmlspecialchars($doc_info['reason'] ?? 'Document invalid or blurry.'); ?></span>
+                                            <strong><?php echo htmlspecialchars($doc_label); ?>:</strong>
+                                            <span style="color: #b3261e; font-weight: 600;"><?php echo htmlspecialchars($doc_reason); ?></span>
                                         </li>
                                     <?php endforeach; ?>
                                 </ul>
@@ -3760,7 +3911,17 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     function normalizeMapText(value) {
-        return String(value || '').replace(/\s+/g, ' ').trim();
+        let str = String(value || '').replace(/\s+/g, ' ').trim();
+        return str
+            .replace(/├▒/g, 'ñ')
+            .replace(/├æ/g, 'Ñ')
+            .replace(/Ã±/g, 'ñ')
+            .replace(/Ã‘/g, 'Ñ')
+            .replace(/ÃƒÂ±/g, 'ñ')
+            .replace(/Γö£ΓûÆ/g, 'ñ')
+            .replace(/├â╞Æ├é┬▒/g, 'ñ')
+            .replace(/Dasmari(?:[^a-zA-Z0-9\s]{1,6}|n)as/gi, 'Dasmariñas')
+            .replace(/\bDasmarinas\b/gi, 'Dasmariñas');
     }
 
     function setMapStatus(message, valid) {

@@ -82,6 +82,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_action'])) {
     $app_id = (int)($_POST['app_id'] ?? 0);
     $action = strtolower(trim((string)($_POST['app_action'] ?? '')));
     $notes = trim((string)($_POST['admin_notes'] ?? ''));
+    if (function_exists('fixMojibakeUtf8')) {
+        $notes = fixMojibakeUtf8($notes);
+    }
 
     $status_map = ['approve' => 'approved', 'reject' => 'rejected', 'incomplete' => 'incomplete'];
     $new_status = $status_map[$action] ?? null;
@@ -128,15 +131,67 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_action'])) {
             throw new RuntimeException('Application not found.');
         }
 
+        if (function_exists('fixMojibakeUtf8')) {
+            foreach ($app_data as $adk => $adv) {
+                if (is_string($adv)) {
+                    $app_data[$adk] = fixMojibakeUtf8($adv);
+                }
+            }
+        }
+
         $flagged_docs = isset($_POST['flagged_docs']) && is_array($_POST['flagged_docs']) ? $_POST['flagged_docs'] : [];
         $doc_remarks = isset($_POST['doc_remarks']) && is_array($_POST['doc_remarks']) ? $_POST['doc_remarks'] : [];
+        if (function_exists('fixMojibakeUtf8')) {
+            foreach ($doc_remarks as &$rmk) {
+                $rmk = fixMojibakeUtf8($rmk);
+            }
+            unset($rmk);
+        }
+        $deadline_raw = trim((string)($_POST['resubmission_deadline'] ?? ''));
+        $deadline_date = null;
+        if ($new_status === 'incomplete') {
+            if ($deadline_raw !== '') {
+                $deadline_ts = strtotime($deadline_raw);
+                $deadline_date = $deadline_ts ? date('Y-m-d 23:59:59', $deadline_ts) : date('Y-m-d 23:59:59', strtotime('+7 days'));
+            } else {
+                $deadline_date = date('Y-m-d 23:59:59', strtotime('+7 days'));
+            }
+        }
+
+        $doc_labels = [
+            'business_logo' => 'Store Business Logo',
+            'dti_doc' => 'DTI / SEC Certificate',
+            'bir_doc' => 'BIR Registration (Form 2303)',
+            'mayor_doc' => "Mayor's Permit",
+            'barangay_clearance' => 'Barangay Clearance',
+            'lease_or_title' => 'Lease Contract / Title',
+            'occupancy_certificate' => 'Certificate of Occupancy',
+            'fire_safety_certificate' => 'Fire Safety Certificate',
+            'community_tax_certificate' => 'Community Tax Certificate (Cedula)',
+            'sanitary_permit' => 'Sanitary Permit',
+            'valid_id' => 'Valid ID of Owner',
+            'address_proof' => 'Proof of Address',
+            'bank_proof' => 'Bank Account Proof',
+            'bir_form' => 'BIR Form 1901/1903',
+            'sss_registration' => 'SSS Registration',
+            'philhealth_registration' => 'PhilHealth Registration',
+            'pagibig_registration' => 'Pag-IBIG Registration',
+            'industry_permit' => 'Industry-Specific Permit'
+        ];
 
         $incomplete_map = [];
         if ($new_status === 'incomplete') {
             foreach ($flagged_docs as $f_doc) {
                 $f_doc = trim((string)$f_doc);
                 if ($f_doc !== '') {
-                    $incomplete_map[$f_doc] = trim((string)($doc_remarks[$f_doc] ?? ''));
+                    $remark = trim((string)($doc_remarks[$f_doc] ?? ''));
+                    if ($remark === '') {
+                        $remark = 'Document requires revision or clearer copy.';
+                    }
+                    $incomplete_map[$f_doc] = [
+                        'label' => $doc_labels[$f_doc] ?? ucwords(str_replace('_', ' ', $f_doc)),
+                        'reason' => $remark
+                    ];
                 }
             }
 
@@ -147,7 +202,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_action'])) {
         $incomplete_json = !empty($incomplete_map) ? json_encode($incomplete_map, JSON_UNESCAPED_UNICODE) : null;
 
         $has_inc_col = saColumnExists($conn, 'franchise_applications', 'incomplete_documents');
-        if ($has_inc_col) {
+        $has_deadline_col = saColumnExists($conn, 'franchise_applications', 'resubmission_deadline');
+
+        if ($has_inc_col && $has_deadline_col) {
+            $update_query = "UPDATE franchise_applications
+                             SET status = ?, admin_notes = ?, incomplete_documents = ?, resubmission_deadline = ?, admin_id = ?, reviewed_at = NOW()
+                             WHERE id = ?";
+            $stmt = mysqli_prepare($conn, $update_query);
+            if (!$stmt) {
+                throw new RuntimeException('Unable to prepare application status update.');
+            }
+            mysqli_stmt_bind_param($stmt, "ssssii", $new_status, $notes, $incomplete_json, $deadline_date, $current_admin_id, $app_id);
+        } elseif ($has_inc_col) {
             $update_query = "UPDATE franchise_applications
                              SET status = ?, admin_notes = ?, incomplete_documents = ?, admin_id = ?, reviewed_at = NOW()
                              WHERE id = ?";
@@ -183,7 +249,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_action'])) {
                     mysqli_stmt_execute($reset_stmt);
                     mysqli_stmt_close($reset_stmt);
                 }
-                foreach ($incomplete_map as $f_type => $f_reason) {
+                foreach ($incomplete_map as $f_type => $f_info) {
+                    $f_reason = is_array($f_info) ? ($f_info['reason'] ?? '') : (string)$f_info;
                     $doc_stmt = mysqli_prepare($conn, "UPDATE franchise_documents SET status = 'incomplete', admin_remarks = ? WHERE application_id = ? AND document_type = ?");
                     if ($doc_stmt) {
                         mysqli_stmt_bind_param($doc_stmt, "sis", $f_reason, $app_id, $f_type);
@@ -255,7 +322,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_action'])) {
                 : 'The application did not meet the current review requirements.'));
         $business_name = trim((string)($app_data['business_name'] ?? ''));
         $title = 'Franchise Application: ' . $status_label;
-        $message = "Status: {$status_label}\nReason: {$reason}\nBusiness: {$business_name}";
+        $deadline_line = ($new_status === 'incomplete' && !empty($deadline_date))
+            ? "\nDeadline: " . date('M d, Y', strtotime($deadline_date))
+            : '';
+        $message = "Status: {$status_label}\nReason: {$reason}{$deadline_line}\nBusiness: {$business_name}";
 
         createNotification(
             $conn,
@@ -267,7 +337,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_action'])) {
             'franchise_application'
         );
 
-        sendFranchiseNotification($conn, $app_data, $new_status, $notes, $incomplete_map);
+        sendFranchiseNotification($conn, $app_data, $new_status, $notes, $incomplete_map, $deadline_date);
 
         if ($new_status === 'approved' && is_array($store_result)) {
             $store_note = !empty($store_result['created']) ? 'A new store location was created.' : 'Existing store location was updated.';
@@ -276,9 +346,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_action'])) {
         } elseif ($new_status === 'incomplete') {
             $doc_count = count($incomplete_map);
             $count_msg = $doc_count > 0 ? " ({$doc_count} document" . ($doc_count > 1 ? 's' : '') . " flagged for re-upload)" : "";
-            saSetFlash('warning', "Application marked as Incomplete Requirements{$count_msg}. Notification email sent to applicant.");
+            $deadline_flash = !empty($deadline_date) ? " Deadline set to " . date('M d, Y', strtotime($deadline_date)) . "." : "";
+            saSetFlash('warning', "Application marked as Incomplete Requirements{$count_msg}.{$deadline_flash} Notification sent to applicant.");
         } else {
-            saSetFlash('success', 'Application status updated successfully. Notification email sent to applicant.');
+            saSetFlash('success', 'Application status updated successfully. Notification sent to applicant.');
         }
     } catch (Throwable $e) {
         mysqli_rollback($conn);
@@ -290,13 +361,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['app_action'])) {
     exit;
 }
 
-function sendFranchiseNotification($conn, $app_data, $status, $admin_notes, $incomplete_documents = []) {
+function sendFranchiseNotification($conn, $app_data, $status, $admin_notes, $incomplete_documents = [], $deadline = null) {
     try {
         require_once dirname(__DIR__) . '/email_service.php';
         $recipient_email = trim((string)($app_data['email'] ?? $app_data['contact_email'] ?? ''));
         if ($recipient_email !== '') {
             $mailer = new EmailService($conn);
-            $mailer->sendFranchiseStatusEmail($recipient_email, $status, $app_data, $admin_notes, $incomplete_documents);
+            $mailer->sendFranchiseStatusEmail($recipient_email, $status, $app_data, $admin_notes, $incomplete_documents, $deadline);
         }
     } catch (Throwable $e) {
         error_log("Failed to send franchise status email notification: " . $e->getMessage());
@@ -340,8 +411,17 @@ if ($has_apps) {
                          OR id = {$search_id})";
     }
 
-    $where_clause = !empty($where_clauses) ? "WHERE " . implode(" AND ", $where_clauses) : "";
     $apps = saQueryRows($conn, "SELECT * FROM franchise_applications {$where_clause} ORDER BY created_at DESC");
+    if (!empty($apps) && function_exists('fixMojibakeUtf8')) {
+        foreach ($apps as &$appRow) {
+            foreach ($appRow as $rk => $rv) {
+                if (is_string($rv)) {
+                    $appRow[$rk] = fixMojibakeUtf8($rv);
+                }
+            }
+        }
+        unset($appRow);
+    }
 }
 
 if (!function_exists('saApplicationStatusChipClass')) {
@@ -619,11 +699,18 @@ $extra_scripts = <<<'HTML'
             return;
         }
         
+        const deadlineField = appForm ? appForm.querySelector('#resubmission_deadline') : null;
+        const deadlineVal = deadlineField ? deadlineField.value : '';
+        const deadlineDisplay = deadlineVal ? new Date(deadlineVal + 'T00:00:00').toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '7 days from today';
+
         let docListHtml = '';
         docListHtml = '<div style="background:#fff8ef;border:1px solid #fedf89;border-radius:8px;padding:10px 14px;margin:12px 0;text-align:left;color:#b54708;font-size:13px;">' +
                       '<strong>Flagged for Re-upload (' + flaggedNames.length + ' item' + (flaggedNames.length > 1 ? 's' : '') + '):</strong><ul style="margin:4px 0 0;padding-left:18px;">' +
                       flaggedNames.map(name => '<li>' + name + '</li>').join('') +
                       '</ul></div>' +
+                      '<div style="background:#fef3f2;border:1px solid #fee4e2;border-radius:8px;padding:8px 12px;margin-bottom:12px;text-align:left;color:#b3261e;font-size:12.5px;">' +
+                      '<i class="fas fa-calendar-day" style="margin-right:6px;"></i><strong>Compliance Deadline:</strong> ' + deadlineDisplay +
+                      '</div>' +
                       '<p style="font-size:12px;color:#667085;margin-bottom:0;">The applicant will only need to re-upload the flagged document(s). All approved files and application information will be preserved.</p>';
 
         Swal.fire({

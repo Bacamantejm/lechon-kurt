@@ -1531,10 +1531,22 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         return '';
     };
+    const normalizeAddressText = (value) => {
+        let text = String(value || '');
+        if (!text) return '';
+        text = text.replace(/\u00c3\u0192\u00c2\u00b1/g, 'ñ');
+        text = text.replace(/\u00c3\u00b1/g, 'ñ');
+        text = text.replace(/\u00c3\u0091/g, 'Ñ');
+        text = text.replace(/\u251c\u2592/g, 'ñ');
+        text = text.replace(/\u251c\u00e6/g, 'Ñ');
+        text = text.replace(/\u0393\u00f6\u00a3\u0393\u00fb\u00c6/g, 'ñ');
+        text = text.replace(/Dasmari(?:[^a-zA-Z0-9\s]{1,6}|n)as/gi, 'Dasmariñas');
+        return text.trim();
+    };
     const extractAddressParts = (components = []) => {
         const getLongName = (typeMatcher) => {
             const match = (components || []).find((component) => (component.types || []).some(typeMatcher));
-            return match?.long_name || '';
+            return normalizeAddressText(match?.long_name || '');
         };
         return {
             region: getLongName((type) => type === 'administrative_area_level_1'),
@@ -1546,11 +1558,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const composeAddressFromParts = (parts = {}, street = '') => {
         const values = [
-            String(street || '').trim(),
-            String(parts?.barangay || '').trim(),
-            String(parts?.city || '').trim(),
-            String(parts?.province || '').trim(),
-            String(parts?.region || '').trim()
+            normalizeAddressText(street || ''),
+            normalizeAddressText(parts?.barangay || ''),
+            normalizeAddressText(parts?.city || ''),
+            normalizeAddressText(parts?.province || ''),
+            normalizeAddressText(parts?.region || '')
         ].filter(Boolean);
         return values.join(', ');
     };
@@ -1571,8 +1583,8 @@ document.addEventListener('DOMContentLoaded', function () {
                             || types.includes('locality');
                     }) || results[0];
                     const parts = extractAddressParts(prioritized?.address_components || []);
-                    const formatted = String(prioritized?.formatted_address || results[0]?.formatted_address || '').trim()
-                        || composeAddressFromParts(parts, '');
+                    const rawFormatted = String(prioritized?.formatted_address || results[0]?.formatted_address || '').trim();
+                    const formatted = normalizeAddressText(rawFormatted || composeAddressFromParts(parts, ''));
                     resolve({ formatted, parts });
                     return;
                 }
@@ -1602,13 +1614,14 @@ document.addEventListener('DOMContentLoaded', function () {
             const data = await response.json();
             const address = data?.address || {};
             const parts = {
-                barangay: String(address.suburb || address.neighbourhood || address.village || address.hamlet || '').trim(),
-                city: String(address.city || address.town || address.municipality || address.county || '').trim(),
-                province: String(address.state_district || address.province || address.county || '').trim(),
-                region: String(address.state || address.region || '').trim()
+                barangay: normalizeAddressText(address.suburb || address.neighbourhood || address.village || address.hamlet || ''),
+                city: normalizeAddressText(address.city || address.town || address.municipality || address.county || ''),
+                province: normalizeAddressText(address.state_district || address.province || address.county || ''),
+                region: normalizeAddressText(address.state || address.region || '')
             };
-            const street = String(address.road || address.residential || address.pedestrian || '').trim();
-            const formatted = String(data?.display_name || '').trim() || composeAddressFromParts(parts, street);
+            const street = normalizeAddressText(address.road || address.residential || address.pedestrian || '');
+            const rawFormatted = String(data?.display_name || '').trim();
+            const formatted = normalizeAddressText(rawFormatted || composeAddressFromParts(parts, street));
             return { formatted, parts };
         } catch (error) {
             console.error('Nominatim reverse geocode failed:', error);

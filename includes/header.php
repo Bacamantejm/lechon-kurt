@@ -4112,7 +4112,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const totalPages = Math.max(1, Math.ceil(userNotifications.length / userNotificationPageSize));
         userNotificationPage = Math.min(Math.max(0, userNotificationPage), totalPages - 1);
         if (userNotifications.length === 0) {
-            notificationDropdown.innerHTML = '<div class="notification-header">Notifications</div><div class="notification-empty">No new notifications yet.</div>';
+            notificationDropdown.innerHTML = '<div class="notification-header">Notifications</div><div class="notification-empty">No notifications yet.</div>';
             return;
         }
 
@@ -4123,15 +4123,26 @@ document.addEventListener('DOMContentLoaded', function () {
             const rawMessage = String(notification.message || '');
             const reasonMatch = rawMessage.match(/(?:^|\n)Reason:\s*([^\n]*)/i);
             const businessMatch = rawMessage.match(/(?:^|\n)Business:\s*([^\n]*)/i);
+            const deadlineMatch = rawMessage.match(/(?:^|\n)Deadline:\s*([^\n]*)/i);
             const reason = reasonMatch ? reasonMatch[1].trim() : rawMessage.replace(/^Status:\s*[^\n]*\n?/i, '').trim();
             const business = businessMatch ? businessMatch[1].trim() : '';
-            const relatedId = parseInt(notification.related_id || '0', 10) || 0;
-            const target = relatedId > 0 ? 'my_account.php#profile' : 'my_account.php';
+            const deadline = deadlineMatch ? deadlineMatch[1].trim() : '';
+            const notifType = String(notification.type || '').toLowerCase();
+            const isFranchise = notifType.startsWith('franchise_') || String(notification.related_type || '') === 'franchise_application';
+            const isRead = Number(notification.is_read || 0) === 1;
+            const notifId = parseInt(notification.id || '0', 10) || 0;
+            const target = isFranchise ? '#' : (parseInt(notification.related_id || '0', 10) > 0 ? 'my_account.php#profile' : 'my_account.php');
             const createdAt = notification.created_at ? new Date(String(notification.created_at).replace(' ', 'T')) : null;
             const timeLabel = createdAt && !Number.isNaN(createdAt.getTime()) ? createdAt.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '';
-            return '<a href="' + target + '" class="notification-status-item js-user-notification" data-notification-id="' + (parseInt(notification.id || '0', 10) || 0) + '">' +
-                '<div class="notification-status-line ' + status.className + '"><i class="fas ' + status.icon + '"></i><span>' + status.label + '</span></div>' +
+
+            const readBg = isRead ? 'background:#fcfcfd;opacity:0.85;' : 'background:#ffffff;border-left:3px solid #b3261e;';
+            const unreadDot = !isRead ? '<span style="width:7px;height:7px;border-radius:50%;background:#b3261e;display:inline-block;margin-left:auto;"></span>' : '';
+            const franchiseClass = isFranchise ? ' js-franchise-notif-item' : '';
+
+            return '<a href="' + target + '" class="notification-status-item js-user-notification' + franchiseClass + '" data-notification-id="' + notifId + '" style="' + readBg + '">' +
+                '<div class="notification-status-line ' + status.className + '"><i class="fas ' + status.icon + '"></i><span>' + status.label + '</span>' + unreadDot + '</div>' +
                 '<div class="notification-reason"><strong>Reason:</strong> ' + escapeNotificationText(reason || 'No additional reason provided.') + '</div>' +
+                (deadline ? '<div style="color:#b54708;font-size:.74rem;font-weight:700;margin-top:3px;"><i class="fas fa-calendar-day"></i> Deadline: ' + escapeNotificationText(deadline) + '</div>' : '') +
                 (business ? '<div class="notification-business">' + escapeNotificationText(business) + '</div>' : '') +
                 (timeLabel ? '<time class="notification-time">' + escapeNotificationText(timeLabel) + '</time>' : '') +
                 '</a>';
@@ -4151,9 +4162,12 @@ document.addEventListener('DOMContentLoaded', function () {
             .then(function (payload) {
                 const notifications = Array.isArray(payload.notifications) ? payload.notifications : [];
                 renderUserNotifications(notifications);
+                const unreadCount = typeof payload.unread_count === 'number'
+                    ? payload.unread_count
+                    : notifications.filter(function(n) { return Number(n.is_read) === 0; }).length;
                 if (notificationBadge) {
-                    notificationBadge.textContent = notifications.length > 99 ? '99+' : String(notifications.length);
-                    notificationBadge.style.display = notifications.length > 0 ? 'inline-flex' : 'none';
+                    notificationBadge.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
+                    notificationBadge.style.display = unreadCount > 0 ? 'inline-flex' : 'none';
                 }
             })
             .catch(function (error) { console.error('User notification load error:', error); });
@@ -4175,8 +4189,25 @@ document.addEventListener('DOMContentLoaded', function () {
             const notificationLink = event.target.closest('.js-user-notification');
             if (!notificationLink) return;
             const notificationId = parseInt(notificationLink.dataset.notificationId || '0', 10);
-            if (notificationId > 0) {
+            const isFranchise = notificationLink.classList.contains('js-franchise-notif-item');
+            const matchedNotif = userNotifications.find(function(n) { return parseInt(n.id, 10) === notificationId; });
+
+            if (isFranchise) {
+                event.preventDefault();
+                if (matchedNotif) {
+                    openFranchiseNotificationModal(matchedNotif);
+                }
+            }
+
+            if (notificationId > 0 && matchedNotif && Number(matchedNotif.is_read) === 0) {
+                matchedNotif.is_read = 1;
                 fetch(notificationApiPath + '?action=mark_read&id=' + encodeURIComponent(notificationId), { credentials: 'same-origin' }).catch(function () {});
+                const unreadRemaining = userNotifications.filter(function(n) { return Number(n.is_read) === 0; }).length;
+                if (notificationBadge) {
+                    notificationBadge.textContent = unreadRemaining > 99 ? '99+' : String(unreadRemaining);
+                    notificationBadge.style.display = unreadRemaining > 0 ? 'inline-flex' : 'none';
+                }
+                renderUserNotifications(userNotifications);
             }
         });
     }
@@ -4278,5 +4309,305 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
     });
+
+    window.openFranchiseNotificationModal = function(notification) {
+        const modal = document.getElementById('franchiseNotifModal');
+        if (!modal) return;
+
+        const rawMessage = String(notification.message || '');
+        const reasonMatch = rawMessage.match(/(?:^|\n)Reason:\s*([^\n]*)/i);
+        const businessMatch = rawMessage.match(/(?:^|\n)Business:\s*([^\n]*)/i);
+        const deadlineMatch = rawMessage.match(/(?:^|\n)Deadline:\s*([^\n]*)/i);
+
+        const reason = reasonMatch ? reasonMatch[1].trim() : rawMessage.replace(/^Status:\s*[^\n]*\n?/i, '').trim();
+        const business = businessMatch ? businessMatch[1].trim() : 'Your Business Application';
+        const deadline = deadlineMatch ? deadlineMatch[1].trim() : '';
+
+        const notifType = String(notification.type || '').toLowerCase();
+        const badgeWrap = document.getElementById('fnmStatusBadgeWrap');
+        const iconWrap = document.getElementById('fnmIconWrap');
+        const icon = document.getElementById('fnmIcon');
+        const title = document.getElementById('fnmTitle');
+        const businessElem = document.getElementById('fnmBusinessName');
+        const deadlineBox = document.getElementById('fnmDeadlineBox');
+        const deadlineVal = document.getElementById('fnmDeadlineValue');
+        const reasonElem = document.getElementById('fnmReason');
+        const instructionsElem = document.getElementById('fnmInstructions');
+        const actionBtn = document.getElementById('fnmActionBtn');
+
+        businessElem.textContent = business;
+        reasonElem.textContent = reason || 'No specific reason provided.';
+
+        if (notifType.includes('incomplete')) {
+            badgeWrap.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;background:#fffaeb;color:#b54708;border:1px solid #fedf89;padding:4px 12px;border-radius:999px;font-size:0.82rem;font-weight:700;"><i class="fas fa-triangle-exclamation"></i> INCOMPLETE REQUIREMENTS</span>';
+            iconWrap.style.background = '#fffaeb';
+            iconWrap.style.color = '#b54708';
+            icon.className = 'fas fa-triangle-exclamation';
+            title.textContent = 'Application Action Required: Incomplete';
+
+            if (deadline) {
+                deadlineBox.style.display = 'block';
+                deadlineVal.textContent = deadline;
+            } else {
+                deadlineBox.style.display = 'none';
+            }
+
+            instructionsElem.innerHTML = '<i class="fas fa-info-circle text-warning me-1"></i> <strong>What to do next:</strong> Click the button below to re-upload only the marked/flagged documents. All previously approved documents and business details have been preserved.';
+            actionBtn.style.display = 'inline-flex';
+            actionBtn.href = 'franchise_application.php';
+            actionBtn.innerHTML = '<i class="fas fa-arrow-rotate-right"></i> Open Application & Resubmit';
+        } else if (notifType.includes('rejected')) {
+            badgeWrap.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;background:#fff1f0;color:#b3261e;border:1px solid #fee4e2;padding:4px 12px;border-radius:999px;font-size:0.82rem;font-weight:700;"><i class="fas fa-circle-xmark"></i> APPLICATION REJECTED</span>';
+            iconWrap.style.background = '#fff1f0';
+            iconWrap.style.color = '#b3261e';
+            icon.className = 'fas fa-circle-xmark';
+            title.textContent = 'Franchise Application Not Approved';
+            deadlineBox.style.display = 'none';
+            instructionsElem.innerHTML = '<i class="fas fa-info-circle text-danger me-1"></i> <strong>Evaluation Policy:</strong> Applicants get up to 2 total attempts. A 3-day cooldown period is required before submitting a final retry application.';
+            actionBtn.style.display = 'inline-flex';
+            actionBtn.href = 'franchise_application.php';
+            actionBtn.innerHTML = '<i class="fas fa-file-lines"></i> View Application Status';
+        } else if (notifType.includes('approved')) {
+            badgeWrap.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;background:#ecfdf3;color:#027a48;border:1px solid #abefc6;padding:4px 12px;border-radius:999px;font-size:0.82rem;font-weight:700;"><i class="fas fa-circle-check"></i> APPLICATION APPROVED</span>';
+            iconWrap.style.background = '#ecfdf3';
+            iconWrap.style.color = '#027a48';
+            icon.className = 'fas fa-circle-check';
+            title.textContent = 'Franchise Application Approved!';
+            deadlineBox.style.display = 'none';
+            instructionsElem.innerHTML = '<i class="fas fa-check-circle text-success me-1"></i> <strong>Welcome Partner:</strong> Your partner trial access has been activated. You can now access your partner store dashboard.';
+            actionBtn.style.display = 'inline-flex';
+            actionBtn.href = 'admin/index.php';
+            actionBtn.innerHTML = '<i class="fas fa-store"></i> Open Partner Dashboard';
+        } else {
+            badgeWrap.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;background:#eff8ff;color:#175cd3;border:1px solid #b2ddff;padding:4px 12px;border-radius:999px;font-size:0.82rem;font-weight:700;"><i class="fas fa-info-circle"></i> APPLICATION UPDATE</span>';
+            iconWrap.style.background = '#eff8ff';
+            iconWrap.style.color = '#175cd3';
+            icon.className = 'fas fa-info-circle';
+            title.textContent = notification.title || 'Franchise Application Notice';
+            deadlineBox.style.display = 'none';
+            instructionsElem.textContent = '';
+            actionBtn.style.display = 'inline-flex';
+            actionBtn.href = 'my_account.php#franchise';
+            actionBtn.innerHTML = '<i class="fas fa-user"></i> View in Account';
+        }
+
+        modal.style.display = 'flex';
+        modal.setAttribute('aria-hidden', 'false');
+    };
+
+    window.closeFranchiseNotificationModal = function() {
+        const modal = document.getElementById('franchiseNotifModal');
+        if (modal) {
+            modal.style.display = 'none';
+            modal.setAttribute('aria-hidden', 'true');
+        }
+    };
 });
 </script>
+
+<!-- Franchise Notification Detail Modal -->
+<div id="franchiseNotifModal" class="franchise-notif-modal-overlay" style="display:none;" aria-hidden="true" role="dialog" aria-labelledby="fnmTitle">
+    <div class="franchise-notif-modal-card">
+        <div class="franchise-notif-modal-header">
+            <div class="franchise-notif-modal-icon-wrap" id="fnmIconWrap">
+                <i class="fas fa-store" id="fnmIcon"></i>
+            </div>
+            <div style="flex:1; min-width:0;">
+                <h4 class="franchise-notif-modal-title" id="fnmTitle">Franchise Application Notice</h4>
+                <p class="franchise-notif-modal-subtitle" id="fnmSubtitle">Official Super Admin Review Decision</p>
+            </div>
+            <button type="button" class="franchise-notif-modal-close" onclick="closeFranchiseNotificationModal()" aria-label="Close modal">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <div class="franchise-notif-modal-body">
+            <div id="fnmStatusBadgeWrap" style="margin-bottom:14px;"></div>
+
+            <div class="franchise-notif-field-box">
+                <div class="franchise-notif-field-label"><i class="fas fa-building"></i> Business Details</div>
+                <div class="franchise-notif-field-value" id="fnmBusinessName">-</div>
+            </div>
+
+            <div class="franchise-notif-field-box" id="fnmDeadlineBox" style="display:none;">
+                <div class="franchise-notif-field-label" style="color:#b54708;"><i class="fas fa-calendar-day"></i> Compliance / Resubmission Deadline</div>
+                <div class="franchise-notif-field-value" id="fnmDeadlineValue" style="color:#b3261e; font-weight:700;">-</div>
+                <small style="color:#667085; display:block; margin-top:2px;">Please upload all flagged requirements before this date to ensure application processing.</small>
+            </div>
+
+            <div class="franchise-notif-field-box">
+                <div class="franchise-notif-field-label"><i class="fas fa-comment-dots"></i> Super Admin Feedback / Reason</div>
+                <div class="franchise-notif-reason-text" id="fnmReason">-</div>
+            </div>
+
+            <div id="fnmInstructions" style="margin-top:12px; font-size:0.84rem; color:#475467; line-height:1.5;"></div>
+        </div>
+
+        <div class="franchise-notif-modal-footer">
+            <button type="button" class="btn-franchise-notif-secondary" onclick="closeFranchiseNotificationModal()">Close</button>
+            <a href="franchise_application.php" class="btn-franchise-notif-primary" id="fnmActionBtn">
+                <i class="fas fa-arrow-right"></i> Open Application
+            </a>
+        </div>
+    </div>
+</div>
+
+<style>
+.franchise-notif-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(16, 24, 40, 0.6);
+    backdrop-filter: blur(2px);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    box-sizing: border-box;
+}
+.franchise-notif-modal-card {
+    background: #ffffff;
+    border: 1px solid #eaecf0;
+    border-radius: 16px;
+    box-shadow: 0 10px 25px -5px rgba(16, 24, 40, 0.15);
+    width: 100%;
+    max-width: 520px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: fnmFadeIn 0.18s ease-out;
+}
+@keyframes fnmFadeIn {
+    from { opacity: 0; transform: scale(0.96) translateY(6px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.franchise-notif-modal-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 18px 20px;
+    border-bottom: 1px solid #eaecf0;
+}
+.franchise-notif-modal-icon-wrap {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.15rem;
+    flex-shrink: 0;
+}
+.franchise-notif-modal-title {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #101828;
+}
+.franchise-notif-modal-subtitle {
+    margin: 2px 0 0;
+    font-size: 0.8rem;
+    color: #667085;
+}
+.franchise-notif-modal-close {
+    background: transparent;
+    border: none;
+    color: #667085;
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.franchise-notif-modal-close:hover {
+    background: #f2f4f7;
+    color: #101828;
+}
+.franchise-notif-modal-body {
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+}
+.franchise-notif-field-box {
+    background: #f8f9fa;
+    border: 1px solid #eaecf0;
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+}
+.franchise-notif-field-label {
+    font-size: 0.76rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #475467;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+}
+.franchise-notif-field-value {
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: #101828;
+}
+.franchise-notif-reason-text {
+    font-size: 0.9rem;
+    color: #344054;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    background: #ffffff;
+    border: 1px solid #eaecf0;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-top: 6px;
+}
+.franchise-notif-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 14px 20px;
+    border-top: 1px solid #eaecf0;
+    background: #fafafa;
+}
+.btn-franchise-notif-secondary {
+    background: #ffffff;
+    border: 1px solid #d0d5dd;
+    color: #344054;
+    font-size: 0.88rem;
+    font-weight: 600;
+    padding: 9px 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+.btn-franchise-notif-secondary:hover {
+    background: #f2f4f7;
+}
+.btn-franchise-notif-primary {
+    background: #b3261e;
+    border: 1px solid #b3261e;
+    color: #ffffff !important;
+    font-size: 0.88rem;
+    font-weight: 600;
+    padding: 9px 18px;
+    border-radius: 8px;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+.btn-franchise-notif-primary:hover {
+    background: #981b15;
+    border-color: #981b15;
+}
+</style>
