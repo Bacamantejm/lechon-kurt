@@ -1305,6 +1305,9 @@ if (is_file(__DIR__ . '/images/hero-bg.jpg')) {
                 <button type="button" class="fp-toggle-pill <?php echo ($active_fulfillment_mode === 'pickup') ? 'active' : ''; ?>" data-mode="pickup">
                     <i class="fas fa-bag-shopping"></i> Pick-up
                 </button>
+                <button type="button" class="fp-toggle-pill <?php echo ($active_fulfillment_mode === 'preorder') ? 'active' : ''; ?>" data-mode="preorder">
+                    <i class="fas fa-calendar-alt"></i> Pre-Order
+                </button>
             </div>
         </div>
 
@@ -2169,7 +2172,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     window.switchDeliveryOptionTab = async function(option) {
-        const normalizedOption = option === 'delivery' ? 'delivery' : 'pickup';
+        const rawOpt = (String(option || '').toLowerCase());
+        const normalizedOption = (rawOpt === 'preorder') ? 'preorder' : ((rawOpt === 'pickup') ? 'pickup' : 'delivery');
         setQuickOrderTabsActive(normalizedOption);
         try {
             await setDeliveryOption(normalizedOption);
@@ -2275,7 +2279,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     async function setDeliveryOption(option) {
-        const normalizedOption = option === 'delivery' ? 'delivery' : 'pickup';
+        const rawOpt = (String(option || '').toLowerCase());
+        const normalizedOption = (rawOpt === 'preorder') ? 'preorder' : ((rawOpt === 'pickup') ? 'pickup' : 'delivery');
         setQuickOrderTabsActive(normalizedOption);
 
         // Also synchronize Foodpanda pills
@@ -2284,7 +2289,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         const payload = new URLSearchParams({ delivery_option: normalizedOption });
-        if (normalizedOption === 'pickup') {
+        if (normalizedOption === 'pickup' || normalizedOption === 'preorder') {
             const selectedPickupStoreId = document.querySelector('input[name="pickup_location"]:checked')?.value
                 || (typeof defaultPickupLocation !== 'undefined' ? defaultPickupLocation : 1);
             payload.set('pickup_location', String(selectedPickupStoreId));
