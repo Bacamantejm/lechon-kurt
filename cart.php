@@ -211,17 +211,10 @@ $downpayment = round($grand_total * 0.30, 2);
 
                 <div class="summary-actions">
                     <a href="menu.php" class="btn-outline">Continue Shopping</a>
-                    <div class="checkout-choice">
-                        <p class="checkout-choice-title">Choose checkout type</p>
-                        <div class="checkout-choice-buttons">
-                            <a href="checkout.php" class="btn-primary" id="cartPageOrderNowBtn" data-checkout-link="1">
-                                <i class="fas fa-bolt"></i> Order Now
-                            </a>
-                            <a href="<?php echo htmlspecialchars($preorder_checkout_link); ?>" class="btn-secondary" id="cartPagePreOrderBtn" data-checkout-link="1">
-                                <i class="fas fa-calendar-alt"></i> Pre-Order
-                            </a>
-                        </div>
-                        <p class="checkout-choice-note">Order now for ASAP delivery/pickup, or pre-order for a scheduled date and time.</p>
+                    <div class="checkout-choice" style="margin-top: 12px;">
+                        <a href="checkout.php?mode=<?php echo htmlspecialchars($_SESSION['delivery_option'] ?? 'delivery'); ?>" class="btn-primary" id="cartPageOrderNowBtn" data-checkout-link="1" style="width: 100%; text-align: center; justify-content: center; display: inline-flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-lock"></i> Proceed to Checkout
+                        </a>
                     </div>
                     <p class="checkout-security-note">
                         <i class="fas fa-shield-alt"></i>
@@ -239,7 +232,7 @@ $downpayment = round($grand_total * 0.30, 2);
             <strong class="sticky-price" id="cartStickyTotal">PHP <?php echo number_format($grand_total, 2); ?></strong>
         </div>
         <div class="cart-sticky-actions">
-            <a href="checkout.php" class="cart-sticky-checkout-btn">
+            <a href="checkout.php?mode=<?php echo htmlspecialchars($_SESSION['delivery_option'] ?? 'delivery'); ?>" class="cart-sticky-checkout-btn">
                 Confirm Order <i class="fas fa-arrow-right"></i>
             </a>
         </div>

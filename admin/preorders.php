@@ -213,7 +213,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pre-Order Management | Admin</title>
+    <title>Pick-up Orders Management | Admin</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../font_awesome/css/all.css">
     <link rel="stylesheet" href="../css/bootstrap.min.css">
@@ -679,7 +679,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
                         </div>
                         <div class="stat-content">
                             <h3 data-count="<?php echo $preorder_stats['total'] ?? 0; ?>">0</h3>
-                            <p>Total Pre-Orders</p>
+                            <p>Total Pick-up Orders</p>
                         </div>
                     </div>
                     <div class="stat-card fade-in-up">
@@ -714,7 +714,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
                 <!-- Section Header with View Mode Switcher -->
                 <div class="section-header d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
                     <div class="d-flex align-items-center gap-3">
-                        <h2 class="m-0">Pre-Orders</h2>
+                        <h2 class="m-0">Pick-up Orders</h2>
                         <div class="btn-group" role="group" aria-label="Preorder View Selection">
                             <button type="button" class="btn btn-sm view-switch-btn active" id="btnTableView" onclick="switchPreorderView('table')">
                                 <i class="fas fa-list me-1"></i> Table View

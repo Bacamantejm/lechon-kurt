@@ -340,18 +340,22 @@ if (!empty($city_display_parts)) {
     $target_city_display = '';
 }
 
-// Fulfillment Mode: Default to 'delivery' so customer immediately sees the delivery fee and breakdown
-$has_explicit_delivery_choice = !empty($_SESSION['delivery_option_explicit']);
-if (!$has_explicit_delivery_choice || empty($_SESSION['delivery_option'])) {
-    $_SESSION['delivery_option'] = 'delivery';
-    if (!isset($_SESSION['pickup_location']) && !empty($stores)) {
-        $_SESSION['pickup_location'] = (int)($stores[0]['id'] ?? 1);
-    }
+// Fulfillment Mode: Check URL parameter first, then session, defaulting to 'delivery'
+if (!empty($_GET['mode']) && in_array(strtolower(trim((string)$_GET['mode'])), ['pickup', 'delivery'], true)) {
+    $_SESSION['delivery_option'] = strtolower(trim((string)$_GET['mode']));
+    $_SESSION['delivery_option_explicit'] = true;
+} elseif (!empty($_GET['delivery_option']) && in_array(strtolower(trim((string)$_GET['delivery_option'])), ['pickup', 'delivery'], true)) {
+    $_SESSION['delivery_option'] = strtolower(trim((string)$_GET['delivery_option']));
+    $_SESSION['delivery_option_explicit'] = true;
 }
-$current_checkout_delivery_option = in_array((string)($_SESSION['delivery_option'] ?? ''), ['pickup', 'delivery'], true)
-    ? (string)$_SESSION['delivery_option']
+
+$current_checkout_delivery_option = in_array(strtolower((string)($_SESSION['delivery_option'] ?? '')), ['pickup', 'delivery'], true)
+    ? strtolower((string)$_SESSION['delivery_option'])
     : 'delivery';
 $_SESSION['delivery_option'] = $current_checkout_delivery_option;
+if (!isset($_SESSION['pickup_location']) && !empty($stores)) {
+    $_SESSION['pickup_location'] = (int)($stores[0]['id'] ?? 1);
+}
 
 // Calculate order totals
 $subtotal = 0;
@@ -469,6 +473,8 @@ if (!$checkout_tenant_blocked && (int)($checkout_tenant_scope['seller_id'] ?? 0)
     $preorder_params['seller_id'] = $storefront_seller_id;
     $preorder_switch_link = 'preorder.php' . (!empty($preorder_params) ? '?' . http_build_query($preorder_params) : '');
 }
+require_once __DIR__ . '/includes/preorder_schedule_helper.php';
+$store_schedule_config = posGetSellerSchedule($conn, (int)$storefront_seller_id);
 $total = max(0, $subtotal + $vat_amount + $delivery_fee - $voucher_discount);
 
 // Calculate downpayment (30%)
@@ -577,107 +583,14 @@ $remaining = $total - $downpayment;
             
             <!-- Checkout Form -->
             <div class="checkout-form">
-                <div id="deliveryCheckoutHeader" style="<?php echo ($current_checkout_delivery_option === 'pickup') ? 'display: none;' : ''; ?>">
-                    <h3>Complete Your Order</h3>
-                    <div class="checkout-flow">
-                    <div class="checkout-flow-step is-active" data-step="1" style="cursor: pointer;"><span>1</span>Contact</div>
-                    <div class="checkout-flow-step" data-step="2" style="cursor: pointer;"><span>2</span>Address</div>
-                    <div class="checkout-flow-step" data-step="3" style="cursor: pointer;"><span>3</span>Payment</div>
-                </div>
-                <div class="progress-container" style="width: 100%; height: 6px; background: #eaecf0; border-radius: 999px; margin-top: 14px; margin-bottom: 24px; overflow: hidden; position: relative;">
-                    <div class="progress-bar" id="checkoutProgressBar" style="position: absolute; left: 0; top: 0; height: 100%; width: 33.33%; background: #b3261e; border-radius: 999px; transition: width 0.3s ease; display: block !important;"></div>
-                </div>
-
-                <div class="checkout-type-switch" aria-label="Checkout Type">
-                    <p class="checkout-type-title">Checkout Type</p>
-                    <div class="checkout-type-actions">
-                        <a href="checkout.php" class="checkout-type-chip is-active" aria-current="page">
-                            <i class="fas fa-bolt"></i> Order Now
-                        </a>
-                        <a href="<?php echo htmlspecialchars($preorder_switch_link); ?>" class="checkout-type-chip">
-                            <i class="fas fa-calendar-alt"></i> Pre-Order
-                        </a>
-                    </div>
-                    <p class="checkout-type-note">Need a scheduled date and time instead? Switch to pre-order anytime.</p>
-                </div>
-                
-                <!-- Delivery Option Form -->
-                <div class="delivery-option-form" id="deliveryOptionForm">
-                    <div class="checkout-mode-card <?php echo $current_checkout_delivery_option === 'delivery' ? 'mode-delivery' : 'mode-pickup'; ?>" id="checkoutModeCard">
-                        <div class="checkout-mode-copy">
-                            <h4>Fulfillment Mode</h4>
-                            <p>
-                                <strong id="activeModeLabel"><?php echo $current_checkout_delivery_option === 'delivery' ? 'Home Delivery' : 'Pickup from Store'; ?></strong>
-                                is active. Tap a button to switch instantly.
-                            </p>
-                        </div>
-                        <div class="checkout-mode-toggle" role="group" aria-label="Fulfillment mode">
-                            <button type="button"
-                                    id="modePickupBtn"
-                                    class="checkout-mode-btn <?php echo $current_checkout_delivery_option === 'pickup' ? 'is-active' : ''; ?>"
-                                    data-mode="pickup"
-                                    onclick="switchCheckoutFulfillmentMode('pickup')">
-                                <i class="fas fa-store"></i> Pickup
-                            </button>
-                            <button type="button"
-                                    id="modeDeliveryBtn"
-                                    class="checkout-mode-btn <?php echo $current_checkout_delivery_option === 'delivery' ? 'is-active' : ''; ?>"
-                                    data-mode="delivery"
-                                    onclick="switchCheckoutFulfillmentMode('delivery')">
-                                <i class="fas fa-truck"></i> Delivery
-                            </button>
-                        </div>
-                    </div>
-                        <!-- Pickup Location -->
-                        <div class="form-group pickup-location" id="pickupLocation" 
-                             style="<?php echo ($current_checkout_delivery_option === 'pickup') ? '' : 'display: none;'; ?>">
-                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                                <label for="pickup_location" style="margin-bottom:0;">Select Store for Pickup</label>
-                                <button type="button" id="findNearestStoreBtn" class="btn-secondary" style="padding: 6px 12px; font-size: 0.85rem; background:#fff; color:#c62828; border:1px solid #c62828;">
-                                    <i class="fas fa-location-arrow"></i> Find Nearest
-                                </button>
-                            </div>
-                            <select id="pickup_location" name="pickup_location" class="store-select">
-                                <?php foreach ($stores as $store): ?>
-                                <option value="<?php echo $store['id']; ?>" 
-                                        <?php echo ($store['id'] == ($_SESSION['pickup_location'] ?? 1)) ? 'selected' : ''; ?>>
-                                    <?php echo htmlspecialchars($store['name'] ?? ($store['store_name'] ?? 'Store')); ?> - 
-                                    <?php echo htmlspecialchars($store['city']); ?>
-                                </option>
-                                <?php endforeach; ?>
-                            </select>
-                            <div class="store-info" id="storeInfo">
-                                <?php if ($selected_store): ?>
-                                <p><i class="fas fa-map-marker-alt"></i> <?php echo htmlspecialchars($selected_store['address']); ?></p>
-                                <p><i class="fas fa-phone"></i> <?php echo htmlspecialchars($selected_store['phone']); ?></p>
-                                <p><i class="fas fa-clock"></i> <?php echo htmlspecialchars($selected_store['hours'] ?? ($selected_store['opening_hours'] ?? '')); ?></p>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                        
-                        <!-- Delivery Location -->
-                        <div class="form-group delivery-location" id="deliveryLocation"
-                             style="<?php echo ($current_checkout_delivery_option === 'delivery') ? '' : 'display: none;'; ?>">
-                            <label>Delivery Fee Calculation</label>
-                            <div class="delivery-fee-info-box">
-                                <p><i class="fas fa-info-circle"></i> The delivery fee is calculated automatically based on the distance from the nearest store to your pinned location.</p>
-                                <p><strong>Base Fee:</strong> PHP <?php echo number_format($base_delivery_fee, 2); ?> + 
-                                   <strong>Rate:</strong> PHP <?php echo number_format($per_km_rate, 2); ?> / km
-                                </p>
-                            </div>
-                        </div>
-                </div>
-                
-                <!-- Main Checkout Form -->
                 <?php if ($checkout_tenant_blocked): ?>
-                    <div class="checkout-tenant-guard" role="alert">
+                    <div class="checkout-tenant-guard" role="alert" style="margin-bottom: 20px;">
                         <p><i class="fas fa-store-slash"></i> <?php echo htmlspecialchars($checkout_tenant_message); ?></p>
                         <a href="cart.php" class="btn-secondary">
                             <i class="fas fa-shopping-cart"></i> Review Cart
                         </a>
                     </div>
                 <?php endif; ?>
-                </div><!-- /#deliveryCheckoutHeader -->
                 <form id="checkoutForm" action="process_order.php" method="POST" novalidate>
                     <!-- ================= FOODPANDA PICK-UP VIEW ================= -->
                     <div id="foodpandaPickupView" style="<?php echo ($current_checkout_delivery_option === 'pickup') ? 'display: block;' : 'display: none;'; ?>">
@@ -718,18 +631,11 @@ $remaining = $total - $downpayment;
                                     <p class="fp-store-address" id="fpPickupStoreAddress">
                                         <?php echo htmlspecialchars($pickup_store_address); ?>
                                     </p>
-                                    <?php if (!empty($stores) && count($stores) > 1): ?>
-                                    <div class="fp-store-change-row">
-                                        <select id="fpStoreSelect" class="fp-store-select-compact" onchange="handlePickupStoreChange(this.value)">
-                                            <?php foreach ($stores as $st): ?>
-                                            <?php $stId = (int)($st['id'] ?? $st['store_id'] ?? 1); ?>
-                                            <option value="<?php echo $stId; ?>" <?php echo ($stId === (int)($pickup_store['id'] ?? $pickup_store['store_id'] ?? 1)) ? 'selected' : ''; ?>>
-                                                Change branch: <?php echo htmlspecialchars($st['name'] ?? ($st['store_name'] ?? 'Branch')); ?> (<?php echo htmlspecialchars($st['city'] ?? ''); ?>)
-                                            </option>
-                                            <?php endforeach; ?>
-                                        </select>
+                                    <div class="fp-store-badge-locked" style="margin-top: 6px;">
+                                        <span style="font-size: 11px; font-weight: 700; color: #027a48; background: #ecfdf3; border: 1px solid #abefc6; padding: 2px 8px; border-radius: 999px; display: inline-flex; align-items: center; gap: 4px;">
+                                            <i class="fas fa-check-circle"></i> Fulfilling Store Branch
+                                        </span>
                                     </div>
-                                    <?php endif; ?>
                                 </div>
                             </div>
                         </div>
@@ -862,486 +768,299 @@ $remaining = $total - $downpayment;
                     </div>
                     <!-- ================= END FOODPANDA PICK-UP VIEW ================= -->
 
-                    <div id="deliveryCheckoutSteps" style="<?php echo ($current_checkout_delivery_option === 'pickup') ? 'display: none;' : ''; ?>">
-                        <!-- Step 1: Contact Details -->
-                    <div class="step-content is-active" id="stepContent1">
-                        <p class="checkout-section-label"><i class="fas fa-user"></i> Contact Details</p>
-                        <div class="form-group">
-                            <label for="full_name">Full Name *</label>
-                            <input type="text" id="full_name" name="full_name" 
-                                   value="<?php echo htmlspecialchars($user['full_name'] ?? ''); ?>" 
-                                   required>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="email">Email *</label>
-                            <input type="email" id="email" name="email" 
-                                   value="<?php echo htmlspecialchars($user['email'] ?? ''); ?>" 
-                                   required>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="phone">Phone Number *</label>
-                            <input type="tel" id="phone" name="phone" 
-                                   value="<?php echo htmlspecialchars($user['phone'] ?? ''); ?>" 
-                                   required pattern="[0-9]{11}" 
-                                   title="11-digit Philippine phone number">
-                        </div>
-
-                        <div class="account-autofill-note">
-                            <i class="fas fa-user-check"></i>
-                            Account details are auto-filled from your profile. You can still edit before placing the order.
-                        </div>
-                        
-                        <div style="display: flex; justify-content: flex-end; margin-top: 24px;">
-                            <button type="button" class="btn-primary" id="btnNextToAddress" style="background: #b3261e; border: none; padding: 12px 24px; font-weight: 700; border-radius: 8px; color: #fff; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
-                                Continue to Delivery <i class="fas fa-arrow-right"></i>
+                    <!-- ================= FOODPANDA DELIVERY VIEW ================= -->
+                    <div id="foodpandaDeliveryView" style="<?php echo ($current_checkout_delivery_option === 'delivery') ? 'display: block;' : 'display: none;'; ?>">
+                        <!-- Top Header -->
+                        <div class="fp-checkout-header">
+                            <button type="button" class="fp-back-btn" onclick="window.history.length > 1 ? window.history.back() : window.location.href='menu.php'" aria-label="Go back">
+                                <i class="fas fa-arrow-left"></i>
                             </button>
-                        </div>
-                    </div>
-                    
-                    <!-- Step 2: Delivery Details & Pickup Store Details -->
-                    <div class="step-content" id="stepContent2">
-                        <!-- Pickup Store Section (Form for Pickup Mode) -->
-                        <div id="pickupStoreSection" style="<?php echo ($current_checkout_delivery_option === 'pickup') ? '' : 'display: none;'; ?>">
-                            <div class="co-address-card" style="background: #fff; border: 1px solid #efddcd; border-radius: 16px; padding: 24px; margin-bottom: 24px; box-shadow: 0 4px 16px rgba(0,0,0,0.03);">
-                                <h3 style="font-size: 22px; font-weight: 800; color: #2a211d; margin: 0 0 16px 0; font-family: inherit;">Pickup store location</h3>
-                                <label for="pickup_location_step" style="font-weight: 700; color: #2a211d; display: block; margin-bottom: 8px;">Select Store for Pickup *</label>
-                                <select id="pickup_location_step" class="store-select" style="width: 100%; padding: 14px 16px; border: 1px solid #efddcd; border-radius: 12px; font-size: 15px; color: #2a211d; background: #fff9f2; outline: none; box-sizing: border-box; margin-bottom: 16px; font-weight: 600;">
-                                    <?php foreach ($stores as $store): ?>
-                                    <option value="<?php echo $store['id']; ?>" <?php echo ($store['id'] == ($_SESSION['pickup_location'] ?? 1)) ? 'selected' : ''; ?>>
-                                        <?php echo htmlspecialchars($store['name'] ?? ($store['store_name'] ?? 'Store')); ?> - <?php echo htmlspecialchars($store['city']); ?>
-                                    </option>
-                                    <?php endforeach; ?>
-                                </select>
-                                <div class="store-info" id="storeInfoStep">
-                                    <?php if ($selected_store): ?>
-                                    <p style="margin: 6px 0; color: #2a211d; font-size: 14px; font-weight: 600;"><i class="fas fa-map-marker-alt" style="color: #b3261e; margin-right: 8px;"></i> <?php echo htmlspecialchars($selected_store['address']); ?></p>
-                                    <p style="margin: 6px 0; color: #667085; font-size: 14px;"><i class="fas fa-phone" style="color: #ef6b2e; margin-right: 8px;"></i> <?php echo htmlspecialchars($selected_store['phone']); ?></p>
-                                    <p style="margin: 6px 0; color: #667085; font-size: 14px;"><i class="fas fa-clock" style="color: #667085; margin-right: 8px;"></i> <?php echo htmlspecialchars($selected_store['hours'] ?? ($selected_store['opening_hours'] ?? '')); ?></p>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Delivery Address Section (Form for Delivery Mode) -->
-                        <div id="deliveryAddressSection" style="<?php echo ($current_checkout_delivery_option === 'delivery') ? '' : 'display: none;'; ?>">
-                            <div class="co-address-card" id="mainDeliveryAddressCard" style="background: #fff; border: 1px solid #efddcd; border-radius: 16px; padding: 24px; margin-bottom: 24px; box-shadow: 0 4px 16px rgba(0,0,0,0.03); cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                                    <h3 style="font-size: 22px; font-weight: 800; color: #2a211d; margin: 0; font-family: inherit;">Delivery address</h3>
-                                    <button type="button" id="openChangeAddressModalBtn" style="background: none; border: none; color: #2a211d; font-weight: 700; font-size: 15px; cursor: pointer; text-decoration: underline; padding: 4px 8px;">
-                                        Change
-                                    </button>
-                                </div>
-
-                                <div style="display: flex; gap: 12px; align-items: flex-start; margin-bottom: 20px;">
-                                    <i class="fas fa-location-dot" style="font-size: 22px; color: #2a211d; margin-top: 2px; flex-shrink: 0;"></i>
-                                    <div>
-                                        <div id="displayStreetAddress" style="font-size: 15px; font-weight: 700; color: #2a211d; line-height: 1.4;">
-                                            <?php echo htmlspecialchars($target_street_display); ?>
-                                        </div>
-                                        <div id="displayCityAddress" style="font-size: 14px; color: #7b6d64; margin-top: 4px;">
-                                            <?php echo htmlspecialchars($target_city_display); ?>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="form-group" style="margin-bottom: 0;">
-                                    <input type="text" id="delivery_instructions" name="delivery_instructions" 
-                                           placeholder="Note to rider - e.g. building, landmark" 
-                                           style="width: 100%; border: 1px solid #efddcd; border-radius: 12px; padding: 14px 16px; font-size: 14px; color: #2a211d; background: #fff9f2; outline: none; box-sizing: border-box;">
-                                </div>
-                            </div>
-
-                            <!-- Delivery Route & Store Overview Map Card -->
-                            <div class="co-delivery-map-card" id="deliveryRouteMapCard" style="background: #ffffff; border: 1px solid #eaecf0; border-radius: 16px; padding: 20px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);">
-                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
-                                    <div>
-                                        <h4 style="font-size: 16px; font-weight: 800; color: #101828; margin: 0; display: flex; align-items: center; gap: 8px;">
-                                            <i class="fas fa-map-location-dot" style="color: #b3261e; font-size: 18px;"></i> Delivery Route & Store Overview
-                                        </h4>
-                                        <p style="font-size: 13px; color: #667085; margin: 4px 0 0 0;">
-                                            Real-time distance, estimated delivery time, and route from our store branch to your pinned address.
-                                        </p>
-                                    </div>
-                                    <button type="button" id="recenterRouteMapBtn" style="background: #ffffff; border: 1px solid #d0d5dd; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 700; color: #344054; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: background 0.15s;">
-                                        <i class="fas fa-crosshairs" style="color: #b3261e;"></i> Recenter Map
-                                    </button>
-                                </div>
-
-                                <!-- Overview Metrics Strip -->
-                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 14px;">
-                                    <div style="background: #f8f9fa; border: 1px solid #eaecf0; border-radius: 10px; padding: 10px 12px;">
-                                        <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #667085; margin-bottom: 3px; display: flex; align-items: center; gap: 5px;">
-                                            <i class="fas fa-store" style="color: #b3261e;"></i> Fulfilling Store
-                                        </div>
-                                        <div id="overviewStoreName" style="font-size: 13px; font-weight: 800; color: #101828; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                                            <?php echo htmlspecialchars($overview_store_name); ?>
-                                        </div>
-                                    </div>
-                                    <div style="background: #eff8ff; border: 1px solid #b2ddff; border-radius: 10px; padding: 10px 12px;">
-                                        <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #175cd3; margin-bottom: 3px; display: flex; align-items: center; gap: 5px;">
-                                            <i class="fas fa-route"></i> Distance
-                                        </div>
-                                        <div id="overviewDistance" style="font-size: 13px; font-weight: 800; color: #175cd3;">
-                                            <?php echo $overview_distance_km > 0 ? number_format($overview_distance_km, 1) . ' km' : '0.0 km'; ?>
-                                        </div>
-                                    </div>
-                                    <div style="background: #ecfdf3; border: 1px solid #abefc6; border-radius: 10px; padding: 10px 12px;">
-                                        <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #027a48; margin-bottom: 3px; display: flex; align-items: center; gap: 5px;">
-                                            <i class="fas fa-clock"></i> Est. Delivery
-                                        </div>
-                                        <div id="overviewEta" style="font-size: 13px; font-weight: 800; color: #027a48;">
-                                            <?php echo !empty($overview_eta) ? htmlspecialchars(str_replace('Estimated delivery: ', '', $overview_eta)) : '35 - 50 mins'; ?>
-                                        </div>
-                                    </div>
-                                    <div style="background: #fff1f0; border: 1px solid #fee4e2; border-radius: 10px; padding: 10px 12px;">
-                                        <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #b3261e; margin-bottom: 3px; display: flex; align-items: center; gap: 5px;">
-                                            <i class="fas fa-peso-sign"></i> Delivery Fee
-                                        </div>
-                                        <div id="overviewDeliveryFee" style="font-size: 13px; font-weight: 800; color: #b3261e;">
-                                            ₱<?php echo number_format($overview_fee, 2); ?>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Map Canvas Shell -->
-                                <div id="deliveryOverviewMapShell" style="height: 280px; width: 100%; border-radius: 12px; overflow: hidden; position: relative; background: #f8f9fa; border: 1px solid #eaecf0;">
-                                    <div id="checkoutDeliveryOverviewMap" style="width: 100%; height: 280px; min-height: 280px; z-index: 1;"></div>
-                                </div>
-
-                                <!-- Map Legend Footer -->
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 12px; color: #667085; flex-wrap: wrap; gap: 8px;">
-                                    <div style="display: flex; align-items: center; gap: 14px;">
-                                        <span style="display: inline-flex; align-items: center; gap: 5px;">
-                                            <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #b3261e;"></span>
-                                            <strong style="color: #344054;">Store:</strong> <span id="legendStoreText"><?php echo htmlspecialchars($overview_store_name); ?></span>
-                                        </span>
-                                        <span style="display: inline-flex; align-items: center; gap: 5px;">
-                                            <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #101828;"></span>
-                                            <strong style="color: #344054;">Delivery:</strong> <span id="legendCustomerText"><?php echo htmlspecialchars($target_street_display); ?></span>
-                                        </span>
-                                    </div>
-                                    <div style="font-size: 11px; color: #98a2b3;">
-                                        <i class="fas fa-shield-alt"></i> Automatic calculation from fulfilling store
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Hidden Address & PSGC Form Fields -->
-                        <input type="hidden" id="street_address" name="street_address" value="<?php echo htmlspecialchars($target_street_address); ?>">
-                        <input type="hidden" id="postal_code" name="postal_code" value="<?php echo htmlspecialchars($target_postal_code); ?>">
-                        <input type="hidden" id="delivery_address" name="delivery_address" value="<?php echo htmlspecialchars($target_full_address); ?>">
-                        <input type="hidden" id="delivery_region_name" name="delivery_region_name" value="<?php echo htmlspecialchars($target_region_name); ?>">
-                        <input type="hidden" id="delivery_region_code" name="delivery_region_code" value="<?php echo htmlspecialchars($target_region_code); ?>">
-                        <input type="hidden" id="delivery_province_name" name="delivery_province_name" value="<?php echo htmlspecialchars($target_province_name); ?>">
-                        <input type="hidden" id="delivery_province_code" name="delivery_province_code" value="<?php echo htmlspecialchars($target_province_code); ?>">
-                        <input type="hidden" id="delivery_city_name" name="delivery_city_name" value="<?php echo htmlspecialchars($target_city_name); ?>">
-                        <input type="hidden" id="delivery_city_code" name="delivery_city_code" value="<?php echo htmlspecialchars($target_city_code); ?>">
-                        <input type="hidden" id="delivery_barangay_name" name="delivery_barangay_name" value="<?php echo htmlspecialchars($target_barangay_name); ?>">
-                        <input type="hidden" id="delivery_barangay_code" name="delivery_barangay_code" value="<?php echo htmlspecialchars($target_barangay_code); ?>">
-                        <input type="hidden" id="delivery_postal_code" name="delivery_postal_code" value="<?php echo htmlspecialchars($target_postal_code); ?>">
-                        <input type="hidden" id="saved_address_id" name="saved_address_id" value="<?php echo (int)$target_saved_id; ?>">
-                        <input type="hidden" id="latitude" name="latitude" value="<?php echo htmlspecialchars($target_lat_val); ?>">
-                        <input type="hidden" id="longitude" name="longitude" value="<?php echo htmlspecialchars($target_lng_val); ?>">
-                        <input type="hidden" id="distance_km" name="distance_km" value="<?php echo htmlspecialchars($target_distance_val); ?>">
-                        <input type="hidden" id="calculated_delivery_fee" name="calculated_delivery_fee" value="<?php echo htmlspecialchars($target_fee_val); ?>">
-
-                        <!-- Hidden select elements kept for PSGC JS compatibility -->
-                        <select id="checkout_region" style="display:none;"><option value="">--</option></select>
-                        <select id="checkout_province" style="display:none;"><option value="">--</option></select>
-                        <select id="checkout_city" style="display:none;"><option value="">--</option></select>
-                        <select id="checkout_barangay" style="display:none;"><option value="">--</option></select>
-                        <select id="saved_address_select" style="display:none;">
-                            <option value="">--</option>
-                            <?php foreach ($saved_addresses as $saved_address): ?>
-                            <option value="<?php echo (int)$saved_address['id']; ?>"><?php echo htmlspecialchars($saved_address['full_address'] ?? ''); ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                        
-                        <!-- Delivery Date & Time (Auto-set to Today/ASAP) -->
-                        <input type="hidden" name="delivery_date" id="delivery_date" value="<?php echo date('Y-m-d'); ?>">
-                        <input type="hidden" name="delivery_time" id="delivery_time" value="Standard (10-15 mins)">
-                        
-                        <div class="form-group" style="margin-top: 16px;">
-                            <label for="order_notes">Order Notes (Optional)</label>
-                            <textarea id="order_notes" name="order_notes" rows="2" 
-                                      placeholder="Special instructions for your order"></textarea>
-                        </div>
-
-                        <div style="display: flex; justify-content: space-between; margin-top: 24px; gap: 12px;">
-                            <button type="button" class="btn-secondary btn-step-back" data-target="1" style="border: 1px solid #efddcd; padding: 12px 20px; font-weight: 700; border-radius: 8px; cursor: pointer; background: #fff; display: inline-flex; align-items: center; gap: 6px;">
-                                <i class="fas fa-arrow-left"></i> Back
-                            </button>
-                            <button type="button" class="btn-primary" id="btnNextToPayment" style="background: #b3261e; border: none; padding: 12px 24px; font-weight: 700; border-radius: 8px; color: #fff; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
-                                Continue to Payment <i class="fas fa-arrow-right"></i>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Step 3: Discounts and Payment -->
-                    <div class="step-content" id="stepContent3">
-                        <p class="checkout-section-label"><i class="fas fa-receipt"></i> Discounts and Payment</p>
-                        <div class="voucher-section" style="background:#ffffff; border:1px solid #eaecf0; border-radius:16px; padding:20px; margin-bottom:24px; box-shadow:0 2px 8px rgba(16,24,40,0.04);">
-                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
-                                <h4 style="margin:0; font-family:'Outfit',sans-serif; font-size:1.1rem; font-weight:800; color:#101828;">
-                                    <i class="fas fa-ticket-alt" style="color:#b3261e; margin-right:6px;"></i> Discount Voucher
-                                </h4>
-                                <?php if (!empty($available_vouchers)): ?>
-                                    <span style="font-size:0.78rem; font-weight:700; color:#027a48; background:#ecfdf3; border:1px solid #abefc6; padding:3px 10px; border-radius:999px;">
-                                        <i class="fas fa-sparkles"></i> <?php echo count($available_vouchers); ?> Available Promotions
-                                    </span>
-                                <?php endif; ?>
-                            </div>
-
-                            <div class="voucher-input-row">
-                                <input type="text"
-                                       id="voucherCodeInput"
-                                       maxlength="60"
-                                       placeholder="Enter promo code (e.g. WELCOME100, FREESHIP)"
-                                       value="<?php echo htmlspecialchars($prefill_voucher_code); ?>">
-                                <button type="button" class="btn-voucher-apply" id="applyVoucherBtn" onclick="applyVoucherCode()">
-                                    <i class="fas fa-ticket-alt"></i> Apply
-                                </button>
-                                <button type="button" class="btn-voucher-remove" id="removeVoucherBtn" onclick="removeVoucherCode()" <?php echo $voucher_discount > 0 ? '' : 'style="display:none;"'; ?>>
-                                    Remove
-                                </button>
-                            </div>
-
-                            <p class="voucher-feedback <?php echo $voucher_discount > 0 ? 'success' : (!empty($voucher_message) ? 'warning' : (!empty($prefill_voucher_code) ? 'info' : '')); ?>" id="voucherFeedback" style="margin-top:10px;">
-                                <?php
-                                if ($voucher_discount > 0) {
-                                    $scope_tag = $voucher_scope_label ? ' (' . htmlspecialchars($voucher_scope_label) . ')' : '';
-                                    echo '<i class="fas fa-check-circle"></i> Applied ' . htmlspecialchars($applied_voucher_code) . ': -PHP ' . number_format($voucher_discount, 2) . $scope_tag;
-                                } elseif (!empty($voucher_message)) {
-                                    echo '<i class="fas fa-exclamation-triangle"></i> ' . htmlspecialchars($voucher_message);
-                                } elseif (!empty($prefill_voucher_code)) {
-                                    echo '<i class="fas fa-ticket-alt" style="color:#b3261e;"></i> Claimed voucher <strong>' . htmlspecialchars($prefill_voucher_code) . '</strong> is ready. Add items to qualify or click Apply.';
-                                } else {
-                                    echo '<i class="fas fa-info-circle"></i> Select or claim a promotion below to apply instant discounts to your order.';
-                                }
-                                ?>
-                            </p>
-
-                            <!-- Available Customer Promotions & Store Vouchers Cards -->
-                            <?php if (!empty($available_vouchers)): ?>
-                                <div class="available-vouchers-container" style="margin-top:16px; padding-top:16px; border-top:1px dashed #eaecf0;">
-                                    <div style="font-size:0.84rem; font-weight:800; color:#344054; margin-bottom:12px; display:flex; align-items:center; gap:6px;">
-                                        <i class="fas fa-tags" style="color:#b3261e;"></i> Claimed & Available Customer Vouchers:
-                                    </div>
-                                    <div class="available-vouchers-grid">
-                                        <?php foreach ($available_vouchers as $v): ?>
-                                            <?php 
-                                                $is_current = (strtoupper($applied_voucher_code) === strtoupper($v['code']));
-                                                $disc_offer = ($v['discount_type'] === 'percent') ? (number_format($v['discount_value'], 0) . '% off*') : ('Flat ₱' . number_format($v['discount_value'], 0) . ' off*');
-                                                $min_spend_label = $v['min_order_amount'] > 0 ? ('*Min. spend PHP ' . number_format($v['min_order_amount'], 2)) : '*Terms & conditions apply';
-                                            ?>
-                                            <div class="available-voucher-card<?php echo $is_current ? ' is-active' : ''; ?><?php echo !$v['is_eligible'] ? ' is-ineligible' : ''; ?>" 
-                                                 data-voucher-code="<?php echo htmlspecialchars(strtoupper($v['code'])); ?>">
-                                                
-                                                <!-- Left Vertical Ticket Stub -->
-                                                <div class="voucher-ticket-stub">
-                                                    <span class="voucher-ticket-stub-text">DISCOUNT</span>
-                                                </div>
-
-                                                <!-- Right Voucher Ticket Body -->
-                                                <div class="voucher-ticket-body">
-                                                    <div class="voucher-ticket-top">
-                                                        <span class="voucher-ticket-discount"><?php echo htmlspecialchars($disc_offer); ?></span>
-                                                        <div class="voucher-ticket-icon-wrap" title="<?php echo htmlspecialchars($v['badge']); ?>">
-                                                            <div class="voucher-ticket-dots">
-                                                                <span class="dot dot-1"></span>
-                                                                <span class="dot dot-2"></span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    <div class="voucher-ticket-code"><?php echo htmlspecialchars($v['code']); ?></div>
-                                                    <div class="voucher-ticket-desc" title="<?php echo htmlspecialchars($v['name']); ?>"><?php echo htmlspecialchars($v['name']); ?></div>
-                                                    <div class="voucher-ticket-terms"><?php echo htmlspecialchars($min_spend_label); ?></div>
-
-                                                    <div class="voucher-ticket-action">
-                                                        <?php if ($is_current): ?>
-                                                            <button type="button" class="voucher-pill-btn is-applied" disabled>
-                                                                <i class="fas fa-check-circle"></i> Applied
-                                                            </button>
-                                                        <?php elseif ($v['is_eligible']): ?>
-                                                            <button type="button" onclick="applySelectedVoucher('<?php echo htmlspecialchars($v['code']); ?>')" class="voucher-pill-btn">
-                                                                Apply Code
-                                                            </button>
-                                                        <?php else: ?>
-                                                            <?php
-                                                                $cart_subtotal_val = (float)($subtotal ?? 0);
-                                                                $min_spend_val = (float)($v['min_order_amount'] ?? 0);
-                                                                $shortfall = ($min_spend_val > $cart_subtotal_val) ? ($min_spend_val - $cart_subtotal_val) : 0;
-                                                            ?>
-                                                            <?php if ($shortfall > 0): ?>
-                                                                <button type="button" onclick="showVoucherShortfall('<?php echo htmlspecialchars($v['code']); ?>', <?php echo $min_spend_val; ?>, <?php echo $shortfall; ?>)" class="voucher-pill-btn is-shortfall" title="Click to view requirements">
-                                                                    <i class="fas fa-plus-circle"></i> Add PHP <?php echo number_format($shortfall, 2); ?> to unlock
-                                                                </button>
-                                                            <?php else: ?>
-                                                                <button type="button" onclick="showVoucherShortfall('<?php echo htmlspecialchars($v['code']); ?>', 0, 0, '<?php echo htmlspecialchars(addslashes($v['ineligible_reason'])); ?>')" class="voucher-pill-btn is-shortfall" title="Click for details">
-                                                                    <i class="fas fa-info-circle"></i> <?php echo htmlspecialchars($v['ineligible_reason']); ?>
-                                                                </button>
-                                                            <?php endif; ?>
-                                                        <?php endif; ?>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        <?php endforeach; ?>
-                                    </div>
-                                </div>
-                            <?php endif; ?>
-                        </div>
-                        
-                        <!-- Mode of Payment Selection -->
-                        <div class="payment-method-selection-section" style="margin-bottom: 24px;">
-                            <h4 style="font-family:'Outfit',sans-serif; font-size:1.1rem; font-weight:800; color:#101828; margin-bottom:14px; display:flex; align-items:center; gap:8px;">
-                                <i class="fas fa-wallet" style="color:#b3261e;"></i> Mode of Payment
-                            </h4>
-                            <div class="custom-payment-methods-grid" style="display: flex; flex-direction: column; gap: 12px;">
-                                <!-- Option 1: Cash on Delivery / Cash on Pickup -->
-                                <label class="custom-payment-method-card is-selected" id="paymentMethodCardCod" style="display:flex; align-items:flex-start; gap:14px; padding:16px 18px; border:2px solid #b3261e; background:#fffbfa; border-radius:14px; cursor:pointer; transition:all 0.2s ease; position:relative;">
-                                    <input type="radio" name="payment_method" value="cod" checked style="accent-color:#b3261e; width:18px; height:18px; margin-top:3px; cursor:pointer;">
-                                    <div class="pm-icon-wrap" style="width:42px; height:42px; border-radius:10px; background:#ecfdf3; color:#027a48; border:1px solid #abefc6; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0;">
-                                        <i class="fas fa-money-bill-wave"></i>
-                                    </div>
-                                    <div style="flex:1;">
-                                        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px;">
-                                            <span class="pm-title" id="codMethodTitle" style="font-size:15px; font-weight:800; color:#101828;">Cash on Delivery (COD)</span>
-                                            <span class="pm-badge" id="codMethodBadge" style="font-size:11px; font-weight:700; background:#ecfdf3; color:#027a48; border:1px solid #abefc6; padding:2px 8px; border-radius:999px;">
-                                                <i class="fas fa-motorcycle"></i> Pay to Rider
-                                            </span>
-                                        </div>
-                                        <p class="pm-desc" id="codMethodDesc" style="margin:4px 0 0; font-size:12.5px; color:#475467; line-height:1.4;">
-                                            Pay with exact cash directly to the delivery rider upon food arrival at your doorstep. No advance online card needed.
-                                        </p>
-                                    </div>
-                                </label>
-
-                                <!-- Option 2: Online Payment via PayMongo -->
-                                <label class="custom-payment-method-card" id="paymentMethodCardPaymongo" style="display:flex; align-items:flex-start; gap:14px; padding:16px 18px; border:2px solid #eaecf0; background:#ffffff; border-radius:14px; cursor:pointer; transition:all 0.2s ease; position:relative;">
-                                    <input type="radio" name="payment_method" value="paymongo" style="accent-color:#b3261e; width:18px; height:18px; margin-top:3px; cursor:pointer;">
-                                    <div class="pm-icon-wrap" style="width:42px; height:42px; border-radius:10px; background:#eff8ff; color:#175cd3; border:1px solid #b2ddff; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0;">
-                                        <i class="fas fa-credit-card"></i>
-                                    </div>
-                                    <div style="flex:1;">
-                                        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px;">
-                                            <span class="pm-title" style="font-size:15px; font-weight:800; color:#101828;">Online Payment (GCash / Maya / Cards)</span>
-                                            <span class="pm-badge" style="font-size:11px; font-weight:700; background:#eff8ff; color:#175cd3; border:1px solid #b2ddff; padding:2px 8px; border-radius:999px;">
-                                                <i class="fas fa-bolt"></i> Instant Payment
-                                            </span>
-                                        </div>
-                                        <p class="pm-desc" style="margin:4px 0 0; font-size:12.5px; color:#475467; line-height:1.4;">
-                                            Fast and secure online checkout via PayMongo. Pay using GCash, Maya, or Credit/Debit card.
-                                        </p>
-                                    </div>
-                                </label>
-                            </div>
-                        </div>
-
-                        <!-- COD Cash Guidance Box (Visible when COD is selected) -->
-                        <div id="codPaymentGuidance" style="background:#fffaeb; border:1px solid #fedf89; border-radius:12px; padding:14px 16px; margin-bottom:24px;">
-                            <div style="display:flex; gap:12px; align-items:flex-start;">
-                                <div style="color:#b54708; font-size:18px; line-height:1; margin-top:2px;">
-                                    <i class="fas fa-hand-holding-dollar"></i>
-                                </div>
-                                <div style="flex:1;">
-                                    <strong style="color:#b54708; font-size:13.5px; display:block; margin-bottom:3px;">Cash Handover Reminder</strong>
-                                    <p id="codGuidanceText" style="margin:0; font-size:12.5px; color:#7a2e0e; line-height:1.45;">
-                                        Please prepare exact cash of <strong id="codCashReminderAmount">PHP <?php echo number_format($total, 2); ?></strong> for the delivery rider upon food arrival. Your order will be confirmed immediately without waiting for bank clearance.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Online Payment Type Selection (Visible only when Online Payment is selected) -->
-                        <div id="onlinePaymentTypeSection" class="payment-type-section" style="display:none; margin-bottom:24px;">
-                            <h4 style="font-family:'Outfit',sans-serif; font-size:1.1rem; font-weight:800; color:#101828; margin-bottom:12px;">Payment Option</h4>
-                            <div class="payment-type-options">
-                                <label class="payment-type-option">
-                                    <input type="radio" name="payment_type" value="full" checked>
-                                    <div class="option-content">
-                                        <span class="option-title">Full Payment</span>
-                                        <span class="option-amount">PHP <?php echo number_format($total, 2); ?></span>
-                                        <small>Pay the complete amount online now</small>
-                                    </div>
-                                </label>
-                                <label class="payment-type-option">
-                                    <input type="radio" name="payment_type" value="downpayment">
-                                    <div class="option-content">
-                                        <span class="option-title">30% Downpayment</span>
-                                        <span class="option-amount">PHP <?php echo number_format($downpayment, 2); ?></span>
-                                        <small>Pay 30% online now, remaining balance on delivery (PHP <?php echo number_format($remaining, 2); ?>)</small>
-                                    </div>
-                                </label>
-                            </div>
-                        </div>
-                        
-                        <!-- Payment Summary Box -->
-                        <div class="payment-info-section" style="margin-bottom:24px;">
-                            <div class="payment-info-box" style="background:#ffffff; border:1px solid #eaecf0; border-radius:12px; padding:16px 18px; box-shadow:0 1px 3px rgba(16,24,40,0.04);">
-                                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-                                    <span style="font-size:13px; font-weight:700; color:#344054;" id="paymentAmountLabel">Amount to Pay on Delivery:</span>
-                                    <span class="payment-amount" id="paymentAmount" style="font-size:1.35rem; font-weight:800; color:#b3261e;">PHP <?php echo number_format($total, 2); ?></span>
-                                </div>
-                                <p class="payment-note" id="paymentNoteText" style="margin:8px 0 0; font-size:12px; color:#475467; line-height:1.4;">
-                                    <i class="fas fa-check-circle" style="color:#027a48; margin-right:4px;"></i> No advance online payment needed. Hand cash directly to the delivery rider upon arrival.
+                            <div class="fp-checkout-title-wrap">
+                                <h2 class="fp-checkout-title">Checkout</h2>
+                                <p class="fp-checkout-subtitle" id="fpDeliveryStoreSubtitle">
+                                    Delivery from <?php echo htmlspecialchars($overview_store_name); ?>
                                 </p>
                             </div>
                         </div>
-                        
-                        <div class="terms-agreement">
-                            <label class="checkbox-label">
-                                <input type="checkbox" name="terms" required>
-                                <span>
-                                    I agree to the
-                                    <a href="terms_of_service.php" data-policy-modal="terms">Terms and Conditions</a>
-                                    and
-                                    <a href="privacy_policy.php" data-policy-modal="privacy">Privacy Policy</a>
-                                </span>
-                            </label>
-                        </div>
-                        
-                        <div class="checkout-actions">
-                            <button type="button" class="btn-secondary btn-step-back" data-target="2" style="border: 1px solid #efddcd; padding: 12px 20px; font-weight: 700; border-radius: 8px; cursor: pointer; background: #fff; display: inline-flex; align-items: center; gap: 6px;">
-                                <i class="fas fa-arrow-left"></i> Back
-                            </button>
-                            <button type="submit" class="btn-primary" id="submitOrder" <?php echo $checkout_tenant_blocked ? 'disabled aria-disabled="true"' : ''; ?> style="background: #b3261e; border: none; padding: 12px 24px; font-weight: 700; border-radius: 8px; color: #fff; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
-                                <i class="fas fa-check-circle"></i> Place Order (Cash on Delivery)
-                            </button>
-                        </div>
-                        <p class="checkout-final-note" id="checkoutFinalNote">
-                            <i class="fas fa-shield-alt"></i> Authentic lechon prepared fresh from our kitchen. Pay in cash upon delivery.
-                        </p>
-                    </div>
 
-                    <div class="checkout-mode-sticky" id="checkoutModeSticky" aria-label="Quick fulfillment switch">
-                        <span class="checkout-mode-sticky-label">Quick mode</span>
-                        <div class="checkout-mode-sticky-actions" role="group" aria-label="Mobile fulfillment mode">
-                            <button type="button"
-                                    id="stickyModePickupBtn"
-                                    class="checkout-mode-btn <?php echo $current_checkout_delivery_option === 'pickup' ? 'is-active' : ''; ?>"
-                                    data-mode="pickup"
-                                    onclick="switchCheckoutFulfillmentMode('pickup')">
-                                <i class="fas fa-store"></i> Pickup
-                            </button>
-                            <button type="button"
-                                    id="stickyModeDeliveryBtn"
-                                    class="checkout-mode-btn <?php echo $current_checkout_delivery_option === 'delivery' ? 'is-active' : ''; ?>"
-                                    data-mode="delivery"
-                                    onclick="switchCheckoutFulfillmentMode('delivery')">
-                                <i class="fas fa-truck"></i> Delivery
-                            </button>
+                        <!-- 1. Delivery Address Card -->
+                        <div class="fp-card fp-delivery-address-card">
+                            <div class="fp-card-header">
+                                <h3 class="fp-section-title">Delivery address</h3>
+                                <div class="fp-mode-pill-toggle">
+                                    <button type="button" class="fp-mode-pill-btn is-active">
+                                        <i class="fas fa-motorcycle"></i> Delivery
+                                    </button>
+                                    <button type="button" class="fp-mode-pill-btn" onclick="switchCheckoutFulfillmentMode('pickup')">
+                                        <i class="fas fa-person-walking"></i> Pick-up
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="fp-address-body">
+                                <div class="fp-address-icon-wrap">
+                                    <i class="fas fa-location-dot"></i>
+                                </div>
+                                <div class="fp-address-details" style="flex: 1;">
+                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+                                        <div>
+                                            <h4 class="fp-store-name" id="displayStreetAddress">
+                                                <?php echo htmlspecialchars($target_street_display); ?>
+                                            </h4>
+                                            <p class="fp-store-address" id="displayCityAddress">
+                                                <?php echo htmlspecialchars($target_city_display); ?>
+                                            </p>
+                                        </div>
+                                        <button type="button" class="fp-del-change-btn" id="openChangeAddressModalBtn">
+                                            <i class="fas fa-pen"></i> Change
+                                        </button>
+                                    </div>
+                                    <div class="fp-order-note-wrap" style="margin-top: 12px;">
+                                        <input type="text" id="delivery_instructions" name="delivery_instructions" class="fp-note-input" placeholder="Note to rider - e.g. building, landmark, gate code" value="<?php echo htmlspecialchars($_SESSION['delivery_instructions'] ?? ''); ?>">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 2. Delivery Route & Distance Card -->
+                        <div class="fp-card fp-delivery-route-card" style="padding: 16px 18px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <span style="font-size: 13px; font-weight: 800; color: #101828; display: inline-flex; align-items: center; gap: 6px;">
+                                    <i class="fas fa-route" style="color: #b3261e;"></i> Route &amp; Distance
+                                </span>
+                                <span style="font-size: 12px; font-weight: 700; color: #175cd3; background: #eff8ff; border: 1px solid #b2ddff; padding: 2px 8px; border-radius: 999px;" id="overviewDistance">
+                                    <?php echo $overview_distance_km > 0 ? number_format($overview_distance_km, 1) . ' km' : 'Direct Distance'; ?>
+                                </span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: #475467; background: #f8f9fa; border: 1px solid #eaecf0; border-radius: 10px; padding: 10px 12px;">
+                                <div>
+                                    <span style="display: block; font-size: 11px; text-transform: uppercase; color: #667085; font-weight: 700;">From Branch</span>
+                                    <strong style="color: #101828;" id="overviewStoreName"><?php echo htmlspecialchars($overview_store_name); ?></strong>
+                                </div>
+                                <div style="text-align: right;">
+                                    <span style="display: block; font-size: 11px; text-transform: uppercase; color: #667085; font-weight: 700;">Est. Delivery Fee</span>
+                                    <strong style="color: #b3261e;" id="overviewDeliveryFee">₱<?php echo number_format($overview_fee, 2); ?></strong>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 3. Delivery Options Card -->
+                        <div class="fp-card fp-pickup-options-card">
+                            <div class="fp-card-header">
+                                <h3 class="fp-section-title">Delivery options</h3>
+                            </div>
+                            <div class="fp-options-list">
+                                <!-- Option 1: Standard (35-50 mins) -->
+                                <div class="fp-option-row is-active" id="fpDelOptionStandard" onclick="selectDeliveryOption('standard')">
+                                    <div class="fp-radio-circle">
+                                        <span class="fp-radio-dot"></span>
+                                    </div>
+                                    <div class="fp-option-info">
+                                        <span class="fp-option-label">Standard</span>
+                                        <span class="fp-option-subtext" id="overviewEta"><?php echo !empty($overview_eta) ? htmlspecialchars(str_replace('Estimated delivery: ', '', $overview_eta)) : '35–50 mins'; ?></span>
+                                    </div>
+                                </div>
+
+                                <!-- Option 2: Scheduled (Select a date and time) -->
+                                <div class="fp-option-row" id="fpDelOptionScheduled" onclick="openPickupScheduleSheet()">
+                                    <div class="fp-radio-circle">
+                                        <span class="fp-radio-dot"></span>
+                                    </div>
+                                    <div class="fp-option-info">
+                                        <span class="fp-option-label">Scheduled</span>
+                                        <span class="fp-option-subtext" id="fpDelScheduledSubtext">Select a date and time</span>
+                                    </div>
+                                    <i class="fas fa-chevron-right fp-option-chevron"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 4. Payment Method Card -->
+                        <div class="fp-card fp-payment-card" id="fpDeliveryPaymentCard">
+                            <div class="fp-card-header">
+                                <h3 class="fp-section-title">Payment method</h3>
+                            </div>
+                            <div class="fp-options-list">
+                                <!-- Option 1: COD -->
+                                <div class="fp-option-row is-active" id="fpPaymentRowCod" onclick="selectDeliveryPaymentMethod('cod')">
+                                    <div class="fp-radio-circle">
+                                        <span class="fp-radio-dot"></span>
+                                    </div>
+                                    <div class="fp-pm-icon-wrap" style="width: 38px; height: 38px; border-radius: 8px; background: #ecfdf3; color: #027a48; display: flex; align-items: center; justify-content: center; font-size: 16px;">
+                                        <i class="fas fa-money-bill-wave"></i>
+                                    </div>
+                                    <div class="fp-option-info">
+                                        <span class="fp-option-label">Cash on Delivery (COD)</span>
+                                        <span class="fp-option-subtext">Pay exact cash to rider upon food arrival</span>
+                                    </div>
+                                </div>
+
+                                <!-- Option 2: PayMongo Online Payment -->
+                                <div class="fp-option-row" id="fpPaymentRowPaymongo" onclick="selectDeliveryPaymentMethod('paymongo')">
+                                    <div class="fp-radio-circle">
+                                        <span class="fp-radio-dot"></span>
+                                    </div>
+                                    <div class="fp-pm-icon-wrap" style="width: 38px; height: 38px; border-radius: 8px; background: #eff8ff; color: #175cd3; display: flex; align-items: center; justify-content: center; font-size: 16px;">
+                                        <i class="fas fa-credit-card"></i>
+                                    </div>
+                                    <div class="fp-option-info">
+                                        <span class="fp-option-label">Online Payment (GCash / Maya / Cards)</span>
+                                        <span class="fp-option-subtext">Fast and secure online checkout via PayMongo</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Guidance note -->
+                            <div class="fp-payment-guidance-box" id="fpDeliveryPaymentGuidance" style="margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: #fffaeb; border: 1px solid #fedf89; font-size: 13px; color: #b54708; display: flex; align-items: flex-start; gap: 8px;">
+                                <i class="fas fa-hand-holding-dollar" style="margin-top: 2px;"></i>
+                                <div id="fpDeliveryGuidanceText">
+                                    Please prepare exact cash of <strong>PHP <?php echo number_format($total, 2); ?></strong> for the delivery rider upon arrival.
+                                </div>
+                            </div>
+
+                            <!-- Discount Voucher Accordion / Row -->
+                            <div class="fp-voucher-compact-row" style="margin-top: 16px; padding-top: 14px; border-top: 1px dashed #eaecf0;">
+                                <div style="display: flex; gap: 8px;">
+                                    <input type="text" id="voucherCodeInput" class="fp-note-input" placeholder="Promo code (e.g. WELCOME100)" value="<?php echo htmlspecialchars($prefill_voucher_code); ?>" style="flex: 1;">
+                                    <button type="button" class="btn-voucher-apply" id="applyVoucherBtn" onclick="applyVoucherCode()" style="padding: 0 16px; font-weight: 700; border-radius: 10px; background: #101828; color: #fff; border: none; cursor: pointer;">
+                                        Apply
+                                    </button>
+                                    <button type="button" class="btn-voucher-remove" id="removeVoucherBtn" onclick="removeVoucherCode()" <?php echo $voucher_discount > 0 ? '' : 'style="display:none;"'; ?> style="padding: 0 12px; font-weight: 700; border-radius: 10px; background: #fff1f0; color: #b3261e; border: 1px solid #fee4e2; cursor: pointer;">
+                                        Remove
+                                    </button>
+                                </div>
+                                <p class="voucher-feedback <?php echo $voucher_discount > 0 ? 'success' : ''; ?>" id="voucherFeedback" style="margin: 8px 0 0; font-size: 12px;">
+                                    <?php if ($voucher_discount > 0): ?>
+                                        <i class="fas fa-check-circle" style="color: #027a48;"></i> Applied <?php echo htmlspecialchars($applied_voucher_code); ?>: -PHP <?php echo number_format($voucher_discount, 2); ?>
+                                    <?php endif; ?>
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- 5. Contact Details & Notes Card -->
+                        <div class="fp-card fp-contact-card">
+                            <div class="fp-card-header">
+                                <h3 class="fp-section-title">Contact details</h3>
+                                <span class="fp-autofill-tag"><i class="fas fa-check-circle"></i> Profile synced</span>
+                            </div>
+                            <div class="fp-contact-body">
+                                <div class="fp-contact-row">
+                                    <i class="fas fa-user"></i>
+                                    <span><?php echo htmlspecialchars($user['full_name'] ?? 'Guest Customer'); ?></span>
+                                </div>
+                                <div class="fp-contact-row">
+                                    <i class="fas fa-phone"></i>
+                                    <span><?php echo htmlspecialchars($user['phone'] ?? ''); ?></span>
+                                </div>
+                                <div class="fp-contact-row">
+                                    <i class="fas fa-envelope"></i>
+                                    <span><?php echo htmlspecialchars($user['email'] ?? ''); ?></span>
+                                </div>
+                                <div class="fp-order-note-wrap">
+                                    <input type="text" id="fp_del_order_notes" class="fp-note-input" placeholder="Note to kitchen (optional, e.g. extra sauce, chop into pieces)" oninput="syncOrderNotes(this.value)">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 6. Order Summary Card -->
+                        <div class="fp-card fp-order-summary-card" id="fpDeliveryOrderSummaryCard">
+                            <div class="fp-card-header">
+                                <h3 class="fp-section-title">Order summary</h3>
+                                <span class="fp-items-count"><?php echo (int)$checkout_item_count; ?> <?php echo $checkout_item_count === 1 ? 'item' : 'items'; ?></span>
+                            </div>
+                            <div class="fp-summary-items-list">
+                                <?php foreach ($_SESSION['cart'] as $item): ?>
+                                <div class="fp-summary-item-row">
+                                    <span class="fp-item-qty"><?php echo (int)$item['quantity']; ?>x</span>
+                                    <div class="fp-item-text">
+                                        <div class="fp-item-name"><?php echo htmlspecialchars($item['name']); ?></div>
+                                        <?php if (!empty($item['size']) && $item['size'] !== 'Regular'): ?>
+                                        <div class="fp-item-variant">Size: <?php echo htmlspecialchars($item['size']); ?></div>
+                                        <?php endif; ?>
+                                        <?php if (!empty($item['addons'])): ?>
+                                        <div class="fp-item-variant">+ <?php echo htmlspecialchars(implode(', ', $item['addons'])); ?></div>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div class="fp-item-price">₱<?php echo number_format($item['price'] * $item['quantity'], 2); ?></div>
+                                </div>
+                                <?php endforeach; ?>
+                            </div>
+                            <div class="fp-summary-totals">
+                                <div class="fp-totals-row">
+                                    <span>Subtotal</span>
+                                    <span>₱<?php echo number_format($subtotal, 2); ?></span>
+                                </div>
+                                <div class="fp-totals-row">
+                                    <span>VAT (12%)</span>
+                                    <span>₱<?php echo number_format($vat_amount, 2); ?></span>
+                                </div>
+                                <div class="fp-totals-row">
+                                    <span>Delivery Fee</span>
+                                    <span id="fpDelDeliveryFeeDisplay">₱<?php echo number_format($delivery_fee, 2); ?></span>
+                                </div>
+                                <?php if ($voucher_discount > 0): ?>
+                                <div class="fp-totals-row fp-voucher-discount-row">
+                                    <span>Discount (<?php echo htmlspecialchars($applied_voucher_code); ?>)</span>
+                                    <span>- ₱<?php echo number_format($voucher_discount, 2); ?></span>
+                                </div>
+                                <?php endif; ?>
+                                <div class="fp-totals-row fp-grand-total-row">
+                                    <span>Total (incl. fees and tax)</span>
+                                    <span id="fpDelGrandTotalDisplay">₱<?php echo number_format($total, 2); ?></span>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    </div><!-- /#deliveryCheckoutSteps -->
-                    
+                    <!-- ================= END FOODPANDA DELIVERY VIEW ================= -->
+
+                    <!-- Hidden Payment Radios & Terms for process_order.php -->
+                    <input type="radio" name="payment_method" value="cod" <?php echo ($current_checkout_delivery_option === 'delivery') ? 'checked' : ''; ?> style="display:none;" id="radioPaymentMethodCod">
+                    <input type="radio" name="payment_method" value="paymongo" <?php echo ($current_checkout_delivery_option === 'pickup') ? 'checked' : ''; ?> style="display:none;" id="radioPaymentMethodPaymongo">
+                    <input type="radio" name="payment_type" value="full" checked style="display:none;">
+                    <input type="checkbox" name="terms" checked style="display:none;">
+
+                    <!-- Hidden Contact Inputs for process_order.php -->
+                    <input type="hidden" id="full_name" name="full_name" value="<?php echo htmlspecialchars($user['full_name'] ?? ''); ?>">
+                    <input type="hidden" id="email" name="email" value="<?php echo htmlspecialchars($user['email'] ?? ''); ?>">
+                    <input type="hidden" id="phone" name="phone" value="<?php echo htmlspecialchars($user['phone'] ?? ''); ?>">
+                    <input type="hidden" id="order_notes" name="order_notes" value="">
+
+                    <!-- Hidden Address & PSGC Form Fields -->
+                    <input type="hidden" id="street_address" name="street_address" value="<?php echo htmlspecialchars($target_street_address); ?>">
+                    <input type="hidden" id="postal_code" name="postal_code" value="<?php echo htmlspecialchars($target_postal_code); ?>">
+                    <input type="hidden" id="delivery_address" name="delivery_address" value="<?php echo htmlspecialchars($target_full_address); ?>">
+                    <input type="hidden" id="delivery_region_name" name="delivery_region_name" value="<?php echo htmlspecialchars($target_region_name); ?>">
+                    <input type="hidden" id="delivery_region_code" name="delivery_region_code" value="<?php echo htmlspecialchars($target_region_code); ?>">
+                    <input type="hidden" id="delivery_province_name" name="delivery_province_name" value="<?php echo htmlspecialchars($target_province_name); ?>">
+                    <input type="hidden" id="delivery_province_code" name="delivery_province_code" value="<?php echo htmlspecialchars($target_province_code); ?>">
+                    <input type="hidden" id="delivery_city_name" name="delivery_city_name" value="<?php echo htmlspecialchars($target_city_name); ?>">
+                    <input type="hidden" id="delivery_city_code" name="delivery_city_code" value="<?php echo htmlspecialchars($target_city_code); ?>">
+                    <input type="hidden" id="delivery_barangay_name" name="delivery_barangay_name" value="<?php echo htmlspecialchars($target_barangay_name); ?>">
+                    <input type="hidden" id="delivery_barangay_code" name="delivery_barangay_code" value="<?php echo htmlspecialchars($target_barangay_code); ?>">
+                    <input type="hidden" id="delivery_postal_code" name="delivery_postal_code" value="<?php echo htmlspecialchars($target_postal_code); ?>">
+                    <input type="hidden" id="saved_address_id" name="saved_address_id" value="<?php echo (int)$target_saved_id; ?>">
+                    <input type="hidden" id="latitude" name="latitude" value="<?php echo htmlspecialchars($target_lat_val); ?>">
+                    <input type="hidden" id="longitude" name="longitude" value="<?php echo htmlspecialchars($target_lng_val); ?>">
+                    <input type="hidden" id="distance_km" name="distance_km" value="<?php echo htmlspecialchars($target_distance_val); ?>">
+                    <input type="hidden" id="calculated_delivery_fee" name="calculated_delivery_fee" value="<?php echo htmlspecialchars($target_fee_val); ?>">
+                    <input type="hidden" name="delivery_date" id="delivery_date" value="<?php echo date('Y-m-d'); ?>">
+                    <input type="hidden" name="delivery_time" id="delivery_time" value="Standard (10-15 mins)">
+
+                    <!-- Hidden PSGC Selects for JS Compatibility -->
+                    <select id="checkout_region" style="display:none;"><option value="">--</option></select>
+                    <select id="checkout_province" style="display:none;"><option value="">--</option></select>
+                    <select id="checkout_city" style="display:none;"><option value="">--</option></select>
+                    <select id="checkout_barangay" style="display:none;"><option value="">--</option></select>
+                    <select id="saved_address_select" style="display:none;">
+                        <option value="">--</option>
+                        <?php foreach ($saved_addresses as $saved_address): ?>
+                        <option value="<?php echo (int)$saved_address['id']; ?>"><?php echo htmlspecialchars($saved_address['full_address'] ?? ''); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+
                     <!-- Hidden fields for delivery option -->
                     <input type="hidden" id="delivery_option_hidden" name="delivery_option" value="<?php echo htmlspecialchars($current_checkout_delivery_option); ?>">
                     <input type="hidden" id="pickup_location_hidden" name="pickup_location" value="<?php echo $_SESSION['pickup_location'] ?? 1; ?>">
-                    <input type="hidden" id="delivery_location_hidden" name="delivery_location" value="<?php echo $_SESSION['delivery_location'] ?? 'metro_manila'; ?>">
+                    <input type="hidden" id="delivery_location_hidden" name="delivery_location" value="<?php echo $_SESSION['delivery_location'] ?? 'cavite'; ?>">
                     <input type="hidden" id="total_amount" name="total_amount" value="<?php echo $total; ?>">
                     <input type="hidden" id="downpayment_amount" name="downpayment_amount" value="<?php echo $downpayment; ?>">
                     <input type="hidden" id="voucher_id_hidden" name="voucher_id" value="<?php echo (int)$applied_voucher_id; ?>">
@@ -1351,8 +1070,8 @@ $remaining = $total - $downpayment;
             </div>
         </div>
     </div>
-<!-- Foodpanda Pick-up Docked Bottom Bar -->
-<div class="fp-docked-bottom-bar" id="fpDockedBottomBar" style="<?php echo ($current_checkout_delivery_option === 'pickup') ? 'display: block;' : 'display: none;'; ?>">
+<!-- Foodpanda Docked Bottom Bar (Unified for Pickup & Delivery) -->
+<div class="fp-docked-bottom-bar" id="fpDockedBottomBar" style="display: block;">
     <div class="fp-bar-content">
         <div class="fp-bar-summary-row">
             <div class="fp-bar-left">
@@ -1366,8 +1085,8 @@ $remaining = $total - $downpayment;
                 <?php endif; ?>
             </div>
         </div>
-        <button type="button" class="fp-place-order-btn" id="fpPlacePickupOrderBtn" onclick="submitPickupCheckout()">
-            Place Pick-Up order
+        <button type="button" class="fp-place-order-btn" id="fpPlacePickupOrderBtn" onclick="submitFoodpandaCheckout()">
+            <?php echo ($current_checkout_delivery_option === 'pickup') ? 'Place Pick-Up order' : 'Place Delivery order'; ?>
         </button>
     </div>
 </div>
@@ -1420,24 +1139,44 @@ $remaining = $total - $downpayment;
     padding-bottom: 140px !important;
 }
 
-.checkout-section.is-pickup-mode .checkout-grid {
+.checkout-section .checkout-grid {
     display: flex !important;
     justify-content: center !important;
 }
 
-.checkout-section.is-pickup-mode .checkout-summary {
+.checkout-section .checkout-summary {
     display: none !important;
 }
 
-.checkout-section.is-pickup-mode .checkout-form {
+.checkout-section .checkout-form {
     max-width: 640px !important;
     width: 100% !important;
     margin: 0 auto !important;
 }
 
-#foodpandaPickupView {
+#foodpandaPickupView,
+#foodpandaDeliveryView {
     width: 100%;
     margin: 0 auto;
+}
+
+.fp-del-change-btn {
+    background: none;
+    border: none;
+    color: #b3261e;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: background 0.15s ease;
+}
+
+.fp-del-change-btn:hover {
+    background: #fff1f0;
 }
 
 .fp-checkout-header {
@@ -4578,65 +4317,59 @@ const psgcCache = new Map();
 const marketAddressPayloadStorageKey = 'market_address_payload';
 
 /* =========================================================
-   FOODPANDA PICK-UP CHECKOUT LOGIC & SCHEDULE MODAL
+   FOODPANDA UNIFIED CHECKOUT LOGIC & SCHEDULE MODAL
    ========================================================= */
+const storeScheduleConfig = <?php echo json_encode($store_schedule_config ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+
 let fpSelectedSchedule = {
     type: 'standard',
     dateValue: '<?php echo date('Y-m-d'); ?>',
     dateLabel: 'Today',
-    timeValue: 'Standard (10-15 mins)',
-    timeLabel: 'Standard (10-15 mins)'
+    timeValue: (activeCheckoutDeliveryOption === 'pickup') ? 'Standard (10-15 mins)' : 'Standard (35-50 mins)',
+    timeLabel: (activeCheckoutDeliveryOption === 'pickup') ? 'Standard (10-15 mins)' : 'Standard (35-50 mins)'
 };
 
 let fpCandidateSchedule = { ...fpSelectedSchedule };
+let generatedSlotsCache = [];
 
 function applyFoodpandaPickupMode(isPickup) {
     const section = document.querySelector('.checkout-section');
-    const fpView = document.getElementById('foodpandaPickupView');
-    const deliveryView = document.getElementById('deliveryCheckoutSteps');
-    const deliveryHeader = document.getElementById('deliveryCheckoutHeader');
+    const fpPickupView = document.getElementById('foodpandaPickupView');
+    const fpDeliveryView = document.getElementById('foodpandaDeliveryView');
     const fpBottomBar = document.getElementById('fpDockedBottomBar');
-    const deliverySummary = document.querySelector('.checkout-summary');
+    const fpPlaceBtn = document.getElementById('fpPlacePickupOrderBtn');
 
     if (section) {
         section.classList.toggle('is-pickup-mode', isPickup);
+        section.classList.toggle('is-delivery-mode', !isPickup);
     }
-    if (fpView) {
-        fpView.style.display = isPickup ? 'block' : 'none';
-    }
-    if (deliveryView) {
-        deliveryView.style.display = isPickup ? 'none' : 'block';
-    }
-    if (deliveryHeader) {
-        deliveryHeader.style.display = isPickup ? 'none' : 'block';
-    }
-    if (fpBottomBar) {
-        fpBottomBar.style.display = isPickup ? 'block' : 'none';
-    }
-    if (deliverySummary) {
-        deliverySummary.style.display = isPickup ? 'none' : '';
+    if (fpPickupView) fpPickupView.style.display = isPickup ? 'block' : 'none';
+    if (fpDeliveryView) fpDeliveryView.style.display = isPickup ? 'none' : 'block';
+    if (fpBottomBar) fpBottomBar.style.display = 'block';
+
+    if (fpPlaceBtn) {
+        fpPlaceBtn.textContent = isPickup ? 'Place Pick-Up order' : 'Place Delivery order';
     }
 
     // Strictly PayMongo GCash only for Pickup!
-    const codCard = document.getElementById('paymentMethodCardCod');
-    const paymongoRadio = document.querySelector('input[name="payment_method"][value="paymongo"]');
+    const paymongoRadio = document.getElementById('radioPaymentMethodPaymongo');
+    const codRadio = document.getElementById('radioPaymentMethodCod');
     const fullRadio = document.querySelector('input[name="payment_type"][value="full"]');
 
     if (isPickup) {
-        if (codCard) codCard.style.display = 'none';
-        if (paymongoRadio) {
-            paymongoRadio.checked = true;
-        }
-        if (fullRadio) {
-            fullRadio.checked = true;
-        }
+        if (paymongoRadio) paymongoRadio.checked = true;
+        if (codRadio) codRadio.checked = false;
+        if (fullRadio) fullRadio.checked = true;
         currentDeliveryFee = 0;
-        if (typeof recalculateOrderTotals === 'function') {
-            recalculateOrderTotals();
-        }
-        updateFoodpandaTotals();
     } else {
-        if (codCard) codCard.style.display = 'flex';
+        const isPaymongoSelected = document.getElementById('fpPaymentRowPaymongo')?.classList.contains('is-active');
+        if (isPaymongoSelected) {
+            if (paymongoRadio) paymongoRadio.checked = true;
+            if (codRadio) codRadio.checked = false;
+        } else {
+            if (codRadio) codRadio.checked = true;
+            if (paymongoRadio) paymongoRadio.checked = false;
+        }
     }
 
     // Sync sheet mode toggle pill
@@ -4644,6 +4377,14 @@ function applyFoodpandaPickupMode(isPickup) {
     const sheetPickupBtn = document.getElementById('sheetPickupBtn');
     if (sheetDeliveryBtn) sheetDeliveryBtn.classList.toggle('is-active', !isPickup);
     if (sheetPickupBtn) sheetPickupBtn.classList.toggle('is-active', isPickup);
+
+    // Invalidate slot cache when mode switches so standard label updates
+    generatedSlotsCache = [];
+
+    if (typeof recalculateOrderTotals === 'function') {
+        recalculateOrderTotals();
+    }
+    updateFoodpandaTotals();
 }
 
 function selectPickupOption(type) {
@@ -4668,6 +4409,69 @@ function selectPickupOption(type) {
         if (timeInput) timeInput.value = 'Standard (10-15 mins)';
     } else {
         openPickupScheduleSheet();
+    }
+}
+
+function selectDeliveryOption(type) {
+    const standardRow = document.getElementById('fpDelOptionStandard');
+    const scheduledRow = document.getElementById('fpDelOptionScheduled');
+    const scheduledSubtext = document.getElementById('fpDelScheduledSubtext');
+    const dateInput = document.getElementById('delivery_date');
+    const timeInput = document.getElementById('delivery_time');
+
+    if (type === 'standard') {
+        if (standardRow) standardRow.classList.add('is-active');
+        if (scheduledRow) scheduledRow.classList.remove('is-active');
+        if (scheduledSubtext) scheduledSubtext.textContent = 'Select a date and time';
+        fpSelectedSchedule = {
+            type: 'standard',
+            dateValue: '<?php echo date('Y-m-d'); ?>',
+            dateLabel: 'Today',
+            timeValue: 'Standard (35-50 mins)',
+            timeLabel: 'Standard (35-50 mins)'
+        };
+        if (dateInput) dateInput.value = '<?php echo date('Y-m-d'); ?>';
+        if (timeInput) timeInput.value = 'Standard (35-50 mins)';
+    } else {
+        openPickupScheduleSheet();
+    }
+}
+
+function selectDeliveryPaymentMethod(method) {
+    const isCod = (method === 'cod');
+    const codRow = document.getElementById('fpPaymentRowCod');
+    const paymongoRow = document.getElementById('fpPaymentRowPaymongo');
+    const guidanceBox = document.getElementById('fpDeliveryPaymentGuidance');
+    const guidanceText = document.getElementById('fpDeliveryGuidanceText');
+    const codRadio = document.getElementById('radioPaymentMethodCod');
+    const paymongoRadio = document.getElementById('radioPaymentMethodPaymongo');
+
+    if (codRow) codRow.classList.toggle('is-active', isCod);
+    if (paymongoRow) paymongoRow.classList.toggle('is-active', !isCod);
+
+    if (isCod) {
+        if (codRadio) codRadio.checked = true;
+        if (paymongoRadio) paymongoRadio.checked = false;
+        if (guidanceBox) {
+            guidanceBox.style.background = '#fffaeb';
+            guidanceBox.style.borderColor = '#fedf89';
+            guidanceBox.style.color = '#b54708';
+        }
+        if (guidanceText) {
+            const tot = document.getElementById('fpBarTotalDisplay')?.textContent || 'PHP 0.00';
+            guidanceText.innerHTML = `Please prepare exact cash of <strong>${tot}</strong> for the delivery rider upon food arrival.`;
+        }
+    } else {
+        if (codRadio) codRadio.checked = false;
+        if (paymongoRadio) paymongoRadio.checked = true;
+        if (guidanceBox) {
+            guidanceBox.style.background = '#eff8ff';
+            guidanceBox.style.borderColor = '#b2ddff';
+            guidanceBox.style.color = '#175cd3';
+        }
+        if (guidanceText) {
+            guidanceText.innerHTML = `<i class="fas fa-shield-alt"></i> Official payment gateway handled securely by PayMongo. Fast, instant GCash, Maya & Card verification.`;
+        }
     }
 }
 
@@ -4703,72 +4507,103 @@ function handleSheetModeSwitch(mode) {
 function generatePickupTimeSlots() {
     const slots = [];
     const now = new Date();
+    const isPickup = (activeCheckoutDeliveryOption === 'pickup');
 
-    // Standard Option
+    // 1. Standard Option
     slots.push({
         id: 'slot-standard',
-        dateLabel: now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+        dateLabel: 'Today, ' + now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
         dateValue: now.toISOString().split('T')[0],
-        timeLabel: 'Standard (10 mins)',
-        timeValue: 'Standard (10-15 mins)',
+        timeLabel: isPickup ? 'Standard (10-15 mins)' : 'Standard (35-50 mins)',
+        timeValue: isPickup ? 'Standard (10-15 mins)' : 'Standard (35-50 mins)',
         isStandard: true
     });
 
-    const addSlotsForDate = (dateObj, isToday) => {
-        const dateStr = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-        const dateISO = dateObj.toISOString().split('T')[0];
-        
-        let startHour = 10;
-        let startMin = 0;
-        if (isToday) {
-            const currentHour = now.getHours();
-            const currentMin = now.getMinutes();
-            if (currentHour >= 10) {
-                startHour = currentHour;
-                startMin = currentMin >= 30 ? 45 : 15;
-                if (startMin >= 45) {
-                    startHour += 1;
-                    startMin = 0;
-                }
-            }
+    const cfg = (typeof storeScheduleConfig !== 'undefined' && storeScheduleConfig) ? storeScheduleConfig : {};
+    const leadTimeDays = parseInt(cfg.lead_time_days || 0, 10);
+    const cutoffTime = cfg.cutoff_time || '18:00:00';
+    const maxAdvanceDays = Math.max(7, parseInt(cfg.max_advance_days || 30, 10));
+    
+    // Operating days array (1=Mon ... 7=Sun)
+    const operatingDays = (cfg.operating_days || '1,2,3,4,5,6,7').split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+    
+    // Slot interval and start/end times
+    const slotStartTime = cfg.slot_start_time || '08:00:00';
+    const slotEndTime = cfg.slot_end_time || '20:00:00';
+    const slotInterval = Math.max(15, parseInt(cfg.slot_interval_minutes || 60, 10));
+    
+    // Blackout dates
+    const blackoutDates = (cfg.blackout_dates || '').split(',').map(s => s.trim()).filter(Boolean);
+
+    // Parse start and end hour/minute
+    const [startH, startM] = slotStartTime.split(':').map(n => parseInt(n || 0, 10));
+    const [endH, endM] = slotEndTime.split(':').map(n => parseInt(n || 0, 10));
+    const startMinutesOfDay = startH * 60 + startM;
+    const endMinutesOfDay = endH * 60 + endM;
+
+    // Check if current time today is past cutoff
+    const currentHour = now.getHours();
+    const currentMin = now.getMinutes();
+    const [cutoffH, cutoffM] = cutoffTime.split(':').map(n => parseInt(n || 0, 10));
+    const isPastCutoff = (currentHour > cutoffH || (currentHour === cutoffH && currentMin >= cutoffM));
+
+    const effectiveLeadTime = isPastCutoff ? (leadTimeDays + 1) : leadTimeDays;
+
+    for (let dayOffset = effectiveLeadTime; dayOffset <= Math.min(maxAdvanceDays, 30); dayOffset++) {
+        const d = new Date(now);
+        d.setDate(d.getDate() + dayOffset);
+
+        // Check operating day (JS getDay: 0=Sun, 1=Mon, ..., 6=Sat -> Convert to 1=Mon..7=Sun)
+        const jsDay = d.getDay();
+        const customDayNum = jsDay === 0 ? 7 : jsDay;
+        if (operatingDays.length > 0 && !operatingDays.includes(customDayNum)) {
+            continue;
         }
 
-        for (let h = Math.max(10, startHour); h <= 21; h++) {
-            for (let m = 0; m < 60; m += 15) {
-                if (isToday && h === startHour && m < startMin) continue;
-                if (h === 21 && m > 30) continue;
-
-                const nextH = (m + 15 >= 60) ? h + 1 : h;
-                const nextM = (m + 15 >= 60) ? 0 : m + 15;
-                const timeFrom = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
-                const timeTo = String(nextH).padStart(2, '0') + ':' + String(nextM).padStart(2, '0');
-
-                slots.push({
-                    id: `slot-${dateISO}-${timeFrom}`,
-                    dateLabel: dateStr,
-                    dateValue: dateISO,
-                    timeLabel: `${timeFrom} – ${timeTo}`,
-                    timeValue: `${timeFrom} – ${timeTo}`,
-                    isStandard: false
-                });
-            }
+        const dateISO = d.toISOString().split('T')[0];
+        if (blackoutDates.includes(dateISO)) {
+            continue;
         }
-    };
 
-    addSlotsForDate(now, true);
+        const dateLabel = (dayOffset === 0) ? 'Today' : (dayOffset === 1 ? 'Tomorrow' : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }));
 
-    const tomorrow = new Date(now);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    addSlotsForDate(tomorrow, false);
+        // Generate slots between startMinutesOfDay and endMinutesOfDay
+        for (let m = startMinutesOfDay; m + slotInterval <= endMinutesOfDay; m += slotInterval) {
+            // If today, skip times within 45 mins
+            if (dayOffset === 0) {
+                const currentM = currentHour * 60 + currentMin + 30;
+                if (m < currentM) continue;
+            }
 
-    const dayAfter = new Date(now);
-    dayAfter.setDate(dayAfter.getDate() + 2);
-    addSlotsForDate(dayAfter, false);
+            const fromH = Math.floor(m / 60);
+            const fromM = m % 60;
+            const toMinutes = m + slotInterval;
+            const toH = Math.floor(toMinutes / 60);
+            const toM = toMinutes % 60;
+
+            const formatTime = (h, min) => {
+                const ampm = h >= 12 ? 'PM' : 'AM';
+                const h12 = h % 12 || 12;
+                return `${String(h12).padStart(2, '0')}:${String(min).padStart(2, '0')} ${ampm}`;
+            };
+
+            const timeFromStr = formatTime(fromH, fromM);
+            const timeToStr = formatTime(toH, toM);
+            const timeRangeLabel = `${timeFromStr} – ${timeToStr}`;
+
+            slots.push({
+                id: `slot-${dateISO}-${fromH}-${fromM}`,
+                dateLabel: dateLabel,
+                dateValue: dateISO,
+                timeLabel: timeRangeLabel,
+                timeValue: timeRangeLabel,
+                isStandard: false
+            });
+        }
+    }
 
     return slots;
 }
-
-let generatedSlotsCache = [];
 
 function renderPickupScheduleSlots() {
     const container = document.getElementById('fpSheetSlotsList');
@@ -4814,22 +4649,39 @@ function applyScheduleSelection() {
 
     const dateInput = document.getElementById('delivery_date');
     const timeInput = document.getElementById('delivery_time');
+
+    if (dateInput) dateInput.value = fpSelectedSchedule.dateValue;
+    if (timeInput) timeInput.value = fpSelectedSchedule.timeValue;
+
+    // Pick-up elements
     const standardRow = document.getElementById('fpOptionStandard');
     const scheduledRow = document.getElementById('fpOptionScheduled');
     const scheduledSubtext = document.getElementById('fpScheduledSubtext');
 
-    if (dateInput) dateInput.value = fpSelectedSchedule.dateValue;
-    if (timeInput) timeInput.value = fpSelectedSchedule.timeValue;
+    // Delivery elements
+    const delStandardRow = document.getElementById('fpDelOptionStandard');
+    const delScheduledRow = document.getElementById('fpDelOptionScheduled');
+    const delScheduledSubtext = document.getElementById('fpDelScheduledSubtext');
 
     if (fpSelectedSchedule.isStandard) {
         if (standardRow) standardRow.classList.add('is-active');
         if (scheduledRow) scheduledRow.classList.remove('is-active');
         if (scheduledSubtext) scheduledSubtext.textContent = 'Select a date and time';
+
+        if (delStandardRow) delStandardRow.classList.add('is-active');
+        if (delScheduledRow) delScheduledRow.classList.remove('is-active');
+        if (delScheduledSubtext) delScheduledSubtext.textContent = 'Select a date and time';
     } else {
         if (standardRow) standardRow.classList.remove('is-active');
         if (scheduledRow) scheduledRow.classList.add('is-active');
         if (scheduledSubtext) {
             scheduledSubtext.textContent = `${fpSelectedSchedule.dateLabel} • ${fpSelectedSchedule.timeLabel}`;
+        }
+
+        if (delStandardRow) delStandardRow.classList.remove('is-active');
+        if (delScheduledRow) delScheduledRow.classList.add('is-active');
+        if (delScheduledSubtext) {
+            delScheduledSubtext.textContent = `${fpSelectedSchedule.dateLabel} • ${fpSelectedSchedule.timeLabel}`;
         }
     }
 
@@ -4840,26 +4692,14 @@ function applyScheduleSelection() {
     }
 }
 
-function handlePickupStoreChange(storeId) {
-    const hiddenPickup = document.getElementById('pickup_location_hidden');
-    if (hiddenPickup) hiddenPickup.value = storeId;
-    const stepPickup = document.getElementById('pickup_location_step');
-    if (stepPickup) stepPickup.value = storeId;
-    const formPickup = document.getElementById('pickup_location');
-    if (formPickup) formPickup.value = storeId;
-
-    if (typeof updateDeliveryOption === 'function') {
-        updateDeliveryOption();
-    }
-}
-
 function syncOrderNotes(val) {
     const mainNotes = document.getElementById('order_notes');
     if (mainNotes) mainNotes.value = val;
 }
 
 function scrollToPickupSummary() {
-    const summaryCard = document.getElementById('fpOrderSummaryCard');
+    const isPickup = (activeCheckoutDeliveryOption === 'pickup');
+    const summaryCard = isPickup ? document.getElementById('fpOrderSummaryCard') : document.getElementById('fpDeliveryOrderSummaryCard');
     if (summaryCard) {
         summaryCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
@@ -4873,28 +4713,68 @@ function updateFoodpandaTotals() {
     const fpPayDisplay = document.getElementById('fpPaymentAmountDisplay');
     const fpBarTotal = document.getElementById('fpBarTotalDisplay');
     const fpGrandTotal = document.getElementById('fpGrandTotalDisplay');
+    const fpDelGrandTotal = document.getElementById('fpDelGrandTotalDisplay');
+    const fpDelFeeDisplay = document.getElementById('fpDelDeliveryFeeDisplay');
+    const fpGuidanceText = document.getElementById('fpDeliveryGuidanceText');
 
     if (fpPayDisplay) fpPayDisplay.textContent = formatted;
     if (fpBarTotal) fpBarTotal.textContent = formatted;
     if (fpGrandTotal) fpGrandTotal.textContent = formatted;
+    if (fpDelGrandTotal) fpDelGrandTotal.textContent = formatted;
+    if (fpDelFeeDisplay) {
+        fpDelFeeDisplay.textContent = (currentDeliveryFee > 0 ? (typeof moneyFormatter !== 'undefined' ? moneyFormatter.format(currentDeliveryFee) : '₱' + currentDeliveryFee.toFixed(2)) : '₱0.00');
+    }
+    if (fpGuidanceText && document.getElementById('fpPaymentRowCod')?.classList.contains('is-active')) {
+        fpGuidanceText.innerHTML = `Please prepare exact cash of <strong>${formatted}</strong> for the delivery rider upon food arrival.`;
+    }
 }
 
-function submitPickupCheckout() {
-    // 1. Ensure fulfillment mode is pickup
-    const deliveryOptionHidden = document.getElementById('delivery_option_hidden');
-    if (deliveryOptionHidden) deliveryOptionHidden.value = 'pickup';
+function submitFoodpandaCheckout() {
+    const isPickup = (activeCheckoutDeliveryOption === 'pickup');
 
-    // 2. Lock payment method to PayMongo GCash
-    const paymongoRadio = document.querySelector('input[name="payment_method"][value="paymongo"]');
-    if (paymongoRadio) paymongoRadio.checked = true;
-    const fullRadio = document.querySelector('input[name="payment_type"][value="full"]');
-    if (fullRadio) fullRadio.checked = true;
+    if (typeof checkoutTenantBlocked !== 'undefined' && checkoutTenantBlocked) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Multiple Stores in Cart',
+            text: (typeof checkoutTenantMessage !== 'undefined' && checkoutTenantMessage) ? checkoutTenantMessage : 'Your cart has items from multiple stores.',
+            confirmButtonColor: '#b3261e'
+        });
+        return;
+    }
 
-    // 3. Ensure terms agreement
-    const terms = document.querySelector('input[name="terms"]');
-    if (terms) terms.checked = true;
+    // Set delivery_option hidden input
+    const delOptInput = document.getElementById('delivery_option_hidden');
+    if (delOptInput) delOptInput.value = isPickup ? 'pickup' : 'delivery';
 
-    // 4. Validate contact info
+    // Ensure terms checkbox is checked
+    const termsInput = document.querySelector('input[name="terms"]');
+    if (termsInput) termsInput.checked = true;
+
+    if (isPickup) {
+        // Lock payment to PayMongo GCash
+        const pmRadio = document.getElementById('radioPaymentMethodPaymongo');
+        if (pmRadio) pmRadio.checked = true;
+        const codRadio = document.getElementById('radioPaymentMethodCod');
+        if (codRadio) codRadio.checked = false;
+        const fullRadio = document.querySelector('input[name="payment_type"][value="full"]');
+        if (fullRadio) fullRadio.checked = true;
+    } else {
+        // Validate delivery address exists
+        const delAddr = (document.getElementById('delivery_address')?.value || '').trim();
+        const streetAddr = (document.getElementById('street_address')?.value || '').trim();
+        const displayStreet = (document.getElementById('displayStreetAddress')?.textContent || '').trim();
+        if (!delAddr && !streetAddr && (!displayStreet || displayStreet === 'No address selected')) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Delivery Address Required',
+                text: 'Please select or enter your delivery address before placing your order.',
+                confirmButtonColor: '#b3261e'
+            });
+            return;
+        }
+    }
+
+    // Validate contact info
     const fullNameInput = document.getElementById('full_name');
     const emailInput = document.getElementById('email');
     const phoneInput = document.getElementById('phone');
@@ -4908,7 +4788,7 @@ function submitPickupCheckout() {
             title: 'Contact Information',
             html: `
                 <div style="text-align:left; font-size:14px;">
-                    <p style="margin-bottom:12px; color:#475467;">Please verify your contact details for this pick-up order:</p>
+                    <p style="margin-bottom:12px; color:#475467;">Please verify your contact details for this order:</p>
                     <div style="margin-bottom:10px;">
                         <label style="font-weight:700; color:#101828; display:block; margin-bottom:4px;">Full Name *</label>
                         <input id="swal_full_name" class="swal2-input" style="margin:0; width:100%; box-sizing:border-box;" value="${fullName}" placeholder="Your full name">
@@ -4926,7 +4806,7 @@ function submitPickupCheckout() {
             showCancelButton: true,
             confirmButtonColor: '#b3261e',
             cancelButtonColor: '#6c757d',
-            confirmButtonText: 'Continue to Payment',
+            confirmButtonText: isPickup ? 'Continue to Payment' : 'Confirm & Place Order',
             preConfirm: () => {
                 const swalName = (document.getElementById('swal_full_name')?.value || '').trim();
                 const swalEmail = (document.getElementById('swal_email')?.value || '').trim();
@@ -4950,75 +4830,83 @@ function submitPickupCheckout() {
                 if (fullNameInput) fullNameInput.value = result.value.name;
                 if (emailInput) emailInput.value = result.value.email;
                 if (phoneInput) phoneInput.value = result.value.phone;
-                executePickupOrderSubmission();
+                executeFormSubmit();
             }
         });
         return;
     }
 
-    executePickupOrderSubmission();
-}
+    executeFormSubmit();
 
-function executePickupOrderSubmission() {
-    const totalInput = document.getElementById('total_amount');
-    const totalAmount = parseFloat(totalInput?.value || '0') || 0;
-    const formattedAmount = (typeof moneyFormatter !== 'undefined' ? moneyFormatter.format(totalAmount) : `PHP ${totalAmount.toFixed(2)}`);
-    const storeName = document.getElementById('fpPickupStoreName')?.textContent?.trim() || 'Store Branch';
-    const scheduleLabel = fpSelectedSchedule.isStandard ? 'Standard (10-15 mins)' : `${fpSelectedSchedule.dateLabel} • ${fpSelectedSchedule.timeLabel}`;
-
-    Swal.fire({
-        title: 'Confirm Pick-Up Order',
-        html: `
-            <div style="text-align: left; font-size: 14px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #eaecf0;">
-                    <span style="color:#667085; font-weight:600;">Branch:</span>
-                    <strong style="color:#101828;">${storeName}</strong>
-                </div>
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #eaecf0;">
-                    <span style="color:#667085; font-weight:600;">Schedule:</span>
-                    <strong style="color:#027a48;">${scheduleLabel}</strong>
-                </div>
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #eaecf0;">
-                    <span style="color:#667085; font-weight:600;">Payment Gateway:</span>
-                    <strong style="color:#007dfe;"><i class="fas fa-lock"></i> GCash via PayMongo</strong>
-                </div>
-                <div style="background:#f8f9fa; border:1px solid #eaecf0; border-radius:12px; padding:14px; margin-bottom:12px; text-align:center;">
-                    <span style="font-size:12px; font-weight:700; color:#667085; text-transform:uppercase; letter-spacing:0.5px; display:block; margin-bottom:4px;">
-                        Total Amount to Pay via GCash
-                    </span>
-                    <span style="font-size:1.75rem; font-weight:800; color:#b3261e; display:block;">${formattedAmount}</span>
-                </div>
-                <p style="margin:0; font-size:12px; color:#475467; line-height:1.4;">
-                    <i class="fas fa-shield-alt" style="color:#175cd3;"></i> You will be redirected to the secure PayMongo payment page to pay with your GCash wallet.
-                </p>
-            </div>
-        `,
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonColor: '#b3261e',
-        cancelButtonColor: '#6c757d',
-        confirmButtonText: '<i class="fas fa-lock"></i> Proceed to GCash Payment',
-        cancelButtonText: 'Review Order'
-    }).then(async (result) => {
-        if (result.isConfirmed) {
+    function executeFormSubmit() {
+        if (isPickup) {
             Swal.fire({
-                title: 'Connecting to GCash...',
-                text: 'Redirecting to PayMongo secure payment page',
-                allowOutsideClick: false,
-                didOpen: () => {
-                    Swal.showLoading();
+                title: 'Confirm Pick-Up Order',
+                html: `
+                    <div style="text-align:left; font-size:14px;">
+                        <p style="margin-bottom:8px;"><strong>Store:</strong> <?php echo htmlspecialchars(addslashes($pickup_store_name)); ?></p>
+                        <p style="margin-bottom:8px;"><strong>Pickup Time:</strong> ${fpSelectedSchedule.timeLabel} (${fpSelectedSchedule.dateLabel})</p>
+                        <p style="margin-bottom:8px;"><strong>Payment Gateway:</strong> PayMongo (GCash)</p>
+                        <p style="margin-bottom:8px;"><strong>Total Amount:</strong> ${document.getElementById('fpBarTotalDisplay')?.textContent || ''}</p>
+                    </div>
+                `,
+                icon: 'info',
+                showCancelButton: true,
+                confirmButtonColor: '#b3261e',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: '<i class="fas fa-lock"></i> Proceed to GCash Payment',
+                cancelButtonText: 'Review Order'
+            }).then(async (result) => {
+                if (result.isConfirmed) {
+                    Swal.fire({
+                        title: 'Connecting to GCash...',
+                        text: 'Redirecting to PayMongo secure payment page',
+                        allowOutsideClick: false,
+                        didOpen: () => {
+                            Swal.showLoading();
+                        }
+                    });
+                    const formElement = document.getElementById('checkoutForm');
+                    if (typeof submitCheckoutAjax === 'function') {
+                        await submitCheckoutAjax(formElement);
+                    } else {
+                        formElement.submit();
+                    }
                 }
             });
-
+        } else {
+            // Delivery order
+            const isPaymongo = document.getElementById('radioPaymentMethodPaymongo')?.checked;
+            if (isPaymongo) {
+                Swal.fire({
+                    title: 'Connecting to PayMongo...',
+                    text: 'Redirecting to secure online payment page',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+            } else {
+                const btn = document.getElementById('fpPlacePickupOrderBtn');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Placing Order...';
+                }
+            }
             const formElement = document.getElementById('checkoutForm');
             if (typeof submitCheckoutAjax === 'function') {
-                await submitCheckoutAjax(formElement);
+                submitCheckoutAjax(formElement);
             } else {
                 formElement.submit();
             }
         }
-    });
+    }
 }
+const submitPickupCheckout = submitFoodpandaCheckout;
+window.submitFoodpandaCheckout = submitFoodpandaCheckout;
+window.submitPickupCheckout = submitFoodpandaCheckout;
+window.selectDeliveryOption = selectDeliveryOption;
+window.selectDeliveryPaymentMethod = selectDeliveryPaymentMethod;
 
 async function switchCheckoutFulfillmentMode(mode) {
     const normalizedMode = (String(mode || '').toLowerCase() === 'delivery') ? 'delivery' : 'pickup';
@@ -5552,6 +5440,9 @@ function recalculateOrderTotals() {
     }
     if (typeof updatePaymentUI === 'function') {
         updatePaymentUI();
+    }
+    if (typeof updateFoodpandaTotals === 'function') {
+        updateFoodpandaTotals();
     }
 
     return {

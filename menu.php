@@ -66,7 +66,7 @@ if (!isset($_SESSION['cart'])) {
 
 // Initialize delivery options
 if (!isset($_SESSION['delivery_option'])) {
-    $_SESSION['delivery_option'] = 'pickup'; // Default to pickup
+    $_SESSION['delivery_option'] = 'delivery'; // Default to delivery
 }
 if (!isset($_SESSION['delivery_location'])) {
     $_SESSION['delivery_location'] = 'cavite'; // Default to Cavite
@@ -1295,19 +1295,17 @@ if (is_file(__DIR__ . '/images/hero-bg.jpg')) {
             <a href="javascript:void(0);" class="fp-see-reviews-btn js-open-store-reviews">See reviews</a>
         </div>
 
-        <!-- Fulfillment Mode Switcher & Group Order -->
+        <!-- Fulfillment Mode Switcher -->
+        <?php $active_fulfillment_mode = strtolower($_SESSION['delivery_option'] ?? 'delivery'); ?>
         <div class="fp-fulfillment-row">
             <div class="fp-fulfillment-toggle">
-                <button type="button" class="fp-toggle-pill active" data-mode="delivery">
+                <button type="button" class="fp-toggle-pill <?php echo ($active_fulfillment_mode === 'delivery') ? 'active' : ''; ?>" data-mode="delivery">
                     <i class="fas fa-motorcycle"></i> Delivery
                 </button>
-                <button type="button" class="fp-toggle-pill" data-mode="pickup">
-                    <i class="fas fa-bag-shopping"></i> Pick-up <span class="fp-discount-badge">10% off</span>
+                <button type="button" class="fp-toggle-pill <?php echo ($active_fulfillment_mode === 'pickup') ? 'active' : ''; ?>" data-mode="pickup">
+                    <i class="fas fa-bag-shopping"></i> Pick-up
                 </button>
             </div>
-            <button type="button" class="fp-group-order-btn js-share-store-btn">
-                <i class="fas fa-user-group"></i> Group order
-            </button>
         </div>
 
         <!-- Delivery ETA & Pricing Card -->
@@ -1983,8 +1981,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     document.querySelectorAll('.fp-toggle-pill').forEach(function(pill) {
         pill.addEventListener('click', function() {
+            const mode = this.getAttribute('data-mode') || 'delivery';
             document.querySelectorAll('.fp-toggle-pill').forEach(function(p) { p.classList.remove('active'); });
             this.classList.add('active');
+            if (typeof setDeliveryOption === 'function') {
+                setDeliveryOption(mode);
+            }
         });
     });
 
@@ -2276,6 +2278,11 @@ document.addEventListener('DOMContentLoaded', function() {
         const normalizedOption = option === 'delivery' ? 'delivery' : 'pickup';
         setQuickOrderTabsActive(normalizedOption);
 
+        // Also synchronize Foodpanda pills
+        document.querySelectorAll('.fp-toggle-pill').forEach(function(p) {
+            p.classList.toggle('active', (p.getAttribute('data-mode') || '').toLowerCase() === normalizedOption);
+        });
+
         const payload = new URLSearchParams({ delivery_option: normalizedOption });
         if (normalizedOption === 'pickup') {
             const selectedPickupStoreId = document.querySelector('input[name="pickup_location"]:checked')?.value
@@ -2304,15 +2311,16 @@ document.addEventListener('DOMContentLoaded', function() {
     async function handleCheckoutStart() {
         if (window.cartData && Number(window.cartData.cart_count || 0) > 0) {
             const activeDeliveryOption =
-                document.querySelector('.quick-order-tab.active')?.dataset.deliveryOption
+                document.querySelector('.fp-toggle-pill.active')?.dataset.mode
+                || document.querySelector('.quick-order-tab.active')?.dataset.deliveryOption
                 || document.querySelector('.mobile-quick-order-tab.active')?.dataset.deliveryOption
-                || (window.cartData?.delivery_option || 'pickup');
+                || (window.cartData?.delivery_option || 'delivery');
             try {
                 await setDeliveryOption(activeDeliveryOption);
             } catch (error) {
                 console.error('Unable to sync delivery option before checkout:', error);
             }
-            window.location.href = 'checkout.php';
+            window.location.href = 'checkout.php?mode=' + encodeURIComponent(activeDeliveryOption);
             return;
         }
 
