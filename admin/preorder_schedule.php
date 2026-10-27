@@ -104,6 +104,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_store_rules'])) 
         $max_orders_per_day = max(1, min(200, (int)($_POST['max_orders_per_day'] ?? 15)));
         $blackout_dates = trim((string)($_POST['blackout_dates'] ?? ''));
 
+        // Separate Store Pick-Up Rules
+        $pickup_operating_days_arr = $_POST['pickup_operating_days'] ?? ['1','2','3','4','5','6','7'];
+        if (!is_array($pickup_operating_days_arr) || empty($pickup_operating_days_arr)) {
+            $pickup_operating_days_arr = ['1','2','3','4','5','6','7'];
+        }
+        $pickup_operating_days = implode(',', array_map('strval', $pickup_operating_days_arr));
+        $pickup_slot_start_time = trim((string)($_POST['pickup_slot_start_time'] ?? '09:00'));
+        $pickup_slot_end_time = trim((string)($_POST['pickup_slot_end_time'] ?? '19:00'));
+        $pickup_slot_interval_minutes = (int)($_POST['pickup_slot_interval_minutes'] ?? 30);
+        $pickup_max_orders_per_slot = max(1, min(50, (int)($_POST['pickup_max_orders_per_slot'] ?? 5)));
+
+        $existing_schedule = posGetSellerSchedule($conn, $target_seller_id);
+        $custom_slots_data = json_decode((string)($existing_schedule['custom_slots_json'] ?? ''), true);
+        if (!is_array($custom_slots_data)) {
+            $custom_slots_data = [];
+        }
+        $custom_slots_data['pickup'] = [
+            'operating_days' => $pickup_operating_days,
+            'slot_start_time' => $pickup_slot_start_time,
+            'slot_end_time' => $pickup_slot_end_time,
+            'slot_interval_minutes' => $pickup_slot_interval_minutes,
+            'max_orders_per_slot' => $pickup_max_orders_per_slot
+        ];
+
         $save_data = [
             'lead_time_days' => $lead_time_days,
             'cutoff_time' => $cutoff_time,
@@ -115,6 +139,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_store_rules'])) 
             'max_orders_per_slot' => $max_orders_per_slot,
             'max_orders_per_day' => $max_orders_per_day,
             'blackout_dates' => $blackout_dates,
+            'custom_slots_json' => json_encode($custom_slots_data),
             'is_active' => 1
         ];
 
@@ -665,8 +690,8 @@ $active_days_count = count(array_filter($operating_days_arr));
                 <!-- Hero Header -->
                 <div class="schedule-hero">
                     <div>
-                        <h2><i class="fas fa-calendar-alt text-danger me-2"></i><?php echo htmlspecialchars($shop_display_name); ?> — Pick-up Schedule</h2>
-                        <p>Click any specific date directly on the calendar below to toggle availability, block holidays, or adjust daily roasting capacity.</p>
+                        <h2><i class="fas fa-calendar-alt text-danger me-2"></i><?php echo htmlspecialchars($shop_display_name); ?> — Pick-Up &amp; Pre-Order Schedule</h2>
+                        <p>Configure distinct dates, operating hours, and capacity limits for Store Pick-Up orders vs. Advance Pre-Order roasting batches.</p>
                     </div>
                     <div class="d-flex align-items-center gap-2">
                         <button type="button" class="btn btn-outline-dark" data-bs-toggle="modal" data-bs-target="#defaultRulesModal" style="border-radius: 10px; font-weight: 600;">
@@ -676,6 +701,16 @@ $active_days_count = count(array_filter($operating_days_arr));
                             <i class="fas fa-list me-1"></i> Pre-Orders List
                         </a>
                     </div>
+                </div>
+
+                <!-- Schedule Mode Switcher Tabs -->
+                <div class="d-flex align-items-center gap-2 mb-3" style="background:#ffffff; border:1px solid #eaecf0; border-radius:12px; padding:6px 10px; width:fit-content; box-shadow: 0 1px 2px rgba(16,24,40,0.04);">
+                    <button type="button" class="btn btn-sm btn-dark" id="btnTogglePreorderView" onclick="switchScheduleModeView('preorder')" style="border-radius:8px; font-weight:700;">
+                        <i class="fas fa-fire me-1 text-warning"></i> Pre-Order Roasting Schedule
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btnTogglePickupView" onclick="switchScheduleModeView('pickup')" style="border-radius:8px; font-weight:700;">
+                        <i class="fas fa-person-walking me-1 text-primary"></i> Regular Store Pick-Up Hours
+                    </button>
                 </div>
 
                 <?php if ($flash_success): ?>
@@ -692,8 +727,8 @@ $active_days_count = count(array_filter($operating_days_arr));
                     </div>
                 <?php endif; ?>
 
-                <!-- Store KPI Quick Status Bar -->
-                <div class="kpi-row">
+                <!-- Store KPI Quick Status Bar (Pre-Order Roasting View) -->
+                <div class="kpi-row" id="kpiRowPreorder">
                     <div class="kpi-card">
                         <div class="kpi-icon" style="background:#fff1f0; color:#b3261e;">
                             <i class="fas fa-stopwatch"></i>
@@ -716,10 +751,10 @@ $active_days_count = count(array_filter($operating_days_arr));
                     </div>
                     <div class="kpi-card">
                         <div class="kpi-icon" style="background:#eff8ff; color:#175cd3;">
-                            <i class="fas fa-clock"></i>
+                            <i class="fas fa-fire"></i>
                         </div>
                         <div class="kpi-info">
-                            <small>Pick-Up Hours</small>
+                            <small>Roasting Batch Hours</small>
                             <strong><?php echo date('g:i A', strtotime($schedule['slot_start_time'])); ?> - <?php echo date('g:i A', strtotime($schedule['slot_end_time'])); ?></strong>
                             <div style="font-size: 0.72rem; color:#667085;">Interval: Every <?php echo (int)$schedule['slot_interval_minutes']; ?> mins</div>
                         </div>
@@ -732,6 +767,53 @@ $active_days_count = count(array_filter($operating_days_arr));
                             <small>Roasting Capacity</small>
                             <strong><?php echo (int)$schedule['max_orders_per_day']; ?> Orders / Day</strong>
                             <div style="font-size: 0.72rem; color:#667085;">Max <?php echo (int)$schedule['max_orders_per_slot']; ?> per slot</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Store KPI Quick Status Bar (Store Pick-Up View) -->
+                <?php 
+                $pickup_days_count = count(array_filter(explode(',', (string)($schedule['pickup_operating_days'] ?? '1,2,3,4,5,6,7'))));
+                ?>
+                <div class="kpi-row" id="kpiRowPickup" style="display: none;">
+                    <div class="kpi-card">
+                        <div class="kpi-icon" style="background:#ecfdf3; color:#027a48;">
+                            <i class="fas fa-store"></i>
+                        </div>
+                        <div class="kpi-info">
+                            <small>Store Pick-Up Days</small>
+                            <strong><?php echo $pickup_days_count; ?> Days / Week</strong>
+                            <div style="font-size: 0.72rem; color:#667085;">Standard customer pickup</div>
+                        </div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-icon" style="background:#eff8ff; color:#175cd3;">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="kpi-info">
+                            <small>Store Pick-Up Hours</small>
+                            <strong><?php echo date('g:i A', strtotime($schedule['pickup_start_time'] ?? '09:00:00')); ?> - <?php echo date('g:i A', strtotime($schedule['pickup_end_time'] ?? '19:00:00')); ?></strong>
+                            <div style="font-size: 0.72rem; color:#667085;">Store open for order pickup</div>
+                        </div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-icon" style="background:#fffaeb; color:#b54708;">
+                            <i class="fas fa-history"></i>
+                        </div>
+                        <div class="kpi-info">
+                            <small>Pickup Slot Interval</small>
+                            <strong>Every <?php echo (int)($schedule['pickup_interval_minutes'] ?? 30); ?> Mins</strong>
+                            <div style="font-size: 0.72rem; color:#667085;">Smooth customer turnaround</div>
+                        </div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-icon" style="background:#fff1f0; color:#b3261e;">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="kpi-info">
+                            <small>Slot Capacity</small>
+                            <strong>Max <?php echo (int)($schedule['pickup_max_orders_per_slot'] ?? 5); ?> Pickups / Slot</strong>
+                            <div style="font-size: 0.72rem; color:#667085;">Counter queuing protection</div>
                         </div>
                     </div>
                 </div>
@@ -864,7 +946,8 @@ $active_days_count = count(array_filter($operating_days_arr));
 
     <!-- ========================================================= -->
     <!-- Date Schedule Editor Modal                                -->
-    <!-- ========================================================= --    <div class="modal fade modern-form-modal" id="dateEditorModal" tabindex="-1" aria-labelledby="dateModalTitle" aria-hidden="true">
+    <!-- ========================================================= -->
+    <div class="modal fade modern-form-modal" id="dateEditorModal" tabindex="-1" aria-labelledby="dateModalTitle" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content">
                 <div class="modal-header modal-header-modern">
@@ -1022,163 +1105,269 @@ $active_days_count = count(array_filter($operating_days_arr));
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
 
-                    <div class="modal-body p-4">
-                        <!-- 1. Lead Time & Cutoff Rules -->
-                        <div class="form-section-card mb-3">
-                            <div class="form-section-head">
-                                <div class="form-section-title">
-                                    <i class="fas fa-stopwatch"></i>
-                                    1. Booking Notice &amp; Cutoff Rule
-                                </div>
-                                <span class="form-req-pill">Notice Window</span>
-                            </div>
-                            <div class="p-3">
-                                <div class="row g-3 mb-2">
-                                    <div class="col-md-6">
-                                        <div class="form-group-modern">
-                                            <label class="form-label-modern">Minimum Advance Notice (Days)</label>
-                                            <div class="form-input-wrap">
-                                                <i class="fas fa-clock form-input-icon"></i>
-                                                <input type="number" name="lead_time_days" class="form-control" value="<?php echo (int)$schedule['lead_time_days']; ?>" min="0" max="14" required>
+                                        <div class="modal-body p-4">
+                        <!-- Navigation Tabs inside Rules Modal -->
+                        <ul class="nav nav-pills nav-fill mb-4" id="rulesNavPills" role="tablist" style="background:#f1f3f5; border-radius:12px; padding:4px;">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active fw-bold text-dark" id="pillPreorderRulesBtn" data-bs-toggle="pill" data-bs-target="#panePreorderRules" type="button" role="tab" style="border-radius:10px;">
+                                    <i class="fas fa-fire me-1 text-danger"></i> 1. Pre-Order Roasting Rules
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link fw-bold text-dark" id="pillPickupRulesBtn" data-bs-toggle="pill" data-bs-target="#panePickupRules" type="button" role="tab" style="border-radius:10px;">
+                                    <i class="fas fa-person-walking me-1 text-primary"></i> 2. Store Pick-Up Rules
+                                </button>
+                            </li>
+                        </ul>
+
+                        <div class="tab-content" id="rulesTabContent">
+                            <!-- Pane 1: Pre-Order Roasting Rules -->
+                            <div class="tab-pane fade show active" id="panePreorderRules" role="tabpanel">
+                                <!-- 1. Lead Time & Cutoff Rules -->
+                                <div class="form-section-card mb-3">
+                                    <div class="form-section-head">
+                                        <div class="form-section-title">
+                                            <i class="fas fa-stopwatch"></i>
+                                            Advance Booking Notice &amp; Daily Cutoff
+                                        </div>
+                                        <span class="form-req-pill">Pre-Orders</span>
+                                    </div>
+                                    <div class="p-3">
+                                        <div class="row g-3 mb-2">
+                                            <div class="col-md-6">
+                                                <div class="form-group-modern">
+                                                    <label class="form-label-modern">Minimum Advance Notice (Days)</label>
+                                                    <div class="form-input-wrap">
+                                                        <i class="fas fa-clock form-input-icon"></i>
+                                                        <input type="number" name="lead_time_days" class="form-control" value="<?php echo (int)$schedule['lead_time_days']; ?>" min="0" max="14" required>
+                                                    </div>
+                                                    <small class="text-muted mt-1 d-block" style="font-size:0.8rem;">Set to <code>1</code> for 24-hr advance notice, or <code>2</code> for 48-hr.</small>
+                                                </div>
                                             </div>
-                                            <small class="text-muted mt-1 d-block" style="font-size:0.8rem;">Set to <code>1</code> for 24-hr notice, or <code>2</code> for 48-hr.</small>
+                                            <div class="col-md-6">
+                                                <div class="form-group-modern">
+                                                    <label class="form-label-modern">Daily Order Cutoff Time</label>
+                                                    <div class="form-input-wrap">
+                                                        <i class="fas fa-hourglass-half form-input-icon"></i>
+                                                        <input type="time" name="cutoff_time" class="form-control" value="<?php echo htmlspecialchars(substr($schedule['cutoff_time'], 0, 5)); ?>" required>
+                                                    </div>
+                                                    <small class="text-muted mt-1 d-block" style="font-size:0.8rem;">Pre-orders placed after this time advance roasting window by +1 day.</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="row g-3">
+                                            <div class="col-md-6">
+                                                <div class="form-group-modern mb-0">
+                                                    <label class="form-label-modern">Maximum Days in Advance</label>
+                                                    <div class="form-input-wrap">
+                                                        <i class="fas fa-calendar-alt form-input-icon"></i>
+                                                        <input type="number" name="max_advance_days" class="form-control" value="<?php echo (int)$schedule['max_advance_days']; ?>" min="7" max="90" required>
+                                                    </div>
+                                                    <small class="text-muted mt-1 d-block" style="font-size:0.8rem;">Rolling calendar booking window (e.g. up to 30 or 60 days ahead).</small>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div class="col-md-6">
-                                        <div class="form-group-modern">
-                                            <label class="form-label-modern">Daily Order Cutoff Time</label>
-                                            <div class="form-input-wrap">
-                                                <i class="fas fa-hourglass-half form-input-icon"></i>
-                                                <input type="time" name="cutoff_time" class="form-control" value="<?php echo htmlspecialchars(substr($schedule['cutoff_time'], 0, 5)); ?>" required>
-                                            </div>
-                                            <small class="text-muted mt-1 d-block" style="font-size:0.8rem;">Orders placed after this time advance availability by +1 day.</small>
+                                </div>
+
+                                <!-- 2. Roasting Operating Days -->
+                                <div class="form-section-card mb-3">
+                                    <div class="form-section-head">
+                                        <div class="form-section-title">
+                                            <i class="fas fa-calendar-week"></i>
+                                            Operating Roasting Days
+                                        </div>
+                                        <span class="form-req-pill">Weekly Roasts</span>
+                                    </div>
+                                    <div class="p-3">
+                                        <p class="text-muted small mb-3">Select the days of the week when your roasting pit operates for pre-orders.</p>
+                                        
+                                        <div class="day-checkbox-grid">
+                                            <?php foreach ($days_map as $val => $name): 
+                                                $is_checked = in_array((string)$val, $operating_days_arr, true);
+                                            ?>
+                                                <label class="day-toggle-card">
+                                                    <input type="checkbox" name="operating_days[]" value="<?php echo $val; ?>" <?php echo $is_checked ? 'checked' : ''; ?>>
+                                                    <span><?php echo $name; ?></span>
+                                                </label>
+                                            <?php endforeach; ?>
                                         </div>
                                     </div>
                                 </div>
-                                <div class="row g-3">
-                                    <div class="col-md-6">
+
+                                <!-- 3. Roasting Pit Hours & Batch Capacity -->
+                                <div class="form-section-card mb-3">
+                                    <div class="form-section-head">
+                                        <div class="form-section-title">
+                                            <i class="fas fa-fire"></i>
+                                            Roasting Batch Hours &amp; Capacity
+                                        </div>
+                                        <span class="form-req-pill">Pit Limits</span>
+                                    </div>
+                                    <div class="p-3">
+                                        <div class="row g-3 mb-3">
+                                            <div class="col-md-4">
+                                                <div class="form-group-modern">
+                                                    <label class="form-label-modern">First Roasting Batch</label>
+                                                    <div class="form-input-wrap">
+                                                        <i class="fas fa-clock form-input-icon"></i>
+                                                        <input type="time" name="slot_start_time" class="form-control" value="<?php echo htmlspecialchars(substr($schedule['slot_start_time'], 0, 5)); ?>" required>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <div class="form-group-modern">
+                                                    <label class="form-label-modern">Last Roasting Batch</label>
+                                                    <div class="form-input-wrap">
+                                                        <i class="fas fa-clock form-input-icon"></i>
+                                                        <input type="time" name="slot_end_time" class="form-control" value="<?php echo htmlspecialchars(substr($schedule['slot_end_time'], 0, 5)); ?>" required>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <div class="form-group-modern">
+                                                    <label class="form-label-modern">Batch Interval</label>
+                                                    <div class="form-input-wrap">
+                                                        <i class="fas fa-history form-input-icon"></i>
+                                                        <select name="slot_interval_minutes" class="form-control">
+                                                            <option value="30" <?php echo (int)$schedule['slot_interval_minutes'] === 30 ? 'selected' : ''; ?>>Every 30 mins</option>
+                                                            <option value="60" <?php echo (int)$schedule['slot_interval_minutes'] === 60 ? 'selected' : ''; ?>>Every 1 hour (Default)</option>
+                                                            <option value="90" <?php echo (int)$schedule['slot_interval_minutes'] === 90 ? 'selected' : ''; ?>>Every 1.5 hours</option>
+                                                            <option value="120" <?php echo (int)$schedule['slot_interval_minutes'] === 120 ? 'selected' : ''; ?>>Every 2 hours</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="row g-3">
+                                            <div class="col-md-6">
+                                                <div class="form-group-modern mb-0">
+                                                    <label class="form-label-modern">Max Pre-Orders Per Batch</label>
+                                                    <div class="form-input-wrap">
+                                                        <i class="fas fa-boxes-stacked form-input-icon"></i>
+                                                        <input type="number" name="max_orders_per_slot" class="form-control" value="<?php echo (int)$schedule['max_orders_per_slot']; ?>" min="1" max="50" required>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="form-group-modern mb-0">
+                                                    <label class="form-label-modern">Max Total Roasts Per Day</label>
+                                                    <div class="form-input-wrap">
+                                                        <i class="fas fa-calendar-day form-input-icon"></i>
+                                                        <input type="number" name="max_orders_per_day" class="form-control" value="<?php echo (int)$schedule['max_orders_per_day']; ?>" min="1" max="200" required>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 4. Global Blackout Dates Input -->
+                                <div class="form-section-card mb-0">
+                                    <div class="form-section-head">
+                                        <div class="form-section-title">
+                                            <i class="fas fa-ban"></i>
+                                            Blocked Holiday Dates
+                                        </div>
+                                        <span class="form-opt-pill">Blackouts</span>
+                                    </div>
+                                    <div class="p-3">
                                         <div class="form-group-modern mb-0">
-                                            <label class="form-label-modern">Maximum Days in Advance</label>
                                             <div class="form-input-wrap">
-                                                <i class="fas fa-calendar-alt form-input-icon"></i>
-                                                <input type="number" name="max_advance_days" class="form-control" value="<?php echo (int)$schedule['max_advance_days']; ?>" min="7" max="90" required>
+                                                <i class="fas fa-calendar-times form-input-icon"></i>
+                                                <input type="text" name="blackout_dates" class="form-control" value="<?php echo htmlspecialchars((string)$schedule['blackout_dates']); ?>" placeholder="e.g. 2026-12-25, 2026-01-01">
                                             </div>
-                                            <small class="text-muted mt-1 d-block" style="font-size:0.8rem;">Rolling calendar window (e.g. up to 30 or 60 days ahead).</small>
+                                            <small class="text-muted mt-1 d-block" style="font-size:0.8rem;">Separate multiple dates with commas. You can also block or open dates directly on the calendar.</small>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
 
-                        <!-- 2. Operating Days -->
-                        <div class="form-section-card mb-3">
-                            <div class="form-section-head">
-                                <div class="form-section-title">
-                                    <i class="fas fa-calendar-week"></i>
-                                    2. Operating Roasting Days
-                                </div>
-                                <span class="form-req-pill">Weekly Schedule</span>
-                            </div>
-                            <div class="p-3">
-                                <p class="text-muted small mb-3">Uncheck days when your roasting pit does not accept pre-order pickups.</p>
-                                
-                                <div class="day-checkbox-grid">
-                                    <?php foreach ($days_map as $val => $name): 
-                                        $is_checked = in_array($val, $operating_days_arr, true);
-                                    ?>
-                                        <label class="day-toggle-card">
-                                            <input type="checkbox" name="operating_days[]" value="<?php echo $val; ?>" <?php echo $is_checked ? 'checked' : ''; ?>>
-                                            <span><?php echo $name; ?></span>
-                                        </label>
-                                    <?php endforeach; ?>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- 3. Pickup Time Slots & Roasting Capacity -->
-                        <div class="form-section-card mb-3">
-                            <div class="form-section-head">
-                                <div class="form-section-title">
-                                    <i class="fas fa-fire"></i>
-                                    3. Pickup Hours &amp; Capacity
-                                </div>
-                                <span class="form-req-pill">Roasting Pit Limits</span>
-                            </div>
-                            <div class="p-3">
-                                <div class="row g-3 mb-3">
-                                    <div class="col-md-4">
-                                        <div class="form-group-modern">
-                                            <label class="form-label-modern">First Pickup Time</label>
-                                            <div class="form-input-wrap">
-                                                <i class="fas fa-clock form-input-icon"></i>
-                                                <input type="time" name="slot_start_time" class="form-control" value="<?php echo htmlspecialchars(substr($schedule['slot_start_time'], 0, 5)); ?>" required>
-                                            </div>
+                            <!-- Pane 2: Store Pick-Up Rules -->
+                            <div class="tab-pane fade" id="panePickupRules" role="tabpanel">
+                                <div class="form-section-card mb-3">
+                                    <div class="form-section-head">
+                                        <div class="form-section-title">
+                                            <i class="fas fa-calendar-check"></i>
+                                            Store Pick-Up Operating Days
                                         </div>
+                                        <span class="form-req-pill">Store Open</span>
                                     </div>
-                                    <div class="col-md-4">
-                                        <div class="form-group-modern">
-                                            <label class="form-label-modern">Last Pickup Time</label>
-                                            <div class="form-input-wrap">
-                                                <i class="fas fa-clock form-input-icon"></i>
-                                                <input type="time" name="slot_end_time" class="form-control" value="<?php echo htmlspecialchars(substr($schedule['slot_end_time'], 0, 5)); ?>" required>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="form-group-modern">
-                                            <label class="form-label-modern">Slot Interval</label>
-                                            <div class="form-input-wrap">
-                                                <i class="fas fa-history form-input-icon"></i>
-                                                <select name="slot_interval_minutes" class="form-control">
-                                                    <option value="30" <?php echo (int)$schedule['slot_interval_minutes'] === 30 ? 'selected' : ''; ?>>Every 30 mins</option>
-                                                    <option value="60" <?php echo (int)$schedule['slot_interval_minutes'] === 60 ? 'selected' : ''; ?>>Every 1 hour (Default)</option>
-                                                    <option value="90" <?php echo (int)$schedule['slot_interval_minutes'] === 90 ? 'selected' : ''; ?>>Every 1.5 hours</option>
-                                                    <option value="120" <?php echo (int)$schedule['slot_interval_minutes'] === 120 ? 'selected' : ''; ?>>Every 2 hours</option>
-                                                </select>
-                                            </div>
+                                    <div class="p-3">
+                                        <p class="text-muted small mb-3">Days of the week when customers can pick up regular store orders.</p>
+                                        
+                                        <div class="day-checkbox-grid">
+                                            <?php 
+                                            $pickup_days_arr = explode(',', (string)($schedule['pickup_operating_days'] ?? '1,2,3,4,5,6,7'));
+                                            foreach ($days_map as $val => $name): 
+                                                $is_checked = in_array((string)$val, $pickup_days_arr, true);
+                                            ?>
+                                                <label class="day-toggle-card">
+                                                    <input type="checkbox" name="pickup_operating_days[]" value="<?php echo $val; ?>" <?php echo $is_checked ? 'checked' : ''; ?>>
+                                                    <span><?php echo $name; ?></span>
+                                                </label>
+                                            <?php endforeach; ?>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div class="row g-3">
-                                    <div class="col-md-6">
-                                        <div class="form-group-modern mb-0">
-                                            <label class="form-label-modern">Max Orders Per Slot</label>
-                                            <div class="form-input-wrap">
-                                                <i class="fas fa-boxes-stacked form-input-icon"></i>
-                                                <input type="number" name="max_orders_per_slot" class="form-control" value="<?php echo (int)$schedule['max_orders_per_slot']; ?>" min="1" max="50" required>
+                                <div class="form-section-card mb-0">
+                                    <div class="form-section-head">
+                                        <div class="form-section-title">
+                                            <i class="fas fa-clock"></i>
+                                            Store Pick-Up Operating Hours &amp; Slots
+                                        </div>
+                                        <span class="form-req-pill">Pickup Hours</span>
+                                    </div>
+                                    <div class="p-3">
+                                        <div class="row g-3 mb-3">
+                                            <div class="col-md-4">
+                                                <div class="form-group-modern">
+                                                    <label class="form-label-modern">Opening Pick-up Time</label>
+                                                    <div class="form-input-wrap">
+                                                        <i class="fas fa-clock form-input-icon"></i>
+                                                        <input type="time" name="pickup_slot_start_time" class="form-control" value="<?php echo htmlspecialchars(substr($schedule['pickup_start_time'] ?? '09:00', 0, 5)); ?>" required>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <div class="form-group-modern">
+                                                    <label class="form-label-modern">Closing Pick-up Time</label>
+                                                    <div class="form-input-wrap">
+                                                        <i class="fas fa-clock form-input-icon"></i>
+                                                        <input type="time" name="pickup_slot_end_time" class="form-control" value="<?php echo htmlspecialchars(substr($schedule['pickup_end_time'] ?? '19:00', 0, 5)); ?>" required>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <div class="form-group-modern">
+                                                    <label class="form-label-modern">Pickup Time Interval</label>
+                                                    <div class="form-input-wrap">
+                                                        <i class="fas fa-history form-input-icon"></i>
+                                                        <select name="pickup_slot_interval_minutes" class="form-control">
+                                                            <option value="15" <?php echo (int)($schedule['pickup_interval_minutes'] ?? 30) === 15 ? 'selected' : ''; ?>>Every 15 mins</option>
+                                                            <option value="30" <?php echo (int)($schedule['pickup_interval_minutes'] ?? 30) === 30 ? 'selected' : ''; ?>>Every 30 mins (Default)</option>
+                                                            <option value="60" <?php echo (int)($schedule['pickup_interval_minutes'] ?? 30) === 60 ? 'selected' : ''; ?>>Every 1 hour</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <div class="form-group-modern mb-0">
-                                            <label class="form-label-modern">Max Total Orders Per Day</label>
-                                            <div class="form-input-wrap">
-                                                <i class="fas fa-calendar-day form-input-icon"></i>
-                                                <input type="number" name="max_orders_per_day" class="form-control" value="<?php echo (int)$schedule['max_orders_per_day']; ?>" min="1" max="200" required>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
 
-                        <!-- 4. Global Blackout Dates Input -->
-                        <div class="form-section-card mb-0">
-                            <div class="form-section-head">
-                                <div class="form-section-title">
-                                    <i class="fas fa-ban"></i>
-                                    4. Blocked Holiday Dates
-                                </div>
-                                <span class="form-opt-pill">Blackouts</span>
-                            </div>
-                            <div class="p-3">
-                                <div class="form-group-modern mb-0">
-                                    <div class="form-input-wrap">
-                                        <i class="fas fa-calendar-times form-input-icon"></i>
-                                        <input type="text" name="blackout_dates" class="form-control" value="<?php echo htmlspecialchars((string)$schedule['blackout_dates']); ?>" placeholder="e.g. 2026-12-25, 2026-01-01">
+                                        <div class="row g-3">
+                                            <div class="col-md-6">
+                                                <div class="form-group-modern mb-0">
+                                                    <label class="form-label-modern">Max Pickups Per Slot</label>
+                                                    <div class="form-input-wrap">
+                                                        <i class="fas fa-boxes-stacked form-input-icon"></i>
+                                                        <input type="number" name="pickup_max_orders_per_slot" class="form-control" value="<?php echo (int)($schedule['pickup_max_orders_per_slot'] ?? 5); ?>" min="1" max="50" required>
+                                                    </div>
+                                                    <small class="text-muted mt-1 d-block" style="font-size:0.8rem;">Maximum customer pickups allowed per interval to avoid counter queues.</small>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <small class="text-muted mt-1 d-block" style="font-size:0.8rem;">Separate multiple dates with commas. You can also block or open dates directly on the calendar.</small>
                                 </div>
                             </div>
                         </div>
@@ -1260,7 +1449,10 @@ $active_days_count = count(array_filter($operating_days_arr));
         // Handle Clicking Any Specific Date on Calendar
         // -------------------------------------------------------------
         function handleDateCellClick(dateStr) {
-            if (!dateEditorModal || !dateStr) return;
+            if (!dateStr) return;
+
+            const modalEl = document.getElementById('dateEditorModal');
+            if (!modalEl) return;
 
             const loading = document.getElementById('dateModalLoading');
             const formWrap = document.getElementById('dateModalFormWrap');
@@ -1268,13 +1460,27 @@ $active_days_count = count(array_filter($operating_days_arr));
             const subtitle = document.getElementById('modalDateSubtitle');
             const editDateVal = document.getElementById('editDateValue');
 
-            loading.style.display = 'block';
-            formWrap.style.display = 'none';
-            heading.textContent = 'Loading...';
-            subtitle.textContent = dateStr;
-            editDateVal.value = dateStr;
+            if (loading) {
+                loading.style.display = 'block';
+                loading.innerHTML = `
+                    <div class="spinner-border text-danger" role="status"></div>
+                    <div class="text-muted mt-2 fw-semibold">Loading schedule details for ${escapeHtml(dateStr)}...</div>
+                `;
+            }
+            if (formWrap) formWrap.style.display = 'none';
+            if (heading) heading.textContent = 'Schedule: ' + dateStr;
+            if (subtitle) subtitle.textContent = 'Loading reservation details...';
+            if (editDateVal) editDateVal.value = dateStr;
 
-            dateEditorModal.show();
+            if (dateEditorModal) {
+                dateEditorModal.show();
+            } else if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                dateEditorModal = new bootstrap.Modal(modalEl);
+                dateEditorModal.show();
+            } else {
+                modalEl.style.display = 'block';
+                modalEl.classList.add('show');
+            }
 
             fetch(`preorder_schedule.php?action=get_date_details&date=${encodeURIComponent(dateStr)}`)
                 .then(res => res.json())
@@ -1283,18 +1489,31 @@ $active_days_count = count(array_filter($operating_days_arr));
                         throw new Error(data.message || 'Unable to load date schedule.');
                     }
                     populateDateModal(data.data);
-                    loading.style.display = 'none';
-                    formWrap.style.display = 'block';
+                    if (loading) loading.style.display = 'none';
+                    if (formWrap) formWrap.style.display = 'block';
                 })
                 .catch(err => {
-                    loading.innerHTML = `
-                        <div class="text-danger py-4">
-                            <i class="fas fa-exclamation-circle fa-2x mb-2"></i>
-                            <div>${err.message || 'Failed to load date details.'}</div>
-                            <button type="button" class="btn btn-sm btn-outline-secondary mt-3" data-bs-dismiss="modal">Close</button>
-                        </div>
-                    `;
+                    if (loading) {
+                        loading.innerHTML = `
+                            <div class="text-danger py-4">
+                                <i class="fas fa-exclamation-circle fa-2x mb-2"></i>
+                                <div>${err.message || 'Failed to load date details.'}</div>
+                                <button type="button" class="btn btn-sm btn-outline-secondary mt-3" data-bs-dismiss="modal" onclick="closeDateEditorFallback()">Close</button>
+                            </div>
+                        `;
+                    }
                 });
+        }
+
+        function closeDateEditorFallback() {
+            const modalEl = document.getElementById('dateEditorModal');
+            if (modalEl) {
+                modalEl.style.display = 'none';
+                modalEl.classList.remove('show');
+            }
+            if (dateEditorModal) {
+                try { dateEditorModal.hide(); } catch(e) {}
+            }
         }
 
         // -------------------------------------------------------------
@@ -1487,6 +1706,25 @@ $active_days_count = count(array_filter($operating_days_arr));
             };
             return text.toString().replace(/[&<>"']/g, m => map[m]);
         }
-    </script>
+    
+        function switchScheduleModeView(mode) {
+            const btnPre = document.getElementById('btnTogglePreorderView');
+            const btnPick = document.getElementById('btnTogglePickupView');
+            const kpiPre = document.getElementById('kpiRowPreorder');
+            const kpiPick = document.getElementById('kpiRowPickup');
+
+            if (mode === 'pickup') {
+                if (btnPick) { btnPick.className = 'btn btn-sm btn-dark'; }
+                if (btnPre) { btnPre.className = 'btn btn-sm btn-outline-secondary'; }
+                if (kpiPre) kpiPre.style.display = 'none';
+                if (kpiPick) kpiPick.style.display = 'grid';
+            } else {
+                if (btnPre) { btnPre.className = 'btn btn-sm btn-dark'; }
+                if (btnPick) { btnPick.className = 'btn btn-sm btn-outline-secondary'; }
+                if (kpiPick) kpiPick.style.display = 'none';
+                if (kpiPre) kpiPre.style.display = 'grid';
+            }
+        }
+</script>
 </body>
 </html>

@@ -1256,7 +1256,7 @@ if (is_file(__DIR__ . '/images/hero-bg.jpg')) {
         
         <!-- Floating Navigation Over Banner (Back on Left, Actions on Right) -->
         <div class="fp-hero-floating-nav">
-            <a href="<?php echo $has_selected_store ? 'menu.php' : 'index.php'; ?>" class="fp-floating-round-btn" aria-label="Go Back">
+            <a href="index.php" class="fp-floating-round-btn" aria-label="Back">
                 <i class="fas fa-arrow-left"></i>
             </a>
             <div class="fp-hero-actions-group">
@@ -1329,14 +1329,10 @@ if (is_file(__DIR__ . '/images/hero-bg.jpg')) {
 <section class="storefront-header desktop-storefront-header">
     <div class="container">
         <nav class="store-breadcrumb" aria-label="Breadcrumb">
+            <a href="index.php" style="color: #b3261e; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;"><i class="fas fa-arrow-left"></i> Back</a>
             <?php if ($has_selected_store): ?>
-                <a href="menu.php" style="color: #b3261e; font-weight: 700;"><i class="fas fa-arrow-left"></i> All Business Shops</a>
                 <span class="breadcrumb-sep">&rsaquo;</span>
                 <span class="is-current"><?php echo htmlspecialchars($store_display_name); ?></span>
-            <?php else: ?>
-                <a href="locations.php"><?php echo htmlspecialchars($breadcrumb_location); ?></a>
-                <span class="breadcrumb-sep">&rsaquo;</span>
-                <span class="is-current">All Business Shops</span>
             <?php endif; ?>
         </nav>
         <div class="storefront-overview">
@@ -1470,7 +1466,7 @@ if (is_file(__DIR__ . '/images/hero-bg.jpg')) {
             <div class="panda-menu-sticky-bar" id="pandaMenuStickyBar">
                 <!-- Mobile Fixed Top Bar (Revealed when scrolled, back + enlarged search + more) -->
                 <div class="fp-mobile-top-bar" id="fpMobileTopBar">
-                    <a href="<?php echo $has_selected_store ? 'menu.php' : 'index.php'; ?>" class="fp-bar-round-btn fp-bar-back" aria-label="Back">
+                    <a href="index.php" class="fp-bar-round-btn fp-bar-back" aria-label="Back">
                         <i class="fas fa-arrow-left"></i>
                     </a>
                     
@@ -1749,10 +1745,7 @@ if (is_file(__DIR__ . '/images/hero-bg.jpg')) {
     </div>
     
     <div class="cart-body" id="cartBody" style="padding: 24px; overflow-y: auto; flex: 1;">
-        <!-- Store Name Header in Drawer -->
-        <div class="cart-store-header" style="margin-bottom: 20px; text-align: left;">
-            <h4 style="font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 1.25rem; color: #171922; margin: 0;"><?php echo htmlspecialchars($store_display_name); ?></h4>
-        </div>
+        <!-- Store Name Header removed: Cart displays only cart items -->
 
         <div class="cart-empty" id="cartEmpty">
             <i class="fas fa-shopping-cart"></i>

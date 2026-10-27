@@ -617,8 +617,7 @@ $remaining = $total - $downpayment;
 
                         <!-- 1. Pickup Address Card -->
                         <div class="fp-card fp-pickup-address-card">
-                            <div class="fp-card-header">
-                                <h3 class="fp-section-title">Pickup address</h3>
+                            <div class="fp-card-header fp-card-header-with-toggle">
                                 <div class="fp-mode-pill-toggle">
                                     <button type="button" class="fp-mode-pill-btn" onclick="switchCheckoutFulfillmentMode('delivery')">
                                         <i class="fas fa-motorcycle"></i> Delivery
@@ -630,6 +629,7 @@ $remaining = $total - $downpayment;
                                         <i class="fas fa-calendar-alt"></i> Pre-Order
                                     </button>
                                 </div>
+                                <h3 class="fp-section-title">Pickup address</h3>
                             </div>
                             <div class="fp-address-body">
                                 <div class="fp-address-icon-wrap">
@@ -796,8 +796,7 @@ $remaining = $total - $downpayment;
 
                         <!-- 1. Delivery Address Card -->
                         <div class="fp-card fp-delivery-address-card">
-                            <div class="fp-card-header">
-                                <h3 class="fp-section-title">Delivery address</h3>
+                            <div class="fp-card-header fp-card-header-with-toggle">
                                 <div class="fp-mode-pill-toggle">
                                     <button type="button" class="fp-mode-pill-btn is-active">
                                         <i class="fas fa-motorcycle"></i> Delivery
@@ -809,6 +808,7 @@ $remaining = $total - $downpayment;
                                         <i class="fas fa-calendar-alt"></i> Pre-Order
                                     </button>
                                 </div>
+                                <h3 class="fp-section-title">Delivery address</h3>
                             </div>
                             <div class="fp-address-body">
                                 <div class="fp-address-icon-wrap">
@@ -1030,8 +1030,7 @@ $remaining = $total - $downpayment;
 
                         <!-- 1. Locked Store Address Card (Strictly NO other store) -->
                         <div class="fp-card fp-pickup-address-card">
-                            <div class="fp-card-header">
-                                <h3 class="fp-section-title">Pick-up store</h3>
+                            <div class="fp-card-header fp-card-header-with-toggle">
                                 <div class="fp-mode-pill-toggle">
                                     <button type="button" class="fp-mode-pill-btn" onclick="switchCheckoutFulfillmentMode('delivery')">
                                         <i class="fas fa-motorcycle"></i> Delivery
@@ -1043,6 +1042,7 @@ $remaining = $total - $downpayment;
                                         <i class="fas fa-calendar-alt"></i> Pre-Order
                                     </button>
                                 </div>
+                                <h3 class="fp-section-title">Pick-up store</h3>
                             </div>
                             <div class="fp-address-body">
                                 <div class="fp-address-icon-wrap">
@@ -1739,33 +1739,51 @@ body {
     font-size: 14px;
 }
 
+.fp-card-header-with-toggle {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+    margin-bottom: 14px !important;
+}
+
+.fp-card-header-with-toggle .fp-section-title {
+    margin: 0 !important;
+}
+
 .fp-mode-pill-toggle {
-    display: inline-flex;
-    background: #f2f4f7;
-    border-radius: 999px;
-    padding: 3px;
-    gap: 2px;
+    display: flex !important;
+    width: 100% !important;
+    background: #f2f4f7 !important;
+    border-radius: 999px !important;
+    padding: 3px !important;
+    box-sizing: border-box !important;
+    gap: 2px !important;
 }
 
 .fp-mode-pill-btn {
-    border: none;
-    background: transparent;
-    font-size: 12px;
-    font-weight: 700;
-    color: #475467;
-    padding: 6px 14px;
-    border-radius: 999px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
+    flex: 1 1 0px !important;
+    border: none !important;
+    background: transparent !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    color: #475467 !important;
+    padding: 8px 6px !important;
+    border-radius: 999px !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 5px !important;
+    white-space: nowrap !important;
+    text-align: center !important;
 }
 
 .fp-mode-pill-btn.is-active {
-    background: #101828;
-    color: #ffffff;
-    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.1);
+    background: #101828 !important;
+    color: #ffffff !important;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.1) !important;
 }
 
 .fp-address-body {
@@ -2113,6 +2131,87 @@ body {
     margin-top: 4px;
 }
 
+
+/* Enhanced Mobile Responsive Fulfillment Toggle & Sheet Modal Fixes */
+@media (max-width: 640px) {
+    .fp-card-header-with-toggle,
+    .fp-card-header:has(.fp-mode-pill-toggle),
+    .fp-delivery-address-card .fp-card-header,
+    #foodpandaPickupView .fp-card-header,
+    #foodpandaPreorderView .fp-card-header {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 10px !important;
+    }
+    .fp-mode-pill-toggle {
+        width: 100% !important;
+        display: flex !important;
+        justify-content: stretch !important;
+        box-sizing: border-box !important;
+    }
+    .fp-mode-pill-btn {
+        flex: 1 1 0px !important;
+        justify-content: center !important;
+        text-align: center !important;
+        padding: 7px 3px !important;
+        font-size: 11px !important;
+        white-space: nowrap !important;
+    }
+    #exactLocationMapShell {
+        height: 190px !important;
+    }
+    #exactLocationModal {
+        padding: 10px !important;
+    }
+    #exactLocationModal > div {
+        padding: 16px !important;
+        border-radius: 14px !important;
+    }
+}
+@media (max-width: 360px) {
+    .fp-mode-pill-btn {
+        font-size: 10px !important;
+        padding: 6px 2px !important;
+        gap: 3px !important;
+    }
+}
+
+.fp-schedule-sheet-backdrop {
+    z-index: 90000 !important;
+}
+.fp-schedule-sheet {
+    z-index: 90001 !important;
+}
+
+@media (max-width: 768px) {
+    #backToTopBtn {
+        display: none !important;
+    }
+    #floatingChatBtn,
+    .floating-chat-btn {
+        left: 16px !important;
+        right: auto !important;
+        bottom: 20px !important;
+        width: 44px !important;
+        height: 44px !important;
+        font-size: 16px !important;
+        z-index: 1000 !important;
+    }
+}
+
+body.has-active-schedule-sheet #floatingChatBtn,
+body.has-active-schedule-sheet .floating-chat-btn,
+body.has-active-schedule-sheet #backToTopBtn,
+body.has-active-schedule-sheet #chatWidgetModal {
+    display: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
+#stickyOngoingOrderWidget {
+    display: none !important;
+}
 .fp-docked-bottom-bar {
     position: relative !important;
     bottom: auto !important;
@@ -5276,17 +5375,19 @@ function openPickupScheduleSheet() {
     const backdrop = document.getElementById('fpScheduleSheetBackdrop');
     if (backdrop) {
         backdrop.classList.add('is-open');
+        document.body.classList.add('has-active-schedule-sheet');
         document.body.style.overflow = 'hidden';
     }
 }
 
 function closePickupScheduleSheet(event) {
-    if (event && event.target && event.target.id !== 'fpScheduleSheetBackdrop' && !event.target.classList.contains('fp-schedule-sheet-backdrop')) {
+    if (event && event.target && event.target.id !== 'fpScheduleSheetBackdrop' && !event.target.classList.contains('fp-schedule-sheet-backdrop') && !event.target.closest('#fpSheetApplyBtn')) {
         return;
     }
     const backdrop = document.getElementById('fpScheduleSheetBackdrop');
     if (backdrop) {
         backdrop.classList.remove('is-open');
+        document.body.classList.remove('has-active-schedule-sheet');
         document.body.style.overflow = '';
     }
 }
@@ -5295,6 +5396,7 @@ function handleSheetModeSwitch(mode) {
     const backdrop = document.getElementById('fpScheduleSheetBackdrop');
     if (backdrop) {
         backdrop.classList.remove('is-open');
+        document.body.classList.remove('has-active-schedule-sheet');
         document.body.style.overflow = '';
     }
     switchCheckoutFulfillmentMode(mode);
@@ -5484,6 +5586,7 @@ function applyScheduleSelection() {
     const backdrop = document.getElementById('fpScheduleSheetBackdrop');
     if (backdrop) {
         backdrop.classList.remove('is-open');
+        document.body.classList.remove('has-active-schedule-sheet');
         document.body.style.overflow = '';
     }
 }
@@ -9487,7 +9590,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (changeModal) changeModal.style.display = 'none';
         if (!exactModal) return;
 
-        exactModal.style.display = 'flex';
+        exactModal.style.display = 'flex'; document.body.classList.add('has-active-schedule-sheet');
         const navPayload = readMarketAddressPayloadFromStorage();
         const startText = initialText || (navPayload ? (navPayload.full_address || navPayload.street_address) : '');
         if (exactInput) exactInput.value = startText;
@@ -9537,13 +9640,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     reverseGeocodeExactPin(pos.lat, pos.lng);
                 });
 
-                exactMap.on('moveend', function() {
-                    if (exactMarker && exactMap) {
-                        const center = exactMap.getCenter();
-                        exactMarker.setLatLng(center);
-                        reverseGeocodeExactPin(center.lat, center.lng);
-                    }
-                });
+
             } else if (exactMap) {
                 exactMap.invalidateSize();
                 exactMap.setView([initLat, initLng], 16);
@@ -9591,13 +9688,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             });
                         });
 
-                        // Automatically pin the first match on the map
-                        const firstLat = parseFloat(places[0].lat);
-                        const firstLng = parseFloat(places[0].lon);
-                        if (exactMap && exactMarker && !isNaN(firstLat) && !isNaN(firstLng)) {
-                            exactMap.setView([firstLat, firstLng], 16);
-                            exactMarker.setLatLng([firstLat, firstLng]);
-                        }
+
                     } else if (suggestionsBox) {
                         suggestionsBox.style.display = 'none';
                     }
@@ -9610,6 +9701,11 @@ document.addEventListener('DOMContentLoaded', function() {
         exactInput.addEventListener('keydown', async function(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
+                const firstItem = suggestionsBox ? suggestionsBox.querySelector('.exact-sug-item') : null;
+                if (firstItem && suggestionsBox.style.display !== 'none') {
+                    firstItem.click();
+                    return;
+                }
                 const query = this.value.trim();
                 if (!query) return;
                 const result = await forwardGeocodeFromNominatim(query);
@@ -9630,7 +9726,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     if (closeExactModalBtn && exactModal) {
         closeExactModalBtn.addEventListener('click', function() {
-            exactModal.style.display = 'none';
+            exactModal.style.display = 'none'; document.body.classList.remove('has-active-schedule-sheet');
         });
     }
     if (clearExactInputBtn && exactInput) {
@@ -10022,7 +10118,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             currentEditingAddressId = null;
-            if (exactModal) exactModal.style.display = 'none';
+            if (exactModal) exactModal.style.display = 'none'; document.body.classList.remove('has-active-schedule-sheet');
             if (changeModal) changeModal.style.display = 'none';
         });
     }

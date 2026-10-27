@@ -56,6 +56,11 @@ if (!function_exists('posGetDefaultSchedule')) {
             'max_orders_per_day' => 15,
             'blackout_dates' => '',
             'custom_slots_json' => '',
+            'pickup_operating_days' => '1,2,3,4,5,6,7',
+            'pickup_start_time' => '09:00:00',
+            'pickup_end_time' => '19:00:00',
+            'pickup_interval_minutes' => 30,
+            'pickup_max_orders_per_slot' => 5,
             'is_active' => 1
         ];
     }
@@ -74,6 +79,21 @@ if (!function_exists('posGetSellerSchedule')) {
             if ($row = mysqli_fetch_assoc($res)) {
                 mysqli_free_result($res);
                 mysqli_stmt_close($stmt);
+                $row['pickup_operating_days'] = '1,2,3,4,5,6,7';
+                $row['pickup_start_time'] = '09:00:00';
+                $row['pickup_end_time'] = '19:00:00';
+                $row['pickup_interval_minutes'] = 30;
+                $row['pickup_max_orders_per_slot'] = 5;
+                if (!empty($row['custom_slots_json'])) {
+                    $parsed = json_decode((string)$row['custom_slots_json'], true);
+                    if (is_array($parsed) && isset($parsed['pickup']) && is_array($parsed['pickup'])) {
+                        $row['pickup_operating_days'] = $parsed['pickup']['operating_days'] ?? $row['pickup_operating_days'];
+                        $row['pickup_start_time'] = $parsed['pickup']['slot_start_time'] ?? $row['pickup_start_time'];
+                        $row['pickup_end_time'] = $parsed['pickup']['slot_end_time'] ?? $row['pickup_end_time'];
+                        $row['pickup_interval_minutes'] = (int)($parsed['pickup']['slot_interval_minutes'] ?? $row['pickup_interval_minutes']);
+                        $row['pickup_max_orders_per_slot'] = (int)($parsed['pickup']['max_orders_per_slot'] ?? $row['pickup_max_orders_per_slot']);
+                    }
+                }
                 return $row;
             }
             if ($res) mysqli_free_result($res);
@@ -124,10 +144,12 @@ if (!function_exists('posSaveSellerSchedule')) {
         $blackout_dates = trim((string)($data['blackout_dates'] ?? ''));
         $is_active = isset($data['is_active']) ? (int)$data['is_active'] : 1;
 
+        $custom_slots_json = isset($data['custom_slots_json']) ? (string)$data['custom_slots_json'] : null;
+
         $sql = "
             INSERT INTO shop_preorder_schedules
-                (seller_id, lead_time_days, cutoff_time, max_advance_days, operating_days, slot_start_time, slot_end_time, slot_interval_minutes, max_orders_per_slot, max_orders_per_day, blackout_dates, is_active)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (seller_id, lead_time_days, cutoff_time, max_advance_days, operating_days, slot_start_time, slot_end_time, slot_interval_minutes, max_orders_per_slot, max_orders_per_day, blackout_dates, custom_slots_json, is_active)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 lead_time_days = VALUES(lead_time_days),
                 cutoff_time = VALUES(cutoff_time),
@@ -139,6 +161,7 @@ if (!function_exists('posSaveSellerSchedule')) {
                 max_orders_per_slot = VALUES(max_orders_per_slot),
                 max_orders_per_day = VALUES(max_orders_per_day),
                 blackout_dates = VALUES(blackout_dates),
+                custom_slots_json = COALESCE(VALUES(custom_slots_json), custom_slots_json),
                 is_active = VALUES(is_active)
         ";
 
@@ -149,7 +172,7 @@ if (!function_exists('posSaveSellerSchedule')) {
 
         mysqli_stmt_bind_param(
             $stmt,
-            "iisssssiiisi",
+            "iisssssiiissi",
             $seller_id,
             $lead_time_days,
             $cutoff_time,
@@ -161,6 +184,7 @@ if (!function_exists('posSaveSellerSchedule')) {
             $max_orders_per_slot,
             $max_orders_per_day,
             $blackout_dates,
+            $custom_slots_json,
             $is_active
         );
 
