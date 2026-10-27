@@ -2209,7 +2209,7 @@ document.addEventListener('pointerdown', function(e) {
             <button class="icon-btn cart-btn" id="cartToggle" onclick="location.href='<?php echo $path_prefix; ?>cart.php'"><i class="fas fa-shopping-cart"></i><span class="badge" id="cartBadge"><?php echo (int)$cart_count; ?></span></button>
             <div class="notification-wrapper">
                 <button class="icon-btn"><i class="fas fa-bell"></i><span class="badge" id="notificationBadge" style="display:none;">0</span></button>
-                <div class="notification-dropdown" id="notificationDropdown"><div class="notification-header">Notifications</div><div class="notification-empty">No new notifications yet.</div></div>
+                <div class="notification-dropdown" id="notificationDropdown"><div class="notification-header"><span>Notifications</span><a href="<?php echo $path_prefix; ?>my_notifications.php">View all</a></div><div class="notification-empty">No new notifications yet.</div></div>
             </div>
             <div class="user-menu-wrapper">
                 <button class="icon-btn user-avatar-btn" aria-label="Open user menu" title="<?php echo htmlspecialchars($viewer_name !== '' ? $viewer_name : 'Profile Settings'); ?>">
@@ -2429,7 +2429,7 @@ document.addEventListener('pointerdown', function(e) {
             <button class="icon-btn cart-btn" id="cartToggle" onclick="location.href='<?php echo $path_prefix; ?>cart.php'"><i class="fas fa-shopping-cart"></i><span class="badge" id="cartBadge"><?php echo (int)$cart_count; ?></span></button>
             <div class="notification-wrapper">
                 <button class="icon-btn"><i class="fas fa-bell"></i><span class="badge" id="notificationBadge" style="display:none;">0</span></button>
-                <div class="notification-dropdown" id="notificationDropdown"><div class="notification-header">Notifications</div><div class="notification-empty">No new notifications yet.</div></div>
+                <div class="notification-dropdown" id="notificationDropdown"><div class="notification-header"><span>Notifications</span><a href="<?php echo $path_prefix; ?>my_notifications.php">View all</a></div><div class="notification-empty">No new notifications yet.</div></div>
             </div>
             <div class="user-menu-wrapper">
                 <button class="icon-btn user-avatar-btn" aria-label="Open user menu" title="<?php echo htmlspecialchars($viewer_name !== '' ? $viewer_name : 'Profile Settings'); ?>">
@@ -4128,18 +4128,15 @@ document.addEventListener('DOMContentLoaded', function () {
             const business = businessMatch ? businessMatch[1].trim() : '';
             const deadline = deadlineMatch ? deadlineMatch[1].trim() : '';
             const notifType = String(notification.type || '').toLowerCase();
-            const isFranchise = notifType.startsWith('franchise_') || String(notification.related_type || '') === 'franchise_application';
             const isRead = Number(notification.is_read || 0) === 1;
             const notifId = parseInt(notification.id || '0', 10) || 0;
-            const target = isFranchise ? '#' : (parseInt(notification.related_id || '0', 10) > 0 ? 'my_account.php#profile' : 'my_account.php');
+            const target = 'my_notifications.php?id=' + encodeURIComponent(notifId);
             const createdAt = notification.created_at ? new Date(String(notification.created_at).replace(' ', 'T')) : null;
             const timeLabel = createdAt && !Number.isNaN(createdAt.getTime()) ? createdAt.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '';
 
             const readBg = isRead ? 'background:#fcfcfd;opacity:0.85;' : 'background:#ffffff;border-left:3px solid #b3261e;';
             const unreadDot = !isRead ? '<span style="width:7px;height:7px;border-radius:50%;background:#b3261e;display:inline-block;margin-left:auto;"></span>' : '';
-            const franchiseClass = isFranchise ? ' js-franchise-notif-item' : '';
-
-            return '<a href="' + target + '" class="notification-status-item js-user-notification' + franchiseClass + '" data-notification-id="' + notifId + '" style="' + readBg + '">' +
+            return '<a href="' + target + '" class="notification-status-item js-user-notification" data-notification-id="' + notifId + '" style="' + readBg + '">' +
                 '<div class="notification-status-line ' + status.className + '"><i class="fas ' + status.icon + '"></i><span>' + status.label + '</span>' + unreadDot + '</div>' +
                 '<div class="notification-reason"><strong>Reason:</strong> ' + escapeNotificationText(reason || 'No additional reason provided.') + '</div>' +
                 (deadline ? '<div style="color:#b54708;font-size:.74rem;font-weight:700;margin-top:3px;"><i class="fas fa-calendar-day"></i> Deadline: ' + escapeNotificationText(deadline) + '</div>' : '') +
@@ -4189,15 +4186,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const notificationLink = event.target.closest('.js-user-notification');
             if (!notificationLink) return;
             const notificationId = parseInt(notificationLink.dataset.notificationId || '0', 10);
-            const isFranchise = notificationLink.classList.contains('js-franchise-notif-item');
             const matchedNotif = userNotifications.find(function(n) { return parseInt(n.id, 10) === notificationId; });
-
-            if (isFranchise) {
-                event.preventDefault();
-                if (matchedNotif) {
-                    openFranchiseNotificationModal(matchedNotif);
-                }
-            }
 
             if (notificationId > 0 && matchedNotif && Number(matchedNotif.is_read) === 0) {
                 matchedNotif.is_read = 1;

@@ -2249,7 +2249,10 @@ body.dark-mode .sidebar-menu .menu-item.active i {
                         <div class="notification-dropdown" id="adminNotifDropdown">
                             <div class="notification-header">
                                 <span>Notifications</span>
-                                <span class="mark-read-btn" id="markAllRead">Mark all read</span>
+                                <span class="notification-header-actions">
+                                    <a href="notifications.php" class="mark-read-btn">View all</a>
+                                    <button type="button" class="mark-read-btn" id="markAllRead">Mark all read</button>
+                                </span>
                             </div>
                             <div class="notification-list" id="adminNotifList">
                                 <div class="notification-empty">Loading...</div>
@@ -2619,7 +2622,8 @@ body.dark-mode .sidebar-menu .menu-item.active i {
                                     // Redirect if related_id exists (basic mapping)
                                     if (notif.related_type === 'order') window.location.href = `orders.php?search=${notif.related_id}`;
                                     else if (notif.related_type === 'pre_order') window.location.href = `preorders.php?search=${notif.related_id}`;
-                                    else if (notif.related_type === 'franchise_application') window.location.href = `../super_admin/franchise_applications.php?search=${notif.related_id}`;
+                                    else if (notif.related_type === 'franchise_application') window.location.href = `notifications.php?id=${encodeURIComponent(notif.id)}`;
+                                    else window.location.href = `notifications.php?id=${encodeURIComponent(notif.id)}`;
                                 });
                                 
                                 list.appendChild(item);

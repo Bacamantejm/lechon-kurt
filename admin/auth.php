@@ -1066,7 +1066,8 @@ function getAdminModuleByPage($page_name) {
         'statistics.php' => 'admin',
         'chat.php' => 'admin',
         'tenant_scope_migration.php' => 'admin',
-        'get_notifications.php' => 'dashboard'
+        'get_notifications.php' => 'dashboard',
+        'notifications.php' => 'dashboard'
     ];
 
     return $module_map[$page_name] ?? null;
