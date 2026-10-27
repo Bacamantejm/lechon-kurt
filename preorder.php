@@ -1605,6 +1605,46 @@ body {
     gap: 16px;
 }
 
+.preorder-section-block {
+    background: #ffffff;
+    border: 1px solid var(--pre-border);
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 20px;
+    clear: both;
+    position: relative;
+    box-sizing: border-box;
+}
+
+.store-map-wrapper {
+    width: 100% !important;
+    max-width: 100% !important;
+    position: relative !important;
+    overflow: hidden !important;
+    border-radius: 12px !important;
+    margin-top: 14px !important;
+    clear: both !important;
+    box-sizing: border-box !important;
+}
+
+#storePickupMap {
+    height: 260px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    border-radius: 12px !important;
+    border: 1px solid var(--pre-border) !important;
+    position: relative !important;
+    overflow: hidden !important;
+    z-index: 1 !important;
+    box-sizing: border-box !important;
+}
+
+#storePickupMap .leaflet-pane,
+#storePickupMap .leaflet-top,
+#storePickupMap .leaflet-bottom {
+    z-index: 2 !important;
+}
+
 .store-details-info h4 {
     margin: 0 0 6px;
     font-size: 1.05rem;
@@ -1696,9 +1736,14 @@ body {
     .progress-step-circle { width: 32px; height: 32px; font-size: 0.8rem; }
     .store-details-card { flex-direction: column; align-items: flex-start; }
     .btn-directions { width: 100%; }
+    .preorder-section-block { padding: 16px !important; margin-bottom: 16px !important; }
+    .store-map-wrapper { margin-top: 10px !important; }
+    #storePickupMap { height: 210px !important; }
 }
 
 @media (max-width: 480px) {
+    .preorder-section-block { padding: 14px 12px !important; }
+    #storePickupMap { height: 190px !important; }
     .store-cards-grid {
         grid-template-columns: 1fr !important;
     }
@@ -3288,6 +3333,7 @@ function initStoreMap() {
 
         storeMarker = L.marker([lat, lng], { icon: storeIcon }).addTo(storeMap);
         storeMarker.bindPopup(`<strong>${name}</strong><br>${address}<br><small style="color:#b3261e; font-weight:700;">Pick-up Branch</small>`).openPopup();
+        setTimeout(() => { storeMap.invalidateSize(); }, 150);
     } else {
         storeMap.setView([lat, lng], 15);
         if (storeMarker) {

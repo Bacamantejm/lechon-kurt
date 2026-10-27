@@ -953,6 +953,60 @@ unset($order);
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <style>
+/* SweetAlert Success Checkmark Full Animation & Complete Visibility */
+.swal2-icon.swal2-success {
+    border-color: #abefc6 !important;
+    background-color: #ecfdf3 !important;
+    color: #027a48 !important;
+    position: relative !important;
+    box-sizing: border-box !important;
+    display: block !important;
+}
+.swal2-icon.swal2-success [class^=swal2-success-circular-line],
+.swal2-icon.swal2-success .swal2-success-fix,
+.swal2-icon.swal2-success .swal2-success-ring {
+    display: none !important;
+}
+.swal2-icon.swal2-success [class^=swal2-success-line] {
+    background-color: #027a48 !important;
+    height: 3.5px !important;
+    border-radius: 2px !important;
+    position: absolute !important;
+    z-index: 10 !important;
+    display: block !important;
+    box-sizing: border-box !important;
+}
+.swal2-icon.swal2-success .swal2-success-line-tip,
+.swal2-icon.swal2-success.swal2-animate-success-icon .swal2-success-line-tip {
+    width: 12px !important;
+    top: 27px !important;
+    left: 16px !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: rotate(45deg) !important;
+    transform-origin: left center !important;
+    animation: swalSuccessTipAnim 0.25s ease-out forwards !important;
+}
+.swal2-icon.swal2-success .swal2-success-line-long,
+.swal2-icon.swal2-success.swal2-animate-success-icon .swal2-success-line-long {
+    width: 22px !important;
+    top: 35.5px !important;
+    left: 23.5px !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: rotate(-45deg) !important;
+    transform-origin: left center !important;
+    animation: swalSuccessLongAnim 0.35s ease-out 0.12s both !important;
+}
+@keyframes swalSuccessTipAnim {
+    0% { width: 0 !important; opacity: 0; }
+    100% { width: 12px !important; opacity: 1; }
+}
+@keyframes swalSuccessLongAnim {
+    0% { width: 0 !important; opacity: 0; }
+    100% { width: 22px !important; opacity: 1; }
+}
+
 /* Streamlined Production E-Commerce Orders System */
 .orders-page-container {
     padding: 28px 0 140px;

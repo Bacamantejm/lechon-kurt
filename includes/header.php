@@ -1086,11 +1086,14 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
         .swal2-icon.swal2-warning .swal2-icon-content {
             color: #b54708 !important;
         }
-        /* Success Icon */
+        /* Success Icon - Complete Crisp SVG/CSS Checkmark */
         .swal2-icon.swal2-success {
             border-color: #abefc6 !important;
             background-color: #ecfdf3 !important;
             color: #027a48 !important;
+            position: relative !important;
+            box-sizing: border-box !important;
+            display: block !important;
         }
         .swal2-icon.swal2-success [class^=swal2-success-circular-line],
         .swal2-icon.swal2-success .swal2-success-fix,
@@ -1099,26 +1102,42 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
         }
         .swal2-icon.swal2-success [class^=swal2-success-line] {
             background-color: #027a48 !important;
-            height: 3px !important;
+            height: 3.5px !important;
             border-radius: 2px !important;
             position: absolute !important;
-            z-index: 2 !important;
+            z-index: 10 !important;
             display: block !important;
+            box-sizing: border-box !important;
         }
-        .swal2-icon.swal2-success .swal2-success-line-tip {
-            width: 14px !important;
-            top: 31px !important;
-            left: 14px !important;
-            transform: rotate(45deg) !important;
-            transform-origin: left bottom !important;
-        }
-        .swal2-icon.swal2-success .swal2-success-line-long {
-            width: 24px !important;
-            top: 26px !important;
-            left: 23px !important;
+        .swal2-icon.swal2-success .swal2-success-line-tip,
+        .swal2-icon.swal2-success.swal2-animate-success-icon .swal2-success-line-tip {
+            width: 12px !important;
+            top: 27px !important;
+            left: 16px !important;
             right: auto !important;
+            bottom: auto !important;
+            transform: rotate(45deg) !important;
+            transform-origin: left center !important;
+            animation: swalSuccessTipAnim 0.25s ease-out forwards !important;
+        }
+        .swal2-icon.swal2-success .swal2-success-line-long,
+        .swal2-icon.swal2-success.swal2-animate-success-icon .swal2-success-line-long {
+            width: 22px !important;
+            top: 35.5px !important;
+            left: 23.5px !important;
+            right: auto !important;
+            bottom: auto !important;
             transform: rotate(-45deg) !important;
-            transform-origin: left bottom !important;
+            transform-origin: left center !important;
+            animation: swalSuccessLongAnim 0.35s ease-out 0.12s both !important;
+        }
+        @keyframes swalSuccessTipAnim {
+            0% { width: 0 !important; opacity: 0; }
+            100% { width: 12px !important; opacity: 1; }
+        }
+        @keyframes swalSuccessLongAnim {
+            0% { width: 0 !important; opacity: 0; }
+            100% { width: 22px !important; opacity: 1; }
         }
         /* Info Icon */
         .swal2-icon.swal2-info {
@@ -2006,12 +2025,14 @@ $is_initial_dark = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark');
                 z-index: 99999 !important;
             }
             .sticky-ongoing-widget {
+                position: fixed !important;
                 bottom: 84px !important;
+                top: auto !important;
                 right: 14px !important;
                 left: 14px !important;
                 width: auto !important;
                 max-width: none !important;
-                z-index: 1240 !important;
+                z-index: 10000 !important;
             }
         }
         .sticky-ongoing-close-btn {
@@ -2297,85 +2318,7 @@ document.addEventListener('pointerdown', function(e) {
     </div>
     <?php endif; ?>
 
-    <?php if ($ongoing_order_id > 0 && $current_page !== 'track_order'): ?>
-    <div id="stickyOngoingOrderWidget" class="sticky-ongoing-widget" style="display: none;">
-        <div style="position: relative;">
-            <a href="<?php echo $path_prefix; ?>track_order.php?order_id=<?php echo $ongoing_order_id; ?>" class="sticky-ongoing-link" onclick="handleTrackOrderClick(<?php echo (int)$ongoing_order_id; ?>)">
-                <div class="sticky-ongoing-icon">
-                    <i class="fas fa-motorcycle"></i>
-                    <span class="sticky-pulse-ring"></span>
-                </div>
-                <div class="sticky-ongoing-info">
-                    <div class="sticky-ongoing-header">
-                        <strong style="font-weight:800; font-size:0.92rem; color:#171922;">Active Delivery Order</strong>
-                        <span class="sticky-live-tag">LIVE</span>
-                    </div>
-                    <div class="sticky-ongoing-status">
-                        #<?php echo htmlspecialchars($ongoing_order_number); ?> &bull; <span style="color:#b3261e; font-weight:700;"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $ongoing_order_status))); ?></span>
-                    </div>
-                </div>
-                <div class="sticky-ongoing-btn">
-                    Track <i class="fas fa-arrow-right"></i>
-                </div>
-            </a>
-            <button type="button" class="sticky-ongoing-close-btn" onclick="dismissStickyOngoingOrder(event, <?php echo (int)$ongoing_order_id; ?>)" aria-label="Dismiss">&times;</button>
-        </div>
-    </div>
-    <script>
-    (function() {
-        var orderId = <?php echo (int)$ongoing_order_id; ?>;
-        var key = 'sticky_order_seen_' + orderId;
-        var stickyWidget = document.getElementById('stickyOngoingOrderWidget');
-        if (!stickyWidget) return;
-        
-        // Show once logic: if already seen or dismissed in this session, do NOT show again
-        if (sessionStorage.getItem(key) === '1' || sessionStorage.getItem('sticky_order_dismissed_' + orderId) === '1') {
-            stickyWidget.style.display = 'none';
-            return;
-        }
-        
-        // Mark as seen immediately so navigating away or clicking back won't show it again
-        sessionStorage.setItem(key, '1');
-        stickyWidget.style.display = 'block';
-        
-        // Auto fade out after 6 seconds
-        setTimeout(function() {
-            if (stickyWidget) {
-                stickyWidget.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
-                stickyWidget.style.opacity = '0';
-                stickyWidget.style.transform = 'translateY(16px)';
-                setTimeout(function() {
-                    if (stickyWidget) stickyWidget.style.display = 'none';
-                }, 400);
-            }
-        }, 6000);
-    })();
-    
-    window.handleTrackOrderClick = function(orderId) {
-        try {
-            sessionStorage.setItem('sticky_order_seen_' + orderId, '1');
-            sessionStorage.setItem('sticky_order_dismissed_' + orderId, '1');
-        } catch(e) {}
-    };
-    
-    window.dismissStickyOngoingOrder = function(e, orderId) {
-        if (e) { e.preventDefault(); e.stopPropagation(); }
-        try {
-            sessionStorage.setItem('sticky_order_seen_' + orderId, '1');
-            sessionStorage.setItem('sticky_order_dismissed_' + orderId, '1');
-        } catch(e) {}
-        var stickyWidget = document.getElementById('stickyOngoingOrderWidget');
-        if (stickyWidget) {
-            stickyWidget.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-            stickyWidget.style.opacity = '0';
-            stickyWidget.style.transform = 'translateY(16px)';
-            setTimeout(function() {
-                if (stickyWidget) stickyWidget.style.display = 'none';
-            }, 300);
-        }
-    };
-    </script>
-    <?php endif; ?>
+
     
     <div class="map-modal-overlay" id="marketMapModal" aria-hidden="true">
         <div class="map-modal" role="dialog" aria-modal="true" aria-labelledby="mapModalTitle">
@@ -2542,6 +2485,82 @@ document.addEventListener('pointerdown', function(e) {
     <?php endif; ?>
 </aside>
 
+<?php if ($ongoing_order_id > 0 && $current_page !== 'track_order' && $current_page !== 'checkout'): ?>
+<div id="stickyOngoingOrderWidget" class="sticky-ongoing-widget" style="display: none;">
+    <div style="position: relative;">
+        <a href="<?php echo $path_prefix; ?>track_order.php?order_id=<?php echo $ongoing_order_id; ?>" class="sticky-ongoing-link" onclick="handleTrackOrderClick(<?php echo (int)$ongoing_order_id; ?>)">
+            <div class="sticky-ongoing-icon">
+                <i class="fas fa-motorcycle"></i>
+                <span class="sticky-pulse-ring"></span>
+            </div>
+            <div class="sticky-ongoing-info">
+                <div class="sticky-ongoing-header">
+                    <strong style="font-weight:800; font-size:0.92rem; color:#171922;">Active Delivery Order</strong>
+                    <span class="sticky-live-tag">LIVE</span>
+                </div>
+                <div class="sticky-ongoing-status">
+                    #<?php echo htmlspecialchars($ongoing_order_number); ?> &bull; <span style="color:#b3261e; font-weight:700;"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $ongoing_order_status))); ?></span>
+                </div>
+            </div>
+            <div class="sticky-ongoing-btn">
+                Track <i class="fas fa-arrow-right"></i>
+            </div>
+        </a>
+        <button type="button" class="sticky-ongoing-close-btn" onclick="dismissStickyOngoingOrder(event, <?php echo (int)$ongoing_order_id; ?>)" aria-label="Dismiss">&times;</button>
+    </div>
+</div>
+<script>
+(function() {
+    var orderId = <?php echo (int)$ongoing_order_id; ?>;
+    var key = 'sticky_order_seen_' + orderId;
+    var stickyWidget = document.getElementById('stickyOngoingOrderWidget');
+    if (!stickyWidget) return;
+    
+    if (sessionStorage.getItem(key) === '1' || sessionStorage.getItem('sticky_order_dismissed_' + orderId) === '1') {
+        stickyWidget.style.display = 'none';
+        return;
+    }
+    
+    sessionStorage.setItem(key, '1');
+    stickyWidget.style.display = 'block';
+    
+    setTimeout(function() {
+        if (stickyWidget) {
+            stickyWidget.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+            stickyWidget.style.opacity = '0';
+            stickyWidget.style.transform = 'translateY(16px)';
+            setTimeout(function() {
+                if (stickyWidget) stickyWidget.style.display = 'none';
+            }, 400);
+        }
+    }, 6000);
+})();
+
+window.handleTrackOrderClick = function(orderId) {
+    try {
+        sessionStorage.setItem('sticky_order_seen_' + orderId, '1');
+        sessionStorage.setItem('sticky_order_dismissed_' + orderId, '1');
+    } catch(e) {}
+};
+
+window.dismissStickyOngoingOrder = function(e, orderId) {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    try {
+        sessionStorage.setItem('sticky_order_seen_' + orderId, '1');
+        sessionStorage.setItem('sticky_order_dismissed_' + orderId, '1');
+    } catch(e) {}
+    var stickyWidget = document.getElementById('stickyOngoingOrderWidget');
+    if (stickyWidget) {
+        stickyWidget.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+        stickyWidget.style.opacity = '0';
+        stickyWidget.style.transform = 'translateY(16px)';
+        setTimeout(function() {
+            if (stickyWidget) stickyWidget.style.display = 'none';
+        }, 300);
+    }
+};
+</script>
+<?php endif; ?>
 <main class="site-main">
 <script>
 window.swalConfirmAction = window.swalConfirmAction || function(options) {

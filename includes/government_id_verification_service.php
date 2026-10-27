@@ -115,6 +115,9 @@ if (!function_exists('isPhilippineGovernmentIdDocument')) {
             'PHILIPPINE IDENTIFICATION SYSTEM' => 'PhilSys National ID',
             'PHILSYS' => 'PhilSys National ID',
             'PHILID' => 'PhilSys National ID',
+            'EPHILID' => 'ePhilID Digital National ID',
+            'DIGITAL NATIONAL ID' => 'Digital National ID',
+            'E-GOV' => 'eGov Digital National ID',
             'PHILIPPINE STATISTICS AUTHORITY' => 'PSA',
             'LAND TRANSPORTATION OFFICE' => 'Land Transportation Office (LTO)',
             'DEPARTMENT OF TRANSPORTATION' => 'DOTr',
@@ -1068,7 +1071,7 @@ if (!function_exists('verifyGovernmentIdWithOcrApi')) {
         }
 
         // Criterion 2: Philippine Government ID & Selected ID Type Match
-        $detected_type = detectGovernmentIdTypeFromText($parsed_text);
+        $detected_type = detectGovernmentIdTypeFromText($parsed_text, $expected_id_type);
         $detected_agencies = [];
         $is_ph_gov_id = isPhilippineGovernmentIdDocument($parsed_text, $detected_agencies);
 
@@ -1243,7 +1246,7 @@ if (!function_exists('cleanGovernmentIdNumberValue')) {
 }
 
 if (!function_exists('detectGovernmentIdTypeFromText')) {
-    function detectGovernmentIdTypeFromText($ocr_text)
+    function detectGovernmentIdTypeFromText($ocr_text, $expected_type = '')
     {
         $normalized = strtoupper(preg_replace('/[^A-Za-z0-9\s]/', ' ', (string)$ocr_text));
         $normalized = preg_replace('/\s+/', ' ', $normalized);
@@ -1251,7 +1254,34 @@ if (!function_exists('detectGovernmentIdTypeFromText')) {
             return '';
         }
 
-        // 1. Driver's License (LTO)
+        $expected = strtolower(trim((string)$expected_type));
+
+        // 1. Philippine National ID (PhilSys / PhilID / ePhilID / Digital National ID)
+        // Check FIRST to prevent false positives from generic words like "BIR" inside "DATE OF BIRTH"
+        $is_national_id = (
+            strpos($normalized, 'PHILIPPINE IDENTIFICATION SYSTEM') !== false ||
+            strpos($normalized, 'PHILSYS') !== false ||
+            strpos($normalized, 'PHILID') !== false ||
+            strpos($normalized, 'EPHILID') !== false ||
+            strpos($normalized, 'PAMBANSANG PAGKAKAKILANLAN') !== false ||
+            strpos($normalized, 'PHILIPPINE STATISTICS AUTHORITY') !== false ||
+            strpos($normalized, 'DIGITAL NATIONAL ID') !== false ||
+            strpos($normalized, 'PCN') !== false ||
+            (strpos($normalized, 'PSA') !== false && (strpos($normalized, 'PILIPINAS') !== false || strpos($normalized, 'PHILIPPINES') !== false || strpos($normalized, 'REPUBLIKA') !== false)) ||
+            (strpos($normalized, 'PAMBANSANG') !== false && strpos($normalized, 'PAGKAKAKILANLAN') !== false) ||
+            (strpos($normalized, 'REPUBLIKA NG PILIPINAS') !== false && (strpos($normalized, 'KAPANGANAKAN') !== false || strpos($normalized, 'KASARIAN') !== false || strpos($normalized, 'TIRAHAN') !== false))
+        );
+
+        if ($is_national_id) {
+            return 'national_id';
+        }
+
+        // If caller expected a specific type, check its explicit signature first
+        if ($expected === 'national_id' && (strpos($normalized, 'PILIPINAS') !== false || strpos($normalized, 'PSA') !== false || strpos($normalized, 'REPUBLIKA') !== false)) {
+            return 'national_id';
+        }
+
+        // 2. Driver's License (LTO)
         if (
             strpos($normalized, 'LAND TRANSPORTATION') !== false ||
             strpos($normalized, 'LTO') !== false ||
@@ -1266,7 +1296,7 @@ if (!function_exists('detectGovernmentIdTypeFromText')) {
             return 'drivers_license';
         }
 
-        // 2. Philippine Passport (DFA)
+        // 3. Philippine Passport (DFA)
         if (
             strpos($normalized, 'PASSPORT') !== false ||
             strpos($normalized, 'PASAPORTE') !== false ||
@@ -1276,7 +1306,7 @@ if (!function_exists('detectGovernmentIdTypeFromText')) {
             return 'passport';
         }
 
-        // 3. PhilHealth ID
+        // 4. PhilHealth ID
         if (
             strpos($normalized, 'PHILHEALTH') !== false ||
             strpos($normalized, 'PHILIPPINE HEALTH INSURANCE') !== false
@@ -1284,7 +1314,7 @@ if (!function_exists('detectGovernmentIdTypeFromText')) {
             return 'philhealth';
         }
 
-        // 4. Postal ID (PHLPost)
+        // 5. Postal ID (PHLPost)
         if (
             strpos($normalized, 'POSTAL ID') !== false ||
             strpos($normalized, 'POSTAL IDENTITY') !== false ||
@@ -1294,7 +1324,7 @@ if (!function_exists('detectGovernmentIdTypeFromText')) {
             return 'postal';
         }
 
-        // 5. Pag-IBIG ID / Loyalty Card (HDMF)
+        // 6. Pag-IBIG ID / Loyalty Card (HDMF)
         if (
             strpos($normalized, 'PAG IBIG') !== false ||
             strpos($normalized, 'PAGIBIG') !== false ||
@@ -1304,7 +1334,7 @@ if (!function_exists('detectGovernmentIdTypeFromText')) {
             return 'pagibig';
         }
 
-        // 6. PRC ID (Professional Regulation Commission)
+        // 7. PRC ID (Professional Regulation Commission)
         if (
             strpos($normalized, 'PROFESSIONAL REGULATION COMMISSION') !== false ||
             strpos($normalized, 'PRC') !== false ||
@@ -1313,7 +1343,7 @@ if (!function_exists('detectGovernmentIdTypeFromText')) {
             return 'prc';
         }
 
-        // 7. Senior Citizen ID (OSCA)
+        // 8. Senior Citizen ID (OSCA)
         if (
             strpos($normalized, 'SENIOR CITIZEN') !== false ||
             strpos($normalized, 'SENIOR CITIZENS') !== false ||
@@ -1323,19 +1353,19 @@ if (!function_exists('detectGovernmentIdTypeFromText')) {
             return 'senior_citizen';
         }
 
-        // 8. TIN ID (BIR)
+        // 9. TIN ID (BIR) - Strict keyword matching. NEVER match bare 'BIR' inside 'DATE OF BIRTH'
         if (
             strpos($normalized, 'BUREAU OF INTERNAL REVENUE') !== false ||
             strpos($normalized, 'TAX IDENTIFICATION NUMBER') !== false ||
-            strpos($normalized, 'BIR') !== false ||
             strpos($normalized, 'TIN ID') !== false ||
             strpos($normalized, 'TIN CARD') !== false ||
-            strpos($normalized, 'TIN NO') !== false
+            strpos($normalized, 'TIN NO') !== false ||
+            (preg_match('/\bBIR\b/', $normalized) && preg_match('/\b(TAX|REVENUE|INTERNAL|REVENUE DISTRICT|RDO|TAXPAYER)\b/', $normalized))
         ) {
             return 'tin';
         }
 
-        // 9. Voter's ID (COMELEC)
+        // 10. Voter's ID (COMELEC)
         if (
             strpos($normalized, 'COMMISSION ON ELECTIONS') !== false ||
             strpos($normalized, 'COMELEC') !== false ||
@@ -1344,7 +1374,7 @@ if (!function_exists('detectGovernmentIdTypeFromText')) {
             return 'voters';
         }
 
-        // 10. OFW ID (OWWA / POEA / DMW)
+        // 11. OFW ID (OWWA / POEA / DMW)
         if (
             strpos($normalized, 'OFW') !== false ||
             strpos($normalized, 'OVERSEAS WORKERS') !== false ||
@@ -1355,7 +1385,7 @@ if (!function_exists('detectGovernmentIdTypeFromText')) {
             return 'ofw';
         }
 
-        // 11. UMID Card / SSS ID
+        // 12. UMID Card / SSS ID
         if (
             strpos($normalized, 'UNIFIED MULTI PURPOSE') !== false ||
             strpos($normalized, 'UMID') !== false ||
@@ -1368,21 +1398,6 @@ if (!function_exists('detectGovernmentIdTypeFromText')) {
             strpos($normalized, 'SSS') !== false
         ) {
             return 'sss';
-        }
-
-        // 12. Philippine National ID (PhilSys)
-        if (
-            strpos($normalized, 'PHILIPPINE IDENTIFICATION SYSTEM') !== false ||
-            strpos($normalized, 'PHILSYS') !== false ||
-            strpos($normalized, 'PHILID') !== false ||
-            strpos($normalized, 'EPHILID') !== false ||
-            strpos($normalized, 'PAMBANSANG PAGKAKAKILANLAN') !== false ||
-            strpos($normalized, 'PHILIPPINE STATISTICS AUTHORITY') !== false ||
-            strpos($normalized, 'PCN') !== false ||
-            (strpos($normalized, 'PSA') !== false && strpos($normalized, 'PILIPINAS') !== false) ||
-            (strpos($normalized, 'PAMBANSANG') !== false && strpos($normalized, 'PAGKAKAKILANLAN') !== false)
-        ) {
-            return 'national_id';
         }
 
         // Fallbacks for other recognized types
@@ -1488,7 +1503,8 @@ if (!function_exists('extractGovernmentIdNumberFromText')) {
                 break;
             case 'national_id':
                 $patterns = [
-                    '/(?:NATIONAL ID|PHILSYS|PHILID)(?:\s+NO(?:\.?)?|\s+NUMBER)?\s*([0-9\-\s]{16,24})\b/',
+                    '/(?:PCN|PHILIPPINE\s+IDENTIFICATION|NATIONAL\s+ID|PHILSYS|PHILID|EPHILID)(?:\s+NO(?:\.?)?|\s+NUMBER|\s*:)?\s*([0-9\-\s]{16,24})\b/',
+                    '/\b([0-9]{4}[\s\-][0-9]{4}[\s\-][0-9]{4}[\s\-][0-9]{4})\b/',
                     '/\b([0-9]{16})\b/'
                 ];
                 break;
@@ -1534,22 +1550,23 @@ if (!function_exists('extractGovernmentIdDetailsFromOcrText')) {
     {
         $detected_type = detectGovernmentIdTypeFromText($ocr_text);
         $ordered_types = [
-            'passport',
+            'national_id',
             'drivers_license',
-            'prc',
-            'tin',
+            'passport',
+            'umid',
             'sss',
+            'tin',
+            'prc',
+            'philhealth',
+            'pagibig',
+            'postal',
+            'senior_citizen',
+            'voters',
+            'ofw',
             'gsis',
             'owwa',
-            'postal',
             'ibp',
-            'ofw',
-            'senior_citizen',
-            'umid',
-            'company',
-            'national_id',
-            'pagibig',
-            'philhealth'
+            'company'
         ];
 
         if ($detected_type !== '') {

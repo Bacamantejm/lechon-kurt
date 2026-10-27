@@ -707,6 +707,159 @@ include 'includes/header.php';
 <script src="dist/bundle.iife.js"></script>
 
 <style>
+/* SweetAlert Success Checkmark Full Animation & Complete Visibility */
+.swal2-icon.swal2-success {
+    border-color: #abefc6 !important;
+    background-color: #ecfdf3 !important;
+    color: #027a48 !important;
+    position: relative !important;
+    box-sizing: border-box !important;
+    display: block !important;
+}
+.swal2-icon.swal2-success [class^=swal2-success-circular-line],
+.swal2-icon.swal2-success .swal2-success-fix,
+.swal2-icon.swal2-success .swal2-success-ring {
+    display: none !important;
+}
+.swal2-icon.swal2-success [class^=swal2-success-line] {
+    background-color: #027a48 !important;
+    height: 3.5px !important;
+    border-radius: 2px !important;
+    position: absolute !important;
+    z-index: 10 !important;
+    display: block !important;
+    box-sizing: border-box !important;
+}
+.swal2-icon.swal2-success .swal2-success-line-tip,
+.swal2-icon.swal2-success.swal2-animate-success-icon .swal2-success-line-tip {
+    width: 12px !important;
+    top: 27px !important;
+    left: 16px !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: rotate(45deg) !important;
+    transform-origin: left center !important;
+    animation: swalSuccessTipAnim 0.25s ease-out forwards !important;
+}
+.swal2-icon.swal2-success .swal2-success-line-long,
+.swal2-icon.swal2-success.swal2-animate-success-icon .swal2-success-line-long {
+    width: 22px !important;
+    top: 35.5px !important;
+    left: 23.5px !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: rotate(-45deg) !important;
+    transform-origin: left center !important;
+    animation: swalSuccessLongAnim 0.35s ease-out 0.12s both !important;
+}
+@keyframes swalSuccessTipAnim {
+    0% { width: 0 !important; opacity: 0; }
+    100% { width: 12px !important; opacity: 1; }
+}
+@keyframes swalSuccessLongAnim {
+    0% { width: 0 !important; opacity: 0; }
+    100% { width: 22px !important; opacity: 1; }
+}
+
+/* ID Card Camera Guide Frame & Viewfinder */
+.id-card-viewfinder {
+    position: absolute;
+    width: 86%;
+    max-width: 440px;
+    aspect-ratio: 85.6 / 54;
+    border-radius: 16px;
+    box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.62);
+    border: 1.5px dashed rgba(255, 255, 255, 0.45);
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    z-index: 5;
+    transition: all 0.25s ease;
+}
+.viewfinder-corner {
+    position: absolute;
+    width: 28px;
+    height: 28px;
+    border-color: #22c55e;
+    border-style: solid;
+    pointer-events: none;
+    box-sizing: border-box;
+}
+.viewfinder-corner.corner-tl {
+    top: -2px;
+    left: -2px;
+    border-width: 4px 0 0 4px;
+    border-top-left-radius: 14px;
+}
+.viewfinder-corner.corner-tr {
+    top: -2px;
+    right: -2px;
+    border-width: 4px 4px 0 0;
+    border-top-right-radius: 14px;
+}
+.viewfinder-corner.corner-bl {
+    bottom: -2px;
+    left: -2px;
+    border-width: 0 0 4px 4px;
+    border-bottom-left-radius: 14px;
+}
+.viewfinder-corner.corner-br {
+    bottom: -2px;
+    right: -2px;
+    border-width: 0 4px 4px 0;
+    border-bottom-right-radius: 14px;
+}
+.viewfinder-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    pointer-events: none;
+    padding: 8px 12px;
+}
+.viewfinder-card-ghost {
+    font-size: 2.2rem;
+    color: rgba(255, 255, 255, 0.28);
+    margin-bottom: 8px;
+}
+.viewfinder-badge {
+    color: #ffffff;
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(4px);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.viewfinder-hint {
+    font-size: 0.69rem;
+    color: rgba(255, 255, 255, 0.85);
+    margin-top: 6px;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+    font-weight: 500;
+}
+
+body.dark-mode .id-digital-tip {
+    background: rgba(30, 58, 138, 0.25) !important;
+    border-color: #1e40af !important;
+}
+body.dark-mode .id-digital-tip .tip-title {
+    color: #93c5fd !important;
+}
+body.dark-mode .id-digital-tip .tip-desc {
+    color: #bfdbfe !important;
+}
+
 .registration-page {
     background: #ffffff !important;
     display: flex;
@@ -1521,7 +1674,160 @@ body.dark-mode .strength-bar {
 
 /* Fix for iOS Safari */
 @supports (-webkit-overflow-scrolling: touch) {
-    .registration-page {
+    /* SweetAlert Success Checkmark Full Animation & Complete Visibility */
+.swal2-icon.swal2-success {
+    border-color: #abefc6 !important;
+    background-color: #ecfdf3 !important;
+    color: #027a48 !important;
+    position: relative !important;
+    box-sizing: border-box !important;
+    display: block !important;
+}
+.swal2-icon.swal2-success [class^=swal2-success-circular-line],
+.swal2-icon.swal2-success .swal2-success-fix,
+.swal2-icon.swal2-success .swal2-success-ring {
+    display: none !important;
+}
+.swal2-icon.swal2-success [class^=swal2-success-line] {
+    background-color: #027a48 !important;
+    height: 3.5px !important;
+    border-radius: 2px !important;
+    position: absolute !important;
+    z-index: 10 !important;
+    display: block !important;
+    box-sizing: border-box !important;
+}
+.swal2-icon.swal2-success .swal2-success-line-tip,
+.swal2-icon.swal2-success.swal2-animate-success-icon .swal2-success-line-tip {
+    width: 12px !important;
+    top: 27px !important;
+    left: 16px !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: rotate(45deg) !important;
+    transform-origin: left center !important;
+    animation: swalSuccessTipAnim 0.25s ease-out forwards !important;
+}
+.swal2-icon.swal2-success .swal2-success-line-long,
+.swal2-icon.swal2-success.swal2-animate-success-icon .swal2-success-line-long {
+    width: 22px !important;
+    top: 35.5px !important;
+    left: 23.5px !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: rotate(-45deg) !important;
+    transform-origin: left center !important;
+    animation: swalSuccessLongAnim 0.35s ease-out 0.12s both !important;
+}
+@keyframes swalSuccessTipAnim {
+    0% { width: 0 !important; opacity: 0; }
+    100% { width: 12px !important; opacity: 1; }
+}
+@keyframes swalSuccessLongAnim {
+    0% { width: 0 !important; opacity: 0; }
+    100% { width: 22px !important; opacity: 1; }
+}
+
+/* ID Card Camera Guide Frame & Viewfinder */
+.id-card-viewfinder {
+    position: absolute;
+    width: 86%;
+    max-width: 440px;
+    aspect-ratio: 85.6 / 54;
+    border-radius: 16px;
+    box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.62);
+    border: 1.5px dashed rgba(255, 255, 255, 0.45);
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    z-index: 5;
+    transition: all 0.25s ease;
+}
+.viewfinder-corner {
+    position: absolute;
+    width: 28px;
+    height: 28px;
+    border-color: #22c55e;
+    border-style: solid;
+    pointer-events: none;
+    box-sizing: border-box;
+}
+.viewfinder-corner.corner-tl {
+    top: -2px;
+    left: -2px;
+    border-width: 4px 0 0 4px;
+    border-top-left-radius: 14px;
+}
+.viewfinder-corner.corner-tr {
+    top: -2px;
+    right: -2px;
+    border-width: 4px 4px 0 0;
+    border-top-right-radius: 14px;
+}
+.viewfinder-corner.corner-bl {
+    bottom: -2px;
+    left: -2px;
+    border-width: 0 0 4px 4px;
+    border-bottom-left-radius: 14px;
+}
+.viewfinder-corner.corner-br {
+    bottom: -2px;
+    right: -2px;
+    border-width: 0 4px 4px 0;
+    border-bottom-right-radius: 14px;
+}
+.viewfinder-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    pointer-events: none;
+    padding: 8px 12px;
+}
+.viewfinder-card-ghost {
+    font-size: 2.2rem;
+    color: rgba(255, 255, 255, 0.28);
+    margin-bottom: 8px;
+}
+.viewfinder-badge {
+    color: #ffffff;
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(4px);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.viewfinder-hint {
+    font-size: 0.69rem;
+    color: rgba(255, 255, 255, 0.85);
+    margin-top: 6px;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+    font-weight: 500;
+}
+
+body.dark-mode .id-digital-tip {
+    background: rgba(30, 58, 138, 0.25) !important;
+    border-color: #1e40af !important;
+}
+body.dark-mode .id-digital-tip .tip-title {
+    color: #93c5fd !important;
+}
+body.dark-mode .id-digital-tip .tip-desc {
+    color: #bfdbfe !important;
+}
+
+.registration-page {
         -webkit-overflow-scrolling: touch;
     }
     
@@ -1543,6 +1849,159 @@ body.dark-mode .strength-bar {
 
 body {
     background: #ffffff;
+}
+
+/* SweetAlert Success Checkmark Full Animation & Complete Visibility */
+.swal2-icon.swal2-success {
+    border-color: #abefc6 !important;
+    background-color: #ecfdf3 !important;
+    color: #027a48 !important;
+    position: relative !important;
+    box-sizing: border-box !important;
+    display: block !important;
+}
+.swal2-icon.swal2-success [class^=swal2-success-circular-line],
+.swal2-icon.swal2-success .swal2-success-fix,
+.swal2-icon.swal2-success .swal2-success-ring {
+    display: none !important;
+}
+.swal2-icon.swal2-success [class^=swal2-success-line] {
+    background-color: #027a48 !important;
+    height: 3.5px !important;
+    border-radius: 2px !important;
+    position: absolute !important;
+    z-index: 10 !important;
+    display: block !important;
+    box-sizing: border-box !important;
+}
+.swal2-icon.swal2-success .swal2-success-line-tip,
+.swal2-icon.swal2-success.swal2-animate-success-icon .swal2-success-line-tip {
+    width: 12px !important;
+    top: 27px !important;
+    left: 16px !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: rotate(45deg) !important;
+    transform-origin: left center !important;
+    animation: swalSuccessTipAnim 0.25s ease-out forwards !important;
+}
+.swal2-icon.swal2-success .swal2-success-line-long,
+.swal2-icon.swal2-success.swal2-animate-success-icon .swal2-success-line-long {
+    width: 22px !important;
+    top: 35.5px !important;
+    left: 23.5px !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: rotate(-45deg) !important;
+    transform-origin: left center !important;
+    animation: swalSuccessLongAnim 0.35s ease-out 0.12s both !important;
+}
+@keyframes swalSuccessTipAnim {
+    0% { width: 0 !important; opacity: 0; }
+    100% { width: 12px !important; opacity: 1; }
+}
+@keyframes swalSuccessLongAnim {
+    0% { width: 0 !important; opacity: 0; }
+    100% { width: 22px !important; opacity: 1; }
+}
+
+/* ID Card Camera Guide Frame & Viewfinder */
+.id-card-viewfinder {
+    position: absolute;
+    width: 86%;
+    max-width: 440px;
+    aspect-ratio: 85.6 / 54;
+    border-radius: 16px;
+    box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.62);
+    border: 1.5px dashed rgba(255, 255, 255, 0.45);
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    z-index: 5;
+    transition: all 0.25s ease;
+}
+.viewfinder-corner {
+    position: absolute;
+    width: 28px;
+    height: 28px;
+    border-color: #22c55e;
+    border-style: solid;
+    pointer-events: none;
+    box-sizing: border-box;
+}
+.viewfinder-corner.corner-tl {
+    top: -2px;
+    left: -2px;
+    border-width: 4px 0 0 4px;
+    border-top-left-radius: 14px;
+}
+.viewfinder-corner.corner-tr {
+    top: -2px;
+    right: -2px;
+    border-width: 4px 4px 0 0;
+    border-top-right-radius: 14px;
+}
+.viewfinder-corner.corner-bl {
+    bottom: -2px;
+    left: -2px;
+    border-width: 0 0 4px 4px;
+    border-bottom-left-radius: 14px;
+}
+.viewfinder-corner.corner-br {
+    bottom: -2px;
+    right: -2px;
+    border-width: 0 4px 4px 0;
+    border-bottom-right-radius: 14px;
+}
+.viewfinder-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    pointer-events: none;
+    padding: 8px 12px;
+}
+.viewfinder-card-ghost {
+    font-size: 2.2rem;
+    color: rgba(255, 255, 255, 0.28);
+    margin-bottom: 8px;
+}
+.viewfinder-badge {
+    color: #ffffff;
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(4px);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.viewfinder-hint {
+    font-size: 0.69rem;
+    color: rgba(255, 255, 255, 0.85);
+    margin-top: 6px;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+    font-weight: 500;
+}
+
+body.dark-mode .id-digital-tip {
+    background: rgba(30, 58, 138, 0.25) !important;
+    border-color: #1e40af !important;
+}
+body.dark-mode .id-digital-tip .tip-title {
+    color: #93c5fd !important;
+}
+body.dark-mode .id-digital-tip .tip-desc {
+    color: #bfdbfe !important;
 }
 
 .registration-page {
@@ -1619,6 +2078,159 @@ body {
 }
 
 /* Full-screen split layout styling with smooth sliding animation */
+/* SweetAlert Success Checkmark Full Animation & Complete Visibility */
+.swal2-icon.swal2-success {
+    border-color: #abefc6 !important;
+    background-color: #ecfdf3 !important;
+    color: #027a48 !important;
+    position: relative !important;
+    box-sizing: border-box !important;
+    display: block !important;
+}
+.swal2-icon.swal2-success [class^=swal2-success-circular-line],
+.swal2-icon.swal2-success .swal2-success-fix,
+.swal2-icon.swal2-success .swal2-success-ring {
+    display: none !important;
+}
+.swal2-icon.swal2-success [class^=swal2-success-line] {
+    background-color: #027a48 !important;
+    height: 3.5px !important;
+    border-radius: 2px !important;
+    position: absolute !important;
+    z-index: 10 !important;
+    display: block !important;
+    box-sizing: border-box !important;
+}
+.swal2-icon.swal2-success .swal2-success-line-tip,
+.swal2-icon.swal2-success.swal2-animate-success-icon .swal2-success-line-tip {
+    width: 12px !important;
+    top: 27px !important;
+    left: 16px !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: rotate(45deg) !important;
+    transform-origin: left center !important;
+    animation: swalSuccessTipAnim 0.25s ease-out forwards !important;
+}
+.swal2-icon.swal2-success .swal2-success-line-long,
+.swal2-icon.swal2-success.swal2-animate-success-icon .swal2-success-line-long {
+    width: 22px !important;
+    top: 35.5px !important;
+    left: 23.5px !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: rotate(-45deg) !important;
+    transform-origin: left center !important;
+    animation: swalSuccessLongAnim 0.35s ease-out 0.12s both !important;
+}
+@keyframes swalSuccessTipAnim {
+    0% { width: 0 !important; opacity: 0; }
+    100% { width: 12px !important; opacity: 1; }
+}
+@keyframes swalSuccessLongAnim {
+    0% { width: 0 !important; opacity: 0; }
+    100% { width: 22px !important; opacity: 1; }
+}
+
+/* ID Card Camera Guide Frame & Viewfinder */
+.id-card-viewfinder {
+    position: absolute;
+    width: 86%;
+    max-width: 440px;
+    aspect-ratio: 85.6 / 54;
+    border-radius: 16px;
+    box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.62);
+    border: 1.5px dashed rgba(255, 255, 255, 0.45);
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    z-index: 5;
+    transition: all 0.25s ease;
+}
+.viewfinder-corner {
+    position: absolute;
+    width: 28px;
+    height: 28px;
+    border-color: #22c55e;
+    border-style: solid;
+    pointer-events: none;
+    box-sizing: border-box;
+}
+.viewfinder-corner.corner-tl {
+    top: -2px;
+    left: -2px;
+    border-width: 4px 0 0 4px;
+    border-top-left-radius: 14px;
+}
+.viewfinder-corner.corner-tr {
+    top: -2px;
+    right: -2px;
+    border-width: 4px 4px 0 0;
+    border-top-right-radius: 14px;
+}
+.viewfinder-corner.corner-bl {
+    bottom: -2px;
+    left: -2px;
+    border-width: 0 0 4px 4px;
+    border-bottom-left-radius: 14px;
+}
+.viewfinder-corner.corner-br {
+    bottom: -2px;
+    right: -2px;
+    border-width: 0 4px 4px 0;
+    border-bottom-right-radius: 14px;
+}
+.viewfinder-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    pointer-events: none;
+    padding: 8px 12px;
+}
+.viewfinder-card-ghost {
+    font-size: 2.2rem;
+    color: rgba(255, 255, 255, 0.28);
+    margin-bottom: 8px;
+}
+.viewfinder-badge {
+    color: #ffffff;
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(4px);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.viewfinder-hint {
+    font-size: 0.69rem;
+    color: rgba(255, 255, 255, 0.85);
+    margin-top: 6px;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+    font-weight: 500;
+}
+
+body.dark-mode .id-digital-tip {
+    background: rgba(30, 58, 138, 0.25) !important;
+    border-color: #1e40af !important;
+}
+body.dark-mode .id-digital-tip .tip-title {
+    color: #93c5fd !important;
+}
+body.dark-mode .id-digital-tip .tip-desc {
+    color: #bfdbfe !important;
+}
+
 .registration-page {
     background: #ffffff !important;
     display: flex;
@@ -2005,7 +2617,160 @@ body {
 body.dark-mode,
 html.dark-mode,
 body.dark-mode .registration-page,
-html.dark-mode .registration-page {
+html.dark-mode /* SweetAlert Success Checkmark Full Animation & Complete Visibility */
+.swal2-icon.swal2-success {
+    border-color: #abefc6 !important;
+    background-color: #ecfdf3 !important;
+    color: #027a48 !important;
+    position: relative !important;
+    box-sizing: border-box !important;
+    display: block !important;
+}
+.swal2-icon.swal2-success [class^=swal2-success-circular-line],
+.swal2-icon.swal2-success .swal2-success-fix,
+.swal2-icon.swal2-success .swal2-success-ring {
+    display: none !important;
+}
+.swal2-icon.swal2-success [class^=swal2-success-line] {
+    background-color: #027a48 !important;
+    height: 3.5px !important;
+    border-radius: 2px !important;
+    position: absolute !important;
+    z-index: 10 !important;
+    display: block !important;
+    box-sizing: border-box !important;
+}
+.swal2-icon.swal2-success .swal2-success-line-tip,
+.swal2-icon.swal2-success.swal2-animate-success-icon .swal2-success-line-tip {
+    width: 12px !important;
+    top: 27px !important;
+    left: 16px !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: rotate(45deg) !important;
+    transform-origin: left center !important;
+    animation: swalSuccessTipAnim 0.25s ease-out forwards !important;
+}
+.swal2-icon.swal2-success .swal2-success-line-long,
+.swal2-icon.swal2-success.swal2-animate-success-icon .swal2-success-line-long {
+    width: 22px !important;
+    top: 35.5px !important;
+    left: 23.5px !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: rotate(-45deg) !important;
+    transform-origin: left center !important;
+    animation: swalSuccessLongAnim 0.35s ease-out 0.12s both !important;
+}
+@keyframes swalSuccessTipAnim {
+    0% { width: 0 !important; opacity: 0; }
+    100% { width: 12px !important; opacity: 1; }
+}
+@keyframes swalSuccessLongAnim {
+    0% { width: 0 !important; opacity: 0; }
+    100% { width: 22px !important; opacity: 1; }
+}
+
+/* ID Card Camera Guide Frame & Viewfinder */
+.id-card-viewfinder {
+    position: absolute;
+    width: 86%;
+    max-width: 440px;
+    aspect-ratio: 85.6 / 54;
+    border-radius: 16px;
+    box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.62);
+    border: 1.5px dashed rgba(255, 255, 255, 0.45);
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    z-index: 5;
+    transition: all 0.25s ease;
+}
+.viewfinder-corner {
+    position: absolute;
+    width: 28px;
+    height: 28px;
+    border-color: #22c55e;
+    border-style: solid;
+    pointer-events: none;
+    box-sizing: border-box;
+}
+.viewfinder-corner.corner-tl {
+    top: -2px;
+    left: -2px;
+    border-width: 4px 0 0 4px;
+    border-top-left-radius: 14px;
+}
+.viewfinder-corner.corner-tr {
+    top: -2px;
+    right: -2px;
+    border-width: 4px 4px 0 0;
+    border-top-right-radius: 14px;
+}
+.viewfinder-corner.corner-bl {
+    bottom: -2px;
+    left: -2px;
+    border-width: 0 0 4px 4px;
+    border-bottom-left-radius: 14px;
+}
+.viewfinder-corner.corner-br {
+    bottom: -2px;
+    right: -2px;
+    border-width: 0 4px 4px 0;
+    border-bottom-right-radius: 14px;
+}
+.viewfinder-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    pointer-events: none;
+    padding: 8px 12px;
+}
+.viewfinder-card-ghost {
+    font-size: 2.2rem;
+    color: rgba(255, 255, 255, 0.28);
+    margin-bottom: 8px;
+}
+.viewfinder-badge {
+    color: #ffffff;
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(4px);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.viewfinder-hint {
+    font-size: 0.69rem;
+    color: rgba(255, 255, 255, 0.85);
+    margin-top: 6px;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+    font-weight: 500;
+}
+
+body.dark-mode .id-digital-tip {
+    background: rgba(30, 58, 138, 0.25) !important;
+    border-color: #1e40af !important;
+}
+body.dark-mode .id-digital-tip .tip-title {
+    color: #93c5fd !important;
+}
+body.dark-mode .id-digital-tip .tip-desc {
+    color: #bfdbfe !important;
+}
+
+.registration-page {
     background: #0f172a !important;
     background-color: #0f172a !important;
     color: #f8fafc !important;
@@ -2495,6 +3260,21 @@ body.dark-mode .leaflet-container {
                         <input type="hidden" id="hasCachedFrontId" value="<?php echo $has_cached_front ? '1' : '0'; ?>">
                         <input type="hidden" id="hasCachedBackId" value="<?php echo $has_cached_back ? '1' : '0'; ?>">
 
+                                                <!-- Fast Track Digital ID Upload Callout Note -->
+                        <div class="id-digital-tip" style="background: #eff8ff; border: 1px solid #b2ddff; border-radius: 12px; padding: 14px 16px; margin-bottom: 20px; display: flex; align-items: flex-start; gap: 12px; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);">
+                            <div style="background: #dbeafe; width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #175cd3; font-size: 1.1rem;">
+                                <i class="fas fa-bolt"></i>
+                            </div>
+                            <div style="flex: 1;">
+                                <div class="tip-title" style="font-size: 0.88rem; font-weight: 700; color: #1e40af; margin-bottom: 2px;">
+                                    Faster Approval Tip: Upload a Digital ID
+                                </div>
+                                <div class="tip-desc" style="font-size: 0.82rem; color: #1e3a8a; line-height: 1.45;">
+                                    Using your official <strong>Digital National ID (ePhilID or eGov PH Digital ID)</strong> ensures crystal-clear readability and is approved and verified much faster!
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- ID Upload Controls Container -->
                         <div style="display: flex; flex-direction: column; gap: 20px;">
                             <!-- Front Side Upload -->
@@ -2777,9 +3557,19 @@ body.dark-mode .leaflet-container {
         <!-- Live Stream Video Panel -->
         <div style="position: relative; background: #000; width: 100%; aspect-ratio: 4/3; max-height: 400px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
             <video id="webcamStream" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>
-            <!-- ID Card Crop Guide Outline Box -->
-            <div id="cropGuide" style="position: absolute; border: 3px dashed rgba(255, 255, 255, 0.85); width: 85%; height: 58%; border-radius: 12px; box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.45); pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                <span id="cropGuideText" style="color: #ffffff; background: rgba(15, 23, 42, 0.75); padding: 4px 12px; border-radius: 20px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Position ID Card Here</span>
+            <!-- ID Card Frame & Alignment Viewfinder -->
+            <div id="cropGuide" class="id-card-viewfinder">
+                <div class="viewfinder-corner corner-tl"></div>
+                <div class="viewfinder-corner corner-tr"></div>
+                <div class="viewfinder-corner corner-bl"></div>
+                <div class="viewfinder-corner corner-br"></div>
+                <div class="viewfinder-content">
+                    <i class="fas fa-id-card viewfinder-card-ghost"></i>
+                    <div id="cropGuideText" class="viewfinder-badge">
+                        <i class="fas fa-expand me-1" style="color: #4ade80;"></i> Fit ID Card Inside Frame
+                    </div>
+                    <span class="viewfinder-hint">Align all 4 corners inside the frame</span>
+                </div>
             </div>
             <div id="cameraLoadingSpinner" style="position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #ffffff; z-index: 10;">
                 <i class="fas fa-circle-notch fa-spin" style="font-size: 2rem; margin-bottom: 10px;"></i>
@@ -4413,6 +5203,12 @@ document.addEventListener('DOMContentLoaded', function() {
         activeCameraSide = (side || 'front').toLowerCase() === 'back' ? 'back' : 'front';
         const title = document.getElementById('cameraModalTitle');
         if (title) title.textContent = activeCameraSide === 'back' ? 'Capture Back of ID' : 'Capture Front of ID';
+        const guideText = document.getElementById('cropGuideText');
+        if (guideText) {
+            guideText.innerHTML = activeCameraSide === 'back'
+                ? '<i class="fas fa-expand me-1" style="color: #4ade80;"></i> Fit Back of ID Inside Frame'
+                : '<i class="fas fa-expand me-1" style="color: #4ade80;"></i> Fit Front of ID Inside Frame';
+        }
         if (cameraModal) cameraModal.style.display = 'flex';
         startCamera();
     }
