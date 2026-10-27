@@ -341,15 +341,15 @@ if (!empty($city_display_parts)) {
 }
 
 // Fulfillment Mode: Check URL parameter first, then session, defaulting to 'delivery'
-if (!empty($_GET['mode']) && in_array(strtolower(trim((string)$_GET['mode'])), ['pickup', 'delivery'], true)) {
+if (!empty($_GET['mode']) && in_array(strtolower(trim((string)$_GET['mode'])), ['pickup', 'delivery', 'preorder'], true)) {
     $_SESSION['delivery_option'] = strtolower(trim((string)$_GET['mode']));
     $_SESSION['delivery_option_explicit'] = true;
-} elseif (!empty($_GET['delivery_option']) && in_array(strtolower(trim((string)$_GET['delivery_option'])), ['pickup', 'delivery'], true)) {
+} elseif (!empty($_GET['delivery_option']) && in_array(strtolower(trim((string)$_GET['delivery_option'])), ['pickup', 'delivery', 'preorder'], true)) {
     $_SESSION['delivery_option'] = strtolower(trim((string)$_GET['delivery_option']));
     $_SESSION['delivery_option_explicit'] = true;
 }
 
-$current_checkout_delivery_option = in_array(strtolower((string)($_SESSION['delivery_option'] ?? '')), ['pickup', 'delivery'], true)
+$current_checkout_delivery_option = in_array(strtolower((string)($_SESSION['delivery_option'] ?? '')), ['pickup', 'delivery', 'preorder'], true)
     ? strtolower((string)$_SESSION['delivery_option'])
     : 'delivery';
 $_SESSION['delivery_option'] = $current_checkout_delivery_option;
@@ -380,7 +380,7 @@ $estimated_delivery_text = '';
 $selected_store_address = '';
 $selected_store = null;
 
-if ($current_checkout_delivery_option === 'pickup') {
+if ($current_checkout_delivery_option === 'pickup' || $current_checkout_delivery_option === 'preorder') {
     $pickup_location = $_SESSION['pickup_location'] ?? 1;
     foreach ($stores as $store) {
         if ($store['id'] == $pickup_location) {
@@ -388,7 +388,10 @@ if ($current_checkout_delivery_option === 'pickup') {
             break;
         }
     }
-    $delivery_details = "Pickup from: " . ($selected_store['name'] ?? ($selected_store['store_name'] ?? 'Main Store'));
+    if (!$selected_store && !empty($stores)) {
+        $selected_store = $stores[0];
+    }
+    $delivery_details = ($current_checkout_delivery_option === 'preorder' ? 'Pre-Order from: ' : 'Pickup from: ') . ($selected_store['name'] ?? ($selected_store['store_name'] ?? 'Main Store'));
     $selected_store_address = $selected_store['address'] ?? '';
 } else {
     if (!empty($current_delivery_quote['success'])) {
@@ -473,8 +476,13 @@ if (!$checkout_tenant_blocked && (int)($checkout_tenant_scope['seller_id'] ?? 0)
     $preorder_params['seller_id'] = $storefront_seller_id;
     $preorder_switch_link = 'preorder.php' . (!empty($preorder_params) ? '?' . http_build_query($preorder_params) : '');
 }
+if ($storefront_seller_id <= 0 && !empty($pickup_store['owner_user_id'])) {
+    $storefront_seller_id = (int)$pickup_store['owner_user_id'];
+    $_SESSION['storefront_seller_id'] = $storefront_seller_id;
+}
 require_once __DIR__ . '/includes/preorder_schedule_helper.php';
 $store_schedule_config = posGetSellerSchedule($conn, (int)$storefront_seller_id);
+$initial_calendar_data = posGetCalendarAvailability($conn, (int)$storefront_seller_id);
 $total = max(0, $subtotal + $vat_amount + $delivery_fee - $voucher_discount);
 
 // Calculate downpayment (30%)
@@ -617,6 +625,9 @@ $remaining = $total - $downpayment;
                                     </button>
                                     <button type="button" class="fp-mode-pill-btn is-active">
                                         <i class="fas fa-person-walking"></i> Pick-up
+                                    </button>
+                                    <button type="button" class="fp-mode-pill-btn" onclick="switchCheckoutFulfillmentMode('preorder')">
+                                        <i class="fas fa-calendar-alt"></i> Pre-Order
                                     </button>
                                 </div>
                             </div>
@@ -794,6 +805,9 @@ $remaining = $total - $downpayment;
                                     <button type="button" class="fp-mode-pill-btn" onclick="switchCheckoutFulfillmentMode('pickup')">
                                         <i class="fas fa-person-walking"></i> Pick-up
                                     </button>
+                                    <button type="button" class="fp-mode-pill-btn" onclick="switchCheckoutFulfillmentMode('preorder')">
+                                        <i class="fas fa-calendar-alt"></i> Pre-Order
+                                    </button>
                                 </div>
                             </div>
                             <div class="fp-address-body">
@@ -843,33 +857,20 @@ $remaining = $total - $downpayment;
                             </div>
                         </div>
 
-                        <!-- 3. Delivery Options Card -->
-                        <div class="fp-card fp-pickup-options-card">
-                            <div class="fp-card-header">
-                                <h3 class="fp-section-title">Delivery options</h3>
+                        <!-- 3. Delivery Speed Card (Direct dispatch - No schedule needed) -->
+                        <div class="fp-card fp-delivery-options-card" style="padding: 16px 18px;">
+                            <div class="fp-card-header" style="margin-bottom: 10px;">
+                                <h3 class="fp-section-title">Delivery speed</h3>
                             </div>
-                            <div class="fp-options-list">
-                                <!-- Option 1: Standard (35-50 mins) -->
-                                <div class="fp-option-row is-active" id="fpDelOptionStandard" onclick="selectDeliveryOption('standard')">
-                                    <div class="fp-radio-circle">
-                                        <span class="fp-radio-dot"></span>
-                                    </div>
-                                    <div class="fp-option-info">
-                                        <span class="fp-option-label">Standard</span>
-                                        <span class="fp-option-subtext" id="overviewEta"><?php echo !empty($overview_eta) ? htmlspecialchars(str_replace('Estimated delivery: ', '', $overview_eta)) : '35–50 mins'; ?></span>
-                                    </div>
+                            <div class="fp-option-row is-active" style="cursor: default; border: 1.5px solid #abefc6; background: #f6fef9; border-radius: 12px; padding: 12px 14px;">
+                                <div class="fp-radio-circle" style="border-color: #027a48;">
+                                    <span class="fp-radio-dot" style="background: #027a48;"></span>
                                 </div>
-
-                                <!-- Option 2: Scheduled (Select a date and time) -->
-                                <div class="fp-option-row" id="fpDelOptionScheduled" onclick="openPickupScheduleSheet()">
-                                    <div class="fp-radio-circle">
-                                        <span class="fp-radio-dot"></span>
-                                    </div>
-                                    <div class="fp-option-info">
-                                        <span class="fp-option-label">Scheduled</span>
-                                        <span class="fp-option-subtext" id="fpDelScheduledSubtext">Select a date and time</span>
-                                    </div>
-                                    <i class="fas fa-chevron-right fp-option-chevron"></i>
+                                <div class="fp-option-info">
+                                    <span class="fp-option-label" style="font-weight: 800; color: #101828;">Standard Delivery</span>
+                                    <span class="fp-option-subtext" id="overviewEta" style="color: #027a48; font-weight: 700;">
+                                        <?php echo !empty($overview_eta) ? htmlspecialchars(str_replace('Estimated delivery: ', '', $overview_eta)) : '30–45 mins'; ?>
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -1012,10 +1013,257 @@ $remaining = $total - $downpayment;
                     </div>
                     <!-- ================= END FOODPANDA DELIVERY VIEW ================= -->
 
+                    <!-- ================= FOODPANDA PRE-ORDER VIEW ================= -->
+                    <div id="foodpandaPreorderView" style="<?php echo ($current_checkout_delivery_option === 'preorder') ? 'display: block;' : 'display: none;'; ?>">
+                        <!-- Top Header -->
+                        <div class="fp-checkout-header">
+                            <button type="button" class="fp-back-btn" onclick="window.history.length > 1 ? window.history.back() : window.location.href='menu.php'" aria-label="Go back">
+                                <i class="fas fa-arrow-left"></i>
+                            </button>
+                            <div class="fp-checkout-title-wrap">
+                                <h2 class="fp-checkout-title">Pre-Order Checkout</h2>
+                                <p class="fp-checkout-subtitle" id="fpPreorderStoreSubtitle">
+                                    <?php echo htmlspecialchars($pickup_store_name); ?>
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- 1. Locked Store Address Card (Strictly NO other store) -->
+                        <div class="fp-card fp-pickup-address-card">
+                            <div class="fp-card-header">
+                                <h3 class="fp-section-title">Pick-up store</h3>
+                                <div class="fp-mode-pill-toggle">
+                                    <button type="button" class="fp-mode-pill-btn" onclick="switchCheckoutFulfillmentMode('delivery')">
+                                        <i class="fas fa-motorcycle"></i> Delivery
+                                    </button>
+                                    <button type="button" class="fp-mode-pill-btn" onclick="switchCheckoutFulfillmentMode('pickup')">
+                                        <i class="fas fa-person-walking"></i> Pick-up
+                                    </button>
+                                    <button type="button" class="fp-mode-pill-btn is-active">
+                                        <i class="fas fa-calendar-alt"></i> Pre-Order
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="fp-address-body">
+                                <div class="fp-address-icon-wrap">
+                                    <i class="fas fa-store"></i>
+                                </div>
+                                <div class="fp-address-details">
+                                    <h4 class="fp-store-name" id="fpPreorderStoreName">
+                                        <?php echo htmlspecialchars($pickup_store_name); ?>
+                                    </h4>
+                                    <p class="fp-store-address" id="fpPreorderStoreAddress">
+                                        <?php echo htmlspecialchars($pickup_store_address); ?>
+                                    </p>
+                                    <div class="fp-store-badge-locked" style="margin-top: 6px;">
+                                        <span style="font-size: 11px; font-weight: 700; color: #027a48; background: #ecfdf3; border: 1px solid #abefc6; padding: 2px 8px; border-radius: 999px; display: inline-flex; align-items: center; gap: 4px;">
+                                            <i class="fas fa-check-circle"></i> Fulfilling Store Branch
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 2. Interactive Roasting & Pick-up Schedule Calendar Card -->
+                        <div class="fp-card fp-preorder-schedule-card">
+                            <div class="fp-card-header">
+                                <h3 class="fp-section-title"><i class="fas fa-calendar-check" style="color: #b3261e; margin-right: 6px;"></i> Roasting &amp; Pick-up Schedule</h3>
+                            </div>
+                            <p style="color: #667085; font-size: 0.84rem; margin-top: -4px; margin-bottom: 16px;">
+                                Select an available pick-up date and roasting batch. Real-time slot capacities ensure your lechon is freshly roasted and ready when you arrive.
+                            </p>
+
+                            <!-- Hidden inputs for pre-order submission -->
+                            <input type="hidden" id="preorderPickupDate" name="preorder_pickup_date" value="">
+                            <input type="hidden" id="preorderPickupTime" name="preorder_pickup_time" value="">
+
+                            <!-- Calendar Widget -->
+                            <div class="preorder-cal-widget" id="preorderCalendarWidget">
+                                <div class="cal-widget-header">
+                                    <button type="button" class="cal-nav-btn" id="calPrevMonthBtn" title="Previous Month"><i class="fas fa-chevron-left"></i></button>
+                                    <div class="cal-widget-title" id="calMonthTitle"><?php echo htmlspecialchars($initial_calendar_data['month_title'] ?? date('F Y')); ?></div>
+                                    <button type="button" class="cal-nav-btn" id="calNextMonthBtn" title="Next Month"><i class="fas fa-chevron-right"></i></button>
+                                </div>
+
+                                <div class="cal-schedule-policy-bar">
+                                    <span><i class="fas fa-clock"></i> <strong>Lead Time:</strong> <?php echo (int)($store_schedule_config['lead_time_days'] ?? 1); ?> day(s) notice</span>
+                                    <span><i class="fas fa-hourglass-half"></i> <strong>Daily Cutoff:</strong> <?php echo date('g:i A', strtotime($store_schedule_config['cutoff_time'] ?? '18:00:00')); ?></span>
+                                    <span><i class="fas fa-calendar-alt"></i> <strong>Window:</strong> Up to <?php echo (int)($store_schedule_config['max_advance_days'] ?? 30); ?> days ahead</span>
+                                </div>
+
+                                <div class="cal-grid-weekdays">
+                                    <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>
+                                </div>
+
+                                <div class="cal-grid-days" id="calDaysGrid">
+                                    <!-- Populated by JavaScript -->
+                                </div>
+
+                                <div class="cal-legend-bar">
+                                    <div class="cal-legend-item"><span class="legend-dot available"></span> Available Date</div>
+                                    <div class="cal-legend-item"><span class="legend-dot selected"></span> Selected</div>
+                                    <div class="cal-legend-item"><span class="legend-dot disabled"></span> Closed / Cutoff</div>
+                                    <div class="cal-legend-item"><span class="legend-dot full"></span> Fully Booked</div>
+                                </div>
+                            </div>
+
+                            <!-- Available Time Slots for Selected Date -->
+                            <div class="preorder-slots-section" id="preorderSlotsSection" style="margin-top: 20px; display: none;">
+                                <h5 style="font-family:'Outfit',sans-serif; font-weight:700; font-size:0.95rem; color:#101828; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+                                    <i class="fas fa-clock" style="color: #b3261e;"></i> Available Roasting Slots for <span id="slotsSelectedDateText" style="color:#b3261e; font-weight: 800;"></span>
+                                </h5>
+                                <div class="time-slots-grid" id="timeSlotsGrid">
+                                    <!-- Time slot cards dynamically injected here -->
+                                </div>
+                            </div>
+
+                            <!-- Selected Date & Time Confirmation Banner -->
+                            <div class="preorder-schedule-selected-badge" id="scheduleSelectedBadge" style="display: none; margin-top: 16px; background: #ecfdf3; border: 1px solid #abefc6; border-radius: 12px; padding: 12px 16px; color: #027a48; align-items: center; gap: 12px;">
+                                <i class="fas fa-circle-check" style="font-size: 1.25rem;"></i>
+                                <div>
+                                    <div style="font-weight: 800; font-size: 0.92rem;">Pick-up Schedule Confirmed</div>
+                                    <div style="font-size: 0.84rem;" id="scheduleSelectedSummaryText"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 3. Payment Method & Terms Card (Full vs 30% Downpayment) -->
+                        <div class="fp-card fp-payment-card">
+                            <div class="fp-card-header">
+                                <h3 class="fp-section-title">Payment terms</h3>
+                            </div>
+                            <div class="fp-payment-terms-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+                                <label class="fp-term-card is-active" id="fpTermCardFull" onclick="selectPreorderPaymentType('full')" style="border: 2px solid #b3261e; background: #fff1f0; border-radius: 12px; padding: 14px; cursor: pointer; display: flex; flex-direction: column; gap: 6px; transition: all 0.2s ease;">
+                                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                                        <span style="font-weight: 800; font-size: 0.92rem; color: #101828; display: inline-flex; align-items: center; gap: 6px;">
+                                            <i class="fas fa-money-bill-wave" style="color: #b3261e;"></i> Full Payment
+                                        </span>
+                                        <input type="radio" name="preorder_payment_term" value="full" checked style="accent-color: #b3261e;">
+                                    </div>
+                                    <span style="font-size: 0.8rem; color: #475467;">Pay 100% now via PayMongo (GCash / Card).</span>
+                                    <span style="font-size: 0.95rem; font-weight: 800; color: #b3261e; margin-top: 4px;">₱<?php echo number_format($total, 2); ?></span>
+                                </label>
+
+                                <label class="fp-term-card" id="fpTermCardDownpayment" onclick="selectPreorderPaymentType('downpayment')" style="border: 1px solid #eaecf0; background: #ffffff; border-radius: 12px; padding: 14px; cursor: pointer; display: flex; flex-direction: column; gap: 6px; transition: all 0.2s ease;">
+                                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                                        <span style="font-weight: 800; font-size: 0.92rem; color: #101828; display: inline-flex; align-items: center; gap: 6px;">
+                                            <i class="fas fa-percentage" style="color: #175cd3;"></i> 30% Downpayment
+                                        </span>
+                                        <input type="radio" name="preorder_payment_term" value="downpayment" style="accent-color: #b3261e;">
+                                    </div>
+                                    <span style="font-size: 0.8rem; color: #475467;">Pay 30% reservation now, balance upon store pick-up.</span>
+                                    <span style="font-size: 0.95rem; font-weight: 800; color: #175cd3; margin-top: 4px;">₱<?php echo number_format($downpayment, 2); ?></span>
+                                </label>
+                            </div>
+
+                            <div class="fp-payment-body">
+                                <div class="fp-payment-row">
+                                    <div class="fp-gcash-badge">
+                                        <span>G</span>
+                                    </div>
+                                    <div class="fp-payment-details">
+                                        <span class="fp-payment-name">GCash / Online (PayMongo)</span>
+                                        <span class="fp-payment-sub">Fast, secure instant confirmation</span>
+                                    </div>
+                                    <div class="fp-payment-amount">
+                                        <span id="fpPreorderPaymentAmountDisplay">₱ <?php echo number_format($total, 2); ?></span>
+                                    </div>
+                                </div>
+                                <div class="fp-payment-footer-note">
+                                    <i class="fas fa-shield-alt"></i> Official payment gateway handled securely by PayMongo.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 4. Contact Details & Notes Card -->
+                        <div class="fp-card fp-contact-card">
+                            <div class="fp-card-header">
+                                <h3 class="fp-section-title">Contact details</h3>
+                                <span class="fp-autofill-tag"><i class="fas fa-check-circle"></i> Profile synced</span>
+                            </div>
+                            <div class="fp-contact-body">
+                                <div class="fp-contact-row">
+                                    <i class="fas fa-user"></i>
+                                    <span><?php echo htmlspecialchars($user['full_name'] ?? 'Guest Customer'); ?></span>
+                                </div>
+                                <div class="fp-contact-row">
+                                    <i class="fas fa-phone"></i>
+                                    <span><?php echo htmlspecialchars($user['phone'] ?? ''); ?></span>
+                                </div>
+                                <div class="fp-contact-row">
+                                    <i class="fas fa-envelope"></i>
+                                    <span><?php echo htmlspecialchars($user['email'] ?? ''); ?></span>
+                                </div>
+                                <div class="fp-order-note-wrap">
+                                    <input type="text" id="fp_preorder_notes" class="fp-note-input" placeholder="Note to kitchen (e.g. extra spicy chili, extra sauce, chop into pieces)" oninput="syncOrderNotes(this.value)">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 5. Order Summary Card -->
+                        <div class="fp-card fp-order-summary-card" id="fpPreorderOrderSummaryCard">
+                            <div class="fp-card-header">
+                                <h3 class="fp-section-title">Order summary</h3>
+                                <span class="fp-items-count"><?php echo (int)$checkout_item_count; ?> <?php echo $checkout_item_count === 1 ? 'item' : 'items'; ?></span>
+                            </div>
+                            <div class="fp-summary-items-list">
+                                <?php foreach ($_SESSION['cart'] as $item): ?>
+                                <div class="fp-summary-item-row">
+                                    <span class="fp-item-qty"><?php echo (int)$item['quantity']; ?>x</span>
+                                    <div class="fp-item-text">
+                                        <div class="fp-item-name"><?php echo htmlspecialchars($item['name']); ?></div>
+                                        <?php if (!empty($item['size']) && $item['size'] !== 'Regular'): ?>
+                                        <div class="fp-item-variant">Size: <?php echo htmlspecialchars($item['size']); ?></div>
+                                        <?php endif; ?>
+                                        <?php if (!empty($item['addons'])): ?>
+                                        <div class="fp-item-variant">+ <?php echo htmlspecialchars(implode(', ', $item['addons'])); ?></div>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div class="fp-item-price">₱<?php echo number_format($item['price'] * $item['quantity'], 2); ?></div>
+                                </div>
+                                <?php endforeach; ?>
+                            </div>
+                            <div class="fp-summary-totals">
+                                <div class="fp-totals-row">
+                                    <span>Subtotal</span>
+                                    <span>₱<?php echo number_format($subtotal, 2); ?></span>
+                                </div>
+                                <div class="fp-totals-row">
+                                    <span>VAT (12%)</span>
+                                    <span>₱<?php echo number_format($vat_amount, 2); ?></span>
+                                </div>
+                                <div class="fp-totals-row">
+                                    <span>Fulfillment Fee</span>
+                                    <span style="color: #027a48; font-weight: 700;">₱0.00 (Store Pick-up)</span>
+                                </div>
+                                <?php if ($voucher_discount > 0): ?>
+                                <div class="fp-totals-row fp-voucher-discount-row">
+                                    <span>Discount (<?php echo htmlspecialchars($applied_voucher_code); ?>)</span>
+                                    <span>- ₱<?php echo number_format($voucher_discount, 2); ?></span>
+                                </div>
+                                <?php endif; ?>
+                                <div class="fp-totals-row fp-grand-total-row">
+                                    <span>Total Amount</span>
+                                    <span>₱<?php echo number_format($total, 2); ?></span>
+                                </div>
+                                <div class="fp-totals-row" id="fpPreorderDownpaymentSummaryRow" style="display: none; border-top: 1px dashed #d0d5dd; padding-top: 8px; margin-top: 8px;">
+                                    <span style="color: #b3261e; font-weight: 700;">30% Downpayment Due Today</span>
+                                    <span style="color: #b3261e; font-weight: 800;" id="fpSummaryDownpaymentDue">₱<?php echo number_format($downpayment, 2); ?></span>
+                                </div>
+                                <div class="fp-totals-row" id="fpPreorderRemainingSummaryRow" style="display: none;">
+                                    <span style="color: #475467; font-size: 0.85rem;">Remaining Balance upon Pick-up</span>
+                                    <span style="color: #475467; font-size: 0.85rem;" id="fpSummaryRemainingDue">₱<?php echo number_format($remaining, 2); ?></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- ================= END FOODPANDA PRE-ORDER VIEW ================= -->
+
                     <!-- Hidden Payment Radios & Terms for process_order.php -->
                     <input type="radio" name="payment_method" value="cod" <?php echo ($current_checkout_delivery_option === 'delivery') ? 'checked' : ''; ?> style="display:none;" id="radioPaymentMethodCod">
-                    <input type="radio" name="payment_method" value="paymongo" <?php echo ($current_checkout_delivery_option === 'pickup') ? 'checked' : ''; ?> style="display:none;" id="radioPaymentMethodPaymongo">
-                    <input type="radio" name="payment_type" value="full" checked style="display:none;">
+                    <input type="radio" name="payment_method" value="paymongo" <?php echo ($current_checkout_delivery_option === 'pickup' || $current_checkout_delivery_option === 'preorder') ? 'checked' : ''; ?> style="display:none;" id="radioPaymentMethodPaymongo">
+                    <input type="radio" name="payment_type" value="full" checked style="display:none;" id="radioPaymentTypeFull">
+                    <input type="radio" name="payment_type" value="downpayment" style="display:none;" id="radioPaymentTypeDownpayment">
                     <input type="checkbox" name="terms" checked style="display:none;">
 
                     <!-- Hidden Contact Inputs for process_order.php -->
@@ -1075,7 +1323,7 @@ $remaining = $total - $downpayment;
     <div class="fp-bar-content">
         <div class="fp-bar-summary-row">
             <div class="fp-bar-left">
-                <div class="fp-bar-label">Total (incl. fees and tax)</div>
+                <div class="fp-bar-label" id="fpBarLabelDisplay">Total (incl. fees and tax)</div>
                 <button type="button" class="fp-see-summary-link" onclick="scrollToPickupSummary()">See summary</button>
             </div>
             <div class="fp-bar-right">
@@ -1086,7 +1334,15 @@ $remaining = $total - $downpayment;
             </div>
         </div>
         <button type="button" class="fp-place-order-btn" id="fpPlacePickupOrderBtn" onclick="submitFoodpandaCheckout()">
-            <?php echo ($current_checkout_delivery_option === 'pickup') ? 'Place Pick-Up order' : 'Place Delivery order'; ?>
+            <?php 
+                if ($current_checkout_delivery_option === 'preorder') {
+                    echo 'Place Pre-Order';
+                } elseif ($current_checkout_delivery_option === 'pickup') {
+                    echo 'Place Pick-Up order';
+                } else {
+                    echo 'Place Delivery order';
+                }
+            ?>
         </button>
     </div>
 </div>
@@ -1136,7 +1392,11 @@ $remaining = $total - $downpayment;
 }
 
 .checkout-section {
-    padding-bottom: 140px !important;
+    padding-bottom: 40px !important;
+    background: #f8f9fa !important;
+}
+body {
+    background: #f8f9fa !important;
 }
 
 .checkout-section .checkout-grid {
@@ -1155,10 +1415,227 @@ $remaining = $total - $downpayment;
 }
 
 #foodpandaPickupView,
-#foodpandaDeliveryView {
+#foodpandaDeliveryView,
+#foodpandaPreorderView {
     width: 100%;
     margin: 0 auto;
 }
+
+/* Pre-Order Calendar & Time Slots Widget Styles */
+.preorder-cal-widget {
+    background: #ffffff;
+    border: 1px solid #eaecf0;
+    border-radius: 16px;
+    padding: 18px;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+}
+.cal-widget-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eaecf0;
+}
+.cal-widget-title {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 800;
+    font-size: 1.1rem;
+    color: #101828;
+}
+.cal-nav-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    border: 1px solid #d0d5dd;
+    background: #ffffff;
+    color: #344054;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s ease;
+}
+.cal-nav-btn:hover:not(:disabled) {
+    background: #f8f9fa;
+    border-color: #98a2b3;
+    color: #101828;
+}
+.cal-nav-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+.cal-schedule-policy-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 8px 12px;
+    background: #f8f9fa;
+    border: 1px solid #eaecf0;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    color: #475467;
+    margin-bottom: 14px;
+}
+.cal-schedule-policy-bar span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+.cal-grid-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 5px;
+    margin-bottom: 6px;
+    text-align: center;
+}
+.cal-grid-weekdays div {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #667085;
+    text-transform: uppercase;
+}
+.cal-grid-days {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+}
+.cal-day-cell {
+    aspect-ratio: 1;
+    min-height: 48px;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3px;
+    border: 1px solid #eaecf0;
+    background: #ffffff;
+    cursor: pointer;
+    transition: all 0.18s ease;
+}
+.cal-day-cell.is-blank {
+    background: transparent;
+    border-color: transparent;
+    cursor: default;
+}
+.cal-day-num {
+    font-weight: 800;
+    font-size: 0.9rem;
+    color: #101828;
+}
+.cal-day-sub {
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #027a48;
+    margin-top: 1px;
+}
+.cal-day-sub.muted { color: #98a2b3; }
+.cal-day-sub.full { color: #b3261e; }
+.cal-day-cell.is-available {
+    background: #ffffff;
+    border-color: #abefc6;
+}
+.cal-day-cell.is-available:hover {
+    border-color: #b3261e;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(179, 38, 30, 0.12);
+}
+.cal-day-cell.is-disabled {
+    background: #f8f9fa;
+    border-color: #eaecf0;
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+.cal-day-cell.is-disabled .cal-day-num { color: #98a2b3; }
+.cal-day-cell.is-selected {
+    background: #b3261e !important;
+    border-color: #b3261e !important;
+    box-shadow: 0 4px 12px rgba(179, 38, 30, 0.35) !important;
+}
+.cal-day-cell.is-selected .cal-day-num { color: #ffffff !important; }
+.cal-day-cell.is-selected .cal-day-sub { color: #fedf89 !important; }
+.cal-legend-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid #eaecf0;
+    justify-content: center;
+}
+.cal-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.75rem;
+    color: #475467;
+    font-weight: 600;
+}
+.legend-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    display: inline-block;
+}
+.legend-dot.available { background: #12b76a; border: 1px solid #027a48; }
+.legend-dot.selected { background: #b3261e; }
+.legend-dot.disabled { background: #d0d5dd; }
+.legend-dot.full { background: #f04438; }
+
+.time-slots-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 10px;
+}
+.time-slot-card {
+    background: #ffffff;
+    border: 1.5px solid #eaecf0;
+    border-radius: 12px;
+    padding: 10px 8px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+}
+.time-slot-card:hover:not(.is-disabled) {
+    border-color: #b3261e;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(179, 38, 30, 0.12);
+}
+.time-slot-card.is-selected {
+    background: #fff1f0;
+    border-color: #b3261e;
+    box-shadow: 0 0 0 2px rgba(179, 38, 30, 0.2);
+}
+.time-slot-card.is-disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    background: #f8f9fa;
+}
+.slot-time {
+    font-weight: 800;
+    font-size: 0.9rem;
+    color: #101828;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.slot-time i { font-size: 0.78rem; color: #b3261e; }
+.slot-label { font-size: 0.72rem; color: #667085; }
+.slot-badge {
+    font-size: 0.65rem;
+    font-weight: 800;
+    padding: 2px 7px;
+    border-radius: 999px;
+    margin-top: 2px;
+}
+.slot-badge.badge-open { background: #ecfdf3; color: #027a48; }
+.slot-badge.badge-full { background: #fef3f2; color: #b42318; }
 
 .fp-del-change-btn {
     background: none;
@@ -1637,17 +2114,35 @@ $remaining = $total - $downpayment;
 }
 
 .fp-docked-bottom-bar {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 1260;
-    background: rgba(255, 255, 255, 0.94);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border-top: 1px solid rgba(0, 0, 0, 0.08);
-    box-shadow: 0 -6px 24px rgba(16, 24, 40, 0.06);
-    padding: 12px 20px calc(14px + env(safe-area-inset-bottom, 0px));
+    position: relative !important;
+    bottom: auto !important;
+    left: auto !important;
+    right: auto !important;
+    z-index: 10 !important;
+    max-width: 640px !important;
+    width: 100% !important;
+    margin: 20px auto 40px !important;
+    background: #ffffff !important;
+    border: 1px solid #eaecf0 !important;
+    border-radius: 16px !important;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04) !important;
+    padding: 20px !important;
+}
+
+/* Chat support positioned at bottom-left so it is never covered */
+#floatingChatBtn,
+.floating-chat-btn {
+    left: 20px !important;
+    right: auto !important;
+    bottom: 24px !important;
+    z-index: 9999 !important;
+}
+#chatWidgetModal,
+.chat-widget-window {
+    left: 20px !important;
+    right: auto !important;
+    bottom: 92px !important;
+    z-index: 10000 !important;
 }
 
 .fp-bar-content {
@@ -3720,7 +4215,8 @@ body.dark-mode /* Hide main storefront bottom navigation on checkout screen */
     display: none !important;
 }
 
-.checkout-section {
+body.dark-mode,
+body.dark-mode .checkout-section {
     background: #0f172a !important;
 }
 
@@ -4301,7 +4797,12 @@ let savedAddressesData = <?php echo json_encode(
 ); ?>;
 const defaultSavedAddressId = <?php echo (int)$default_saved_address_id; ?>;
 const initialCheckoutDeliveryOption = <?php echo json_encode($current_checkout_delivery_option); ?>;
-let activeCheckoutDeliveryOption = (initialCheckoutDeliveryOption === 'delivery') ? 'delivery' : 'pickup';
+let activeCheckoutDeliveryOption = (initialCheckoutDeliveryOption === 'preorder') ? 'preorder' : ((initialCheckoutDeliveryOption === 'pickup') ? 'pickup' : 'delivery');
+let currentCalMonth = <?php echo json_encode($initial_calendar_data['current_month'] ?? date('Y-m')); ?>;
+let activeSellerId = <?php echo (int)$storefront_seller_id; ?>;
+let selectedPickupDate = '';
+let selectedPickupTime = '';
+let selectedPreorderPaymentType = 'full';
 const initialDeliveryQuote = <?php echo json_encode($current_delivery_quote, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
 const initialStoreContext = <?php echo json_encode([
     'id' => $overview_store_id,
@@ -4332,34 +4833,67 @@ let fpSelectedSchedule = {
 let fpCandidateSchedule = { ...fpSelectedSchedule };
 let generatedSlotsCache = [];
 
-function applyFoodpandaPickupMode(isPickup) {
+function applyFoodpandaPickupMode(modeOrIsPickup) {
     const section = document.querySelector('.checkout-section');
     const fpPickupView = document.getElementById('foodpandaPickupView');
     const fpDeliveryView = document.getElementById('foodpandaDeliveryView');
+    const fpPreorderView = document.getElementById('foodpandaPreorderView');
     const fpBottomBar = document.getElementById('fpDockedBottomBar');
     const fpPlaceBtn = document.getElementById('fpPlacePickupOrderBtn');
 
-    if (section) {
-        section.classList.toggle('is-pickup-mode', isPickup);
-        section.classList.toggle('is-delivery-mode', !isPickup);
+    let currentMode = 'delivery';
+    if (typeof modeOrIsPickup === 'string') {
+        currentMode = modeOrIsPickup.toLowerCase();
+    } else if (typeof modeOrIsPickup === 'boolean') {
+        currentMode = modeOrIsPickup ? 'pickup' : 'delivery';
+    } else {
+        currentMode = (String(activeCheckoutDeliveryOption || '').toLowerCase());
     }
-    if (fpPickupView) fpPickupView.style.display = isPickup ? 'block' : 'none';
-    if (fpDeliveryView) fpDeliveryView.style.display = isPickup ? 'none' : 'block';
+    if (!['delivery', 'pickup', 'preorder'].includes(currentMode)) {
+        currentMode = 'delivery';
+    }
+    activeCheckoutDeliveryOption = currentMode;
+
+    if (section) {
+        section.classList.toggle('is-pickup-mode', currentMode === 'pickup');
+        section.classList.toggle('is-preorder-mode', currentMode === 'preorder');
+        section.classList.toggle('is-delivery-mode', currentMode === 'delivery');
+    }
+    if (fpPickupView) fpPickupView.style.display = (currentMode === 'pickup') ? 'block' : 'none';
+    if (fpDeliveryView) fpDeliveryView.style.display = (currentMode === 'delivery') ? 'block' : 'none';
+    if (fpPreorderView) fpPreorderView.style.display = (currentMode === 'preorder') ? 'block' : 'none';
     if (fpBottomBar) fpBottomBar.style.display = 'block';
 
     if (fpPlaceBtn) {
-        fpPlaceBtn.textContent = isPickup ? 'Place Pick-Up order' : 'Place Delivery order';
+        if (currentMode === 'preorder') {
+            fpPlaceBtn.textContent = 'Place Pre-Order';
+        } else if (currentMode === 'pickup') {
+            fpPlaceBtn.textContent = 'Place Pick-Up order';
+        } else {
+            fpPlaceBtn.textContent = 'Place Delivery order';
+        }
     }
 
-    // Strictly PayMongo GCash only for Pickup!
     const paymongoRadio = document.getElementById('radioPaymentMethodPaymongo');
     const codRadio = document.getElementById('radioPaymentMethodCod');
-    const fullRadio = document.querySelector('input[name="payment_type"][value="full"]');
+    const fullRadio = document.getElementById('radioPaymentTypeFull');
+    const downpaymentRadio = document.getElementById('radioPaymentTypeDownpayment');
 
-    if (isPickup) {
+    if (currentMode === 'preorder') {
+        if (paymongoRadio) paymongoRadio.checked = true;
+        if (codRadio) codRadio.checked = false;
+        currentDeliveryFee = 0;
+        if (typeof loadCalendarMonth === 'function' && typeof currentCalMonth !== 'undefined') {
+            const daysGrid = document.getElementById('calDaysGrid');
+            if (daysGrid && (!daysGrid.children.length || daysGrid.children.length <= 1)) {
+                loadCalendarMonth(currentCalMonth);
+            }
+        }
+    } else if (currentMode === 'pickup') {
         if (paymongoRadio) paymongoRadio.checked = true;
         if (codRadio) codRadio.checked = false;
         if (fullRadio) fullRadio.checked = true;
+        if (downpaymentRadio) downpaymentRadio.checked = false;
         currentDeliveryFee = 0;
     } else {
         const isPaymongoSelected = document.getElementById('fpPaymentRowPaymongo')?.classList.contains('is-active');
@@ -4370,13 +4904,15 @@ function applyFoodpandaPickupMode(isPickup) {
             if (codRadio) codRadio.checked = true;
             if (paymongoRadio) paymongoRadio.checked = false;
         }
+        if (fullRadio) fullRadio.checked = true;
+        if (downpaymentRadio) downpaymentRadio.checked = false;
     }
 
     // Sync sheet mode toggle pill
     const sheetDeliveryBtn = document.getElementById('sheetDeliveryBtn');
     const sheetPickupBtn = document.getElementById('sheetPickupBtn');
-    if (sheetDeliveryBtn) sheetDeliveryBtn.classList.toggle('is-active', !isPickup);
-    if (sheetPickupBtn) sheetPickupBtn.classList.toggle('is-active', isPickup);
+    if (sheetDeliveryBtn) sheetDeliveryBtn.classList.toggle('is-active', currentMode === 'delivery');
+    if (sheetPickupBtn) sheetPickupBtn.classList.toggle('is-active', currentMode === 'pickup');
 
     // Invalidate slot cache when mode switches so standard label updates
     generatedSlotsCache = [];
@@ -4385,6 +4921,266 @@ function applyFoodpandaPickupMode(isPickup) {
         recalculateOrderTotals();
     }
     updateFoodpandaTotals();
+}
+
+/* =========================================================
+   PRE-ORDER ROASTING CALENDAR & TIME SLOTS CONTROLLER
+   ========================================================= */
+function selectPreorderPaymentType(type) {
+    selectedPreorderPaymentType = type;
+    const fullCard = document.getElementById('fpTermCardFull');
+    const downCard = document.getElementById('fpTermCardDownpayment');
+    const fullRadio = document.getElementById('radioPaymentTypeFull');
+    const downRadio = document.getElementById('radioPaymentTypeDownpayment');
+    const downSummaryRow = document.getElementById('fpPreorderDownpaymentSummaryRow');
+    const remSummaryRow = document.getElementById('fpPreorderRemainingSummaryRow');
+    const barLabel = document.getElementById('fpBarLabelDisplay');
+    const barTotal = document.getElementById('fpBarTotalDisplay');
+    const payAmountDisplay = document.getElementById('fpPreorderPaymentAmountDisplay');
+
+    const totalInput = document.getElementById('total_amount');
+    const totalVal = parseFloat(totalInput?.value || '0') || 0;
+    const downVal = totalVal * 0.30;
+    const remVal = totalVal - downVal;
+
+    const formattedTotal = (typeof moneyFormatter !== 'undefined' ? moneyFormatter.format(totalVal) : '₱ ' + totalVal.toFixed(2));
+    const formattedDown = (typeof moneyFormatter !== 'undefined' ? moneyFormatter.format(downVal) : '₱ ' + downVal.toFixed(2));
+    const formattedRem = (typeof moneyFormatter !== 'undefined' ? moneyFormatter.format(remVal) : '₱ ' + remVal.toFixed(2));
+
+    if (type === 'downpayment') {
+        if (fullCard) {
+            fullCard.classList.remove('is-active');
+            fullCard.style.borderColor = '#eaecf0';
+            fullCard.style.background = '#ffffff';
+        }
+        if (downCard) {
+            downCard.classList.add('is-active');
+            downCard.style.borderColor = '#b3261e';
+            downCard.style.background = '#fff1f0';
+        }
+        if (downRadio) downRadio.checked = true;
+        if (fullRadio) fullRadio.checked = false;
+
+        document.querySelectorAll('input[name="preorder_payment_term"]').forEach(r => {
+            r.checked = (r.value === 'downpayment');
+        });
+
+        if (downSummaryRow) downSummaryRow.style.display = 'flex';
+        if (remSummaryRow) remSummaryRow.style.display = 'flex';
+        if (barLabel) barLabel.textContent = '30% Downpayment Due Today';
+        if (barTotal) barTotal.textContent = formattedDown;
+        if (payAmountDisplay) payAmountDisplay.textContent = formattedDown;
+    } else {
+        if (fullCard) {
+            fullCard.classList.add('is-active');
+            fullCard.style.borderColor = '#b3261e';
+            fullCard.style.background = '#fff1f0';
+        }
+        if (downCard) {
+            downCard.classList.remove('is-active');
+            downCard.style.borderColor = '#eaecf0';
+            downCard.style.background = '#ffffff';
+        }
+        if (fullRadio) fullRadio.checked = true;
+        if (downRadio) downRadio.checked = false;
+
+        document.querySelectorAll('input[name="preorder_payment_term"]').forEach(r => {
+            r.checked = (r.value === 'full');
+        });
+
+        if (downSummaryRow) downSummaryRow.style.display = 'none';
+        if (remSummaryRow) remSummaryRow.style.display = 'none';
+        if (barLabel) barLabel.textContent = 'Total (incl. fees and tax)';
+        if (barTotal) barTotal.textContent = formattedTotal;
+        if (payAmountDisplay) payAmountDisplay.textContent = formattedTotal;
+    }
+}
+
+async function loadCalendarMonth(monthStr) {
+    const daysGrid = document.getElementById('calDaysGrid');
+    const monthTitle = document.getElementById('calMonthTitle');
+    const prevBtn = document.getElementById('calPrevMonthBtn');
+    const nextBtn = document.getElementById('calNextMonthBtn');
+    
+    if (!daysGrid) return;
+    daysGrid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 20px; color: #667085;"><i class="fas fa-spinner fa-spin"></i> Loading schedule...</div>';
+
+    try {
+        const res = await fetch(`api/preorder_schedule.php?action=get_calendar&seller_id=${activeSellerId}&month=${encodeURIComponent(monthStr || '')}`);
+        const json = await res.json();
+        if (json.success && json.data) {
+            const data = json.data;
+            currentCalMonth = data.current_month;
+            if (monthTitle) monthTitle.textContent = data.month_title;
+            
+            if (prevBtn) {
+                prevBtn.disabled = !data.prev_month;
+                prevBtn.onclick = () => data.prev_month && loadCalendarMonth(data.prev_month);
+            }
+            if (nextBtn) {
+                nextBtn.disabled = !data.next_month;
+                nextBtn.onclick = () => data.next_month && loadCalendarMonth(data.next_month);
+            }
+
+            renderCalendarDays(data);
+        }
+    } catch (e) {
+        console.error('Error loading calendar:', e);
+        daysGrid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 20px; color: #b3261e;">Failed to load schedule. Please try again.</div>';
+    }
+}
+
+function renderCalendarDays(calData) {
+    const daysGrid = document.getElementById('calDaysGrid');
+    if (!daysGrid) return;
+    daysGrid.innerHTML = '';
+
+    // Leading blanks
+    for (let i = 1; i < calData.first_day_weekday; i++) {
+        const blank = document.createElement('div');
+        blank.className = 'cal-day-cell is-blank';
+        daysGrid.appendChild(blank);
+    }
+
+    calData.days.forEach(day => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `cal-day-cell is-day ${day.available ? 'is-available' : 'is-disabled'}`;
+        if (day.date === selectedPickupDate) {
+            btn.classList.add('is-selected');
+        }
+        btn.title = day.status_reason || '';
+
+        let statusSub = '';
+        if (day.available) {
+            statusSub = `<span class="cal-day-sub">${day.remaining_capacity} left</span>`;
+        } else if (day.status === 'lead_time_cutoff') {
+            statusSub = `<span class="cal-day-sub muted">Cutoff</span>`;
+        } else if (day.status === 'closed_weekday') {
+            statusSub = `<span class="cal-day-sub muted">Closed</span>`;
+        } else if (day.status === 'fully_booked') {
+            statusSub = `<span class="cal-day-sub full">Full</span>`;
+        } else if (day.status === 'blackout') {
+            statusSub = `<span class="cal-day-sub full">Holiday</span>`;
+        }
+
+        btn.innerHTML = `<span class="cal-day-num">${day.day}</span>${statusSub}`;
+
+        if (day.available) {
+            btn.addEventListener('click', () => {
+                selectCalendarDate(day.date, day);
+            });
+        }
+
+        daysGrid.appendChild(btn);
+    });
+}
+
+async function selectCalendarDate(dateStr, dayData) {
+    selectedPickupDate = dateStr;
+    const pickupDateInput = document.getElementById('preorderPickupDate');
+    if (pickupDateInput) pickupDateInput.value = dateStr;
+    const delDateInput = document.getElementById('delivery_date');
+    if (delDateInput) delDateInput.value = dateStr;
+
+    // Reset selected time
+    selectedPickupTime = '';
+    const pickupTimeInput = document.getElementById('preorderPickupTime');
+    if (pickupTimeInput) pickupTimeInput.value = '';
+    const delTimeInput = document.getElementById('delivery_time');
+    if (delTimeInput) delTimeInput.value = '';
+
+    const badge = document.getElementById('scheduleSelectedBadge');
+    if (badge) badge.style.display = 'none';
+
+    document.querySelectorAll('.cal-day-cell.is-day').forEach(cell => cell.classList.remove('is-selected'));
+    const allCells = document.querySelectorAll('.cal-day-cell.is-day');
+    allCells.forEach(cell => {
+        if (cell.title && cell.title.includes(dateStr)) cell.classList.add('is-selected');
+    });
+
+    await loadTimeSlotsForDate(dateStr);
+}
+
+async function loadTimeSlotsForDate(dateStr) {
+    const slotsSection = document.getElementById('preorderSlotsSection');
+    const slotsGrid = document.getElementById('timeSlotsGrid');
+    const dateText = document.getElementById('slotsSelectedDateText');
+
+    if (!slotsSection || !slotsGrid) return;
+
+    slotsSection.style.display = 'block';
+    if (dateText) {
+        const dObj = new Date(dateStr + 'T00:00:00');
+        dateText.textContent = dObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    slotsGrid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:15px; color:#667085;"><i class="fas fa-spinner fa-spin"></i> Loading available slots...</div>';
+
+    try {
+        const res = await fetch(`api/preorder_schedule.php?action=get_slots&seller_id=${activeSellerId}&date=${encodeURIComponent(dateStr)}`);
+        const json = await res.json();
+        if (json.success && json.slots) {
+            renderTimeSlots(json.slots);
+        }
+    } catch (e) {
+        console.error('Error loading time slots:', e);
+        slotsGrid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:15px; color:#b3261e;">Failed to load time slots.</div>';
+    }
+}
+
+function renderTimeSlots(slots) {
+    const slotsGrid = document.getElementById('timeSlotsGrid');
+    if (!slotsGrid) return;
+    slotsGrid.innerHTML = '';
+
+    if (!slots || slots.length === 0) {
+        slotsGrid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:15px; color:#667085;">No pickup time slots configured for this date.</div>';
+        return;
+    }
+
+    slots.forEach(slot => {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = `time-slot-card ${slot.is_available ? 'is-available' : 'is-disabled'}`;
+        if (slot.time_value === selectedPickupTime) {
+            card.classList.add('is-selected');
+        }
+
+        card.innerHTML = `
+            <div class="slot-time"><i class="fas fa-clock"></i> ${slot.time_value}</div>
+            <div class="slot-label">${slot.display_label}</div>
+            <span class="slot-badge ${slot.is_available ? 'badge-open' : 'badge-full'}">${slot.badge_text}</span>
+        `;
+
+        if (slot.is_available) {
+            card.addEventListener('click', (e) => {
+                selectTimeSlot(slot.time_value, slot.display_label, card);
+            });
+        }
+
+        slotsGrid.appendChild(card);
+    });
+}
+
+function selectTimeSlot(timeVal, label, clickedEl) {
+    selectedPickupTime = timeVal;
+    const pickupTimeInput = document.getElementById('preorderPickupTime');
+    if (pickupTimeInput) pickupTimeInput.value = timeVal;
+    const delTimeInput = document.getElementById('delivery_time');
+    if (delTimeInput) delTimeInput.value = timeVal;
+
+    document.querySelectorAll('.time-slot-card').forEach(c => c.classList.remove('is-selected'));
+    if (clickedEl) clickedEl.classList.add('is-selected');
+
+    const badge = document.getElementById('scheduleSelectedBadge');
+    const summaryText = document.getElementById('scheduleSelectedSummaryText');
+    if (badge && summaryText && selectedPickupDate) {
+        const dObj = new Date(selectedPickupDate + 'T00:00:00');
+        const formattedDate = dObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+        summaryText.innerHTML = `<strong>${formattedDate}</strong> at <strong>${timeVal}</strong> (${label})`;
+        badge.style.display = 'flex';
+    }
 }
 
 function selectPickupOption(type) {
@@ -4698,8 +5494,12 @@ function syncOrderNotes(val) {
 }
 
 function scrollToPickupSummary() {
-    const isPickup = (activeCheckoutDeliveryOption === 'pickup');
-    const summaryCard = isPickup ? document.getElementById('fpOrderSummaryCard') : document.getElementById('fpDeliveryOrderSummaryCard');
+    let summaryCard = document.getElementById('fpDeliveryOrderSummaryCard');
+    if (activeCheckoutDeliveryOption === 'pickup') {
+        summaryCard = document.getElementById('fpOrderSummaryCard');
+    } else if (activeCheckoutDeliveryOption === 'preorder') {
+        summaryCard = document.getElementById('fpPreorderOrderSummaryCard');
+    }
     if (summaryCard) {
         summaryCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
@@ -4718,7 +5518,6 @@ function updateFoodpandaTotals() {
     const fpGuidanceText = document.getElementById('fpDeliveryGuidanceText');
 
     if (fpPayDisplay) fpPayDisplay.textContent = formatted;
-    if (fpBarTotal) fpBarTotal.textContent = formatted;
     if (fpGrandTotal) fpGrandTotal.textContent = formatted;
     if (fpDelGrandTotal) fpDelGrandTotal.textContent = formatted;
     if (fpDelFeeDisplay) {
@@ -4727,10 +5526,41 @@ function updateFoodpandaTotals() {
     if (fpGuidanceText && document.getElementById('fpPaymentRowCod')?.classList.contains('is-active')) {
         fpGuidanceText.innerHTML = `Please prepare exact cash of <strong>${formatted}</strong> for the delivery rider upon food arrival.`;
     }
+
+    if (activeCheckoutDeliveryOption === 'preorder') {
+        const isDownpayment = (selectedPreorderPaymentType === 'downpayment');
+        const downVal = totalVal * 0.30;
+        const remVal = totalVal - downVal;
+        const formattedDown = (typeof moneyFormatter !== 'undefined' ? moneyFormatter.format(downVal) : '₱ ' + downVal.toFixed(2));
+        const formattedRem = (typeof moneyFormatter !== 'undefined' ? moneyFormatter.format(remVal) : '₱ ' + remVal.toFixed(2));
+
+        const preorderPayAmount = document.getElementById('fpPreorderPaymentAmountDisplay');
+        const downSummaryDue = document.getElementById('fpSummaryDownpaymentDue');
+        const remSummaryDue = document.getElementById('fpSummaryRemainingDue');
+        const barLabel = document.getElementById('fpBarLabelDisplay');
+
+        if (downSummaryDue) downSummaryDue.textContent = formattedDown;
+        if (remSummaryDue) remSummaryDue.textContent = formattedRem;
+
+        if (isDownpayment) {
+            if (fpBarTotal) fpBarTotal.textContent = formattedDown;
+            if (preorderPayAmount) preorderPayAmount.textContent = formattedDown;
+            if (barLabel) barLabel.textContent = '30% Downpayment Due Today';
+        } else {
+            if (fpBarTotal) fpBarTotal.textContent = formatted;
+            if (preorderPayAmount) preorderPayAmount.textContent = formatted;
+            if (barLabel) barLabel.textContent = 'Total (incl. fees and tax)';
+        }
+    } else {
+        if (fpBarTotal) fpBarTotal.textContent = formatted;
+        const barLabel = document.getElementById('fpBarLabelDisplay');
+        if (barLabel) barLabel.textContent = 'Total (incl. fees and tax)';
+    }
 }
 
 function submitFoodpandaCheckout() {
     const isPickup = (activeCheckoutDeliveryOption === 'pickup');
+    const isPreorder = (activeCheckoutDeliveryOption === 'preorder');
 
     if (typeof checkoutTenantBlocked !== 'undefined' && checkoutTenantBlocked) {
         Swal.fire({
@@ -4744,20 +5574,62 @@ function submitFoodpandaCheckout() {
 
     // Set delivery_option hidden input
     const delOptInput = document.getElementById('delivery_option_hidden');
-    if (delOptInput) delOptInput.value = isPickup ? 'pickup' : 'delivery';
+    if (delOptInput) delOptInput.value = activeCheckoutDeliveryOption;
 
     // Ensure terms checkbox is checked
     const termsInput = document.querySelector('input[name="terms"]');
     if (termsInput) termsInput.checked = true;
 
-    if (isPickup) {
+    if (isPreorder) {
+        if (!selectedPickupDate || !selectedPickupTime) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Select Roasting Schedule',
+                text: 'Please select an available pick-up date and time slot from the roasting schedule calendar before proceeding.',
+                confirmButtonColor: '#b3261e'
+            });
+            document.getElementById('preorderCalendarWidget')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return;
+        }
+
+        // Set delivery_date and delivery_time
+        const delDateInput = document.getElementById('delivery_date');
+        const delTimeInput = document.getElementById('delivery_time');
+        if (delDateInput) delDateInput.value = selectedPickupDate;
+        if (delTimeInput) delTimeInput.value = selectedPickupTime;
+
+        // Notes sync
+        const preNotes = document.getElementById('fp_preorder_notes')?.value || '';
+        const orderNotesInput = document.getElementById('order_notes');
+        if (orderNotesInput && preNotes) orderNotesInput.value = preNotes;
+
         // Lock payment to PayMongo GCash
         const pmRadio = document.getElementById('radioPaymentMethodPaymongo');
         if (pmRadio) pmRadio.checked = true;
         const codRadio = document.getElementById('radioPaymentMethodCod');
         if (codRadio) codRadio.checked = false;
-        const fullRadio = document.querySelector('input[name="payment_type"][value="full"]');
+
+        if (selectedPreorderPaymentType === 'downpayment') {
+            const downRadio = document.getElementById('radioPaymentTypeDownpayment');
+            if (downRadio) downRadio.checked = true;
+            const fullRadio = document.getElementById('radioPaymentTypeFull');
+            if (fullRadio) fullRadio.checked = false;
+        } else {
+            const fullRadio = document.getElementById('radioPaymentTypeFull');
+            if (fullRadio) fullRadio.checked = true;
+            const downRadio = document.getElementById('radioPaymentTypeDownpayment');
+            if (downRadio) downRadio.checked = false;
+        }
+    } else if (isPickup) {
+        // Lock payment to PayMongo GCash
+        const pmRadio = document.getElementById('radioPaymentMethodPaymongo');
+        if (pmRadio) pmRadio.checked = true;
+        const codRadio = document.getElementById('radioPaymentMethodCod');
+        if (codRadio) codRadio.checked = false;
+        const fullRadio = document.getElementById('radioPaymentTypeFull');
         if (fullRadio) fullRadio.checked = true;
+        const downRadio = document.getElementById('radioPaymentTypeDownpayment');
+        if (downRadio) downRadio.checked = false;
     } else {
         // Validate delivery address exists
         const delAddr = (document.getElementById('delivery_address')?.value || '').trim();
@@ -4839,7 +5711,45 @@ function submitFoodpandaCheckout() {
     executeFormSubmit();
 
     function executeFormSubmit() {
-        if (isPickup) {
+        if (isPreorder) {
+            const isDownpayment = (selectedPreorderPaymentType === 'downpayment');
+            const payText = isDownpayment ? (document.getElementById('fpSummaryDownpaymentDue')?.textContent || '') : (document.getElementById('fpBarTotalDisplay')?.textContent || '');
+            Swal.fire({
+                title: 'Confirm Pre-Order Reservation',
+                html: `
+                    <div style="text-align:left; font-size:14px;">
+                        <p style="margin-bottom:8px;"><strong>Store:</strong> <?php echo htmlspecialchars(addslashes($pickup_store_name)); ?></p>
+                        <p style="margin-bottom:8px;"><strong>Pick-up Date:</strong> ${selectedPickupDate}</p>
+                        <p style="margin-bottom:8px;"><strong>Roasting Time:</strong> ${selectedPickupTime}</p>
+                        <p style="margin-bottom:8px;"><strong>Payment Terms:</strong> ${isDownpayment ? '30% Downpayment (Balance upon pick-up)' : 'Full Payment (100%)'}</p>
+                        <p style="margin-bottom:8px;"><strong>Amount to Pay Now:</strong> ${payText}</p>
+                    </div>
+                `,
+                icon: 'info',
+                showCancelButton: true,
+                confirmButtonColor: '#b3261e',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: '<i class="fas fa-lock"></i> Proceed to Online Payment',
+                cancelButtonText: 'Review Reservation'
+            }).then(async (result) => {
+                if (result.isConfirmed) {
+                    Swal.fire({
+                        title: 'Connecting to PayMongo...',
+                        text: 'Redirecting to secure online payment page',
+                        allowOutsideClick: false,
+                        didOpen: () => {
+                            Swal.showLoading();
+                        }
+                    });
+                    const formElement = document.getElementById('checkoutForm');
+                    if (typeof submitCheckoutAjax === 'function') {
+                        await submitCheckoutAjax(formElement);
+                    } else {
+                        formElement.submit();
+                    }
+                }
+            });
+        } else if (isPickup) {
             Swal.fire({
                 title: 'Confirm Pick-Up Order',
                 html: `
@@ -4909,28 +5819,28 @@ window.selectDeliveryOption = selectDeliveryOption;
 window.selectDeliveryPaymentMethod = selectDeliveryPaymentMethod;
 
 async function switchCheckoutFulfillmentMode(mode) {
-    const normalizedMode = (String(mode || '').toLowerCase() === 'delivery') ? 'delivery' : 'pickup';
+    const rawMode = String(mode || '').toLowerCase();
+    const normalizedMode = (rawMode === 'preorder') ? 'preorder' : ((rawMode === 'pickup') ? 'pickup' : 'delivery');
     const isDelivery = (normalizedMode === 'delivery');
     activeCheckoutDeliveryOption = normalizedMode;
-    applyFoodpandaPickupMode(!isDelivery);
+    applyFoodpandaPickupMode(normalizedMode);
     if (typeof updatePaymentUI === 'function') {
         updatePaymentUI();
     }
 
-    // 1. Toggle Button UI Classes
-    ['modePickupBtn', 'stickyModePickupBtn'].forEach(id => {
-        const btn = document.getElementById(id);
-        if (btn) {
-            btn.classList.toggle('is-active', !isDelivery);
-            btn.setAttribute('aria-pressed', (!isDelivery).toString());
+    // 1. Toggle Button UI Classes across all cards
+    document.querySelectorAll('.fp-mode-pill-btn').forEach(btn => {
+        const onclickAttr = btn.getAttribute('onclick') || '';
+        let btnMode = 'delivery';
+        if (onclickAttr.includes("'pickup'")) btnMode = 'pickup';
+        else if (onclickAttr.includes("'preorder'")) btnMode = 'preorder';
+        else if (onclickAttr.includes("'delivery'")) btnMode = 'delivery';
+        else if (btn.classList.contains('is-active')) {
+            if (btn.textContent.includes('Pre-Order')) btnMode = 'preorder';
+            else if (btn.textContent.includes('Pick-up')) btnMode = 'pickup';
+            else btnMode = 'delivery';
         }
-    });
-    ['modeDeliveryBtn', 'stickyModeDeliveryBtn'].forEach(id => {
-        const btn = document.getElementById(id);
-        if (btn) {
-            btn.classList.toggle('is-active', isDelivery);
-            btn.setAttribute('aria-pressed', isDelivery.toString());
-        }
+        btn.classList.toggle('is-active', btnMode === normalizedMode);
     });
 
     // 2. Toggle Mode Card Copy & Summary Labels
@@ -7416,8 +8326,8 @@ document.querySelectorAll('input[name="payment_type"]').forEach(radio => {
     radio.addEventListener('change', updatePaymentUI);
 });
 window.updatePaymentUI = updatePaymentUI;
-// Initialize Foodpanda pickup state
-applyFoodpandaPickupMode(activeCheckoutDeliveryOption === 'pickup');
+// Initialize Foodpanda fulfillment state
+applyFoodpandaPickupMode(activeCheckoutDeliveryOption);
 updatePaymentUI();
 
 // Bind event listeners for voucher controls
@@ -8370,37 +9280,69 @@ if (activeCheckoutDeliveryOption === 'delivery' && initialDeliveryQuote && initi
 
 <!-- What's Your Exact Location? Map Modal (Screenshot 2) -->
 <div id="exactLocationModal" style="display:none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 10060; align-items: center; justify-content: center; padding: 16px;">
-    <div style="background: #fff; border-radius: 20px; width: 100%; max-width: 580px; padding: 26px; box-shadow: 0 10px 40px rgba(0,0,0,0.25); max-height: 92vh; display: flex; flex-direction: column; position: relative;">
+    <div style="background: #fff; border-radius: 20px; width: 100%; max-width: 580px; padding: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.25); max-height: 92vh; display: flex; flex-direction: column; position: relative; overflow-y: auto;">
         <!-- Header -->
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
             <div>
-                <h3 style="font-size: 20px; font-weight: 800; color: #2a211d; margin: 0; display: flex; align-items: center; gap: 8px;">
+                <h3 style="font-size: 19px; font-weight: 800; color: #101828; margin: 0; display: flex; align-items: center; gap: 8px;">
                     <i class="fas fa-location-dot" style="color: #b3261e;"></i> What’s your exact location?
                 </h3>
                 <p style="font-size: 13px; color: #667085; margin: 4px 0 0 0; line-height: 1.4;">
-                    Providing your location enables more accurate search and delivery ETA, seamless order tracking and personalised recommendations.
+                    Providing your location enables accurate search, delivery ETA calculation, and seamless rider dispatch.
                 </p>
             </div>
             <button type="button" id="closeExactLocationModalBtn" style="background: none; border: none; font-size: 20px; color: #667085; cursor: pointer; padding: 4px;"><i class="fas fa-times"></i></button>
         </div>
 
-        <!-- Address Search Input Box -->
-        <div style="position: relative; margin-bottom: 16px;">
-            <label style="font-size: 11px; font-weight: 700; color: #667085; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; display: block;">Enter your address</label>
-            <div style="display: flex; align-items: center; border: 1px solid #efddcd; border-radius: 12px; padding: 4px 12px; background: #fff;">
-                <input type="text" id="exactLocationInput" placeholder="Street, House No., Building, City" style="width: 100%; border: none; outline: none; padding: 10px 4px; font-size: 14px; color: #2a211d; background: transparent;">
+        <!-- Saved Addresses Chips (Quick Select) -->
+        <?php if (!empty($saved_addresses)): ?>
+        <div style="margin-bottom: 12px;">
+            <label style="font-size: 11px; font-weight: 700; color: #667085; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; display: block;">Saved Locations from Account</label>
+            <div id="exactSavedAddressesChips" style="display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px;">
+                <?php foreach ($saved_addresses as $s_idx => $s_addr): ?>
+                <button type="button" class="exact-saved-chip" 
+                        data-address-id="<?php echo (int)$s_addr['id']; ?>"
+                        data-street="<?php echo htmlspecialchars($s_addr['street_address'] ?? ($s_addr['full_address'] ?? '')); ?>"
+                        data-city="<?php echo htmlspecialchars($s_addr['city_name'] ?? ''); ?>"
+                        data-full="<?php echo htmlspecialchars($s_addr['full_address'] ?? ''); ?>"
+                        data-lat="<?php echo htmlspecialchars($s_addr['latitude'] ?? ''); ?>"
+                        data-lng="<?php echo htmlspecialchars($s_addr['longitude'] ?? ''); ?>"
+                        style="border: 1px solid #d0d5dd; background: #ffffff; border-radius: 999px; padding: 5px 12px; font-size: 12px; font-weight: 600; color: #344054; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s ease;">
+                    <i class="fas fa-bookmark" style="color: #b3261e; font-size: 11px;"></i>
+                    <span><?php echo htmlspecialchars($s_addr['street_address'] ?? ($s_addr['full_address'] ?? 'Saved Address')); ?></span>
+                </button>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <!-- Address Search Input Box with Locate Me Button -->
+        <div style="position: relative; margin-bottom: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <label style="font-size: 11px; font-weight: 700; color: #667085; text-transform: uppercase; letter-spacing: 0.5px;">Enter your address</label>
+                <button type="button" id="btnExactLocateMe" style="background: none; border: none; color: #b3261e; font-size: 12px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; padding: 0;">
+                    <i class="fas fa-location-crosshairs"></i> Locate Me
+                </button>
+            </div>
+            <div style="display: flex; align-items: center; border: 1.5px solid #d0d5dd; border-radius: 12px; padding: 3px 12px; background: #fff; transition: border-color 0.2s;">
+                <input type="text" id="exactLocationInput" placeholder="Street, Barangay, City..." autocomplete="off" style="width: 100%; border: none; outline: none; padding: 9px 4px; font-size: 14px; color: #101828; background: transparent;">
                 <button type="button" id="clearExactLocationInputBtn" style="background: none; border: none; color: #667085; cursor: pointer; font-size: 16px; padding: 4px;"><i class="fas fa-times-circle"></i></button>
             </div>
+            <!-- Suggestions dropdown container -->
+            <div id="exactLocationSuggestions" style="position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #eaecf0; border-radius: 10px; max-height: 220px; overflow-y: auto; z-index: 10010; box-shadow: 0 8px 24px rgba(16,24,40,0.12); display: none; margin-top: 4px;"></div>
         </div>
 
         <!-- Interactive Map Canvas Container -->
-        <div id="exactLocationMapShell" style="height: 280px; width: 100%; border-radius: 14px; overflow: hidden; position: relative; margin-bottom: 16px; background: #f3f4f6; border: 1px solid #efddcd;">
+        <div id="exactLocationMapShell" style="height: 260px; width: 100%; border-radius: 14px; overflow: hidden; position: relative; margin-bottom: 8px; background: #f3f4f6; border: 1px solid #eaecf0;">
             <div id="exactLocationMapCanvas" style="width: 100%; height: 100%;"></div>
         </div>
+        <small style="display: block; margin-bottom: 14px; color: #667085; font-size: 11.5px;">
+            <i class="fas fa-hand-pointer" style="color: #b3261e;"></i> Click anywhere on the map or drag the pin to pinpoint your location.
+        </small>
 
         <!-- Footer SUBMIT Button -->
-        <div style="display: flex; justify-content: flex-end; margin-top: auto; padding-top: 8px;">
-            <button type="button" id="submitExactLocationBtn" style="background: #d92632; color: #fff; font-weight: 800; font-size: 14px; letter-spacing: 0.8px; text-transform: uppercase; border: none; border-radius: 10px; padding: 14px 38px; cursor: pointer; transition: background 0.2s, transform 0.1s; box-shadow: 0 4px 12px rgba(217,38,50,0.25);">
+        <div style="display: flex; justify-content: flex-end; margin-top: auto; padding-top: 4px;">
+            <button type="button" id="submitExactLocationBtn" style="background: #b3261e; color: #fff; font-weight: 800; font-size: 14px; letter-spacing: 0.8px; text-transform: uppercase; border: none; border-radius: 10px; padding: 13px 36px; cursor: pointer; transition: background 0.2s, transform 0.1s; box-shadow: 0 4px 12px rgba(179,38,30,0.25);">
                 SUBMIT
             </button>
         </div>
@@ -8441,17 +9383,17 @@ document.addEventListener('DOMContentLoaded', function() {
     let exactMap = null;
     let exactMarker = null;
 
-    if (mainCard && changeModal) {
+    if (mainCard) {
         mainCard.addEventListener('click', function(e) {
             if (e.target.id !== 'delivery_instructions') {
-                changeModal.style.display = 'flex';
+                openExactMapModal();
             }
         });
     }
-    if (openModalBtn && changeModal) {
+    if (openModalBtn) {
         openModalBtn.addEventListener('click', function(e) {
             e.stopPropagation();
-            changeModal.style.display = 'flex';
+            openExactMapModal();
         });
     }
     if (closeModalBtn && changeModal) {
@@ -8462,6 +9404,81 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let currentEditingAddressId = null;
     let exactSearchDebounceTimer = null;
+    const suggestionsBox = document.getElementById('exactLocationSuggestions');
+    const locateMeBtn = document.getElementById('btnExactLocateMe');
+
+    // Locate Me GPS handler
+    if (locateMeBtn) {
+        locateMeBtn.addEventListener('click', function() {
+            if (!navigator.geolocation) {
+                alert('Geolocation is not supported by your browser.');
+                return;
+            }
+            const origHtml = locateMeBtn.innerHTML;
+            locateMeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Locating...';
+            locateMeBtn.disabled = true;
+
+            navigator.geolocation.getCurrentPosition(
+                async function(pos) {
+                    locateMeBtn.innerHTML = origHtml;
+                    locateMeBtn.disabled = false;
+                    const lat = pos.coords.latitude;
+                    const lng = pos.coords.longitude;
+                    if (exactMap && exactMarker) {
+                        exactMap.setView([lat, lng], 17);
+                        exactMarker.setLatLng([lat, lng]);
+                    }
+                    try {
+                        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+                        const data = await res.json();
+                        if (data && data.display_name && exactInput) {
+                            exactInput.value = data.display_name;
+                        }
+                    } catch (e) {
+                        console.error('Reverse geocode error:', e);
+                    }
+                },
+                function(err) {
+                    locateMeBtn.innerHTML = origHtml;
+                    locateMeBtn.disabled = false;
+                    alert('Unable to retrieve your location. Please check location permissions or click on the map.');
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        });
+    }
+
+    // Saved Addresses Chips click
+    document.querySelectorAll('.exact-saved-chip').forEach(chip => {
+        chip.addEventListener('click', function() {
+            document.querySelectorAll('.exact-saved-chip').forEach(c => {
+                c.style.borderColor = '#d0d5dd';
+                c.style.background = '#ffffff';
+                c.style.color = '#344054';
+            });
+            this.style.borderColor = '#b3261e';
+            this.style.background = '#fff1f0';
+            this.style.color = '#b3261e';
+
+            const fullAddr = this.getAttribute('data-full') || this.getAttribute('data-street') || '';
+            const lat = parseFloat(this.getAttribute('data-lat') || '');
+            const lng = parseFloat(this.getAttribute('data-lng') || '');
+            if (exactInput && fullAddr) {
+                exactInput.value = fullAddr;
+            }
+            if (!isNaN(lat) && !isNaN(lng) && exactMap && exactMarker) {
+                exactMap.setView([lat, lng], 17);
+                exactMarker.setLatLng([lat, lng]);
+            }
+        });
+    });
+
+    // Close suggestions dropdown on outside click
+    document.addEventListener('click', function(e) {
+        if (suggestionsBox && !e.target.closest('#exactLocationInput') && !e.target.closest('#exactLocationSuggestions')) {
+            suggestionsBox.style.display = 'none';
+        }
+    });
 
     // Open Exact Location Map Modal (Screenshot 2)
     async function openExactMapModal(initialText = '', latVal = null, lngVal = null, editingId = null) {
@@ -8535,22 +9552,59 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 120);
     }
 
-    // Live Geocode when user enters/edits address in input box
+    // Live Geocode and suggestions dropdown when user types in address box
     if (exactInput) {
         exactInput.addEventListener('input', function() {
             const query = this.value.trim();
-            if (!query || query.length < 4) return;
-
             if (exactSearchDebounceTimer) clearTimeout(exactSearchDebounceTimer);
+
+            if (!query || query.length < 3) {
+                if (suggestionsBox) suggestionsBox.style.display = 'none';
+                return;
+            }
+
             exactSearchDebounceTimer = setTimeout(async function() {
-                const result = await forwardGeocodeFromNominatim(query);
-                if (result && Number.isFinite(result.lat) && Number.isFinite(result.lng)) {
-                    if (exactMap && exactMarker) {
-                        exactMap.setView([result.lat, result.lng], 16);
-                        exactMarker.setLatLng([result.lat, result.lng]);
+                try {
+                    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&countrycodes=ph&limit=5&q=${encodeURIComponent(query)}`);
+                    const places = await res.json();
+                    if (Array.isArray(places) && places.length > 0 && suggestionsBox) {
+                        suggestionsBox.innerHTML = places.map(p => `
+                            <div class="exact-sug-item" data-lat="${p.lat}" data-lng="${p.lon}" data-name="${escapeHtml(p.display_name)}" style="padding: 10px 14px; font-size: 13px; color: #101828; cursor: pointer; border-bottom: 1px solid #f1f3f5; display: flex; align-items: flex-start; gap: 8px;">
+                                <i class="fas fa-location-dot" style="color: #b3261e; margin-top: 3px; font-size: 12px; flex-shrink: 0;"></i>
+                                <span style="line-height: 1.3;">${escapeHtml(p.display_name)}</span>
+                            </div>
+                        `).join('');
+                        suggestionsBox.style.display = 'block';
+
+                        // Bind item clicks
+                        suggestionsBox.querySelectorAll('.exact-sug-item').forEach(item => {
+                            item.addEventListener('click', function() {
+                                const lat = parseFloat(this.getAttribute('data-lat'));
+                                const lng = parseFloat(this.getAttribute('data-lng'));
+                                const name = this.getAttribute('data-name');
+                                if (exactInput) exactInput.value = name;
+                                if (suggestionsBox) suggestionsBox.style.display = 'none';
+                                if (exactMap && exactMarker) {
+                                    exactMap.setView([lat, lng], 17);
+                                    exactMarker.setLatLng([lat, lng]);
+                                }
+                            });
+                        });
+
+                        // Automatically pin the first match on the map
+                        const firstLat = parseFloat(places[0].lat);
+                        const firstLng = parseFloat(places[0].lon);
+                        if (exactMap && exactMarker && !isNaN(firstLat) && !isNaN(firstLng)) {
+                            exactMap.setView([firstLat, firstLng], 16);
+                            exactMarker.setLatLng([firstLat, firstLng]);
+                        }
+                    } else if (suggestionsBox) {
+                        suggestionsBox.style.display = 'none';
                     }
+                } catch (err) {
+                    console.warn('Suggestions fetch error:', err);
                 }
-            }, 600);
+            }, 300);
         });
 
         exactInput.addEventListener('keydown', async function(e) {

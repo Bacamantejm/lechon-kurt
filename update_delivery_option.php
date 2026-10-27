@@ -13,7 +13,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 $delivery_option = strtolower(trim((string)($_POST['delivery_option'] ?? 'pickup')));
-if (!in_array($delivery_option, ['pickup', 'delivery'], true)) {
+if (!in_array($delivery_option, ['pickup', 'delivery', 'preorder'], true)) {
     echo json_encode(['success' => false, 'message' => 'Invalid delivery option.']);
     exit;
 }
@@ -47,7 +47,7 @@ $response = [
     'customer_lng' => null,
 ];
 
-if ($delivery_option === 'pickup') {
+if ($delivery_option === 'pickup' || $delivery_option === 'preorder') {
     $pickup_location_id = (int)($_POST['pickup_location'] ?? ($_SESSION['pickup_location'] ?? 1));
     $_SESSION['pickup_location'] = $pickup_location_id;
     unset($_SESSION['delivery_location'], $_SESSION['current_delivery_quote']);
@@ -61,7 +61,7 @@ if ($delivery_option === 'pickup') {
     }
 
     $response['pickup_location'] = $pickup_location_id;
-    $response['delivery_details'] = 'Pickup from: ' . ($selected_store['name'] ?? 'Main Store');
+    $response['delivery_details'] = ($delivery_option === 'preorder' ? 'Pre-Order from: ' : 'Pickup from: ') . ($selected_store['name'] ?? 'Main Store');
     $response['nearest_store_address'] = (string)($selected_store['address'] ?? '');
 
     echo json_encode($response);

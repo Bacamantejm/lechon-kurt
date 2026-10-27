@@ -17,7 +17,7 @@ $seller_scope_id = $is_partner_scoped_admin ? getFranchiseSellerScopeOwnerId($co
 $target_seller_id = ($seller_scope_id > 0) ? (int)$seller_scope_id : 0;
 
 $current_page = 'preorder_schedule.php';
-$page_title = 'Pickup Schedule & Calendar Map';
+$page_title = 'Pick-up & Pre-Order Schedule Manager';
 
 // -------------------------------------------------------------
 // AJAX API Endpoint: Fetch Date Summary

@@ -668,7 +668,7 @@ body.dark-mode .sidebar-menu .menu-item.active i {
                 <li>
                     <a href="preorder_schedule.php" class="menu-item <?php echo ($current_page === 'preorder_schedule.php') ? 'active' : ''; ?>">
                         <i class="fas fa-calendar-days"></i>
-                        <span>Pickup Schedule &amp; Slots</span>
+                        <span>Pick-up &amp; Pre-Order Schedule</span>
                     </a>
                 </li>
             <?php endif; ?>
