@@ -1956,6 +1956,12 @@ body {
     width: 100%;
 }
 
+@media (min-width: 851px) {
+    .mobile-only-auth-cta {
+        display: none !important;
+    }
+}
+
 @media (max-width: 850px) {
     .registration-container {
         flex-direction: column;
@@ -1965,6 +1971,10 @@ body {
         height: auto;
         min-height: calc(100vh - 64px);
         transform: none !important;
+        padding-bottom: 120px !important;
+    }
+    #loginViewWrapper {
+        padding-bottom: 30px !important;
     }
     .registration-image-side {
         display: none !important;
@@ -2439,6 +2449,13 @@ body.dark-mode .leaflet-container {
                         <div class="button-group">
                             <button type="button" class="btn btn-primary" id="nextStep1" style="width: 100%;">Continue <i class="fas fa-arrow-right ms-1"></i></button>
                         </div>
+
+                        <div class="auth-switch-prompt mobile-only-auth-cta" style="text-align:center; margin-top:20px; font-size:0.92rem; color:#475467;">
+                            <span>Already have an account?</span>
+                            <a href="register.php?mode=login#login" class="js-trigger-slide-login" style="color:#b3261e; font-weight:700; text-decoration:none; margin-left:6px; display:inline-block;">
+                                Sign In
+                            </a>
+                        </div>
                     </div>
                     
                     <!-- Step 2: Verification (Upload Government ID / Business Proof) -->
@@ -2734,6 +2751,13 @@ body.dark-mode .leaflet-container {
                             <span>Sign In</span> <i class="fas fa-arrow-right"></i>
                         </button>
                     </form>
+
+                    <div class="auth-switch-prompt" style="text-align:center; margin-top:22px; padding:4px 0 12px; font-size:0.95rem; color:#475467;">
+                        <span>Don't have an account yet?</span>
+                        <a href="register.php" class="js-trigger-slide-register" style="color:#b3261e; font-weight:700; text-decoration:none; margin-left:6px; display:inline-block;">
+                            Sign Up
+                        </a>
+                    </div>
                 </div>
 
             </div>

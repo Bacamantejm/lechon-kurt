@@ -1478,25 +1478,27 @@ body.dark-mode .storefront-change-shop-btn:hover {
                             </div>
                         <?php endif; ?>
                         
-                        <!-- Top Image Banner -->
+                        <!-- Card Image -->
                         <div class="item-image">
                             <img src="<?php echo htmlspecialchars($imageSrc); ?>" alt="<?php echo htmlspecialchars($item['name']); ?>" 
                                  onerror="this.src='https://via.placeholder.com/400x300?text=<?php echo $placeholderText; ?>'">
-                            <button
-                                type="button"
-                                class="product-favorite-btn<?php echo $is_product_favorite ? ' is-active' : ''; ?>"
-                                data-favorite-toggle="1"
-                                data-favorite-type="product"
-                                data-favorite-product-id="<?php echo (int)$item['id']; ?>"
-                                data-favorite-active="<?php echo $is_product_favorite ? '1' : '0'; ?>"
-                                aria-pressed="<?php echo $is_product_favorite ? 'true' : 'false'; ?>"
-                                title="<?php echo $is_product_favorite ? 'Remove from favorites' : 'Save to favorites'; ?>">
-                                <i class="<?php echo $is_product_favorite ? 'fas' : 'far'; ?> fa-heart"></i>
-                            </button>
                             <?php if (($item['total_sold'] ?? 0) > 0): ?>
                             <span class="top-seller-badge"><i class="fas fa-fire"></i> Top Seller</span>
                             <?php endif; ?>
                         </div>
+
+                        <!-- Card Favorite Heart Button (Positioned at top right of card, away from product image) -->
+                        <button
+                            type="button"
+                            class="product-favorite-btn<?php echo $is_product_favorite ? ' is-active' : ''; ?>"
+                            data-favorite-toggle="1"
+                            data-favorite-type="product"
+                            data-favorite-product-id="<?php echo (int)$item['id']; ?>"
+                            data-favorite-active="<?php echo $is_product_favorite ? '1' : '0'; ?>"
+                            aria-pressed="<?php echo $is_product_favorite ? 'true' : 'false'; ?>"
+                            title="<?php echo $is_product_favorite ? 'Remove from favorites' : 'Save to favorites'; ?>">
+                            <i class="<?php echo $is_product_favorite ? 'fas' : 'far'; ?> fa-heart"></i>
+                        </button>
                         
                         <!-- Card Body Content -->
                         <div class="item-content">
@@ -2529,8 +2531,15 @@ document.addEventListener('click', function(e) {
             }
         }
         
+        if (addToCartConfirm) {
+            addToCartConfirm.disabled = (parseInt(product.stock) <= 0);
+            addToCartConfirm.innerHTML = (parseInt(product.stock) <= 0) ? '<i class="fas fa-ban"></i> Currently Sold Out' : '<i class="fas fa-cart-plus"></i> Add to Cart';
+            addToCartConfirm.style.display = 'flex';
+        }
+
         // Show modal
         if (productPreviewModal) {
+            document.body.classList.add('product-preview-open');
             productPreviewModal.style.display = 'block';
             setTimeout(() => {
                 productPreviewModal.classList.add('active');
@@ -2597,6 +2606,7 @@ document.addEventListener('click', function(e) {
     // Close preview modal
     function closeProductPreview() {
         if (!productPreviewModal) return;
+        document.body.classList.remove('product-preview-open');
         productPreviewModal.classList.remove('active');
         setTimeout(() => {
             productPreviewModal.style.display = 'none';
@@ -5424,18 +5434,19 @@ body {
         font-size: 1.25rem !important;
     }
     .preview-actions-wrap {
-        position: fixed !important;
+        position: sticky !important;
         bottom: 0 !important;
         left: 0 !important;
         right: 0 !important;
-        background: rgba(255, 255, 255, 0.98) !important;
-        backdrop-filter: blur(12px) !important;
-        -webkit-backdrop-filter: blur(12px) !important;
+        background: #ffffff !important;
         border-top: 1px solid #eaecf0 !important;
-        padding: 12px 16px !important;
-        margin: 0 !important;
-        z-index: 100 !important;
+        padding: 12px 16px 16px !important;
+        margin: 14px -18px -18px -18px !important;
+        z-index: 50 !important;
         box-shadow: 0 -4px 16px rgba(16, 24, 40, 0.08) !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 10px !important;
     }
 }
 
@@ -5520,31 +5531,46 @@ body {
 
 .product-favorite-btn {
     position: absolute;
-    top: 14px;
-    right: 14px;
-    width: 38px;
-    height: 38px;
+    top: 10px;
+    right: 10px;
+    width: 34px;
+    height: 34px;
     border-radius: 50%;
-    border: 1px solid rgba(255, 255, 255, 0.88);
-    background: rgba(255, 255, 255, 0.92);
-    color: #7b6f68;
+    border: 1px solid #eaecf0;
+    background: #ffffff;
+    color: #98a2b3;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    z-index: 3;
-    transition: var(--transition);
+    z-index: 5;
+    box-shadow: 0 1px 4px rgba(16, 24, 40, 0.08);
+    transition: all 0.2s ease;
 }
 
 .product-favorite-btn:hover {
-    color: var(--primary-color);
-    transform: translateY(-1px);
+    color: #b3261e;
+    background: #fff1f0;
+    border-color: #fee4e2;
+    transform: scale(1.08);
 }
 
 .product-favorite-btn.is-active {
-    color: var(--primary-color);
-    background: #fff1ea;
-    border-color: #f0c3ab;
+    color: #b3261e;
+    background: #fff1f0;
+    border-color: #fecdca;
+}
+
+body.dark-mode .product-favorite-btn {
+    background: #334155;
+    border-color: #475467;
+    color: #cbd5e1;
+}
+
+body.dark-mode .product-favorite-btn.is-active {
+    color: #ef4444;
+    background: #451a1a;
+    border-color: #7f1d1d;
 }
 
 .store-logo-initials {
@@ -6434,6 +6460,7 @@ body {
         font-size: 0.94rem !important;
         line-height: 1.25 !important;
         margin: 0 0 3px 0 !important;
+        padding-right: 36px !important;
         white-space: nowrap !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
@@ -7205,12 +7232,22 @@ body.dark-mode .store-review-filter-btn.active {
     .menu-item {
         padding: 12px !important;
         border-radius: 14px !important;
+        position: relative !important;
+    }
+    .menu-item .product-favorite-btn {
+        top: 8px !important;
+        right: 8px !important;
+        width: 30px !important;
+        height: 30px !important;
+        font-size: 0.8rem !important;
+        z-index: 5 !important;
     }
     .menu-item .item-image {
         width: 80px !important;
         height: 80px !important;
         min-width: 80px !important;
         border-radius: 10px !important;
+        position: relative !important;
     }
     
     
@@ -7266,15 +7303,47 @@ body.dark-mode .store-review-filter-btn.active {
         font-size: 0.82rem !important;
     }
     .preview-actions-wrap {
-        margin-top: 12px !important;
-        margin-bottom: 24px !important;
-        padding-bottom: 20px !important;
+        position: sticky !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        background: #ffffff !important;
+        border-top: 1px solid #eaecf0 !important;
+        padding: 12px 16px 16px !important;
+        margin: 12px -16px -28px -16px !important;
+        z-index: 50 !important;
+        box-shadow: 0 -4px 16px rgba(16, 24, 40, 0.08) !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 10px !important;
     }
     .add-to-cart-confirm {
         min-height: 48px !important;
-        font-size: 0.95rem !important;
+        height: 48px !important;
+        width: 100% !important;
+        font-size: 1rem !important;
         font-weight: 800 !important;
         border-radius: 12px !important;
+        background: #b3261e !important;
+        color: #ffffff !important;
+        border: none !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 8px !important;
+        box-shadow: 0 4px 14px rgba(179, 38, 30, 0.25) !important;
+        cursor: pointer !important;
+    }
+
+    body.dark-mode .preview-actions-wrap {
+        background: #1e293b !important;
+        border-top-color: #334155 !important;
+    }
+
+    /* Suppress mobile bottom nav and quick order pill when preview modal is active */
+    body.product-preview-open .mobile-bottom-nav,
+    body.product-preview-open .mobile-quick-order {
+        display: none !important;
     }
 
     /* Floating action button clutter suppression on mobile menu page */
