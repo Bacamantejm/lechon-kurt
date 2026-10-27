@@ -1113,15 +1113,17 @@ body.dark-mode .storefront-change-shop-btn:hover {
                     </div>
                 </div>
                 
-                <div class="preview-actions-wrap" style="display: flex; gap: 10px; margin-top: 14px; margin-bottom: 24px; padding-bottom: 16px; flex-wrap: wrap;">
-                    <button class="btn-primary add-to-cart-confirm" id="addToCartConfirm" style="flex: 1; min-width: 160px;">
-                        <i class="fas fa-cart-plus"></i> Add to Cart
-                    </button>
-                    <a href="preorder.php" id="previewPreorderLink" style="display: none; align-items: center; justify-content: center; gap: 6px; padding: 12px 18px; border-radius: 12px; font-weight: 700; font-size: 0.88rem; background: #fffaeb; color: #b54708; border: 1px solid #fedf89; text-decoration: none; white-space: nowrap;">
-                        <i class="fas fa-calendar-check"></i> Reserve Event Date
-                    </a>
                 </div>
-            </div>
+        </div>
+        
+        <!-- Fixed Preview Modal Action Footer (Never scrolls with modal body) -->
+        <div class="preview-actions-wrap">
+            <button class="btn-primary add-to-cart-confirm" id="addToCartConfirm">
+                <i class="fas fa-cart-plus"></i> Add to Cart
+            </button>
+            <a href="preorder.php" id="previewPreorderLink" class="preview-preorder-link" style="display: none;">
+                <i class="fas fa-calendar-check"></i> Reserve Event Date
+            </a>
         </div>
     </div>
     <div class="preview-overlay" id="previewOverlay"></div>
@@ -5358,6 +5360,8 @@ body {
     opacity: 0;
     box-shadow: 0 24px 48px rgba(0, 0, 0, 0.2);
     transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex;
+    flex-direction: column;
 }
 
 .product-preview-modal.active .preview-modal-content {
@@ -5377,7 +5381,7 @@ body {
     font-size: 1.3rem;
     color: #171922;
     cursor: pointer;
-    z-index: 10;
+    z-index: 30;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -5393,60 +5397,161 @@ body {
 
 .preview-body {
     display: flex;
-    max-height: 88vh;
-    overflow: hidden;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.preview-actions-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 28px;
+    border-top: 1px solid #eaecf0;
+    background: #ffffff;
+    flex-shrink: 0;
+    z-index: 20;
+}
+
+.preview-actions-wrap .add-to-cart-confirm {
+    min-width: 200px;
+    height: 48px;
+    padding: 0 24px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    border-radius: 12px;
+    background: #b3261e;
+    color: #ffffff;
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(179, 38, 30, 0.2);
+    transition: all 0.2s ease;
+}
+
+.preview-actions-wrap .add-to-cart-confirm:hover {
+    background: #981b15;
+    box-shadow: 0 6px 16px rgba(179, 38, 30, 0.3);
+}
+
+.preview-actions-wrap .add-to-cart-confirm:disabled {
+    background: #94a3b8 !important;
+    cursor: not-allowed !important;
+    box-shadow: none !important;
+    opacity: 0.7 !important;
+}
+
+.preview-preorder-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 0 18px;
+    height: 48px;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 0.88rem;
+    background: #fffaeb;
+    color: #b54708;
+    border: 1px solid #fedf89;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+}
+
+.preview-preorder-link:hover {
+    background: #fef0c7;
+    color: #93370d;
 }
 
 @media (max-width: 768px) {
     .preview-modal-content {
-        width: 100% !important;
-        max-width: 100% !important;
-        height: 100% !important;
-        max-height: 100vh !important;
-        max-height: 100dvh !important;
-        border-radius: 0 !important;
-        top: 0 !important;
-        left: 0 !important;
-        transform: none !important;
+        width: min(440px, 94vw) !important;
+        max-width: 440px !important;
+        height: auto !important;
+        max-height: 88vh !important;
+        max-height: 88dvh !important;
+        border-radius: 20px !important;
+        top: 50% !important;
+        left: 50% !important;
+        transform: translate(-50%, -50%) !important;
         display: flex !important;
         flex-direction: column !important;
+        overflow: hidden !important;
+        margin: 0 !important;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25) !important;
     }
     .product-preview-modal.active .preview-modal-content {
-        transform: none !important;
+        transform: translate(-50%, -50%) scale(1) !important;
+        opacity: 1 !important;
     }
     .preview-body {
+        display: flex !important;
         flex: 1 1 auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
         flex-direction: column !important;
         overflow-y: auto !important;
-        max-height: none !important;
-        padding-bottom: 90px !important;
+        -webkit-overflow-scrolling: touch !important;
+        padding-bottom: 8px !important;
     }
     .preview-image {
         min-width: 0 !important;
         width: 100% !important;
-        height: 230px !important;
-        flex: 0 0 230px !important;
+        height: 160px !important;
+        min-height: 160px !important;
+        max-height: 160px !important;
+        flex: 0 0 160px !important;
     }
     .preview-details {
-        padding: 16px 18px !important;
+        padding: 14px 16px !important;
+        flex: none !important;
+        overflow: visible !important;
     }
     .preview-details h3 {
         font-size: 1.25rem !important;
     }
     .preview-actions-wrap {
-        position: sticky !important;
-        bottom: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
+        position: relative !important;
+        flex: 0 0 auto !important;
+        width: 100% !important;
         background: #ffffff !important;
         border-top: 1px solid #eaecf0 !important;
         padding: 12px 16px 16px !important;
-        margin: 14px -18px -18px -18px !important;
-        z-index: 50 !important;
+        margin: 0 !important;
+        z-index: 20 !important;
         box-shadow: 0 -4px 16px rgba(16, 24, 40, 0.08) !important;
         display: flex !important;
         flex-direction: column !important;
-        gap: 10px !important;
+        gap: 8px !important;
+    }
+    .preview-actions-wrap .add-to-cart-confirm {
+        width: 100% !important;
+        min-height: 48px !important;
+        height: 48px !important;
+        font-size: 1rem !important;
+        font-weight: 800 !important;
+        border-radius: 12px !important;
+        background: #b3261e !important;
+        color: #ffffff !important;
+        border: none !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 8px !important;
+        box-shadow: 0 4px 14px rgba(179, 38, 30, 0.25) !important;
+        cursor: pointer !important;
+    }
+    .preview-actions-wrap .preview-preorder-link {
+        width: 100% !important;
+        height: 44px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
     }
 }
 
@@ -7251,15 +7356,22 @@ body.dark-mode .store-review-filter-btn.active {
     }
     
     
-    /* Product Preview Modal Mobile Fit (Ensures Add to Cart button is never cut off or covered) */
+    /* Product Preview Modal Mobile Fit (Ensures Add to Cart button is fixed and never scrollable) */
     .preview-modal-content {
         width: min(440px, 94vw) !important;
-        max-height: 86vh !important;
-        max-height: 86dvh !important;
+        max-width: 440px !important;
+        height: auto !important;
+        max-height: 88vh !important;
+        max-height: 88dvh !important;
+        position: fixed !important;
+        top: 50% !important;
+        left: 50% !important;
+        transform: translate(-50%, -50%) !important;
         display: flex !important;
         flex-direction: column !important;
         border-radius: 20px !important;
         overflow: hidden !important;
+        margin: 0 !important;
     }
     .preview-image {
         height: 160px !important;
@@ -7267,7 +7379,7 @@ body.dark-mode .store-review-filter-btn.active {
         max-height: 160px !important;
         width: 100% !important;
         min-width: 0 !important;
-        flex-shrink: 0 !important;
+        flex: 0 0 160px !important;
     }
     .preview-image img {
         width: 100% !important;
@@ -7277,14 +7389,15 @@ body.dark-mode .store-review-filter-btn.active {
     .preview-body {
         display: flex !important;
         flex-direction: column !important;
-        flex: 1 !important;
+        flex: 1 1 auto !important;
         min-height: 0 !important;
         max-height: none !important;
         overflow-y: auto !important;
         -webkit-overflow-scrolling: touch !important;
+        padding-bottom: 8px !important;
     }
     .preview-details {
-        padding: 14px 16px 28px !important;
+        padding: 14px 16px !important;
         flex: none !important;
         overflow: visible !important;
         display: block !important;
@@ -7303,20 +7416,20 @@ body.dark-mode .store-review-filter-btn.active {
         font-size: 0.82rem !important;
     }
     .preview-actions-wrap {
-        position: sticky !important;
-        bottom: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
+        position: relative !important;
+        flex: 0 0 auto !important;
+        width: 100% !important;
         background: #ffffff !important;
         border-top: 1px solid #eaecf0 !important;
         padding: 12px 16px 16px !important;
-        margin: 12px -16px -28px -16px !important;
-        z-index: 50 !important;
+        margin: 0 !important;
+        z-index: 20 !important;
         box-shadow: 0 -4px 16px rgba(16, 24, 40, 0.08) !important;
         display: flex !important;
         flex-direction: column !important;
-        gap: 10px !important;
+        gap: 8px !important;
     }
+    .preview-actions-wrap .add-to-cart-confirm,
     .add-to-cart-confirm {
         min-height: 48px !important;
         height: 48px !important;
@@ -7333,6 +7446,13 @@ body.dark-mode .store-review-filter-btn.active {
         gap: 8px !important;
         box-shadow: 0 4px 14px rgba(179, 38, 30, 0.25) !important;
         cursor: pointer !important;
+    }
+    .preview-actions-wrap .preview-preorder-link {
+        width: 100% !important;
+        height: 44px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
     }
 
     body.dark-mode .preview-actions-wrap {
