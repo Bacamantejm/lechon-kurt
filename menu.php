@@ -831,6 +831,14 @@ if ($lookup_seller_id > 0 && isset($conn) && $conn instanceof mysqli) {
 }
 ?>
 <style>
+/* Global Smooth Motion & Fluid Glass Architecture */
+html {
+    scroll-behavior: smooth !important;
+}
+body {
+    -webkit-overflow-scrolling: touch !important;
+}
+
 /* Immediate Navigation & Tab Styles */
 .panda-cat-tab {
     display: inline-flex !important;
@@ -8229,6 +8237,278 @@ body.dark-mode .fp-toggle-pill {
 body.dark-mode .fp-toggle-pill.active {
     background: #0f172a !important;
     color: #ffffff !important;
+}
+
+
+/* ==========================================================================
+   GLASSMORPHISM & FLUID MOTION DESIGN SYSTEM ENGINE
+   ========================================================================== */
+
+/* Glassmorphic Search Bars (Desktop & Mobile) */
+.fp-bar-search-box,
+.panda-menu-search-box,
+.menu-search-field {
+    background: rgba(255, 255, 255, 0.75) !important;
+    backdrop-filter: blur(14px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(14px) saturate(180%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.85) !important;
+    box-shadow: 0 4px 16px rgba(16, 24, 40, 0.05), inset 0 1px 2px rgba(255, 255, 255, 0.75) !important;
+    border-radius: 999px !important;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.fp-bar-search-box:focus-within,
+.panda-menu-search-box:focus-within,
+.menu-search-field:focus-within {
+    background: rgba(255, 255, 255, 0.94) !important;
+    border-color: rgba(179, 38, 30, 0.45) !important;
+    box-shadow: 0 6px 22px rgba(179, 38, 30, 0.12), inset 0 1px 2px rgba(255, 255, 255, 0.9) !important;
+    transform: translateY(-1px) !important;
+}
+
+/* Glassmorphic Circular Action Buttons */
+.fp-floating-round-btn,
+.fp-bar-round-btn,
+.preview-close {
+    background: rgba(255, 255, 255, 0.80) !important;
+    backdrop-filter: blur(14px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(14px) saturate(180%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.9) !important;
+    box-shadow: 0 4px 16px rgba(16, 24, 40, 0.12), inset 0 1px 1px rgba(255, 255, 255, 0.9) !important;
+    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+.fp-floating-round-btn:hover,
+.fp-bar-round-btn:hover,
+.preview-close:hover {
+    background: rgba(255, 255, 255, 0.96) !important;
+    transform: translateY(-2px) scale(1.05) !important;
+    box-shadow: 0 8px 22px rgba(16, 24, 40, 0.16) !important;
+}
+
+.fp-floating-round-btn:active,
+.fp-bar-round-btn:active,
+.preview-close:active {
+    transform: scale(0.92) !important;
+}
+
+/* Quick Add (+) Button Glassmorphism & Spring Motion */
+.panda-quick-add-btn {
+    background: rgba(255, 255, 255, 0.88) !important;
+    backdrop-filter: blur(12px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(180%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.95) !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14), inset 0 1px 1px rgba(255, 255, 255, 0.9) !important;
+    transition: transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+.panda-quick-add-btn:hover {
+    background: #b3261e !important;
+    color: #ffffff !important;
+    transform: scale(1.1) !important;
+    box-shadow: 0 6px 18px rgba(179, 38, 30, 0.35) !important;
+}
+
+.panda-quick-add-btn:active {
+    transform: scale(0.86) rotate(90deg) !important;
+}
+
+/* Product Card Favorite Heart Button */
+.product-favorite-btn {
+    background: rgba(255, 255, 255, 0.82) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.85) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), inset 0 1px 1px rgba(255, 255, 255, 0.9) !important;
+    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s ease, color 0.2s ease !important;
+}
+
+.product-favorite-btn:hover {
+    transform: scale(1.12) !important;
+    background: #ffffff !important;
+}
+
+.product-favorite-btn:active {
+    transform: scale(0.85) !important;
+}
+
+/* Glassmorphism Primary CTA Buttons */
+.add-to-cart-confirm,
+.btn-primary {
+    background: rgba(179, 38, 30, 0.95) !important;
+    backdrop-filter: blur(14px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(14px) saturate(180%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+    box-shadow: 0 6px 20px rgba(179, 38, 30, 0.28), inset 0 1px 1px rgba(255, 255, 255, 0.4) !important;
+    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease, background 0.2s ease !important;
+}
+
+.add-to-cart-confirm:hover,
+.btn-primary:hover {
+    background: rgba(152, 27, 21, 0.98) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 10px 26px rgba(179, 38, 30, 0.38) !important;
+}
+
+.add-to-cart-confirm:active,
+.btn-primary:active {
+    transform: scale(0.97) !important;
+}
+
+/* Glassmorphism Sticky Bar & Category Navigation */
+.panda-menu-sticky-bar {
+    background: rgba(255, 255, 255, 0.84) !important;
+    backdrop-filter: blur(20px) saturate(190%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(190%) !important;
+    border-bottom: 1px solid rgba(234, 236, 240, 0.75) !important;
+    box-shadow: 0 4px 20px rgba(16, 24, 40, 0.04) !important;
+    transition: box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1), background 0.3s ease, border-color 0.3s ease !important;
+}
+
+.panda-menu-sticky-bar.is-docked {
+    background: rgba(255, 255, 255, 0.92) !important;
+    box-shadow: 0 8px 30px rgba(16, 24, 40, 0.10) !important;
+}
+
+/* Smooth Category Tab Slide & Underline Motion */
+.panda-cat-tab {
+    position: relative !important;
+    border-bottom: none !important;
+    transition: color 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s ease !important;
+}
+
+.panda-cat-tab::after {
+    content: '' !important;
+    position: absolute !important;
+    left: 12px !important;
+    right: 12px !important;
+    bottom: 0 !important;
+    height: 3px !important;
+    border-radius: 999px !important;
+    background: #101828 !important;
+    transform: scaleX(0) !important;
+    transform-origin: center !important;
+    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s ease !important;
+}
+
+.panda-cat-tab.active::after {
+    transform: scaleX(1) !important;
+}
+
+.panda-cat-tab:active {
+    transform: scale(0.94) !important;
+}
+
+.panda-cat-strip-wrap {
+    scroll-behavior: smooth !important;
+    -webkit-overflow-scrolling: touch !important;
+}
+
+/* Glassmorphism Product Cards */
+.menu-item {
+    background: rgba(255, 255, 255, 0.84) !important;
+    backdrop-filter: blur(12px) saturate(170%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(170%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.75) !important;
+    box-shadow: 0 4px 16px rgba(16, 24, 40, 0.04), inset 0 1px 1px rgba(255, 255, 255, 0.85) !important;
+    transition: transform 0.26s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.26s ease !important;
+}
+
+.menu-item:hover {
+    transform: translateY(-3px) !important;
+    box-shadow: 0 10px 28px rgba(16, 24, 40, 0.08), inset 0 1px 1px rgba(255, 255, 255, 0.95) !important;
+}
+
+.menu-item:active {
+    transform: scale(0.98) !important;
+}
+
+/* Glassmorphism Input & Controls */
+.quantity-control,
+.qty-minus,
+.qty-plus {
+    background: rgba(248, 250, 252, 0.85) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    border: 1px solid rgba(226, 232, 240, 0.85) !important;
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+.qty-minus:active,
+.qty-plus:active {
+    transform: scale(0.9) !important;
+}
+
+.size-preview-btn {
+    background: rgba(255, 255, 255, 0.78) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    border: 1.5px solid rgba(226, 232, 240, 0.9) !important;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.size-preview-btn.active {
+    background: #b3261e !important;
+    border-color: #b3261e !important;
+    color: #ffffff !important;
+    transform: scale(1.02) !important;
+}
+
+.preview-actions-wrap {
+    background: rgba(255, 255, 255, 0.88) !important;
+    backdrop-filter: blur(18px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(180%) !important;
+    border-top: 1px solid rgba(234, 236, 240, 0.75) !important;
+}
+
+/* Dark Mode Glassmorphism Overrides */
+body.dark-mode .panda-menu-sticky-bar {
+    background: rgba(30, 41, 59, 0.82) !important;
+    backdrop-filter: blur(20px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+    border-bottom-color: rgba(51, 65, 85, 0.7) !important;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4) !important;
+}
+
+body.dark-mode .fp-bar-search-box,
+body.dark-mode .panda-menu-search-box,
+body.dark-mode .menu-search-field {
+    background: rgba(15, 23, 42, 0.78) !important;
+    backdrop-filter: blur(14px) !important;
+    -webkit-backdrop-filter: blur(14px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.08) !important;
+}
+
+body.dark-mode .fp-floating-round-btn,
+body.dark-mode .fp-bar-round-btn,
+body.dark-mode .menu-item .panda-quick-add-btn,
+body.dark-mode .preview-close {
+    background: rgba(15, 23, 42, 0.82) !important;
+    backdrop-filter: blur(14px) !important;
+    -webkit-backdrop-filter: blur(14px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.38) !important;
+}
+
+body.dark-mode .menu-item {
+    background: rgba(30, 41, 59, 0.75) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35) !important;
+}
+
+body.dark-mode .panda-cat-tab::after {
+    background: #ef4444 !important;
+}
+
+body.dark-mode .preview-actions-wrap {
+    background: rgba(30, 41, 59, 0.88) !important;
+    backdrop-filter: blur(18px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(180%) !important;
+    border-top-color: rgba(51, 65, 85, 0.8) !important;
 }
 
 </style>
